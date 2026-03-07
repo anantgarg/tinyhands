@@ -606,7 +606,7 @@ export function approveMcpConfig(id: string, userId: string): void {
   const config = db.prepare('SELECT * FROM mcp_configs WHERE id = ?').get(id) as McpConfig | undefined;
   if (!config) throw new Error(`MCP config ${id} not found`);
   if (!canModifyAgent(config.agent_id, userId)) throw new Error('Insufficient permissions');
-  db.prepare('UPDATE mcp_configs SET approved = 1, updated_at = datetime("now") WHERE id = ?').run(id);
+  db.prepare("UPDATE mcp_configs SET approved = 1, updated_at = datetime('now') WHERE id = ?").run(id);
   logger.info('MCP config approved', { id, userId });
 }
 
@@ -649,7 +649,7 @@ export function approveAuthoredSkill(id: string, userId: string): void {
   const skill = getAuthoredSkill(id);
   if (!skill) throw new Error(`Authored skill ${id} not found`);
   if (!canModifyAgent(skill.agent_id, userId)) throw new Error('Insufficient permissions');
-  db.prepare('UPDATE authored_skills SET approved = 1, updated_at = datetime("now") WHERE id = ?').run(id);
+  db.prepare("UPDATE authored_skills SET approved = 1, updated_at = datetime('now') WHERE id = ?").run(id);
   logger.info('Authored skill approved', { id, userId });
 }
 
@@ -659,7 +659,7 @@ export function updateAuthoredSkillTemplate(id: string, template: string, userId
   if (!skill) throw new Error(`Authored skill ${id} not found`);
   if (!canModifyAgent(skill.agent_id, userId)) throw new Error('Insufficient permissions');
   db.prepare(
-    'UPDATE authored_skills SET template = ?, version = version + 1, updated_at = datetime("now") WHERE id = ?'
+    "UPDATE authored_skills SET template = ?, version = version + 1, updated_at = datetime('now') WHERE id = ?"
   ).run(template, id);
   logger.info('Authored skill template updated', { id, version: skill.version + 1 });
 }

@@ -66,7 +66,7 @@ export function approveKBEntry(entryId: string): KBEntry {
   const entry = getKBEntry(entryId);
   if (!entry) throw new Error(`KB entry ${entryId} not found`);
 
-  db.prepare('UPDATE kb_entries SET approved = 1, updated_at = datetime("now") WHERE id = ?').run(entryId);
+  db.prepare("UPDATE kb_entries SET approved = 1, updated_at = datetime('now') WHERE id = ?").run(entryId);
   indexKBEntry(entry);
 
   logger.info('KB entry approved', { entryId });
