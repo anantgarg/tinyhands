@@ -5,13 +5,15 @@ import { getRedisConnection, recordTokenUsage, checkRateLimit, checkRequestRate 
 import { createAgentContainer, startContainer, waitForContainer, removeContainer } from '../../docker';
 import { getAgent } from '../agents';
 import { retrieveContext } from '../sources';
-import { retrieveMemories } from '../sources/memory';
+import { retrieveMemories, storeMemories } from '../sources/memory';
 import { getDisallowedTools, getDockerSecurityConfig } from '../permissions';
+import { getAgentSkills } from '../skills';
+import { listCustomTools } from '../tools';
 import { bufferEvent } from '../../slack/buffer';
 import { config } from '../../config';
 import { estimateCost, getModelId } from '../../utils/costs';
 import { logger, logRunEvent } from '../../utils/logger';
-import type { JobData, RunRecord, RunStatus, ModelAlias } from '../../types';
+import type { JobData, RunRecord, RunStatus, ModelAlias, MemoryCategory } from '../../types';
 
 // ── Run Record CRUD ──
 
@@ -183,6 +185,28 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
   const disallowedTools = getDisallowedTools(agent.permission_level);
   const securityConfig = getDockerSecurityConfig(agent.permission_level);
 
+  // Collect agent's skills and custom tools for injection
+  let skillsConfig = '[]';
+  let customToolsConfig = '[]';
+  try {
+    const skills = getAgentSkills(agent.id);
+    skillsConfig = JSON.stringify(skills.map(s => ({
+      name: s.name,
+      type: s.skill_type,
+      config: JSON.parse(s.config_json),
+      permission_level: s.permission_level,
+    })));
+    const customTools = listCustomTools();
+    const agentCustomTools = customTools.filter(t => agent.tools.includes(t.name));
+    customToolsConfig = JSON.stringify(agentCustomTools.map(t => ({
+      name: t.name,
+      schema: JSON.parse(t.schema_json),
+      script_path: t.script_path,
+    })));
+  } catch (err) {
+    logger.warn('Failed to load skills/tools for agent', { agentId: agent.id, error: String(err) });
+  }
+
   // Ensure workspace directory exists
   const workingDir = `/tmp/tinyjobs-workspaces/${agent.id}`;
   const sourcesCacheDir = `/tmp/tinyjobs-sources-cache/${agent.id}`;
@@ -203,6 +227,9 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
         TRACE_ID: data.traceId,
         AGENT_ID: agent.id,
         PERMISSION_MODE: 'bypassPermissions',
+        SKILLS_CONFIG: skillsConfig,
+        CUSTOM_TOOLS_CONFIG: customToolsConfig,
+        MEMORY_ENABLED: agent.memory_enabled ? '1' : '0',
       },
       networkAllowlist: securityConfig.networkMode === 'bridge' ? ['*'] : undefined,
     });
@@ -270,6 +297,15 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
       completed_at: new Date().toISOString(),
     });
 
+    // Extract and store 0-5 key facts as agent memory
+    if (agent.memory_enabled && status === 'completed' && output) {
+      try {
+        await extractAndStoreMemories(agent.id, runRecord.id, data.input, output);
+      } catch (memErr) {
+        logger.warn('Memory extraction failed', { traceId: data.traceId, error: String(memErr) });
+      }
+    }
+
     // Stream done event to Slack
     if (data.channelId) {
       bufferEvent(
@@ -334,6 +370,57 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
     });
 
     throw err;
+  }
+}
+
+// ── Memory Extraction ──
+
+async function extractAndStoreMemories(
+  agentId: string,
+  runId: string,
+  input: string,
+  output: string
+): Promise<void> {
+  try {
+    const Anthropic = (await import('@anthropic-ai/sdk')).default;
+    const client = new Anthropic();
+
+    const response = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 512,
+      system: `Extract 0-5 key facts worth remembering from this agent interaction.
+Return ONLY a JSON array of objects: [{"fact": "...", "category": "preference|procedure|correction|context|entity"}]
+If nothing is worth remembering, return an empty array [].
+Focus on: user preferences, corrections, entities mentioned, procedures learned.`,
+      messages: [{
+        role: 'user',
+        content: `Task: ${input.slice(0, 500)}\n\nOutput: ${output.slice(0, 1500)}`,
+      }],
+    });
+
+    const text = response.content
+      .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
+      .map(b => b.text)
+      .join('');
+
+    const facts = JSON.parse(text) as Array<{ fact: string; category: string }>;
+    if (Array.isArray(facts) && facts.length > 0) {
+      const validCategories = ['preference', 'procedure', 'correction', 'context', 'entity'];
+      const validFacts = facts
+        .filter(f => f.fact && f.category)
+        .slice(0, 5)
+        .map(f => ({
+          fact: f.fact,
+          category: (validCategories.includes(f.category) ? f.category : 'context') as MemoryCategory,
+        }));
+
+      if (validFacts.length > 0) {
+        storeMemories(agentId, runId, validFacts);
+        logger.info('Memories extracted from run', { agentId, runId, count: validFacts.length });
+      }
+    }
+  } catch (err: any) {
+    logger.warn('AI memory extraction failed', { error: err.message });
   }
 }
 

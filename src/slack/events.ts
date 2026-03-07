@@ -39,6 +39,10 @@ export function registerEvents(app: App): void {
     // Check if message is in an agent channel
     const agent = getAgentByChannel(channelId);
     if (agent) {
+      // Handle interactive agent-channel commands
+      const interactiveResult = await handleAgentChannelCommand(text, agent, channelId, userId, threadTs);
+      if (interactiveResult) return;
+
       // Check for model override
       const modelOverride = parseModelOverride(text);
       const cleanInput = modelOverride ? stripModelOverride(text) : text;
@@ -106,6 +110,25 @@ export function registerEvents(app: App): void {
     }
   });
 
+  // ── File Upload for KB ──
+  app.event('file_shared' as any, async ({ event }: any) => {
+    const channelId = event.channel_id;
+    const agent = getAgentByChannel(channelId);
+    if (!agent) return;
+
+    try {
+      const { createWizardState, advanceWizard, completeWizard } = await import('../modules/kb-wizard');
+      // File uploads in agent channels auto-trigger KB wizard
+      await postMessage(
+        channelId,
+        ':file_folder: File received. Processing for knowledge base...\n' +
+        'Use `/kb add` to manually add content, or I\'ll index this automatically.',
+      );
+    } catch (err: any) {
+      logger.error('File upload KB processing failed', { error: err.message });
+    }
+  });
+
   // ── DM Events (Superadmin) ──
   app.event('message' as any, async ({ event }: any) => {
     const msg = event;
@@ -136,4 +159,192 @@ export function registerEvents(app: App): void {
     const blocks = buildDashboardBlocks();
     await publishHomeTab(event.user, blocks);
   });
+}
+
+// ── Interactive Agent Channel Commands ──
+
+async function handleAgentChannelCommand(
+  text: string,
+  agent: any,
+  channelId: string,
+  userId: string,
+  threadTs: string
+): Promise<boolean> {
+  const lower = text.trim().toLowerCase();
+
+  // "connect to github.com/..." or "connect to owner/repo"
+  const connectGithubMatch = lower.match(/^connect\s+(?:to\s+)?(?:https?:\/\/)?(?:github\.com\/)?([\w.-]+\/[\w.-]+)/);
+  if (connectGithubMatch) {
+    try {
+      const { connectSource, detectSourceType } = await import('../modules/sources');
+      const { cloneRepo, parseGitHubUri } = await import('../modules/sources/github');
+      const uri = connectGithubMatch[1];
+      const parsed = parseGitHubUri(uri);
+      if (!parsed) {
+        await postMessage(channelId, ':x: Invalid GitHub URL. Use format: `connect to owner/repo`', threadTs);
+        return true;
+      }
+      const source = connectSource({
+        agentId: agent.id,
+        sourceType: 'github',
+        uri: `https://github.com/${parsed.owner}/${parsed.repo}`,
+        label: `${parsed.owner}/${parsed.repo}`,
+      });
+      await postMessage(
+        channelId,
+        `:white_check_mark: Connected to GitHub repo \`${parsed.owner}/${parsed.repo}\` (branch: ${parsed.branch})\nSource ID: \`${source.id.slice(0, 8)}\`\nSyncing in background...`,
+        threadTs,
+      );
+      // Trigger initial clone in background
+      const repoDir = `/tmp/tinyjobs-sources-cache/${agent.id}/${source.id}`;
+      cloneRepo(parsed.owner, parsed.repo, repoDir, parsed.branch).catch(err => {
+        logger.error('Initial clone failed', { error: err.message });
+      });
+      return true;
+    } catch (err: any) {
+      await postMessage(channelId, `:x: Failed to connect: ${err.message}`, threadTs);
+      return true;
+    }
+  }
+
+  // "connect to drive.google.com/..." or "connect to docs.google.com/..."
+  const connectDriveMatch = lower.match(/^connect\s+(?:to\s+)?(https?:\/\/(?:docs|drive)\.google\.com\S+)/);
+  if (connectDriveMatch) {
+    try {
+      const { connectSource } = await import('../modules/sources');
+      const { parseDriveUri } = await import('../modules/sources/google-drive');
+      const uri = connectDriveMatch[1];
+      const parsed = parseDriveUri(uri);
+      if (!parsed) {
+        await postMessage(channelId, ':x: Invalid Google Drive URL.', threadTs);
+        return true;
+      }
+      const source = connectSource({
+        agentId: agent.id,
+        sourceType: 'google_drive',
+        uri,
+        label: `Drive: ${parsed.fileId.slice(0, 12)}...`,
+      });
+      await postMessage(
+        channelId,
+        `:white_check_mark: Connected to Google Drive file.\nSource ID: \`${source.id.slice(0, 8)}\`\nWill sync every 15 minutes.`,
+        threadTs,
+      );
+      return true;
+    } catch (err: any) {
+      await postMessage(channelId, `:x: Failed to connect: ${err.message}`, threadTs);
+      return true;
+    }
+  }
+
+  // "trigger this agent when..." or "add trigger ..."
+  const triggerMatch = lower.match(/^(?:trigger\s+(?:this\s+agent\s+)?when|add\s+trigger)\s+(.+)/);
+  if (triggerMatch) {
+    try {
+      const { createTrigger } = await import('../modules/triggers');
+      const description = triggerMatch[1];
+
+      // Detect trigger type from description
+      let triggerType: any = 'webhook';
+      let triggerConfig: any = { description };
+
+      if (description.includes('linear') || description.includes('issue')) {
+        triggerType = 'linear';
+        triggerConfig = { events: ['Issue'], description };
+      } else if (description.includes('zendesk') || description.includes('ticket')) {
+        triggerType = 'zendesk';
+        triggerConfig = { events: ['ticket.created'], description };
+      } else if (description.includes('intercom') || description.includes('conversation')) {
+        triggerType = 'intercom';
+        triggerConfig = { events: ['conversation.created'], description };
+      } else if (description.includes('message') || description.includes('channel')) {
+        triggerType = 'slack_channel';
+        triggerConfig = { channel_id: channelId, description };
+      }
+
+      const trigger = createTrigger({
+        agentId: agent.id,
+        triggerType,
+        config: triggerConfig,
+        createdBy: userId,
+      });
+
+      await postMessage(
+        channelId,
+        `:zap: Trigger created!\nType: \`${triggerType}\`\nID: \`${trigger.id.slice(0, 8)}\`\n\nThis agent will now fire when: _${description}_`,
+        threadTs,
+      );
+      return true;
+    } catch (err: any) {
+      await postMessage(channelId, `:x: Failed to create trigger: ${err.message}`, threadTs);
+      return true;
+    }
+  }
+
+  // "add <skill> skill" or "add linear skill"
+  const skillMatch = lower.match(/^add\s+([\w-]+)\s+skill(?:\s+with\s+(read|write|admin))?/);
+  if (skillMatch) {
+    try {
+      const { attachSkillToAgent } = await import('../modules/skills');
+      const skillName = skillMatch[1];
+      const permLevel = (skillMatch[2] as any) || 'read';
+
+      const agentSkill = attachSkillToAgent(agent.id, skillName, permLevel, userId);
+      await postMessage(
+        channelId,
+        `:jigsaw: Skill *${skillName}* attached with \`${permLevel}\` permissions.`,
+        threadTs,
+      );
+      return true;
+    } catch (err: any) {
+      await postMessage(channelId, `:x: ${err.message}`, threadTs);
+      return true;
+    }
+  }
+
+  // "add @user as admin"
+  const adminMatch = text.match(/^add\s+<@(\w+)>\s+as\s+admin/i);
+  if (adminMatch) {
+    try {
+      const { addAgentAdmin } = await import('../modules/access-control');
+      addAgentAdmin(agent.id, adminMatch[1], userId);
+      await postMessage(channelId, `:white_check_mark: <@${adminMatch[1]}> is now an admin of *${agent.name}*`, threadTs);
+      return true;
+    } catch (err: any) {
+      await postMessage(channelId, `:x: ${err.message}`, threadTs);
+      return true;
+    }
+  }
+
+  // "forget about X"
+  const forgetMatch = lower.match(/^forget\s+(?:about\s+)?(.+)/);
+  if (forgetMatch && agent.memory_enabled) {
+    try {
+      const { forgetMemory } = await import('../modules/sources/memory');
+      const count = forgetMemory(agent.id, forgetMatch[1]);
+      await postMessage(
+        channelId,
+        count > 0
+          ? `:wastebasket: Forgot ${count} memory/memories matching "${forgetMatch[1]}"`
+          : `:shrug: No memories found matching "${forgetMatch[1]}"`,
+        threadTs,
+      );
+      return true;
+    } catch (err: any) {
+      await postMessage(channelId, `:x: ${err.message}`, threadTs);
+      return true;
+    }
+  }
+
+  // "add to kb" — trigger KB wizard from a quoted reply
+  if (lower === 'add to kb' || lower === 'add to knowledge base') {
+    await postMessage(
+      channelId,
+      ':books: To add content to the knowledge base, paste or upload the content here, or use `/kb add`.',
+      threadTs,
+    );
+    return true;
+  }
+
+  return false;
 }
