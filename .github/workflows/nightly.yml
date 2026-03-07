@@ -1,0 +1,29 @@
+name: Nightly Smoke Tests
+
+on:
+  schedule:
+    - cron: '0 4 * * *'  # 4 AM UTC daily
+  workflow_dispatch:
+
+jobs:
+  smoke-tests:
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx vitest run tests/unit/
+        env:
+          REDIS_URL: redis://localhost:6379
+      - run: npx vitest run --config vitest.integration.config.ts
+        env:
+          REDIS_URL: redis://localhost:6379
+      - run: docker build -t tinyjobs-agent:smoke ./docker

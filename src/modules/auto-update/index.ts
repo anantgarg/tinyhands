@@ -1,0 +1,160 @@
+import crypto from 'crypto';
+import { execSync } from 'child_process';
+import type { Request, Response } from 'express';
+import { config } from '../../config';
+import { logger } from '../../utils/logger';
+
+// ── Webhook Signature Verification ──
+
+export function verifyGithubSignature(payload: string, signature: string): boolean {
+  if (!config.github.webhookSecret) return false;
+
+  const expected = 'sha256=' + crypto
+    .createHmac('sha256', config.github.webhookSecret)
+    .update(payload)
+    .digest('hex');
+
+  return crypto.timingSafeEqual(
+    Buffer.from(signature),
+    Buffer.from(expected)
+  );
+}
+
+// ── Deploy Handler ──
+
+export interface DeployResult {
+  success: boolean;
+  commitHash: string;
+  changedFiles: string[];
+  packageJsonChanged: boolean;
+  dockerfileChanged: boolean;
+  restartTime: number;
+  error?: string;
+}
+
+export async function handleDeploy(payload: any): Promise<DeployResult> {
+  const startTime = Date.now();
+  const commitHash = payload.after?.slice(0, 7) || 'unknown';
+
+  // Get changed files
+  const changedFiles: string[] = [];
+  if (payload.commits) {
+    for (const commit of payload.commits) {
+      changedFiles.push(...(commit.added || []), ...(commit.modified || []), ...(commit.removed || []));
+    }
+  }
+
+  const packageJsonChanged = changedFiles.includes('package.json') || changedFiles.includes('package-lock.json');
+  const dockerfileChanged = changedFiles.some((f: string) => f.startsWith('docker/'));
+
+  try {
+    // 1. Git pull
+    logger.info('Deploy: pulling latest code', { commitHash });
+    execSync('git pull origin main', { cwd: process.cwd(), timeout: 30000 });
+
+    // 2. npm install if package.json changed
+    if (packageJsonChanged) {
+      logger.info('Deploy: installing dependencies');
+      execSync('npm install --production', { cwd: process.cwd(), timeout: 120000 });
+    }
+
+    // 3. Docker rebuild if Dockerfile changed
+    if (dockerfileChanged) {
+      logger.info('Deploy: rebuilding Docker image');
+      execSync(`docker build -t ${config.docker.baseImage} ./docker/`, {
+        cwd: process.cwd(),
+        timeout: 300000,
+      });
+    }
+
+    // 4. Build TypeScript
+    logger.info('Deploy: building TypeScript');
+    execSync('npm run build', { cwd: process.cwd(), timeout: 60000 });
+
+    // 5. Graceful PM2 reload (in-flight jobs complete first)
+    logger.info('Deploy: reloading PM2');
+    execSync('pm2 reload ecosystem.config.js', { cwd: process.cwd(), timeout: 30000 });
+
+    const restartTime = Date.now() - startTime;
+
+    logger.info('Deploy completed', {
+      commitHash,
+      changedFiles: changedFiles.length,
+      packageJsonChanged,
+      dockerfileChanged,
+      restartTime,
+    });
+
+    return {
+      success: true,
+      commitHash,
+      changedFiles: [...new Set(changedFiles)],
+      packageJsonChanged,
+      dockerfileChanged,
+      restartTime,
+    };
+  } catch (err: any) {
+    logger.error('Deploy failed', { commitHash, error: err.message });
+    return {
+      success: false,
+      commitHash,
+      changedFiles: [...new Set(changedFiles)],
+      packageJsonChanged,
+      dockerfileChanged,
+      restartTime: Date.now() - startTime,
+      error: err.message,
+    };
+  }
+}
+
+// ── Express Route Handler ──
+
+export function deployWebhookHandler(req: Request, res: Response): void {
+  const signature = req.headers['x-hub-signature-256'] as string;
+  const event = req.headers['x-github-event'] as string;
+
+  if (!signature) {
+    res.status(401).json({ error: 'Missing signature' });
+    return;
+  }
+
+  const payload = JSON.stringify(req.body);
+  if (!verifyGithubSignature(payload, signature)) {
+    res.status(401).json({ error: 'Invalid signature' });
+    return;
+  }
+
+  // Only deploy on push to main
+  if (event !== 'push' || req.body.ref !== 'refs/heads/main') {
+    res.status(200).json({ message: 'Ignored non-main push' });
+    return;
+  }
+
+  // Respond immediately, deploy async
+  res.status(202).json({ message: 'Deploy started' });
+
+  handleDeploy(req.body).catch(err => {
+    logger.error('Deploy handler error', { error: err.message });
+  });
+}
+
+// ── Deploy Summary for Slack ──
+
+export function formatDeploySummary(result: DeployResult): string {
+  const status = result.success ? ':white_check_mark: Deploy successful' : ':x: Deploy failed';
+
+  let summary = `${status}\n`;
+  summary += `Commit: \`${result.commitHash}\`\n`;
+  summary += `Changed files: ${result.changedFiles.length}\n`;
+
+  if (result.packageJsonChanged) summary += ':package: Dependencies updated\n';
+  if (result.dockerfileChanged) summary += ':whale: Docker image rebuilt\n';
+
+  summary += `Restart time: ${(result.restartTime / 1000).toFixed(1)}s\n`;
+
+  if (result.error) {
+    summary += `\n:warning: Error: ${result.error}\n`;
+  }
+
+  return summary;
+}

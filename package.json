@@ -1,0 +1,55 @@
+{
+  "name": "tinyjobs",
+  "version": "1.0.0",
+  "description": "Slack-based command center for Claude Code agents",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "ts-node src/index.ts",
+    "start": "node dist/index.ts",
+    "lint": "eslint src/ --ext .ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "prepare": "husky install"
+  },
+  "keywords": [
+    "slack",
+    "ai-agents",
+    "claude",
+    "automation",
+    "bullmq",
+    "docker"
+  ],
+  "author": "Anant Garg",
+  "license": "MIT",
+  "dependencies": {
+    "@anthropic-ai/claude-code": "^1.0.0",
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@slack/bolt": "^4.1.0",
+    "@slack/web-api": "^7.8.0",
+    "better-sqlite3": "^11.7.0",
+    "bullmq": "^5.34.0",
+    "dockerode": "^4.0.4",
+    "express": "^4.21.0",
+    "ioredis": "^5.4.2",
+    "uuid": "^11.1.0",
+    "winston": "^3.17.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.12",
+    "@types/dockerode": "^3.3.34",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.10.0",
+    "@types/uuid": "^10.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.0.0",
+    "@typescript-eslint/parser": "^8.0.0",
+    "eslint": "^9.0.0",
+    "husky": "^9.0.0",
+    "testcontainers": "^10.16.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.0"
+  }
+}
