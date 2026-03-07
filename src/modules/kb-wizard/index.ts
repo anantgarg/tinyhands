@@ -35,9 +35,7 @@ export function createWizardState(
   };
 }
 
-export function generateSuggestions(content: string): WizardSuggestions {
-  // In production, this calls Claude to generate metadata.
-  // Here we provide basic heuristic-based suggestions.
+export function generateSuggestionsHeuristic(content: string): WizardSuggestions {
   const firstLine = content.split('\n')[0] || 'Untitled';
   const title = firstLine.slice(0, 80).trim();
 
@@ -64,17 +62,56 @@ export function generateSuggestions(content: string): WizardSuggestions {
   };
 }
 
-export function advanceWizard(
+export async function generateSuggestions(content: string): Promise<WizardSuggestions> {
+  // Try AI-powered metadata generation, fall back to heuristics
+  try {
+    const Anthropic = (await import('@anthropic-ai/sdk')).default;
+    const client = new Anthropic();
+
+    const response = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 512,
+      system: `Extract metadata from the provided content. Return ONLY valid JSON with these fields:
+{"title": "...", "summary": "...", "category": "...", "tags": ["...", "..."]}
+- title: concise title (max 80 chars)
+- summary: 1-2 sentence summary
+- category: one of: General, Engineering, Product, Support, Sales, HR, Legal, Finance, Operations
+- tags: 3-5 relevant keywords`,
+      messages: [{
+        role: 'user',
+        content: content.slice(0, 3000),
+      }],
+    });
+
+    const text = response.content
+      .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
+      .map(b => b.text)
+      .join('');
+
+    const parsed = JSON.parse(text);
+    return {
+      title: parsed.title || content.split('\n')[0]?.slice(0, 80) || 'Untitled',
+      summary: parsed.summary || '',
+      category: parsed.category || 'General',
+      tags: Array.isArray(parsed.tags) ? parsed.tags : [],
+    };
+  } catch (err: any) {
+    logger.warn('AI KB metadata generation failed, using heuristics', { error: err.message });
+    return generateSuggestionsHeuristic(content);
+  }
+}
+
+export async function advanceWizard(
   state: WizardState,
   action: 'suggest' | 'confirm' | 'override',
   data?: Partial<WizardSuggestions>
-): WizardState {
+): Promise<WizardState> {
   switch (action) {
     case 'suggest':
       return {
         ...state,
         step: 'metadata',
-        suggestions: generateSuggestions(state.content),
+        suggestions: await generateSuggestions(state.content),
       };
 
     case 'override':
@@ -84,7 +121,7 @@ export function advanceWizard(
       };
 
     case 'confirm': {
-      const suggestions = state.suggestions || generateSuggestions(state.content);
+      const suggestions = state.suggestions || await generateSuggestions(state.content);
       const final = { ...suggestions, ...state.overrides };
       return {
         ...state,

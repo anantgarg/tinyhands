@@ -1,9 +1,12 @@
 import { getDb } from './db';
-import { getSourcesDueForSync, updateSourceStatus, ingestContent } from './modules/sources';
+import { getSourcesDueForSync, updateSourceStatus, ingestContent, getSource } from './modules/sources';
 import { checkAlerts } from './modules/observability';
 import { generateDailyDigest } from './modules/observability';
 import { config } from './config';
 import { logger } from './utils/logger';
+import { postMessage } from './slack';
+
+const TINYJOBS_CHANNEL = process.env.TINYJOBS_CHANNEL_ID || 'tinyjobs';
 
 const SYNC_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
 const ALERT_CHECK_INTERVAL_MS = 60 * 1000; // 1 minute
@@ -24,8 +27,23 @@ async function main(): Promise<void> {
         try {
           updateSourceStatus(source.id, 'syncing');
 
-          // In production: fetch content from source type (GitHub, Drive, etc.)
-          // For now, mark as synced
+          // Fetch and re-index based on source type
+          if (source.source_type === 'github') {
+            const { pullLatest, readRepoFiles } = await import('./modules/sources/github');
+            const repoDir = `/tmp/tinyjobs-sources-cache/${source.agent_id}/${source.id}`;
+            await pullLatest(repoDir);
+            const files = readRepoFiles(repoDir);
+            ingestContent(source.id, source.agent_id, files);
+          } else if (source.source_type === 'google_drive') {
+            const { fetchDriveFile, parseDriveUri, getServiceAccountToken } = await import('./modules/sources/google-drive');
+            const parsed = parseDriveUri(source.uri);
+            if (parsed) {
+              const token = await getServiceAccountToken();
+              const content = await fetchDriveFile(parsed.fileId, token);
+              ingestContent(source.id, source.agent_id, [{ path: source.label, content }]);
+            }
+          }
+
           updateSourceStatus(source.id, 'active');
         } catch (err: any) {
           updateSourceStatus(source.id, 'error', err.message);
@@ -38,7 +56,7 @@ async function main(): Promise<void> {
   }, SYNC_INTERVAL_MS);
 
   // Alert check loop
-  setInterval(() => {
+  setInterval(async () => {
     try {
       const alerts = checkAlerts();
       for (const alert of alerts) {
@@ -48,7 +66,15 @@ async function main(): Promise<void> {
           threshold: alert.threshold,
           message: alert.message,
         });
-        // In production: post to #tinyjobs Slack channel
+        // Post alert to #tinyjobs Slack channel
+        try {
+          await postMessage(
+            TINYJOBS_CHANNEL,
+            `:rotating_light: *Alert: ${alert.condition}*\n${alert.message}\nThreshold: ${alert.threshold} | Value: ${typeof alert.value === 'number' ? alert.value.toFixed(4) : alert.value}`
+          );
+        } catch (slackErr: any) {
+          logger.error('Failed to post alert to Slack', { error: slackErr.message });
+        }
       }
     } catch (err: any) {
       logger.error('Alert check failed', { error: err.message });
@@ -63,7 +89,10 @@ async function main(): Promise<void> {
     if (time === config.observability.dailyDigestTime) {
       const digest = generateDailyDigest();
       logger.info('Daily digest generated', { digest: digest.slice(0, 200) });
-      // In production: post digest to #tinyjobs Slack channel
+      // Post digest to #tinyjobs Slack channel
+      postMessage(TINYJOBS_CHANNEL, digest).catch((err: any) => {
+        logger.error('Failed to post daily digest to Slack', { error: err.message });
+      });
     }
   }, 60000);
 
