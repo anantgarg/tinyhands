@@ -1,6 +1,6 @@
 import { v4 as uuid } from 'uuid';
 import { getDb } from '../../db';
-import { getAgent } from '../agents';
+import { getAgent, updateAgent } from '../agents';
 import { registerCustomTool, getCustomTool, listCustomTools } from '../tools';
 import { registerSkill, attachSkillToAgent } from '../skills';
 import { createProposal } from '../self-evolution';
@@ -54,7 +54,8 @@ export async function authorTool(
   // Step 1: AI generates tool specification and implementation
   const { spec, code } = await generateToolCode(taskDescription, agent.name);
 
-  // Step 2: Static validation (forbidden patterns, size limits)
+  // Step 2: Validate name + code
+  validateToolName(spec.name);
   validateToolCode(code, spec.language);
 
   // Step 3: Sandbox test — run with sample input, verify it doesn't crash
@@ -178,28 +179,35 @@ async function sandboxTest(
   const wrappedCode = wrapForExecution(code, language, 'sandbox-test');
 
   try {
-    const { execSync } = await import('child_process');
+    const { execFileSync } = await import('child_process');
+    const { writeFileSync, unlinkSync, mkdtempSync } = await import('fs');
+    const { join } = await import('path');
+    const os = await import('os');
 
-    let cmd: string;
+    // Write code to temp file to avoid shell injection
+    const tmpDir = mkdtempSync(join(os.tmpdir(), 'tj-sandbox-'));
+    const extMap: Record<string, string> = { javascript: 'js', python: 'py', bash: 'sh' };
+    const ext = extMap[language] || 'js';
+    const tmpFile = join(tmpDir, `test.${ext}`);
+    writeFileSync(tmpFile, wrappedCode, 'utf-8');
+
+    let interpreter: string;
     switch (language) {
-      case 'javascript':
-        cmd = `echo ${JSON.stringify(wrappedCode)} | INPUT=${JSON.stringify(JSON.stringify(sampleInput))} timeout 10 node -e "$(cat)"`;
-        break;
-      case 'python':
-        cmd = `echo ${JSON.stringify(wrappedCode)} | INPUT=${JSON.stringify(JSON.stringify(sampleInput))} timeout 10 python3 -c "$(cat)"`;
-        break;
-      case 'bash':
-        cmd = `echo ${JSON.stringify(wrappedCode)} | INPUT=${JSON.stringify(JSON.stringify(sampleInput))} timeout 10 bash -s`;
-        break;
+      case 'javascript': interpreter = 'node'; break;
+      case 'python': interpreter = 'python3'; break;
+      case 'bash': interpreter = 'bash'; break;
       default:
         return { passed: false, output: '', error: `Unsupported language: ${language}`, durationMs: 0 };
     }
 
-    const output = execSync(cmd, {
+    const output = execFileSync(interpreter, [tmpFile], {
       timeout: 15000,
       maxBuffer: 1024 * 1024,
       env: { ...process.env, INPUT: JSON.stringify(sampleInput) },
     }).toString().trim();
+
+    // Cleanup
+    try { unlinkSync(tmpFile); unlinkSync(tmpDir); } catch {}
 
     return {
       passed: true,
@@ -356,7 +364,6 @@ export function shareToolWithAgent(
   if (!toAgent) throw new Error(`Target agent ${toAgentId} not found`);
 
   // Add tool to target agent's tool list
-  const { updateAgent } = require('../agents');
   const tools = [...toAgent.tools];
   if (!tools.includes(toolName)) {
     tools.push(toolName);
@@ -428,29 +435,42 @@ export function createToolPipeline(
 }
 
 function generatePipelineCode(pipeline: ToolPipeline): string {
-  const steps = pipeline.steps.map((step, i) => {
-    const mappingCode = Object.entries(step.inputMapping)
-      .map(([from, to]) => `stepInput['${to}'] = prevResult['${from}'] || input['${from}'];`)
-      .join('\n    ');
-
-    return `
-  // Step ${i + 1}: ${step.toolName}
-  {
-    const stepInput = {};
-    ${mappingCode || `Object.assign(stepInput, prevResult || input);`}
-    const { execSync } = require('child_process');
-    const result = execSync(
-      \`INPUT='\${JSON.stringify(stepInput)}' node /tools/${step.toolName}.js\`,
-      { timeout: 30000, env: process.env }
-    ).toString().trim();
-    prevResult = JSON.parse(result);
-  }`;
-  }).join('\n');
+  // Pipeline code uses vm module (stdlib) to run steps in-process — avoids child_process
+  const stepConfigs = JSON.stringify(pipeline.steps.map(s => ({
+    toolName: s.toolName,
+    inputMapping: s.inputMapping,
+  })));
 
   return `'use strict';
+const fs = require('fs');
+const vm = require('vm');
 const input = JSON.parse(process.env.INPUT || '{}');
+const steps = ${stepConfigs};
 let prevResult = null;
-${steps}
+
+for (const step of steps) {
+  const stepInput = {};
+  if (Object.keys(step.inputMapping).length > 0) {
+    for (const [from, to] of Object.entries(step.inputMapping)) {
+      stepInput[to] = (prevResult || input)[from] || input[from];
+    }
+  } else {
+    Object.assign(stepInput, prevResult || input);
+  }
+
+  const exts = ['js', 'py', 'sh'];
+  let scriptPath = null;
+  for (const ext of exts) {
+    const p = '/tools/' + step.toolName + '.' + ext;
+    if (fs.existsSync(p)) { scriptPath = p; break; }
+  }
+  if (!scriptPath) throw new Error('Tool script not found: ' + step.toolName);
+
+  const script = fs.readFileSync(scriptPath, 'utf-8');
+  const sandbox = { process: { env: { ...process.env, INPUT: JSON.stringify(stepInput) } }, require, console: { log: function(v) { prevResult = typeof v === 'string' ? JSON.parse(v) : v; } } };
+  vm.runInNewContext(script, sandbox, { timeout: 30000 });
+}
+
 console.log(JSON.stringify(prevResult));`;
 }
 
@@ -722,6 +742,41 @@ export function validateToolCode(code: string, language: string): void {
   }
 }
 
+/**
+ * Validate tool name — must be safe for use as filename and shell arg.
+ */
+export function validateToolName(name: string): void {
+  if (!name || name.length < 3 || name.length > 40) {
+    throw new Error('Tool name must be 3-40 characters');
+  }
+  if (!/^[a-z0-9][a-z0-9-]*[a-z0-9]$/.test(name)) {
+    throw new Error('Tool name must be kebab-case (a-z, 0-9, hyphens, no leading/trailing hyphens)');
+  }
+  if (name.includes('--')) {
+    throw new Error('Tool name must not contain consecutive hyphens');
+  }
+}
+
+/**
+ * Validate file path for code artifacts — prevent path traversal.
+ */
+export function validateArtifactPath(filePath: string): void {
+  // Normalize and reject traversal
+  if (filePath.includes('..') || filePath.includes('\0')) {
+    throw new Error('File path must not contain ".." or null bytes');
+  }
+  if (!filePath.startsWith('/')) {
+    throw new Error('File path must be absolute');
+  }
+  // Block sensitive paths
+  const blockedPrefixes = ['/etc/', '/proc/', '/sys/', '/dev/', '/boot/', '/root/', '/var/run/'];
+  for (const prefix of blockedPrefixes) {
+    if (filePath.startsWith(prefix)) {
+      throw new Error(`File path cannot target ${prefix}`);
+    }
+  }
+}
+
 // ══════════════════════════════════════════════════
 //  TOOL EXECUTION SCRIPT GENERATION
 // ══════════════════════════════════════════════════
@@ -750,6 +805,7 @@ ${code}`;
 
 export function getToolExecutionScript(toolName: string): string | null {
   const tool = getCustomTool(toolName);
+  // SQLite returns 0/1 for boolean columns, so use truthiness check
   if (!tool?.script_code || !tool.approved) return null;
 
   const shebangMap: Record<string, string> = {
