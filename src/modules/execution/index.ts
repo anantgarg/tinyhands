@@ -1,16 +1,19 @@
 import { v4 as uuid } from 'uuid';
 import { Worker, Job } from 'bullmq';
 import { getDb } from '../../db';
-import { getRedisConnection, recordTokenUsage, checkRateLimit } from '../../queue';
+import { getRedisConnection, recordTokenUsage, checkRateLimit, checkRequestRate } from '../../queue';
 import { createAgentContainer, startContainer, waitForContainer, removeContainer } from '../../docker';
 import { getAgent } from '../agents';
 import { retrieveContext } from '../sources';
 import { retrieveMemories } from '../sources/memory';
-import { getDisallowedTools } from '../permissions';
+import { getDisallowedTools, getDockerSecurityConfig } from '../permissions';
+import { bufferEvent } from '../../slack/buffer';
 import { config } from '../../config';
 import { estimateCost, getModelId } from '../../utils/costs';
 import { logger, logRunEvent } from '../../utils/logger';
-import type { JobData, RunRecord, RunStatus } from '../../types';
+import type { JobData, RunRecord, RunStatus, ModelAlias } from '../../types';
+
+// ── Run Record CRUD ──
 
 export function createRunRecord(data: JobData, jobId: string): RunRecord {
   const db = getDb();
@@ -90,6 +93,8 @@ export function getRecentRuns(limit: number = 20): RunRecord[] {
   ).all(limit) as RunRecord[];
 }
 
+// ── Agent Execution ──
+
 export async function executeAgentRun(job: Job<JobData>): Promise<string> {
   const { data } = job;
   const startTime = Date.now();
@@ -99,7 +104,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
 
   const runRecord = createRunRecord(data, job.id || '');
 
-  // Check rate limit
+  // Check rate limit (TPM and RPM)
   const rateCheck = await checkRateLimit();
   if (!rateCheck.allowed) {
     logger.warn('Rate limit near capacity, delaying job', {
@@ -109,8 +114,29 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
     throw new Error('Rate limit exceeded, job will be retried');
   }
 
+  const rpmAllowed = await checkRequestRate();
+  if (!rpmAllowed) {
+    throw new Error('RPM limit exceeded, job will be retried');
+  }
+
   const queueWaitMs = Date.now() - new Date(runRecord.created_at).getTime();
   updateRunRecord(runRecord.id, { status: 'running', queue_wait_ms: queueWaitMs });
+
+  const model: ModelAlias = data.modelOverride || agent.model;
+  const suppressThinking = model === 'haiku'; // Haiku: no thinking traces
+
+  // Stream initial thinking event to Slack
+  if (data.channelId) {
+    bufferEvent(
+      data.channelId,
+      data.threadTs,
+      'thinking',
+      'Analyzing task...',
+      agent.name,
+      agent.avatar_emoji,
+      suppressThinking
+    );
+  }
 
   logRunEvent({
     trace_id: data.traceId,
@@ -123,7 +149,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
     duration_ms: 0,
   });
 
-  // Retrieve context
+  // Retrieve context (sources + memory)
   let contextBlock = '';
   let contextTokens = 0;
   try {
@@ -131,7 +157,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
     if (chunks.length > 0) {
       contextBlock = '\n\n## Relevant Context\n\n' +
         chunks.map(c => `### ${c.file_path}\n${c.content}`).join('\n\n');
-      contextTokens = Math.ceil(contextBlock.length / 4); // rough estimate
+      contextTokens = Math.ceil(contextBlock.length / 4);
     }
 
     if (agent.memory_enabled) {
@@ -148,19 +174,22 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
 
   updateRunRecord(runRecord.id, { context_tokens_injected: contextTokens });
 
-  // Build task prompt
+  // Build task prompt with context
   const taskPrompt = contextBlock
     ? `${data.input}\n${contextBlock}`
     : data.input;
 
-  // Get disallowed tools
+  // Get permission config
   const disallowedTools = getDisallowedTools(agent.permission_level);
-  const model = data.modelOverride || agent.model;
+  const securityConfig = getDockerSecurityConfig(agent.permission_level);
 
-  // Create and run Docker container
+  // Ensure workspace directory exists
   const workingDir = `/tmp/tinyjobs-workspaces/${agent.id}`;
+  const sourcesCacheDir = `/tmp/tinyjobs-sources-cache/${agent.id}`;
+  const memoryDir = `/tmp/tinyjobs-memory/${agent.id}`;
 
   try {
+    // Create Docker container with full security config applied
     const container = await createAgentContainer({
       agent,
       traceId: data.traceId,
@@ -171,38 +200,87 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
         MAX_TURNS: String(agent.max_turns),
         DISALLOWED_TOOLS: JSON.stringify(disallowedTools),
         STREAMING_DETAIL: agent.streaming_detail ? '1' : '0',
+        TRACE_ID: data.traceId,
+        AGENT_ID: agent.id,
+        PERMISSION_MODE: 'bypassPermissions',
       },
+      networkAllowlist: securityConfig.networkMode === 'bridge' ? ['*'] : undefined,
     });
 
     await startContainer(container);
 
     const timeoutMs = config.docker.defaultJobTimeoutMs;
+
+    // SDK Watchdog: if no events for 60s, kill container
+    let lastEventTime = Date.now();
+    const watchdog = setInterval(() => {
+      if (Date.now() - lastEventTime > 60000) {
+        logger.warn('SDK watchdog triggered — no events for 60s', { traceId: data.traceId });
+        container.kill().catch(() => {});
+        clearInterval(watchdog);
+      }
+    }, 10000);
+
     const { exitCode } = await waitForContainer(container, timeoutMs);
+    clearInterval(watchdog);
 
     const durationMs = Date.now() - startTime;
 
-    // For now, simulate token counts from exit code
-    // In production, the container writes structured output
-    const inputTokens = contextTokens + Math.ceil(taskPrompt.length / 4);
-    const outputTokens = 500; // placeholder — real implementation reads from container output
-    const cost = estimateCost(model, inputTokens, outputTokens);
+    // Read structured output from container (written to /workspace/.tinyjobs-output.json)
+    let outputData = { output: '', inputTokens: 0, outputTokens: 0, toolCallsCount: 0 };
+    try {
+      const logs = await import('../../docker').then(d => d.getContainerLogs(container));
+      // Parse structured output from logs
+      const jsonMatch = logs.match(/TINYJOBS_OUTPUT:({.*})/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[1]);
+        outputData = {
+          output: parsed.output || '',
+          inputTokens: parsed.input_tokens || 0,
+          outputTokens: parsed.output_tokens || 0,
+          toolCallsCount: parsed.tool_calls_count || 0,
+        };
+      } else {
+        // Fallback: estimate from task
+        outputData.inputTokens = contextTokens + Math.ceil(taskPrompt.length / 4);
+        outputData.outputTokens = Math.ceil(logs.length / 4);
+        outputData.output = logs.slice(-2000); // Last 2KB of logs
+      }
+    } catch {
+      outputData.inputTokens = contextTokens + Math.ceil(taskPrompt.length / 4);
+      outputData.outputTokens = 200;
+    }
 
-    await recordTokenUsage(inputTokens + outputTokens);
+    const cost = estimateCost(model, outputData.inputTokens, outputData.outputTokens);
+    await recordTokenUsage(outputData.inputTokens + outputData.outputTokens);
 
     const status: RunStatus = exitCode === 0 ? 'completed' : 'failed';
     const output = exitCode === 0
-      ? 'Task completed successfully'
-      : `Task failed with exit code ${exitCode}`;
+      ? outputData.output || 'Task completed successfully'
+      : `Task failed with exit code ${exitCode}: ${outputData.output}`;
 
     updateRunRecord(runRecord.id, {
       status,
       output,
-      input_tokens: inputTokens,
-      output_tokens: outputTokens,
+      input_tokens: outputData.inputTokens,
+      output_tokens: outputData.outputTokens,
       estimated_cost_usd: cost,
       duration_ms: durationMs,
+      tool_calls_count: outputData.toolCallsCount,
       completed_at: new Date().toISOString(),
     });
+
+    // Stream done event to Slack
+    if (data.channelId) {
+      bufferEvent(
+        data.channelId,
+        data.threadTs,
+        'done',
+        output,
+        agent.name,
+        agent.avatar_emoji
+      );
+    }
 
     logRunEvent({
       trace_id: data.traceId,
@@ -210,8 +288,8 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
       job_id: job.id || '',
       event_type: 'done',
       timestamp: new Date().toISOString(),
-      tokens_in: inputTokens,
-      tokens_out: outputTokens,
+      tokens_in: outputData.inputTokens,
+      tokens_out: outputData.outputTokens,
       duration_ms: durationMs,
     });
 
@@ -220,13 +298,28 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
     return output;
   } catch (err: any) {
     const durationMs = Date.now() - startTime;
+    const isTimeout = err.message?.includes('timed out');
 
     updateRunRecord(runRecord.id, {
-      status: err.message?.includes('timed out') ? 'timeout' : 'failed',
+      status: isTimeout ? 'timeout' : 'failed',
       output: err.message || 'Unknown error',
       duration_ms: durationMs,
       completed_at: new Date().toISOString(),
     });
+
+    // Stream error to Slack
+    if (data.channelId) {
+      bufferEvent(
+        data.channelId,
+        data.threadTs,
+        'error',
+        isTimeout
+          ? `Task timed out after ${(durationMs / 1000).toFixed(0)}s`
+          : err.message,
+        agent.name,
+        agent.avatar_emoji
+      );
+    }
 
     logRunEvent({
       trace_id: data.traceId,
@@ -243,6 +336,8 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
     throw err;
   }
 }
+
+// ── Worker ──
 
 export function createWorker(): Worker<JobData> {
   const worker = new Worker<JobData>(
@@ -266,6 +361,15 @@ export function createWorker(): Worker<JobData> {
 
   worker.on('failed', (job, err) => {
     logger.error('Job failed', { jobId: job?.id, error: err.message });
+
+    // Handle Anthropic 429: pause worker for retry-after duration
+    if (err.message?.includes('429') || err.message?.includes('rate limit')) {
+      const retryAfter = 60; // default 60s
+      logger.warn('Anthropic 429 detected, pausing worker', { retryAfter });
+      worker.pause().then(() => {
+        setTimeout(() => worker.resume(), retryAfter * 1000);
+      });
+    }
   });
 
   return worker;

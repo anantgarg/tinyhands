@@ -137,27 +137,59 @@ function executeProposal(proposal: EvolutionProposal): void {
 }
 
 function executeWriteTool(proposal: EvolutionProposal): void {
-  // In production: write script to file, register as custom tool
   const toolConfig = JSON.parse(proposal.diff);
+  const toolName = toolConfig.name || `agent-tool-${proposal.id.slice(0, 8)}`;
+  const { mkdirSync, writeFileSync } = require('fs');
+
+  // Write the tool script to disk
+  if (toolConfig.script) {
+    const scriptPath = `${process.cwd()}/tools/${toolName}.js`;
+    mkdirSync(`${process.cwd()}/tools`, { recursive: true });
+    writeFileSync(scriptPath, toolConfig.script, 'utf-8');
+    toolConfig.script_path = scriptPath;
+    logger.info('Tool script written', { toolName, scriptPath });
+  }
 
   registerCustomTool(
-    toolConfig.name || `agent-tool-${proposal.id.slice(0, 8)}`,
+    toolName,
     JSON.stringify(toolConfig.schema || {}),
     toolConfig.script_path || null,
     proposal.agent_id
   );
 
-  gitCommit(`Agent ${proposal.agent_id.slice(0, 8)} wrote tool: ${toolConfig.name || 'unnamed'}`);
+  gitCommitAndPush(`Agent ${proposal.agent_id.slice(0, 8)} wrote tool: ${toolName}`);
 }
 
 function executeCreateMcp(proposal: EvolutionProposal): void {
-  // Write MCP config, register as skill
-  gitCommit(`Agent ${proposal.agent_id.slice(0, 8)} created MCP integration`);
+  const mcpConfig = JSON.parse(proposal.diff);
+  const { mkdirSync, writeFileSync } = require('fs');
+
+  // Write MCP server config
+  const configDir = `${process.cwd()}/mcp-servers`;
+  mkdirSync(configDir, { recursive: true });
+  const configPath = `${configDir}/${mcpConfig.name || proposal.id.slice(0, 8)}.json`;
+  writeFileSync(configPath, JSON.stringify(mcpConfig, null, 2), 'utf-8');
+
+  logger.info('MCP integration created', { configPath });
+  gitCommitAndPush(`Agent ${proposal.agent_id.slice(0, 8)} created MCP: ${mcpConfig.name || 'unnamed'}`);
 }
 
 function executeCommitCode(proposal: EvolutionProposal): void {
-  // The diff contains code changes to apply
-  gitCommit(`Agent ${proposal.agent_id.slice(0, 8)}: ${proposal.description.slice(0, 60)}`);
+  const changes = JSON.parse(proposal.diff);
+  const { mkdirSync, writeFileSync } = require('fs');
+  const { dirname } = require('path');
+
+  if (Array.isArray(changes.files)) {
+    for (const file of changes.files) {
+      if (file.path && file.content) {
+        mkdirSync(dirname(file.path), { recursive: true });
+        writeFileSync(file.path, file.content, 'utf-8');
+        logger.info('Code file written by agent', { path: file.path });
+      }
+    }
+  }
+
+  gitCommitAndPush(`Agent ${proposal.agent_id.slice(0, 8)}: ${proposal.description.slice(0, 60)}`);
 }
 
 function executeUpdatePrompt(proposal: EvolutionProposal): void {
@@ -179,7 +211,7 @@ function executeAddToKb(proposal: EvolutionProposal): void {
   });
 }
 
-function gitCommit(message: string): void {
+function gitCommitAndPush(message: string): void {
   try {
     execSync('git add -A', { cwd: process.cwd(), timeout: 10000 });
     execSync(`git commit -m "${message.replace(/"/g, '\\"')}"`, {
@@ -187,6 +219,14 @@ function gitCommit(message: string): void {
       timeout: 10000,
     });
     logger.info('Git commit created', { message });
+
+    // Push to remote
+    try {
+      execSync('git push', { cwd: process.cwd(), timeout: 30000 });
+      logger.info('Git push succeeded', { message });
+    } catch (pushErr: any) {
+      logger.warn('Git push failed', { error: pushErr.message });
+    }
   } catch (err: any) {
     logger.warn('Git commit failed (may be no changes)', { error: err.message });
   }

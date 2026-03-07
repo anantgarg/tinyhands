@@ -135,11 +135,11 @@ export async function spawnSubAgent(
 
 // ── Sub-Agent Completion ──
 
-export function completeSubAgent(
+export async function completeSubAgent(
   subAgentRunId: string,
   status: RunStatus,
   result: string
-): void {
+): Promise<void> {
   const db = getDb();
   db.prepare(
     'UPDATE sub_agent_runs SET status = ?, result = ? WHERE id = ?'
@@ -154,17 +154,47 @@ export function completeSubAgent(
     status,
   });
 
-  // Check if all sub-agents are done
-  checkTeamCompletion(subRun.team_run_id);
+  // Check if all sub-agents are done — post results to Slack
+  await checkTeamCompletion(subRun.team_run_id);
 }
 
-function checkTeamCompletion(teamRunId: string): boolean {
+async function checkTeamCompletion(teamRunId: string): Promise<boolean> {
   const db = getDb();
   const pending = db.prepare(
     'SELECT COUNT(*) as count FROM sub_agent_runs WHERE team_run_id = ? AND status IN (?, ?)'
   ).get(teamRunId, 'queued', 'running') as any;
 
-  return pending.count === 0;
+  if (pending.count === 0) {
+    // All sub-agents done — post aggregated results to lead agent's thread
+    const teamRun = getTeamRun(teamRunId);
+    if (teamRun) {
+      const leadRun = db.prepare('SELECT * FROM run_history WHERE id = ?').get(teamRun.lead_run_id) as any;
+      if (leadRun?.channel_id && leadRun?.thread_ts) {
+        try {
+          const { postMessage } = await import('../../slack');
+          const results = getTeamResults(teamRunId);
+          const cost = getTeamCost(teamRunId);
+
+          let summary = `:checkered_flag: *Team run complete*\n`;
+          summary += `Completed: ${results.completed.length} | Failed: ${results.failed.length} | Cost: $${cost.toFixed(4)}\n\n`;
+
+          for (const sub of results.completed) {
+            summary += `:white_check_mark: *${sub.agent_id.slice(0, 8)}*: ${(sub.result || '').slice(0, 200)}\n`;
+          }
+          for (const sub of results.failed) {
+            summary += `:x: *${sub.agent_id.slice(0, 8)}*: ${(sub.result || 'Failed').slice(0, 200)}\n`;
+          }
+
+          await postMessage(leadRun.channel_id, summary, leadRun.thread_ts);
+        } catch (err: any) {
+          logger.warn('Failed to post team results to Slack', { error: err.message });
+        }
+      }
+    }
+    return true;
+  }
+
+  return false;
 }
 
 // ── Results Aggregation ──

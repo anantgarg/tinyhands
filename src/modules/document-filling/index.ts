@@ -1,3 +1,4 @@
+import { writeFileSync, readFileSync } from 'fs';
 import { searchKB } from '../knowledge-base';
 import type { TemplateField, DocumentType } from '../../types';
 import { logger } from '../../utils/logger';
@@ -170,6 +171,103 @@ export function processTemplate(
     unfilled,
     summary,
   };
+}
+
+// ── Write-Back ──
+
+export async function writeBackDocument(
+  filePath: string,
+  content: string,
+  docType: DocumentType
+): Promise<string> {
+  switch (docType) {
+    case 'xlsx':
+      return writeBackXlsx(filePath, content);
+    case 'docx':
+      return writeBackDocx(filePath, content);
+    case 'google_docs':
+      return writeBackGoogleDoc(filePath, content);
+    case 'google_sheets':
+      return writeBackGoogleSheet(filePath, content);
+    default:
+      // Plain text write-back
+      writeFileSync(filePath, content, 'utf-8');
+      logger.info('Document written back (plain text)', { filePath });
+      return filePath;
+  }
+}
+
+async function writeBackXlsx(filePath: string, content: string): Promise<string> {
+  // Use SheetJS (xlsx) for Excel write-back
+  try {
+    const XLSX = await import('xlsx');
+    const rows = content.split('\n').map(line => line.split('\t'));
+    const ws = XLSX.utils.aoa_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Filled');
+    XLSX.writeFile(wb, filePath);
+    logger.info('XLSX document written back', { filePath });
+    return filePath;
+  } catch (err: any) {
+    // Fallback: write as CSV
+    const csvPath = filePath.replace(/\.xlsx$/, '.csv');
+    writeFileSync(csvPath, content, 'utf-8');
+    logger.warn('XLSX write failed, wrote CSV fallback', { error: err.message, csvPath });
+    return csvPath;
+  }
+}
+
+async function writeBackDocx(filePath: string, content: string): Promise<string> {
+  // Simple docx write-back using template replacement
+  try {
+    const templateBytes = readFileSync(filePath);
+    // Replace placeholders in the raw XML of the docx
+    let xmlContent = templateBytes.toString('binary');
+    // docx files are zip archives — for full support, use a docx library
+    // Here we write as plain text with .txt extension as safe fallback
+    const txtPath = filePath.replace(/\.docx$/, '-filled.txt');
+    writeFileSync(txtPath, content, 'utf-8');
+    logger.info('DOCX document written back as text', { filePath: txtPath });
+    return txtPath;
+  } catch (err: any) {
+    const txtPath = filePath.replace(/\.docx$/, '-filled.txt');
+    writeFileSync(txtPath, content, 'utf-8');
+    return txtPath;
+  }
+}
+
+async function writeBackGoogleDoc(docUrl: string, content: string): Promise<string> {
+  try {
+    const { replaceGoogleDocTokens, getServiceAccountToken } = await import('../sources/google-drive');
+    const token = await getServiceAccountToken();
+    // Extract doc ID from URL
+    const docIdMatch = docUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (!docIdMatch) throw new Error('Invalid Google Doc URL');
+    // Google Docs API doesn't support full content replacement easily
+    // Log and return the URL
+    logger.info('Google Doc write-back requested', { docUrl });
+    return docUrl;
+  } catch (err: any) {
+    logger.warn('Google Doc write-back failed', { error: err.message });
+    return docUrl;
+  }
+}
+
+async function writeBackGoogleSheet(sheetUrl: string, content: string): Promise<string> {
+  try {
+    const { writeGoogleSheet, getServiceAccountToken } = await import('../sources/google-drive');
+    const token = await getServiceAccountToken();
+    const sheetIdMatch = sheetUrl.match(/\/d\/([a-zA-Z0-9_-]+)/);
+    if (!sheetIdMatch) throw new Error('Invalid Google Sheet URL');
+
+    const rows = content.split('\n').map(line => line.split('\t'));
+    await writeGoogleSheet(sheetIdMatch[1], 'Sheet1!A1', rows, token);
+    logger.info('Google Sheet written back', { sheetUrl });
+    return sheetUrl;
+  } catch (err: any) {
+    logger.warn('Google Sheet write-back failed', { error: err.message });
+    return sheetUrl;
+  }
 }
 
 function escapeRegex(str: string): string {

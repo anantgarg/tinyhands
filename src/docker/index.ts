@@ -1,5 +1,7 @@
 import Dockerode from 'dockerode';
+import fs from 'fs';
 import { config } from '../config';
+import { getDockerSecurityConfig } from '../modules/permissions';
 import type { Agent } from '../types';
 import { logger } from '../utils/logger';
 
@@ -31,6 +33,16 @@ export async function createAgentContainer(cfg: ContainerConfig): Promise<Docker
     ...Object.entries(cfg.envVars).map(([k, v]) => `${k}=${v}`),
   ];
 
+  // Ensure directories exist
+  const sourcesCacheDir = `/tmp/tinyjobs-sources-cache/${cfg.agent.id}`;
+  const memoryDir = `/tmp/tinyjobs-memory/${cfg.agent.id}`;
+  for (const dir of [cfg.workingDir, sourcesCacheDir, memoryDir]) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+
+  // Apply security config based on permission level
+  const securityConfig = getDockerSecurityConfig(cfg.agent.permission_level);
+
   const container = await docker.createContainer({
     Image: image,
     Env: envList,
@@ -38,15 +50,21 @@ export async function createAgentContainer(cfg: ContainerConfig): Promise<Docker
     HostConfig: {
       Binds: [
         `${cfg.workingDir}:/workspace:rw`,
+        `${sourcesCacheDir}:/sources:ro`,
+        `${memoryDir}:/memory:ro`,
       ],
-      Memory: config.docker.defaultMemory,
-      NanoCpus: config.docker.defaultCpu * 1e9,
-      NetworkMode: cfg.networkAllowlist?.length ? 'bridge' : 'none',
+      Memory: securityConfig.memoryLimit,
+      NanoCpus: securityConfig.cpuLimit * 1e9,
+      NetworkMode: securityConfig.networkMode,
+      ReadonlyRootfs: securityConfig.readOnlyRootfs,
+      SecurityOpt: securityConfig.noNewPrivileges ? ['no-new-privileges:true'] : [],
+      CapDrop: securityConfig.dropCapabilities,
       AutoRemove: true,
     },
     Labels: {
       'tinyjobs.agent_id': cfg.agent.id,
       'tinyjobs.trace_id': cfg.traceId,
+      'tinyjobs.permission_level': cfg.agent.permission_level,
     },
   });
 

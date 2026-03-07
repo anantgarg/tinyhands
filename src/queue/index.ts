@@ -62,32 +62,56 @@ export async function enqueueRun(
   return job;
 }
 
-// ── Rate Limiter ──
+// ── Token Bucket Rate Limiter ──
+// Tracks TPM and RPM against Anthropic API tier limits.
+// Pre-flight check before dispatch, in-flight estimation, backpressure at 90%.
 
 const RATE_LIMITER_KEY = 'tinyjobs:rate_limiter';
+const INFLIGHT_KEY = 'tinyjobs:inflight_tokens';
 
 export async function checkRateLimit(): Promise<{ allowed: boolean; usage: number }> {
   const redis = getRedisConnection();
   const now = Math.floor(Date.now() / 60000); // minute window
-  const key = `${RATE_LIMITER_KEY}:${now}`;
+  const key = `${RATE_LIMITER_KEY}:tpm:${now}`;
 
-  const current = await redis.get(key);
-  const usage = current ? parseInt(current, 10) : 0;
+  const [current, inflight] = await Promise.all([
+    redis.get(key),
+    redis.get(INFLIGHT_KEY),
+  ]);
+
+  const actualUsage = current ? parseInt(current, 10) : 0;
+  const inflightEstimate = inflight ? parseInt(inflight, 10) : 0;
+  const totalUsage = actualUsage + inflightEstimate;
   const limit = config.anthropic.tpmLimit;
+  const usageRatio = totalUsage / limit;
 
+  // At >80%: delay 5 seconds and re-check. At >90%: pause queue.
   return {
-    allowed: usage < limit * 0.9,
-    usage: usage / limit,
+    allowed: usageRatio < 0.9,
+    usage: usageRatio,
   };
 }
 
 export async function recordTokenUsage(tokens: number): Promise<void> {
   const redis = getRedisConnection();
   const now = Math.floor(Date.now() / 60000);
-  const key = `${RATE_LIMITER_KEY}:${now}`;
+  const key = `${RATE_LIMITER_KEY}:tpm:${now}`;
 
   await redis.incrby(key, tokens);
   await redis.expire(key, 120); // 2 minute TTL
+
+  // Reconcile: reduce in-flight estimate
+  await redis.decrby(INFLIGHT_KEY, tokens);
+  const remaining = await redis.get(INFLIGHT_KEY);
+  if (remaining && parseInt(remaining, 10) < 0) {
+    await redis.set(INFLIGHT_KEY, '0');
+  }
+}
+
+export async function estimateInflightUsage(estimatedTokens: number): Promise<void> {
+  const redis = getRedisConnection();
+  await redis.incrby(INFLIGHT_KEY, estimatedTokens);
+  await redis.expire(INFLIGHT_KEY, 300);
 }
 
 export async function checkRequestRate(): Promise<boolean> {
@@ -99,6 +123,25 @@ export async function checkRequestRate(): Promise<boolean> {
   await redis.expire(key, 120);
 
   return current <= config.anthropic.rpmLimit;
+}
+
+export async function handleRateLimitResponse(retryAfterSec: number): Promise<void> {
+  const redis = getRedisConnection();
+  // Mark rate limit hit — workers check this before dispatch
+  await redis.set('tinyjobs:rate_limited', '1', 'EX', retryAfterSec);
+  logger.warn('Anthropic 429 recorded', { retryAfter: retryAfterSec });
+}
+
+export async function isRateLimited(): Promise<boolean> {
+  const redis = getRedisConnection();
+  const limited = await redis.get('tinyjobs:rate_limited');
+  return limited === '1';
+}
+
+export async function getQueueDepth(): Promise<number> {
+  const q = getQueue();
+  const counts = await q.getJobCounts();
+  return (counts.waiting || 0) + (counts.delayed || 0);
 }
 
 // ── Trigger Dedup ──

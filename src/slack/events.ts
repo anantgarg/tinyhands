@@ -45,11 +45,10 @@ export function registerEvents(app: App): void {
 
       // Check if this is critique (in-thread reply)
       if (msg.thread_ts && detectCritique(cleanInput)) {
-        // Handle self-improvement
+        // Handle self-improvement via AI-powered diff generation
         const { applyPromptDiff, generatePromptDiff, formatDiffForSlack } = await import('../modules/self-improvement');
 
-        const diff = generatePromptDiff(agent.system_prompt, cleanInput, '');
-        // In production, this would call Claude to generate the actual diff
+        const diff = await generatePromptDiff(agent.system_prompt, cleanInput, '');
         const diffText = formatDiffForSlack(diff.original, diff.proposed);
 
         await postMessage(
