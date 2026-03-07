@@ -1,5 +1,5 @@
 import { createWorker } from './modules/execution';
-import { getDb } from './db';
+import { initializeSchema } from './db';
 import { processExpiredTimers } from './modules/workflows';
 import { expireOldProposals } from './modules/self-evolution';
 import { logger } from './utils/logger';
@@ -10,16 +10,16 @@ async function main(): Promise<void> {
   logger.info(`Starting TinyJobs worker ${workerId}...`);
 
   // Initialize database
-  getDb();
+  await initializeSchema();
 
   // Create BullMQ worker
   const worker = createWorker();
   logger.info(`Worker ${workerId} ready, waiting for jobs...`);
 
   // Periodic tasks
-  setInterval(() => {
+  setInterval(async () => {
     try {
-      const expired = processExpiredTimers();
+      const expired = await processExpiredTimers();
       if (expired > 0) {
         logger.info('Processed expired workflow timers', { count: expired });
       }
@@ -28,9 +28,9 @@ async function main(): Promise<void> {
     }
   }, 10000); // Check every 10 seconds
 
-  setInterval(() => {
+  setInterval(async () => {
     try {
-      expireOldProposals();
+      await expireOldProposals();
     } catch (err: any) {
       logger.error('Proposal expiry failed', { error: err.message });
     }

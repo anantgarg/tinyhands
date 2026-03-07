@@ -30,19 +30,23 @@ export interface FillOptions {
   tokenBudget?: number;
 }
 
-export function fillFields(
+export async function fillFields(
   fields: TemplateField[],
   options: FillOptions = {}
-): TemplateField[] {
-  return fields.map(field => fillSingleField(field, options));
+): Promise<TemplateField[]> {
+  const results: TemplateField[] = [];
+  for (const field of fields) {
+    results.push(await fillSingleField(field, options));
+  }
+  return results;
 }
 
-function fillSingleField(
+async function fillSingleField(
   field: TemplateField,
   options: FillOptions
-): TemplateField {
+): Promise<TemplateField> {
   // Search KB for relevant content
-  const kbResults = searchKB(field.name, options.agentId);
+  const kbResults = await searchKB(field.name, options.agentId);
 
   if (kbResults.length === 0) {
     return {
@@ -145,17 +149,17 @@ export function formatGapSummary(unfilled: TemplateField[]): string {
 
 // ── Full Pipeline ──
 
-export function processTemplate(
+export async function processTemplate(
   template: string,
   options: FillOptions = {}
-): {
+): Promise<{
   result: string;
   fields: TemplateField[];
   unfilled: TemplateField[];
   summary: string;
-} {
+}> {
   const fields = extractFields(template);
-  const filledFields = fillFields(fields, options);
+  const filledFields = await fillFields(fields, options);
   const { content, unfilled } = applyFieldsToTemplate(template, filledFields);
   const summary = formatGapSummary(unfilled);
 
@@ -261,7 +265,8 @@ async function writeBackGoogleSheet(sheetUrl: string, content: string): Promise<
     if (!sheetIdMatch) throw new Error('Invalid Google Sheet URL');
 
     const rows = content.split('\n').map(line => line.split('\t'));
-    await writeGoogleSheet(sheetIdMatch[1], 'Sheet1!A1', rows, token);
+    const sheetId = sheetIdMatch[1] as string;
+    await writeGoogleSheet(sheetId, 'Sheet1!A1', rows, token);
     logger.info('Google Sheet written back', { sheetUrl });
     return sheetUrl;
   } catch (err: any) {

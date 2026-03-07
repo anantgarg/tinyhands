@@ -1,4 +1,4 @@
-import { getDb } from '../../db';
+import { query } from '../../db';
 import { listAgents } from '../agents';
 import { getRecentRuns } from '../execution';
 import type { DashboardMetrics, ModelAlias } from '../../types';
@@ -6,7 +6,7 @@ import { logger } from '../../utils/logger';
 
 // ── Slack Home Tab Dashboard ──
 
-export function buildDashboardBlocks(): Record<string, any>[] {
+export async function buildDashboardBlocks(): Promise<Record<string, any>[]> {
   const blocks: Record<string, any>[] = [];
 
   // Header
@@ -18,15 +18,15 @@ export function buildDashboardBlocks(): Record<string, any>[] {
   blocks.push({ type: 'divider' });
 
   // Agent Fleet
-  blocks.push(...buildAgentFleetSection());
+  blocks.push(...(await buildAgentFleetSection()));
   blocks.push({ type: 'divider' });
 
   // Recent Runs
-  blocks.push(...buildRecentRunsSection());
+  blocks.push(...(await buildRecentRunsSection()));
   blocks.push({ type: 'divider' });
 
   // Source Sync Health
-  blocks.push(...buildSourceHealthSection());
+  blocks.push(...(await buildSourceHealthSection()));
   blocks.push({ type: 'divider' });
 
   // Queue Health
@@ -34,7 +34,7 @@ export function buildDashboardBlocks(): Record<string, any>[] {
   blocks.push({ type: 'divider' });
 
   // Usage Overview
-  blocks.push(...buildUsageOverviewSection());
+  blocks.push(...(await buildUsageOverviewSection()));
 
   // Ensure under 50KB Block Kit limit
   const json = JSON.stringify(blocks);
@@ -46,8 +46,8 @@ export function buildDashboardBlocks(): Record<string, any>[] {
   return blocks;
 }
 
-function buildAgentFleetSection(): Record<string, any>[] {
-  const agents = listAgents();
+async function buildAgentFleetSection(): Promise<Record<string, any>[]> {
+  const agents = await listAgents();
   const blocks: Record<string, any>[] = [];
 
   blocks.push({
@@ -83,8 +83,8 @@ function buildAgentFleetSection(): Record<string, any>[] {
   return blocks;
 }
 
-function buildRecentRunsSection(): Record<string, any>[] {
-  const runs = getRecentRuns(10);
+async function buildRecentRunsSection(): Promise<Record<string, any>[]> {
+  const runs = await getRecentRuns(10);
   const blocks: Record<string, any>[] = [];
 
   blocks.push({
@@ -120,15 +120,14 @@ function buildRecentRunsSection(): Record<string, any>[] {
   return blocks;
 }
 
-function buildSourceHealthSection(): Record<string, any>[] {
-  const db = getDb();
-  const sources = db.prepare(`
+async function buildSourceHealthSection(): Promise<Record<string, any>[]> {
+  const { rows: sources } = await query(`
     SELECT s.*, a.name as agent_name
     FROM sources s
     JOIN agents a ON s.agent_id = a.id
     ORDER BY s.last_sync_at DESC
     LIMIT 10
-  `).all() as any[];
+  `);
 
   const blocks: Record<string, any>[] = [];
   blocks.push({
@@ -168,8 +167,8 @@ function buildQueueHealthSection(): Record<string, any>[] {
   }];
 }
 
-function buildUsageOverviewSection(): Record<string, any>[] {
-  const metrics = getMetrics(30);
+async function buildUsageOverviewSection(): Promise<Record<string, any>[]> {
+  const metrics = await getMetrics(30);
 
   return [{
     type: 'section',
@@ -187,11 +186,10 @@ function buildUsageOverviewSection(): Record<string, any>[] {
 
 // ── Metrics ──
 
-export function getMetrics(days: number = 30): DashboardMetrics {
-  const db = getDb();
+export async function getMetrics(days: number = 30): Promise<DashboardMetrics> {
   const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
 
-  const stats = db.prepare(`
+  const { rows: statsRows } = await query(`
     SELECT
       COUNT(*) as total_runs,
       COALESCE(SUM(input_tokens + output_tokens), 0) as total_tokens,
@@ -199,63 +197,67 @@ export function getMetrics(days: number = 30): DashboardMetrics {
       COALESCE(AVG(duration_ms), 0) as avg_duration,
       COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0) as failed_runs
     FROM run_history
-    WHERE created_at >= ?
-  `).get(since) as any;
+    WHERE created_at >= $1
+  `, [since]);
+  const stats = statsRows[0];
 
   // Percentiles
-  const durations = db.prepare(`
+  const { rows: durations } = await query(`
     SELECT duration_ms FROM run_history
-    WHERE created_at >= ? AND status = 'completed'
+    WHERE created_at >= $1 AND status = 'completed'
     ORDER BY duration_ms
-  `).all(since) as { duration_ms: number }[];
+  `, [since]);
 
-  const p50 = percentile(durations.map(d => d.duration_ms), 50);
-  const p95 = percentile(durations.map(d => d.duration_ms), 95);
-  const p99 = percentile(durations.map(d => d.duration_ms), 99);
+  const durationValues = durations.map((d: any) => d.duration_ms);
+  const p50 = percentile(durationValues, 50);
+  const p95 = percentile(durationValues, 95);
+  const p99 = percentile(durationValues, 99);
 
   // Tokens by agent
-  const byAgent = db.prepare(`
+  const { rows: byAgent } = await query(`
     SELECT agent_id, SUM(input_tokens + output_tokens) as tokens
-    FROM run_history WHERE created_at >= ?
+    FROM run_history WHERE created_at >= $1
     GROUP BY agent_id ORDER BY tokens DESC
-  `).all(since) as any[];
+  `, [since]);
 
   // Tokens by model
-  const byModel = db.prepare(`
+  const { rows: byModel } = await query(`
     SELECT model, SUM(input_tokens + output_tokens) as tokens
-    FROM run_history WHERE created_at >= ?
+    FROM run_history WHERE created_at >= $1
     GROUP BY model
-  `).all(since) as any[];
+  `, [since]);
 
   // Runs by agent
-  const runsByAgent = db.prepare(`
+  const { rows: runsByAgent } = await query(`
     SELECT agent_id, COUNT(*) as count
-    FROM run_history WHERE created_at >= ?
+    FROM run_history WHERE created_at >= $1
     GROUP BY agent_id ORDER BY count DESC
-  `).all(since) as any[];
+  `, [since]);
 
   // Queue wait percentiles
-  const waits = db.prepare(`
+  const { rows: waits } = await query(`
     SELECT queue_wait_ms FROM run_history
-    WHERE created_at >= ? AND queue_wait_ms > 0
+    WHERE created_at >= $1 AND queue_wait_ms > 0
     ORDER BY queue_wait_ms
-  `).all(since) as { queue_wait_ms: number }[];
+  `, [since]);
+
+  const waitValues = waits.map((w: any) => w.queue_wait_ms);
 
   return {
-    totalRuns: stats.total_runs,
-    totalTokens: stats.total_tokens,
-    totalCostUsd: stats.total_cost,
-    errorRate: stats.total_runs > 0 ? stats.failed_runs / stats.total_runs : 0,
-    avgDurationMs: stats.avg_duration,
+    totalRuns: parseInt(stats.total_runs),
+    totalTokens: parseInt(stats.total_tokens),
+    totalCostUsd: parseFloat(stats.total_cost),
+    errorRate: parseInt(stats.total_runs) > 0 ? parseInt(stats.failed_runs) / parseInt(stats.total_runs) : 0,
+    avgDurationMs: parseFloat(stats.avg_duration),
     p50DurationMs: p50,
     p95DurationMs: p95,
     p99DurationMs: p99,
-    queueWaitP50Ms: percentile(waits.map(w => w.queue_wait_ms), 50),
-    queueWaitP95Ms: percentile(waits.map(w => w.queue_wait_ms), 95),
-    tokensByAgent: Object.fromEntries(byAgent.map(r => [r.agent_id, r.tokens])),
+    queueWaitP50Ms: percentile(waitValues, 50),
+    queueWaitP95Ms: percentile(waitValues, 95),
+    tokensByAgent: Object.fromEntries(byAgent.map((r: any) => [r.agent_id, parseInt(r.tokens)])),
     tokensByUser: {},
-    tokensByModel: Object.fromEntries(byModel.map(r => [r.model, r.tokens])) as Record<ModelAlias, number>,
-    runsByAgent: Object.fromEntries(runsByAgent.map(r => [r.agent_id, r.count])),
+    tokensByModel: Object.fromEntries(byModel.map((r: any) => [r.model, parseInt(r.tokens)])) as Record<ModelAlias, number>,
+    runsByAgent: Object.fromEntries(runsByAgent.map((r: any) => [r.agent_id, parseInt(r.count)])),
   };
 }
 

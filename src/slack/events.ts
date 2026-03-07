@@ -37,7 +37,7 @@ export function registerEvents(app: App): void {
     }
 
     // Check if message is in an agent channel
-    const agent = getAgentByChannel(channelId);
+    const agent = await getAgentByChannel(channelId);
     if (agent) {
       // Handle interactive agent-channel commands
       const interactiveResult = await handleAgentChannelCommand(text, agent, channelId, userId, threadTs);
@@ -98,7 +98,7 @@ export function registerEvents(app: App): void {
     }
 
     // Check for Slack channel triggers
-    const triggers = findSlackChannelTriggers(channelId);
+    const triggers = await findSlackChannelTriggers(channelId);
     for (const trigger of triggers) {
       await fireTrigger({
         triggerId: trigger.id,
@@ -113,7 +113,7 @@ export function registerEvents(app: App): void {
   // ── File Upload for KB ──
   app.event('file_shared' as any, async ({ event }: any) => {
     const channelId = event.channel_id;
-    const agent = getAgentByChannel(channelId);
+    const agent = await getAgentByChannel(channelId);
     if (!agent) return;
 
     try {
@@ -135,7 +135,7 @@ export function registerEvents(app: App): void {
     if (msg.channel_type !== 'im' || msg.bot_id) return;
 
     // First DM initializes superadmin
-    initSuperadmin(msg.user);
+    await initSuperadmin(msg.user);
 
     // Handle superadmin commands via DM
     const text = (msg.text || '').trim().toLowerCase();
@@ -145,7 +145,7 @@ export function registerEvents(app: App): void {
       const match = text.match(/add\s+<@(\w+)>\s+as\s+superadmin/);
       if (match) {
         try {
-          addSuperadmin(match[1], msg.user);
+          await addSuperadmin(match[1], msg.user);
           await postMessage(msg.channel, `:white_check_mark: <@${match[1]}> added as superadmin`);
         } catch (err: any) {
           await postMessage(msg.channel, `:x: ${err.message}`);
@@ -156,7 +156,7 @@ export function registerEvents(app: App): void {
 
   // ── App Home Opened ──
   app.event('app_home_opened', async ({ event }) => {
-    const blocks = buildDashboardBlocks();
+    const blocks = await buildDashboardBlocks();
     await publishHomeTab(event.user, blocks);
   });
 }
@@ -184,7 +184,7 @@ async function handleAgentChannelCommand(
         await postMessage(channelId, ':x: Invalid GitHub URL. Use format: `connect to owner/repo`', threadTs);
         return true;
       }
-      const source = connectSource({
+      const source = await connectSource({
         agentId: agent.id,
         sourceType: 'github',
         uri: `https://github.com/${parsed.owner}/${parsed.repo}`,
@@ -197,9 +197,11 @@ async function handleAgentChannelCommand(
       );
       // Trigger initial clone in background
       const repoDir = `/tmp/tinyjobs-sources-cache/${agent.id}/${source.id}`;
-      cloneRepo(parsed.owner, parsed.repo, repoDir, parsed.branch).catch(err => {
-        logger.error('Initial clone failed', { error: err.message });
-      });
+      try {
+        cloneRepo(parsed.owner, parsed.repo, repoDir, undefined, parsed.branch);
+      } catch (cloneErr: any) {
+        logger.error('Initial clone failed', { error: cloneErr.message });
+      }
       return true;
     } catch (err: any) {
       await postMessage(channelId, `:x: Failed to connect: ${err.message}`, threadTs);
@@ -219,7 +221,7 @@ async function handleAgentChannelCommand(
         await postMessage(channelId, ':x: Invalid Google Drive URL.', threadTs);
         return true;
       }
-      const source = connectSource({
+      const source = await connectSource({
         agentId: agent.id,
         sourceType: 'google_drive',
         uri,
@@ -262,7 +264,7 @@ async function handleAgentChannelCommand(
         triggerConfig = { channel_id: channelId, description };
       }
 
-      const trigger = createTrigger({
+      const trigger = await createTrigger({
         agentId: agent.id,
         triggerType,
         config: triggerConfig,
@@ -289,7 +291,7 @@ async function handleAgentChannelCommand(
       const skillName = skillMatch[1];
       const permLevel = (skillMatch[2] as any) || 'read';
 
-      const agentSkill = attachSkillToAgent(agent.id, skillName, permLevel, userId);
+      const agentSkill = await attachSkillToAgent(agent.id, skillName, permLevel, userId);
       await postMessage(
         channelId,
         `:jigsaw: Skill *${skillName}* attached with \`${permLevel}\` permissions.`,
@@ -307,7 +309,7 @@ async function handleAgentChannelCommand(
   if (adminMatch) {
     try {
       const { addAgentAdmin } = await import('../modules/access-control');
-      addAgentAdmin(agent.id, adminMatch[1], 'admin', userId);
+      await addAgentAdmin(agent.id, adminMatch[1], 'admin', userId);
       await postMessage(channelId, `:white_check_mark: <@${adminMatch[1]}> is now an admin of *${agent.name}*`, threadTs);
       return true;
     } catch (err: any) {
@@ -321,7 +323,7 @@ async function handleAgentChannelCommand(
   if (forgetMatch && agent.memory_enabled) {
     try {
       const { forgetMemory } = await import('../modules/sources/memory');
-      const count = forgetMemory(agent.id, forgetMatch[1]);
+      const count = await forgetMemory(agent.id, forgetMatch[1]);
       await postMessage(
         channelId,
         count > 0
@@ -397,7 +399,7 @@ async function handleAgentChannelCommand(
   if (approveToolMatch) {
     try {
       const { approveCustomTool } = await import('../modules/tools');
-      approveCustomTool(approveToolMatch[1], userId);
+      await approveCustomTool(approveToolMatch[1], userId);
       await postMessage(channelId, `:white_check_mark: Tool *${approveToolMatch[1]}* approved.`, threadTs);
       return true;
     } catch (err: any) {
@@ -411,7 +413,7 @@ async function handleAgentChannelCommand(
   if (shareToolMatch) {
     try {
       const { shareToolWithAgent } = await import('../modules/self-authoring');
-      shareToolWithAgent(shareToolMatch[1], agent.id, shareToolMatch[2]);
+      await shareToolWithAgent(shareToolMatch[1], agent.id, shareToolMatch[2]);
       await postMessage(channelId, `:handshake: Tool *${shareToolMatch[1]}* shared with *${shareToolMatch[2]}*.`, threadTs);
       return true;
     } catch (err: any) {
@@ -425,7 +427,7 @@ async function handleAgentChannelCommand(
   if (rollbackMatch) {
     try {
       const { rollbackTool } = await import('../modules/self-authoring');
-      rollbackTool(rollbackMatch[1], parseInt(rollbackMatch[2], 10), userId);
+      await rollbackTool(rollbackMatch[1], parseInt(rollbackMatch[2], 10), userId);
       await postMessage(channelId, `:rewind: Tool *${rollbackMatch[1]}* rolled back to version ${rollbackMatch[2]}.`, threadTs);
       return true;
     } catch (err: any) {
@@ -438,7 +440,7 @@ async function handleAgentChannelCommand(
   if (lower === 'tool stats' || lower === 'tool analytics') {
     try {
       const { getAllToolAnalytics } = await import('../modules/self-authoring');
-      const analytics = getAllToolAnalytics(agent.id);
+      const analytics = await getAllToolAnalytics(agent.id);
       if (analytics.length === 0) {
         await postMessage(channelId, ':bar_chart: No tool usage data yet.', threadTs);
         return true;
@@ -461,7 +463,7 @@ async function handleAgentChannelCommand(
   if (versionsMatch) {
     try {
       const { getToolVersions } = await import('../modules/self-authoring');
-      const versions = getToolVersions(versionsMatch[1]);
+      const versions = await getToolVersions(versionsMatch[1]);
       if (versions.length === 0) {
         await postMessage(channelId, `:file_folder: No version history for *${versionsMatch[1]}*.`, threadTs);
         return true;
@@ -483,7 +485,7 @@ async function handleAgentChannelCommand(
   if (findToolMatch) {
     try {
       const { discoverTools } = await import('../modules/self-authoring');
-      const tools = discoverTools(findToolMatch[1]);
+      const tools = await discoverTools(findToolMatch[1]);
       if (tools.length === 0) {
         await postMessage(channelId, `:mag: No tools found matching "${findToolMatch[1]}".`, threadTs);
         return true;
@@ -506,10 +508,10 @@ async function handleAgentChannelCommand(
       const { getAgentToolSummary } = await import('../modules/tools');
       const { getAuthoredSkills, getMcpConfigs, getCodeArtifacts } = await import('../modules/self-authoring');
 
-      const summary = getAgentToolSummary(agent.id);
-      const authored = getAuthoredSkills(agent.id);
-      const mcpConfigs = getMcpConfigs(agent.id);
-      const artifacts = getCodeArtifacts(agent.id);
+      const summary = await getAgentToolSummary(agent.id);
+      const authored = await getAuthoredSkills(agent.id);
+      const mcpConfigs = await getMcpConfigs(agent.id);
+      const artifacts = await getCodeArtifacts(agent.id);
 
       const lines = [
         `:toolbox: *Capabilities for ${agent.name}*`,

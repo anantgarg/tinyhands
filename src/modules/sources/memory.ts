@@ -1,5 +1,5 @@
 import { v4 as uuid } from 'uuid';
-import { getDb } from '../../db';
+import { query } from '../../db';
 import type { AgentMemory, MemoryCategory } from '../../types';
 import { logger } from '../../utils/logger';
 
@@ -15,8 +15,7 @@ export interface StoreMemoryParams {
   relevanceScore?: number;
 }
 
-export function storeMemory(params: StoreMemoryParams): AgentMemory {
-  const db = getDb();
+export async function storeMemory(params: StoreMemoryParams): Promise<AgentMemory> {
   const id = uuid();
 
   const memory: AgentMemory = {
@@ -29,59 +28,56 @@ export function storeMemory(params: StoreMemoryParams): AgentMemory {
     created_at: new Date().toISOString(),
   };
 
-  db.prepare(`
+  await query(`
     INSERT INTO agent_memory (id, agent_id, run_id, fact, category, relevance_score, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(memory.id, memory.agent_id, memory.run_id, memory.fact,
-    memory.category, memory.relevance_score, memory.created_at);
-
-  // Rebuild FTS
-  rebuildMemoryFts();
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
+  `, [memory.id, memory.agent_id, memory.run_id, memory.fact,
+    memory.category, memory.relevance_score, memory.created_at]);
 
   // Prune if over cap
-  pruneMemories(params.agentId);
+  await pruneMemories(params.agentId);
 
   logger.info('Memory stored', { agentId: params.agentId, memoryId: id });
   return memory;
 }
 
-export function storeMemories(
+export async function storeMemories(
   agentId: string,
   runId: string,
   facts: Array<{ fact: string; category: MemoryCategory }>
-): AgentMemory[] {
-  return facts.map(f =>
-    storeMemory({ agentId, runId, fact: f.fact, category: f.category })
-  );
+): Promise<AgentMemory[]> {
+  const results: AgentMemory[] = [];
+  for (const f of facts) {
+    results.push(await storeMemory({ agentId, runId, fact: f.fact, category: f.category }));
+  }
+  return results;
 }
 
-export function retrieveMemories(
+export async function retrieveMemories(
   agentId: string,
-  query: string,
+  queryText: string,
   tokenBudget: number = MEMORY_TOKEN_BUDGET
-): AgentMemory[] {
-  const db = getDb();
-  const ftsQuery = query
+): Promise<AgentMemory[]> {
+  const ftsQuery = queryText
     .replace(/[^\w\s]/g, ' ')
     .split(/\s+/)
     .filter(w => w.length > 2)
     .slice(0, 10)
-    .join(' OR ');
+    .join(' ');
 
   if (!ftsQuery) return [];
 
   try {
-    const memories = db.prepare(`
-      SELECT am.*, rank
-      FROM agent_memory_fts
-      JOIN agent_memory am ON agent_memory_fts.rowid = am.rowid
-      WHERE agent_memory_fts MATCH ? AND am.agent_id = ?
-      ORDER BY rank
-      LIMIT ?
-    `).all(ftsQuery, agentId, MAX_MEMORIES_RETRIEVED) as (AgentMemory & { rank: number })[];
+    const { rows: memories } = await query(`
+      SELECT am.*, ts_rank(am.search_vector, plainto_tsquery('english', $1)) as rank
+      FROM agent_memory am
+      WHERE am.search_vector @@ plainto_tsquery('english', $1) AND am.agent_id = $2
+      ORDER BY rank DESC
+      LIMIT $3
+    `, [ftsQuery, agentId, MAX_MEMORIES_RETRIEVED]);
 
     let tokensUsed = 0;
-    return memories.filter(m => {
+    return (memories as AgentMemory[]).filter(m => {
       const tokens = Math.ceil(m.fact.length / 4);
       if (tokensUsed + tokens > tokenBudget) return false;
       tokensUsed += tokens;
@@ -89,71 +85,60 @@ export function retrieveMemories(
     });
   } catch {
     // Fallback to LIKE search
-    return db.prepare(`
+    const { rows } = await query(`
       SELECT * FROM agent_memory
-      WHERE agent_id = ? AND fact LIKE ?
+      WHERE agent_id = $1 AND fact LIKE $2
       ORDER BY relevance_score DESC, created_at DESC
-      LIMIT ?
-    `).all(agentId, `%${query.slice(0, 50)}%`, MAX_MEMORIES_RETRIEVED) as AgentMemory[];
+      LIMIT $3
+    `, [agentId, `%${queryText.slice(0, 50)}%`, MAX_MEMORIES_RETRIEVED]);
+    return rows as AgentMemory[];
   }
 }
 
-export function getAgentMemories(agentId: string): AgentMemory[] {
-  const db = getDb();
-  return db.prepare(
-    'SELECT * FROM agent_memory WHERE agent_id = ? ORDER BY created_at DESC'
-  ).all(agentId) as AgentMemory[];
+export async function getAgentMemories(agentId: string): Promise<AgentMemory[]> {
+  const { rows } = await query(
+    'SELECT * FROM agent_memory WHERE agent_id = $1 ORDER BY created_at DESC',
+    [agentId]
+  );
+  return rows as AgentMemory[];
 }
 
-export function forgetMemory(agentId: string, searchTerm: string): number {
-  const db = getDb();
-  const result = db.prepare(
-    'DELETE FROM agent_memory WHERE agent_id = ? AND fact LIKE ?'
-  ).run(agentId, `%${searchTerm}%`);
+export async function forgetMemory(agentId: string, searchTerm: string): Promise<number> {
+  const result = await query(
+    'DELETE FROM agent_memory WHERE agent_id = $1 AND fact LIKE $2',
+    [agentId, `%${searchTerm}%`]
+  );
 
-  rebuildMemoryFts();
-  logger.info('Memories forgotten', { agentId, term: searchTerm, count: result.changes });
-  return result.changes;
+  const count = result.rowCount || 0;
+  logger.info('Memories forgotten', { agentId, term: searchTerm, count });
+  return count;
 }
 
-export function clearAgentMemory(agentId: string): number {
-  const db = getDb();
-  const result = db.prepare('DELETE FROM agent_memory WHERE agent_id = ?').run(agentId);
-  rebuildMemoryFts();
-  logger.info('Agent memory cleared', { agentId, count: result.changes });
-  return result.changes;
+export async function clearAgentMemory(agentId: string): Promise<number> {
+  const result = await query('DELETE FROM agent_memory WHERE agent_id = $1', [agentId]);
+  const count = result.rowCount || 0;
+  logger.info('Agent memory cleared', { agentId, count });
+  return count;
 }
 
-function pruneMemories(agentId: string): void {
-  const db = getDb();
-  const count = (db.prepare(
-    'SELECT COUNT(*) as count FROM agent_memory WHERE agent_id = ?'
-  ).get(agentId) as any).count;
+async function pruneMemories(agentId: string): Promise<void> {
+  const { rows: countRows } = await query(
+    'SELECT COUNT(*) as count FROM agent_memory WHERE agent_id = $1',
+    [agentId]
+  );
+  const count = parseInt(countRows[0].count);
 
   if (count > MAX_MEMORIES_PER_AGENT) {
     const excess = count - MAX_MEMORIES_PER_AGENT;
-    db.prepare(`
+    await query(`
       DELETE FROM agent_memory WHERE id IN (
         SELECT id FROM agent_memory
-        WHERE agent_id = ?
+        WHERE agent_id = $1
         ORDER BY relevance_score ASC, created_at ASC
-        LIMIT ?
+        LIMIT $2
       )
-    `).run(agentId, excess);
+    `, [agentId, excess]);
 
     logger.info('Memories pruned', { agentId, pruned: excess });
-  }
-}
-
-function rebuildMemoryFts(): void {
-  const db = getDb();
-  try {
-    db.exec(`
-      DELETE FROM agent_memory_fts;
-      INSERT INTO agent_memory_fts(rowid, fact, category)
-        SELECT rowid, fact, category FROM agent_memory;
-    `);
-  } catch (err) {
-    logger.warn('Memory FTS rebuild failed', { error: String(err) });
   }
 }

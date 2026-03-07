@@ -1,21 +1,42 @@
-import Database from 'better-sqlite3';
-import path from 'path';
+import { Pool, PoolClient } from 'pg';
+import { logger } from '../utils/logger';
 
-let db: Database.Database;
+let pool: Pool | null = null;
 
-export function getDb(): Database.Database {
-  if (!db) {
-    const dbPath = process.env.DB_PATH || path.join(process.cwd(), 'tinyjobs.db');
-    db = new Database(dbPath);
-    db.pragma('journal_mode = WAL');
-    db.pragma('foreign_keys = ON');
-    initializeSchema(db);
+export function getPool(): Pool {
+  if (!pool) {
+    const connectionString = process.env.DATABASE_URL ||
+      'postgresql://doadmin:AVNS_9nKZ4q_jVa_91LO7h5R@private-dbaas-db-1775877-do-user-5103356-0.c.db.ondigitalocean.com:25060/tinyjobs?sslmode=require';
+
+    pool = new Pool({
+      connectionString,
+      ssl: { rejectUnauthorized: false },
+      max: 20,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000,
+    });
+
+    pool.on('error', (err) => {
+      logger.error('Unexpected PG pool error', { error: err.message });
+    });
   }
-  return db;
+  return pool;
 }
 
-export function initializeSchema(database: Database.Database): void {
-  database.exec(`
+export async function query(text: string, params?: any[]): Promise<any> {
+  const p = getPool();
+  return p.query(text, params);
+}
+
+export async function getClient(): Promise<PoolClient> {
+  const p = getPool();
+  return p.connect();
+}
+
+export async function initializeSchema(): Promise<void> {
+  const p = getPool();
+
+  await p.query(`
     -- ── Module 1: Agent Management ──
 
     CREATE TABLE IF NOT EXISTS agents (
@@ -27,15 +48,15 @@ export function initializeSchema(database: Database.Database): void {
       avatar_emoji TEXT NOT NULL DEFAULT ':robot_face:',
       status TEXT NOT NULL DEFAULT 'active',
       model TEXT NOT NULL DEFAULT 'sonnet',
-      streaming_detail INTEGER NOT NULL DEFAULT 1,
+      streaming_detail BOOLEAN NOT NULL DEFAULT true,
       docker_image TEXT,
       self_evolution_mode TEXT NOT NULL DEFAULT 'autonomous',
       max_turns INTEGER NOT NULL DEFAULT 50,
-      memory_enabled INTEGER NOT NULL DEFAULT 0,
+      memory_enabled BOOLEAN NOT NULL DEFAULT false,
       permission_level TEXT NOT NULL DEFAULT 'standard',
       created_by TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (NOW()::text),
+      updated_at TEXT NOT NULL DEFAULT (NOW()::text)
     );
 
     CREATE TABLE IF NOT EXISTS agent_versions (
@@ -45,7 +66,7 @@ export function initializeSchema(database: Database.Database): void {
       system_prompt TEXT NOT NULL,
       change_note TEXT NOT NULL DEFAULT '',
       changed_by TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (NOW()::text)
     );
 
     CREATE INDEX IF NOT EXISTS idx_agent_versions_agent ON agent_versions(agent_id, version);
@@ -71,7 +92,7 @@ export function initializeSchema(database: Database.Database): void {
       job_id TEXT NOT NULL DEFAULT '',
       model TEXT NOT NULL DEFAULT 'sonnet',
       slack_user_id TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      created_at TEXT NOT NULL DEFAULT (NOW()::text),
       completed_at TEXT
     );
 
@@ -91,7 +112,7 @@ export function initializeSchema(database: Database.Database): void {
       last_sync_at TEXT,
       chunk_count INTEGER NOT NULL DEFAULT 0,
       error_message TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (NOW()::text)
     );
 
     CREATE INDEX IF NOT EXISTS idx_sources_agent ON sources(agent_id);
@@ -104,19 +125,13 @@ export function initializeSchema(database: Database.Database): void {
       chunk_index INTEGER NOT NULL,
       content TEXT NOT NULL,
       content_hash TEXT NOT NULL,
-      metadata_json TEXT NOT NULL DEFAULT '{}'
+      metadata_json TEXT NOT NULL DEFAULT '{}',
+      search_vector tsvector
     );
 
     CREATE INDEX IF NOT EXISTS idx_source_chunks_source ON source_chunks(source_id);
     CREATE INDEX IF NOT EXISTS idx_source_chunks_agent ON source_chunks(agent_id);
-
-    -- FTS5 virtual table for source chunks
-    CREATE VIRTUAL TABLE IF NOT EXISTS source_chunks_fts USING fts5(
-      content,
-      file_path,
-      content='source_chunks',
-      content_rowid='rowid'
-    );
+    CREATE INDEX IF NOT EXISTS idx_source_chunks_fts ON source_chunks USING GIN(search_vector);
 
     -- ── Module 4b: Agent Memory ──
 
@@ -127,17 +142,12 @@ export function initializeSchema(database: Database.Database): void {
       fact TEXT NOT NULL,
       category TEXT NOT NULL DEFAULT 'general',
       relevance_score REAL NOT NULL DEFAULT 1.0,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (NOW()::text),
+      search_vector tsvector
     );
 
     CREATE INDEX IF NOT EXISTS idx_agent_memory_agent ON agent_memory(agent_id);
-
-    CREATE VIRTUAL TABLE IF NOT EXISTS agent_memory_fts USING fts5(
-      fact,
-      category,
-      content='agent_memory',
-      content_rowid='rowid'
-    );
+    CREATE INDEX IF NOT EXISTS idx_agent_memory_fts ON agent_memory USING GIN(search_vector);
 
     -- ── Module 5: Event Triggers ──
 
@@ -148,7 +158,7 @@ export function initializeSchema(database: Database.Database): void {
       config_json TEXT NOT NULL DEFAULT '{}',
       status TEXT NOT NULL DEFAULT 'active',
       created_by TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (NOW()::text)
     );
 
     CREATE INDEX IF NOT EXISTS idx_triggers_agent ON triggers(agent_id);
@@ -161,8 +171,8 @@ export function initializeSchema(database: Database.Database): void {
       skill_type TEXT NOT NULL,
       config_json TEXT NOT NULL DEFAULT '{}',
       version INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (NOW()::text),
+      updated_at TEXT NOT NULL DEFAULT (NOW()::text)
     );
 
     CREATE TABLE IF NOT EXISTS agent_skills (
@@ -170,7 +180,7 @@ export function initializeSchema(database: Database.Database): void {
       skill_id TEXT NOT NULL REFERENCES skills(id) ON DELETE CASCADE,
       permission_level TEXT NOT NULL DEFAULT 'read',
       attached_by TEXT NOT NULL,
-      attached_at TEXT NOT NULL DEFAULT (datetime('now')),
+      attached_at TEXT NOT NULL DEFAULT (NOW()::text),
       PRIMARY KEY (agent_id, skill_id)
     );
 
@@ -186,9 +196,9 @@ export function initializeSchema(database: Database.Database): void {
       access_scope TEXT NOT NULL DEFAULT '"all"',
       source_type TEXT NOT NULL DEFAULT 'manual',
       contributed_by TEXT,
-      approved INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      approved BOOLEAN NOT NULL DEFAULT false,
+      created_at TEXT NOT NULL DEFAULT (NOW()::text),
+      updated_at TEXT NOT NULL DEFAULT (NOW()::text)
     );
 
     CREATE TABLE IF NOT EXISTS kb_chunks (
@@ -196,14 +206,11 @@ export function initializeSchema(database: Database.Database): void {
       entry_id TEXT NOT NULL REFERENCES kb_entries(id) ON DELETE CASCADE,
       chunk_index INTEGER NOT NULL,
       content TEXT NOT NULL,
-      content_hash TEXT NOT NULL
+      content_hash TEXT NOT NULL,
+      search_vector tsvector
     );
 
-    CREATE VIRTUAL TABLE IF NOT EXISTS kb_chunks_fts USING fts5(
-      content,
-      content='kb_chunks',
-      content_rowid='rowid'
-    );
+    CREATE INDEX IF NOT EXISTS idx_kb_chunks_fts ON kb_chunks USING GIN(search_vector);
 
     -- ── Module 11: Custom Tools ──
 
@@ -216,8 +223,21 @@ export function initializeSchema(database: Database.Database): void {
       script_path TEXT,
       language TEXT NOT NULL DEFAULT 'javascript',
       registered_by TEXT NOT NULL,
-      approved INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      approved BOOLEAN NOT NULL DEFAULT false,
+      created_at TEXT NOT NULL DEFAULT (NOW()::text)
+    );
+
+    -- ── Module 16: Self-Evolution ──
+
+    CREATE TABLE IF NOT EXISTS evolution_proposals (
+      id TEXT PRIMARY KEY,
+      agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+      action TEXT NOT NULL,
+      description TEXT NOT NULL,
+      diff TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at TEXT NOT NULL DEFAULT (NOW()::text),
+      resolved_at TEXT
     );
 
     -- ── Module 20: Authored Skills ──
@@ -230,9 +250,9 @@ export function initializeSchema(database: Database.Database): void {
       skill_type TEXT NOT NULL DEFAULT 'prompt_template',
       template TEXT NOT NULL,
       version INTEGER NOT NULL DEFAULT 1,
-      approved INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      approved BOOLEAN NOT NULL DEFAULT false,
+      created_at TEXT NOT NULL DEFAULT (NOW()::text),
+      updated_at TEXT NOT NULL DEFAULT (NOW()::text)
     );
 
     CREATE INDEX IF NOT EXISTS idx_authored_skills_agent ON authored_skills(agent_id);
@@ -244,9 +264,9 @@ export function initializeSchema(database: Database.Database): void {
       agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
       name TEXT NOT NULL,
       config_json TEXT NOT NULL DEFAULT '{}',
-      approved INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      approved BOOLEAN NOT NULL DEFAULT false,
+      created_at TEXT NOT NULL DEFAULT (NOW()::text),
+      updated_at TEXT NOT NULL DEFAULT (NOW()::text)
     );
 
     CREATE UNIQUE INDEX IF NOT EXISTS idx_mcp_configs_agent_name ON mcp_configs(agent_id, name);
@@ -261,8 +281,8 @@ export function initializeSchema(database: Database.Database): void {
       language TEXT NOT NULL DEFAULT 'text',
       proposal_id TEXT REFERENCES evolution_proposals(id),
       version INTEGER NOT NULL DEFAULT 1,
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (NOW()::text),
+      updated_at TEXT NOT NULL DEFAULT (NOW()::text)
     );
 
     CREATE INDEX IF NOT EXISTS idx_code_artifacts_agent ON code_artifacts(agent_id);
@@ -277,7 +297,7 @@ export function initializeSchema(database: Database.Database): void {
       script_code TEXT NOT NULL,
       language TEXT NOT NULL DEFAULT 'javascript',
       changed_by TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (NOW()::text)
     );
 
     CREATE INDEX IF NOT EXISTS idx_tool_versions_name ON tool_versions(tool_name, version);
@@ -288,10 +308,10 @@ export function initializeSchema(database: Database.Database): void {
       id TEXT PRIMARY KEY,
       tool_name TEXT NOT NULL,
       agent_id TEXT NOT NULL,
-      success INTEGER NOT NULL DEFAULT 1,
+      success BOOLEAN NOT NULL DEFAULT true,
       duration_ms INTEGER NOT NULL DEFAULT 0,
       error TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (NOW()::text)
     );
 
     CREATE INDEX IF NOT EXISTS idx_tool_runs_name ON tool_runs(tool_name);
@@ -305,7 +325,7 @@ export function initializeSchema(database: Database.Database): void {
       agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
       steps_json TEXT NOT NULL DEFAULT '[]',
       created_by TEXT NOT NULL,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (NOW()::text)
     );
 
     CREATE TABLE IF NOT EXISTS workflow_runs (
@@ -317,8 +337,8 @@ export function initializeSchema(database: Database.Database): void {
       waiting_for TEXT,
       wait_until TEXT,
       status TEXT NOT NULL DEFAULT 'running',
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (NOW()::text),
+      updated_at TEXT NOT NULL DEFAULT (NOW()::text)
     );
 
     CREATE INDEX IF NOT EXISTS idx_workflow_runs_status ON workflow_runs(status);
@@ -330,31 +350,18 @@ export function initializeSchema(database: Database.Database): void {
       attempt_number INTEGER NOT NULL DEFAULT 1,
       effect_type TEXT NOT NULL,
       effect_data TEXT NOT NULL DEFAULT '{}',
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (NOW()::text)
     );
 
     CREATE UNIQUE INDEX IF NOT EXISTS idx_side_effects_unique
       ON side_effects_log(workflow_run_id, step_id, effect_type);
-
-    -- ── Module 16: Self-Evolution ──
-
-    CREATE TABLE IF NOT EXISTS evolution_proposals (
-      id TEXT PRIMARY KEY,
-      agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
-      action TEXT NOT NULL,
-      description TEXT NOT NULL,
-      diff TEXT NOT NULL DEFAULT '',
-      status TEXT NOT NULL DEFAULT 'pending',
-      created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      resolved_at TEXT
-    );
 
     -- ── Module 17: Access Control ──
 
     CREATE TABLE IF NOT EXISTS superadmins (
       user_id TEXT PRIMARY KEY,
       granted_by TEXT NOT NULL DEFAULT 'system',
-      granted_at TEXT NOT NULL DEFAULT (datetime('now'))
+      granted_at TEXT NOT NULL DEFAULT (NOW()::text)
     );
 
     CREATE TABLE IF NOT EXISTS agent_admins (
@@ -362,7 +369,7 @@ export function initializeSchema(database: Database.Database): void {
       user_id TEXT NOT NULL,
       role TEXT NOT NULL DEFAULT 'admin',
       granted_by TEXT NOT NULL,
-      granted_at TEXT NOT NULL DEFAULT (datetime('now')),
+      granted_at TEXT NOT NULL DEFAULT (NOW()::text),
       PRIMARY KEY (agent_id, user_id)
     );
 
@@ -374,7 +381,7 @@ export function initializeSchema(database: Database.Database): void {
       lead_run_id TEXT NOT NULL,
       max_concurrent INTEGER NOT NULL DEFAULT 3,
       max_depth INTEGER NOT NULL DEFAULT 2,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (NOW()::text)
     );
 
     CREATE TABLE IF NOT EXISTS sub_agent_runs (
@@ -386,13 +393,65 @@ export function initializeSchema(database: Database.Database): void {
       status TEXT NOT NULL DEFAULT 'queued',
       task TEXT NOT NULL,
       result TEXT,
-      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+      created_at TEXT NOT NULL DEFAULT (NOW()::text)
     );
+  `);
+
+  // Create triggers for auto-updating tsvector columns
+  await p.query(`
+    CREATE OR REPLACE FUNCTION source_chunks_search_vector_update() RETURNS trigger AS $$
+    BEGIN
+      NEW.search_vector := to_tsvector('english', COALESCE(NEW.content, '') || ' ' || COALESCE(NEW.file_path, ''));
+      RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    DROP TRIGGER IF EXISTS source_chunks_search_vector_trigger ON source_chunks;
+    CREATE TRIGGER source_chunks_search_vector_trigger
+      BEFORE INSERT OR UPDATE ON source_chunks
+      FOR EACH ROW EXECUTE FUNCTION source_chunks_search_vector_update();
+
+    CREATE OR REPLACE FUNCTION agent_memory_search_vector_update() RETURNS trigger AS $$
+    BEGIN
+      NEW.search_vector := to_tsvector('english', COALESCE(NEW.fact, '') || ' ' || COALESCE(NEW.category, ''));
+      RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    DROP TRIGGER IF EXISTS agent_memory_search_vector_trigger ON agent_memory;
+    CREATE TRIGGER agent_memory_search_vector_trigger
+      BEFORE INSERT OR UPDATE ON agent_memory
+      FOR EACH ROW EXECUTE FUNCTION agent_memory_search_vector_update();
+
+    CREATE OR REPLACE FUNCTION kb_chunks_search_vector_update() RETURNS trigger AS $$
+    BEGIN
+      NEW.search_vector := to_tsvector('english', COALESCE(NEW.content, ''));
+      RETURN NEW;
+    END;
+    $$ LANGUAGE plpgsql;
+
+    DROP TRIGGER IF EXISTS kb_chunks_search_vector_trigger ON kb_chunks;
+    CREATE TRIGGER kb_chunks_search_vector_trigger
+      BEFORE INSERT OR UPDATE ON kb_chunks
+      FOR EACH ROW EXECUTE FUNCTION kb_chunks_search_vector_update();
+  `);
+
+  // Backfill search vectors for any existing rows
+  await p.query(`
+    UPDATE source_chunks SET search_vector = to_tsvector('english', COALESCE(content, '') || ' ' || COALESCE(file_path, ''))
+    WHERE search_vector IS NULL;
+
+    UPDATE agent_memory SET search_vector = to_tsvector('english', COALESCE(fact, '') || ' ' || COALESCE(category, ''))
+    WHERE search_vector IS NULL;
+
+    UPDATE kb_chunks SET search_vector = to_tsvector('english', COALESCE(content, ''))
+    WHERE search_vector IS NULL;
   `);
 }
 
-export function closeDb(): void {
-  if (db) {
-    db.close();
+export async function closeDb(): Promise<void> {
+  if (pool) {
+    await pool.end();
+    pool = null;
   }
 }

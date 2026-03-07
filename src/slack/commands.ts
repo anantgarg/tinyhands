@@ -30,7 +30,7 @@ export function registerCommands(app: App): void {
     const key = `${userId}:${command.channel_id}`;
 
     // Initialize superadmin on first use
-    initSuperadmin(userId);
+    await initSuperadmin(userId);
 
     const state: WizardState = {
       step: 'name',
@@ -56,7 +56,7 @@ export function registerCommands(app: App): void {
   app.command('/agents', async ({ command, ack, respond }) => {
     await ack();
 
-    const agents = listAgents();
+    const agents = await listAgents();
 
     if (agents.length === 0) {
       await respond({
@@ -98,7 +98,7 @@ export function registerCommands(app: App): void {
           return;
         }
         const { searchKB } = await import('../modules/knowledge-base');
-        const results = searchKB(query);
+        const results = await searchKB(query);
         if (results.length === 0) {
           await respond({ text: 'No KB entries found.', response_type: 'ephemeral' });
         } else {
@@ -131,7 +131,7 @@ export async function handleWizardMessage(
   switch (state.step) {
     case 'name': {
       // Check duplicate
-      const existing = getAgentByName(text.trim());
+      const existing = await getAgentByName(text.trim());
       if (existing) {
         return `:x: Agent "${text.trim()}" already exists. Please choose a different name.`;
       }
@@ -194,7 +194,7 @@ export async function handleWizardMessage(
       try {
         const agentChannelId = await createChannel(state.name!);
 
-        const agent = createAgent({
+        const agent = await createAgent({
           name: state.name!,
           channelId: agentChannelId,
           systemPrompt: state.persona!,

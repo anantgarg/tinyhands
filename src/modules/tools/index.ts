@@ -1,5 +1,5 @@
 import { v4 as uuid } from 'uuid';
-import { getDb } from '../../db';
+import { query } from '../../db';
 import { getAgent, updateAgent } from '../agents';
 import { canModifyAgent } from '../access-control';
 import type { CustomTool, ToolType } from '../../types';
@@ -22,16 +22,16 @@ export function getBuiltinTools(): string[] {
 
 // ── Tool Management ──
 
-export function addToolToAgent(
+export async function addToolToAgent(
   agentId: string,
   toolName: string,
   userId: string
-): string[] {
-  if (!canModifyAgent(agentId, userId)) {
+): Promise<string[]> {
+  if (!(await canModifyAgent(agentId, userId))) {
     throw new Error('Insufficient permissions to modify agent tools');
   }
 
-  const agent = getAgent(agentId);
+  const agent = await getAgent(agentId);
   if (!agent) throw new Error(`Agent ${agentId} not found`);
 
   const tools = [...agent.tools];
@@ -41,31 +41,31 @@ export function addToolToAgent(
 
   // Verify tool exists
   if (!isBuiltinTool(toolName)) {
-    const custom = getCustomTool(toolName);
+    const custom = await getCustomTool(toolName);
     if (!custom) throw new Error(`Tool "${toolName}" not found`);
   }
 
   tools.push(toolName);
-  updateAgent(agentId, { tools }, userId);
+  await updateAgent(agentId, { tools }, userId);
 
   logger.info('Tool added to agent', { agentId, toolName, userId });
   return tools;
 }
 
-export function removeToolFromAgent(
+export async function removeToolFromAgent(
   agentId: string,
   toolName: string,
   userId: string
-): string[] {
-  if (!canModifyAgent(agentId, userId)) {
+): Promise<string[]> {
+  if (!(await canModifyAgent(agentId, userId))) {
     throw new Error('Insufficient permissions to modify agent tools');
   }
 
-  const agent = getAgent(agentId);
+  const agent = await getAgent(agentId);
   if (!agent) throw new Error(`Agent ${agentId} not found`);
 
   const tools = agent.tools.filter(t => t !== toolName);
-  updateAgent(agentId, { tools }, userId);
+  await updateAgent(agentId, { tools }, userId);
 
   logger.info('Tool removed from agent', { agentId, toolName, userId });
   return tools;
@@ -73,22 +73,21 @@ export function removeToolFromAgent(
 
 // ── Custom Tools ──
 
-export function registerCustomTool(
+export async function registerCustomTool(
   name: string,
   schemaJson: string,
   scriptPathOrCode: string | null,
   registeredBy: string,
   options?: { code?: string; language?: 'javascript' | 'python' | 'bash'; autoApprove?: boolean }
-): CustomTool {
-  const db = getDb();
+): Promise<CustomTool> {
   const id = uuid();
 
   // Admins or agent self-authoring (agent IDs are UUIDs)
-  const isSuperadminRow = db.prepare('SELECT user_id FROM superadmins WHERE user_id = ?').get(registeredBy);
-  const isAgentAuthored = !isSuperadminRow;
+  const { rows: isSuperadminRows } = await query('SELECT user_id FROM superadmins WHERE user_id = $1', [registeredBy]);
+  const isAgentAuthored = isSuperadminRows.length === 0;
 
-  const existing = db.prepare('SELECT id FROM custom_tools WHERE name = ?').get(name);
-  if (existing) throw new Error(`Tool "${name}" already registered`);
+  const { rows: existingRows } = await query('SELECT id FROM custom_tools WHERE name = $1', [name]);
+  if (existingRows.length > 0) throw new Error(`Tool "${name}" already registered`);
 
   const scriptCode = options?.code || null;
   const language = options?.language || 'javascript';
@@ -107,61 +106,59 @@ export function registerCustomTool(
     created_at: new Date().toISOString(),
   };
 
-  db.prepare(`
+  await query(`
     INSERT INTO custom_tools (id, name, tool_type, schema_json, script_code, script_path, language, registered_by, approved, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(tool.id, tool.name, tool.tool_type, tool.schema_json,
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+  `, [tool.id, tool.name, tool.tool_type, tool.schema_json,
     tool.script_code, tool.script_path, tool.language, tool.registered_by,
-    tool.approved ? 1 : 0, tool.created_at);
+    tool.approved, tool.created_at]);
 
   logger.info('Custom tool registered', { toolId: id, name, registeredBy, approved, language });
   return tool;
 }
 
-export function approveCustomTool(name: string, userId: string): void {
-  const db = getDb();
-  const isSuperadmin = db.prepare('SELECT user_id FROM superadmins WHERE user_id = ?').get(userId);
-  if (!isSuperadmin) throw new Error('Only admins can approve tools');
+export async function approveCustomTool(name: string, userId: string): Promise<void> {
+  const { rows: isSuperadmin } = await query('SELECT user_id FROM superadmins WHERE user_id = $1', [userId]);
+  if (isSuperadmin.length === 0) throw new Error('Only admins can approve tools');
 
-  db.prepare('UPDATE custom_tools SET approved = 1 WHERE name = ?').run(name);
+  await query('UPDATE custom_tools SET approved = true WHERE name = $1', [name]);
   logger.info('Custom tool approved', { name, userId });
 }
 
-export function getToolCode(name: string): { code: string; language: string } | null {
-  const tool = getCustomTool(name);
+export async function getToolCode(name: string): Promise<{ code: string; language: string } | null> {
+  const tool = await getCustomTool(name);
   if (!tool || !tool.script_code) return null;
   return { code: tool.script_code, language: tool.language };
 }
 
-export function getCustomTool(name: string): CustomTool | null {
-  const db = getDb();
-  return db.prepare('SELECT * FROM custom_tools WHERE name = ?').get(name) as CustomTool | null;
+export async function getCustomTool(name: string): Promise<CustomTool | null> {
+  const { rows } = await query('SELECT * FROM custom_tools WHERE name = $1', [name]);
+  return rows[0] as CustomTool | null ?? null;
 }
 
-export function listCustomTools(): CustomTool[] {
-  const db = getDb();
-  return db.prepare('SELECT * FROM custom_tools ORDER BY name').all() as CustomTool[];
+export async function listCustomTools(): Promise<CustomTool[]> {
+  const { rows } = await query('SELECT * FROM custom_tools ORDER BY name');
+  return rows as CustomTool[];
 }
 
-export function deleteCustomTool(name: string, userId: string): void {
-  const db = getDb();
-  const isSuperadminRow = db.prepare('SELECT user_id FROM superadmins WHERE user_id = ?').get(userId);
-  if (!isSuperadminRow) {
+export async function deleteCustomTool(name: string, userId: string): Promise<void> {
+  const { rows: isSuperadminRows } = await query('SELECT user_id FROM superadmins WHERE user_id = $1', [userId]);
+  if (isSuperadminRows.length === 0) {
     throw new Error('Only admins can delete custom tools');
   }
 
-  db.prepare('DELETE FROM custom_tools WHERE name = ?').run(name);
+  await query('DELETE FROM custom_tools WHERE name = $1', [name]);
   logger.info('Custom tool deleted', { name, userId });
 }
 
 // ── Agent Tool Summary ──
 
-export function getAgentToolSummary(agentId: string): {
+export async function getAgentToolSummary(agentId: string): Promise<{
   builtin: string[];
   custom: string[];
   mcp: string[];
-} {
-  const agent = getAgent(agentId);
+}> {
+  const agent = await getAgent(agentId);
   if (!agent) throw new Error(`Agent ${agentId} not found`);
 
   const builtin: string[] = [];
@@ -172,7 +169,7 @@ export function getAgentToolSummary(agentId: string): {
     if (isBuiltinTool(tool)) {
       builtin.push(tool);
     } else {
-      const customTool = getCustomTool(tool);
+      const customTool = await getCustomTool(tool);
       if (customTool) {
         custom.push(tool);
       } else {

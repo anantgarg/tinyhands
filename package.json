@@ -29,7 +29,7 @@
     "@anthropic-ai/sdk": "^0.39.0",
     "@slack/bolt": "^4.1.0",
     "@slack/web-api": "^7.8.0",
-    "better-sqlite3": "^11.7.0",
+    "pg": "^8.13.0",
     "bullmq": "^5.34.0",
     "dockerode": "^4.0.4",
     "express": "^4.21.0",
@@ -38,7 +38,7 @@
     "winston": "^3.17.0"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.12",
+    "@types/pg": "^8.11.0",
     "@types/dockerode": "^3.3.34",
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.0",
