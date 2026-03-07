@@ -237,6 +237,66 @@ export function initializeSchema(database: Database.Database): void {
 
     CREATE INDEX IF NOT EXISTS idx_authored_skills_agent ON authored_skills(agent_id);
 
+    -- ── Module 21: MCP Configs (DB-stored) ──
+
+    CREATE TABLE IF NOT EXISTS mcp_configs (
+      id TEXT PRIMARY KEY,
+      agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      config_json TEXT NOT NULL DEFAULT '{}',
+      approved INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_mcp_configs_agent_name ON mcp_configs(agent_id, name);
+
+    -- ── Module 22: Code Artifacts (DB-stored agent-written files) ──
+
+    CREATE TABLE IF NOT EXISTS code_artifacts (
+      id TEXT PRIMARY KEY,
+      agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+      file_path TEXT NOT NULL,
+      content TEXT NOT NULL,
+      language TEXT NOT NULL DEFAULT 'text',
+      proposal_id TEXT REFERENCES evolution_proposals(id),
+      version INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_code_artifacts_agent ON code_artifacts(agent_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_code_artifacts_path ON code_artifacts(agent_id, file_path);
+
+    -- ── Module 23: Tool Versioning ──
+
+    CREATE TABLE IF NOT EXISTS tool_versions (
+      id TEXT PRIMARY KEY,
+      tool_name TEXT NOT NULL,
+      version INTEGER NOT NULL,
+      script_code TEXT NOT NULL,
+      language TEXT NOT NULL DEFAULT 'javascript',
+      changed_by TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_tool_versions_name ON tool_versions(tool_name, version);
+
+    -- ── Module 24: Tool Analytics ──
+
+    CREATE TABLE IF NOT EXISTS tool_runs (
+      id TEXT PRIMARY KEY,
+      tool_name TEXT NOT NULL,
+      agent_id TEXT NOT NULL,
+      success INTEGER NOT NULL DEFAULT 1,
+      duration_ms INTEGER NOT NULL DEFAULT 0,
+      error TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_tool_runs_name ON tool_runs(tool_name);
+    CREATE INDEX IF NOT EXISTS idx_tool_runs_agent ON tool_runs(agent_id);
+
     -- ── Module 15: Workflows ──
 
     CREATE TABLE IF NOT EXISTS workflow_definitions (
