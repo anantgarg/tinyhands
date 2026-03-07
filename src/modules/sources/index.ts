@@ -66,7 +66,7 @@ export function updateSourceStatus(
   errorMessage?: string
 ): void {
   const db = getDb();
-  db.prepare('UPDATE sources SET status = ?, error_message = ?, last_sync_at = datetime("now") WHERE id = ?')
+  db.prepare("UPDATE sources SET status = ?, error_message = ?, last_sync_at = datetime('now') WHERE id = ?")
     .run(status, errorMessage || null, sourceId);
 }
 
@@ -116,7 +116,7 @@ export function ingestContent(
       'SELECT COUNT(*) as count FROM source_chunks WHERE source_id = ?'
     ).get(sourceId) as any).count;
 
-    db.prepare('UPDATE sources SET chunk_count = ?, last_sync_at = datetime("now"), status = ? WHERE id = ?')
+    db.prepare("UPDATE sources SET chunk_count = ?, last_sync_at = datetime('now'), status = ? WHERE id = ?")
       .run(count, 'active', sourceId);
   });
 

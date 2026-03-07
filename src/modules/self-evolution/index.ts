@@ -67,7 +67,7 @@ export function approveProposal(proposalId: string, userId: string): EvolutionPr
   executeProposal(proposal);
 
   db.prepare(
-    'UPDATE evolution_proposals SET status = ?, resolved_at = datetime("now") WHERE id = ?'
+    "UPDATE evolution_proposals SET status = ?, resolved_at = datetime('now') WHERE id = ?"
   ).run('approved', proposalId);
 
   logger.info('Evolution proposal approved', { proposalId, userId });
@@ -84,7 +84,7 @@ export function rejectProposal(proposalId: string, userId: string): void {
   }
 
   db.prepare(
-    'UPDATE evolution_proposals SET status = ?, resolved_at = datetime("now") WHERE id = ?'
+    "UPDATE evolution_proposals SET status = ?, resolved_at = datetime('now') WHERE id = ?"
   ).run('rejected', proposalId);
 
   logger.info('Evolution proposal rejected', { proposalId, userId });
