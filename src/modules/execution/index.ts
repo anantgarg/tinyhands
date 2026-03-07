@@ -9,6 +9,7 @@ import { retrieveMemories, storeMemories } from '../sources/memory';
 import { getDisallowedTools, getDockerSecurityConfig } from '../permissions';
 import { getAgentSkills } from '../skills';
 import { listCustomTools } from '../tools';
+import { getToolExecutionScript } from '../self-authoring';
 import { bufferEvent } from '../../slack/buffer';
 import { config } from '../../config';
 import { estimateCost, getModelId } from '../../utils/costs';
@@ -198,11 +199,17 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
     })));
     const customTools = listCustomTools();
     const agentCustomTools = customTools.filter(t => agent.tools.includes(t.name));
-    customToolsConfig = JSON.stringify(agentCustomTools.map(t => ({
-      name: t.name,
-      schema: JSON.parse(t.schema_json),
-      script_path: t.script_path,
-    })));
+    customToolsConfig = JSON.stringify(agentCustomTools.map(t => {
+      // For DB-stored tools, include the executable script inline
+      const execScript = getToolExecutionScript(t.name);
+      return {
+        name: t.name,
+        schema: JSON.parse(t.schema_json),
+        script_path: t.script_path,
+        script_code: execScript,
+        language: t.language,
+      };
+    }));
   } catch (err) {
     logger.warn('Failed to load skills/tools for agent', { agentId: agent.id, error: String(err) });
   }

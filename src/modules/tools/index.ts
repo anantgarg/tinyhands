@@ -76,39 +76,61 @@ export function removeToolFromAgent(
 export function registerCustomTool(
   name: string,
   schemaJson: string,
-  scriptPath: string | null,
-  registeredBy: string
+  scriptPathOrCode: string | null,
+  registeredBy: string,
+  options?: { code?: string; language?: 'javascript' | 'python' | 'bash'; autoApprove?: boolean }
 ): CustomTool {
   const db = getDb();
   const id = uuid();
 
-  // Only admins can register custom tools
+  // Admins or agent self-authoring (agent IDs are UUIDs)
   const isSuperadminRow = db.prepare('SELECT user_id FROM superadmins WHERE user_id = ?').get(registeredBy);
-  if (!isSuperadminRow) {
-    throw new Error('Only admins can register custom tools');
-  }
+  const isAgentAuthored = !isSuperadminRow;
 
   const existing = db.prepare('SELECT id FROM custom_tools WHERE name = ?').get(name);
   if (existing) throw new Error(`Tool "${name}" already registered`);
+
+  const scriptCode = options?.code || null;
+  const language = options?.language || 'javascript';
+  const approved = options?.autoApprove || !isAgentAuthored;
 
   const tool: CustomTool = {
     id,
     name,
     tool_type: 'custom',
     schema_json: schemaJson,
-    script_path: scriptPath,
+    script_code: scriptCode,
+    script_path: scriptCode ? null : scriptPathOrCode,
+    language,
     registered_by: registeredBy,
+    approved,
     created_at: new Date().toISOString(),
   };
 
   db.prepare(`
-    INSERT INTO custom_tools (id, name, tool_type, schema_json, script_path, registered_by, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO custom_tools (id, name, tool_type, schema_json, script_code, script_path, language, registered_by, approved, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(tool.id, tool.name, tool.tool_type, tool.schema_json,
-    tool.script_path, tool.registered_by, tool.created_at);
+    tool.script_code, tool.script_path, tool.language, tool.registered_by,
+    tool.approved ? 1 : 0, tool.created_at);
 
-  logger.info('Custom tool registered', { toolId: id, name, registeredBy });
+  logger.info('Custom tool registered', { toolId: id, name, registeredBy, approved, language });
   return tool;
+}
+
+export function approveCustomTool(name: string, userId: string): void {
+  const db = getDb();
+  const isSuperadmin = db.prepare('SELECT user_id FROM superadmins WHERE user_id = ?').get(userId);
+  if (!isSuperadmin) throw new Error('Only admins can approve tools');
+
+  db.prepare('UPDATE custom_tools SET approved = 1 WHERE name = ?').run(name);
+  logger.info('Custom tool approved', { name, userId });
+}
+
+export function getToolCode(name: string): { code: string; language: string } | null {
+  const tool = getCustomTool(name);
+  if (!tool || !tool.script_code) return null;
+  return { code: tool.script_code, language: tool.language };
 }
 
 export function getCustomTool(name: string): CustomTool | null {
