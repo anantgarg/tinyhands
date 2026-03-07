@@ -195,10 +195,10 @@ async function handleAgentChannelCommand(
         `:white_check_mark: Connected to GitHub repo \`${parsed.owner}/${parsed.repo}\` (branch: ${parsed.branch})\nSource ID: \`${source.id.slice(0, 8)}\`\nSyncing in background...`,
         threadTs,
       );
-      // Trigger initial clone in background
+      // Trigger initial clone
       const repoDir = `/tmp/tinyjobs-sources-cache/${agent.id}/${source.id}`;
       try {
-        cloneRepo(parsed.owner, parsed.repo, repoDir, undefined, parsed.branch);
+        cloneRepo(parsed.owner, parsed.repo, repoDir, parsed.branch);
       } catch (cloneErr: any) {
         logger.error('Initial clone failed', { error: cloneErr.message });
       }
