@@ -1,0 +1,6 @@
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
+
+npx tsc --noEmit
+npx eslint src/ --ext .ts --max-warnings 0
+npx vitest run tests/unit/ --reporter=dot
