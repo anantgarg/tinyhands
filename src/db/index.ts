@@ -212,10 +212,30 @@ export function initializeSchema(database: Database.Database): void {
       name TEXT UNIQUE NOT NULL,
       tool_type TEXT NOT NULL DEFAULT 'custom',
       schema_json TEXT NOT NULL DEFAULT '{}',
+      script_code TEXT,
       script_path TEXT,
+      language TEXT NOT NULL DEFAULT 'javascript',
       registered_by TEXT NOT NULL,
+      approved INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    -- ── Module 20: Authored Skills ──
+
+    CREATE TABLE IF NOT EXISTS authored_skills (
+      id TEXT PRIMARY KEY,
+      agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      skill_type TEXT NOT NULL DEFAULT 'prompt_template',
+      template TEXT NOT NULL,
+      version INTEGER NOT NULL DEFAULT 1,
+      approved INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_authored_skills_agent ON authored_skills(agent_id);
 
     -- ── Module 15: Workflows ──
 

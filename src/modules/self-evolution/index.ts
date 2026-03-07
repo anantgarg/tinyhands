@@ -139,25 +139,35 @@ function executeProposal(proposal: EvolutionProposal): void {
 function executeWriteTool(proposal: EvolutionProposal): void {
   const toolConfig = JSON.parse(proposal.diff);
   const toolName = toolConfig.name || `agent-tool-${proposal.id.slice(0, 8)}`;
-  const { mkdirSync, writeFileSync } = require('fs');
 
-  // Write the tool script to disk
+  if (toolConfig.stored_in_db && toolConfig.code) {
+    // DB-stored tool (from self-authoring module) — already registered
+    logger.info('Tool stored in DB', { toolName });
+    return;
+  }
+
+  // Legacy: write to disk for file-based tools
   if (toolConfig.script) {
+    const { mkdirSync, writeFileSync } = require('fs');
     const scriptPath = `${process.cwd()}/tools/${toolName}.js`;
     mkdirSync(`${process.cwd()}/tools`, { recursive: true });
     writeFileSync(scriptPath, toolConfig.script, 'utf-8');
     toolConfig.script_path = scriptPath;
-    logger.info('Tool script written', { toolName, scriptPath });
+    logger.info('Tool script written to disk', { toolName, scriptPath });
   }
 
+  // Store code in DB if available, otherwise use file path
   registerCustomTool(
     toolName,
     JSON.stringify(toolConfig.schema || {}),
     toolConfig.script_path || null,
-    proposal.agent_id
+    proposal.agent_id,
+    toolConfig.code ? { code: toolConfig.code, language: toolConfig.language || 'javascript' } : undefined
   );
 
-  gitCommitAndPush(`Agent ${proposal.agent_id.slice(0, 8)} wrote tool: ${toolName}`);
+  if (!toolConfig.stored_in_db) {
+    gitCommitAndPush(`Agent ${proposal.agent_id.slice(0, 8)} wrote tool: ${toolName}`);
+  }
 }
 
 function executeCreateMcp(proposal: EvolutionProposal): void {

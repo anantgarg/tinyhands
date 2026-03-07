@@ -109,7 +109,7 @@ export interface SourceChunk {
 
 // ── Agent Memory Types ──
 
-export type MemoryCategory = 'customer_preference' | 'decision' | 'context' | 'technical' | 'general';
+export type MemoryCategory = 'customer_preference' | 'decision' | 'context' | 'technical' | 'general' | 'preference' | 'procedure' | 'correction' | 'entity';
 
 export interface AgentMemory {
   id: string;
@@ -239,9 +239,25 @@ export interface CustomTool {
   name: string;
   tool_type: ToolType;
   schema_json: string;
+  script_code: string | null;
   script_path: string | null;
+  language: 'javascript' | 'python' | 'bash';
   registered_by: string;
+  approved: boolean;
   created_at: string;
+}
+
+export interface AuthoredSkill {
+  id: string;
+  agent_id: string;
+  name: string;
+  description: string;
+  skill_type: 'prompt_template' | 'tool_chain';
+  template: string;
+  version: number;
+  approved: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 // ── Dashboard Types ──

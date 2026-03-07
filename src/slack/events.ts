@@ -336,6 +336,121 @@ async function handleAgentChannelCommand(
     }
   }
 
+  // "create a tool that..." — AI-powered tool authoring
+  const createToolMatch = lower.match(/^(?:create|write|build|make)\s+(?:a\s+)?tool\s+(?:that|to|for|which)\s+(.+)/);
+  if (createToolMatch) {
+    try {
+      const { authorTool } = await import('../modules/self-authoring');
+      await postMessage(
+        channelId,
+        ':hammer_and_wrench: Generating tool implementation...',
+        threadTs,
+        agent.name,
+        agent.avatar_emoji,
+      );
+
+      const result = await authorTool(agent.id, createToolMatch[1]);
+      const statusMsg = result.requiresApproval
+        ? '\n:warning: Requires admin approval before use. An admin can say `approve tool ' + result.tool.name + '`'
+        : '\n:white_check_mark: Auto-approved and ready to use.';
+
+      await postMessage(
+        channelId,
+        `:hammer_and_wrench: Tool *${result.tool.name}* created!\n` +
+        `Language: \`${result.tool.language}\`\n` +
+        `Code: ${result.code.split('\n').length} lines (stored in DB)\n` +
+        statusMsg,
+        threadTs,
+        agent.name,
+        agent.avatar_emoji,
+      );
+      return true;
+    } catch (err: any) {
+      await postMessage(channelId, `:x: Tool creation failed: ${err.message}`, threadTs);
+      return true;
+    }
+  }
+
+  // "create a skill that..." — AI-powered skill authoring
+  const createSkillMatch = lower.match(/^(?:create|write|build|make)\s+(?:a\s+)?skill\s+(?:that|to|for|which)\s+(.+)/);
+  if (createSkillMatch) {
+    try {
+      const { authorSkill } = await import('../modules/self-authoring');
+      await postMessage(
+        channelId,
+        ':brain: Generating skill template...',
+        threadTs,
+        agent.name,
+        agent.avatar_emoji,
+      );
+
+      const skill = await authorSkill(agent.id, createSkillMatch[1]);
+      const statusMsg = skill.approved
+        ? ':white_check_mark: Auto-approved and ready to use.'
+        : ':warning: Requires admin approval.';
+
+      await postMessage(
+        channelId,
+        `:jigsaw: Skill *${skill.name}* authored!\n` +
+        `Description: ${skill.description}\n` +
+        `Template preview:\n\`\`\`${skill.template.slice(0, 300)}${skill.template.length > 300 ? '...' : ''}\`\`\`\n` +
+        statusMsg,
+        threadTs,
+        agent.name,
+        agent.avatar_emoji,
+      );
+      return true;
+    } catch (err: any) {
+      await postMessage(channelId, `:x: Skill creation failed: ${err.message}`, threadTs);
+      return true;
+    }
+  }
+
+  // "approve tool <name>" — admin approval for agent-authored tools
+  const approveToolMatch = lower.match(/^approve\s+tool\s+([\w-]+)/);
+  if (approveToolMatch) {
+    try {
+      const { approveCustomTool } = await import('../modules/tools');
+      approveCustomTool(approveToolMatch[1], userId);
+      await postMessage(
+        channelId,
+        `:white_check_mark: Tool *${approveToolMatch[1]}* approved and ready for use.`,
+        threadTs,
+      );
+      return true;
+    } catch (err: any) {
+      await postMessage(channelId, `:x: ${err.message}`, threadTs);
+      return true;
+    }
+  }
+
+  // "show tools" / "list tools"
+  if (lower === 'show tools' || lower === 'list tools' || lower === 'my tools') {
+    try {
+      const { getAgentToolSummary } = await import('../modules/tools');
+      const summary = getAgentToolSummary(agent.id);
+      const lines = [
+        `:toolbox: *Tools for ${agent.name}*`,
+        `Built-in: ${summary.builtin.join(', ') || 'none'}`,
+        `Custom: ${summary.custom.join(', ') || 'none'}`,
+        `MCP: ${summary.mcp.join(', ') || 'none'}`,
+      ];
+
+      // Also show authored skills
+      const { getAuthoredSkills } = await import('../modules/self-authoring');
+      const authored = getAuthoredSkills(agent.id);
+      if (authored.length > 0) {
+        lines.push(`\nAuthored skills: ${authored.map(s => `${s.name}${s.approved ? '' : ' (pending)'}`).join(', ')}`);
+      }
+
+      await postMessage(channelId, lines.join('\n'), threadTs);
+      return true;
+    } catch (err: any) {
+      await postMessage(channelId, `:x: ${err.message}`, threadTs);
+      return true;
+    }
+  }
+
   // "add to kb" — trigger KB wizard from a quoted reply
   if (lower === 'add to kb' || lower === 'add to knowledge base') {
     await postMessage(
