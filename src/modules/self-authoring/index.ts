@@ -1,12 +1,19 @@
 import { v4 as uuid } from 'uuid';
+import Dockerode from 'dockerode';
+import { writeFileSync, unlinkSync, mkdtempSync } from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'os';
 import { getDb } from '../../db';
 import { getAgent, updateAgent } from '../agents';
 import { registerCustomTool, getCustomTool, listCustomTools } from '../tools';
 import { registerSkill, attachSkillToAgent } from '../skills';
 import { createProposal } from '../self-evolution';
 import { canModifyAgent } from '../access-control';
+import { config } from '../../config';
 import type { CustomTool, AuthoredSkill, CodeArtifact, McpConfig } from '../../types';
 import { logger } from '../../utils/logger';
+
+const docker = new Dockerode();
 
 // ── Types ──
 
@@ -178,36 +185,82 @@ async function sandboxTest(
   const sampleInput = generateSampleInput(inputSchema);
   const wrappedCode = wrapForExecution(code, language, 'sandbox-test');
 
+  const extMap: Record<string, string> = { javascript: 'js', python: 'py', bash: 'sh' };
+  const ext = extMap[language] || 'js';
+
+  let interpreter: string;
+  switch (language) {
+    case 'javascript': interpreter = 'node'; break;
+    case 'python': interpreter = 'python3'; break;
+    case 'bash': interpreter = 'bash'; break;
+    default:
+      return { passed: false, output: '', error: `Unsupported language: ${language}`, durationMs: 0 };
+  }
+
+  // Write code to a temp file on host, mount read-only into throwaway container
+  const tmpDir = mkdtempSync(join(tmpdir(), 'tj-sandbox-'));
+  const tmpFile = join(tmpDir, `test.${ext}`);
+  writeFileSync(tmpFile, wrappedCode, 'utf-8');
+
+  let container: Dockerode.Container | null = null;
   try {
-    const { execFileSync } = await import('child_process');
-    const { writeFileSync, unlinkSync, mkdtempSync } = await import('fs');
-    const { join } = await import('path');
-    const os = await import('os');
+    const image = config.docker.baseImage;
 
-    // Write code to temp file to avoid shell injection
-    const tmpDir = mkdtempSync(join(os.tmpdir(), 'tj-sandbox-'));
-    const extMap: Record<string, string> = { javascript: 'js', python: 'py', bash: 'sh' };
-    const ext = extMap[language] || 'js';
-    const tmpFile = join(tmpDir, `test.${ext}`);
-    writeFileSync(tmpFile, wrappedCode, 'utf-8');
+    container = await docker.createContainer({
+      Image: image,
+      Cmd: [interpreter, `/sandbox/test.${ext}`],
+      Env: [`INPUT=${JSON.stringify(sampleInput)}`],
+      WorkingDir: '/sandbox',
+      HostConfig: {
+        Binds: [`${tmpDir}:/sandbox:ro`],
+        Memory: 256 * 1024 * 1024, // 256MB
+        NanoCpus: 0.5e9, // 0.5 CPU
+        NetworkMode: 'none',
+        ReadonlyRootfs: true,
+        CapDrop: ['ALL'],
+        SecurityOpt: ['no-new-privileges:true'],
+        AutoRemove: true,
+        // tmpfs for interpreters that need writable /tmp
+        Tmpfs: { '/tmp': 'rw,noexec,nosuid,size=16m' },
+      },
+      Labels: {
+        'tinyjobs.sandbox': 'true',
+        'tinyjobs.sandbox_language': language,
+      },
+    });
 
-    let interpreter: string;
-    switch (language) {
-      case 'javascript': interpreter = 'node'; break;
-      case 'python': interpreter = 'python3'; break;
-      case 'bash': interpreter = 'bash'; break;
-      default:
-        return { passed: false, output: '', error: `Unsupported language: ${language}`, durationMs: 0 };
+    await container.start();
+
+    // Wait with 15s timeout
+    const { exitCode } = await new Promise<{ exitCode: number }>((resolve, reject) => {
+      const timer = setTimeout(async () => {
+        try { await container!.kill(); } catch {}
+        reject(new Error('Sandbox test timed out after 15s'));
+      }, 15000);
+
+      container!.wait()
+        .then((result: { StatusCode: number }) => {
+          clearTimeout(timer);
+          resolve({ exitCode: result.StatusCode });
+        })
+        .catch((err: Error) => {
+          clearTimeout(timer);
+          reject(err);
+        });
+    });
+
+    // Read logs before container auto-removes
+    const logs = await container.logs({ stdout: true, stderr: true, follow: false });
+    const output = logs.toString('utf8').trim();
+
+    if (exitCode !== 0) {
+      return {
+        passed: false,
+        output: '',
+        error: (output || `Process exited with code ${exitCode}`).slice(0, 2000),
+        durationMs: Date.now() - startTime,
+      };
     }
-
-    const output = execFileSync(interpreter, [tmpFile], {
-      timeout: 15000,
-      maxBuffer: 1024 * 1024,
-      env: { ...process.env, INPUT: JSON.stringify(sampleInput) },
-    }).toString().trim();
-
-    // Cleanup
-    try { unlinkSync(tmpFile); unlinkSync(tmpDir); } catch {}
 
     return {
       passed: true,
@@ -216,12 +269,21 @@ async function sandboxTest(
       durationMs: Date.now() - startTime,
     };
   } catch (err: any) {
+    // Try to clean up container if it wasn't auto-removed
+    if (container) {
+      try { await container.remove({ force: true }); } catch {}
+    }
+
     return {
       passed: false,
       output: '',
-      error: (err.stderr?.toString() || err.message || 'Unknown error').slice(0, 2000),
+      error: (err.message || 'Unknown sandbox error').slice(0, 2000),
       durationMs: Date.now() - startTime,
     };
+  } finally {
+    // Clean up temp file
+    try { unlinkSync(tmpFile); } catch {}
+    try { unlinkSync(tmpDir); } catch {}
   }
 }
 

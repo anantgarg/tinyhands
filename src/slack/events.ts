@@ -307,7 +307,7 @@ async function handleAgentChannelCommand(
   if (adminMatch) {
     try {
       const { addAgentAdmin } = await import('../modules/access-control');
-      addAgentAdmin(agent.id, adminMatch[1], userId);
+      addAgentAdmin(agent.id, adminMatch[1], 'admin', userId);
       await postMessage(channelId, `:white_check_mark: <@${adminMatch[1]}> is now an admin of *${agent.name}*`, threadTs);
       return true;
     } catch (err: any) {
