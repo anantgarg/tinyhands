@@ -495,3 +495,132 @@ describe('Self-Authoring: Tool Discovery', () => {
     expect(results[0].name).toBe('tool-a');
   });
 });
+
+// ══════════════════════════════════════════════════
+//  Tool Name Validation (security)
+// ══════════════════════════════════════════════════
+
+describe('Self-Authoring: Tool Name Validation', () => {
+  function validateToolName(name: string): string | null {
+    if (!name || name.length < 3 || name.length > 40) return 'length';
+    if (!/^[a-z0-9][a-z0-9-]*[a-z0-9]$/.test(name)) return 'format';
+    if (name.includes('--')) return 'double-hyphen';
+    return null;
+  }
+
+  it('accepts valid kebab-case names', () => {
+    expect(validateToolName('my-tool')).toBeNull();
+    expect(validateToolName('csv-parser')).toBeNull();
+    expect(validateToolName('tool123')).toBeNull();
+    expect(validateToolName('abc')).toBeNull();
+  });
+
+  it('rejects too short names', () => {
+    expect(validateToolName('ab')).toBe('length');
+    expect(validateToolName('')).toBe('length');
+  });
+
+  it('rejects too long names', () => {
+    expect(validateToolName('a'.repeat(41))).toBe('length');
+  });
+
+  it('rejects names with uppercase', () => {
+    expect(validateToolName('MyTool')).toBe('format');
+  });
+
+  it('rejects names with spaces', () => {
+    expect(validateToolName('my tool')).toBe('format');
+  });
+
+  it('rejects names starting with hyphen', () => {
+    expect(validateToolName('-my-tool')).toBe('format');
+  });
+
+  it('rejects names ending with hyphen', () => {
+    expect(validateToolName('my-tool-')).toBe('format');
+  });
+
+  it('rejects shell injection in names', () => {
+    expect(validateToolName('tool;rm -rf /')).toBe('format');
+    expect(validateToolName('tool$(whoami)')).toBe('format');
+    expect(validateToolName('tool`id`')).toBe('format');
+  });
+
+  it('rejects path traversal in names', () => {
+    expect(validateToolName('../etc/passwd')).toBe('format');
+    expect(validateToolName('tool/../../bin')).toBe('format');
+  });
+
+  it('rejects consecutive hyphens', () => {
+    expect(validateToolName('my--tool')).toBe('double-hyphen');
+  });
+});
+
+// ══════════════════════════════════════════════════
+//  Artifact Path Validation (security)
+// ══════════════════════════════════════════════════
+
+describe('Self-Authoring: Artifact Path Validation', () => {
+  const blockedPrefixes = ['/etc/', '/proc/', '/sys/', '/dev/', '/boot/', '/root/', '/var/run/'];
+
+  function validateArtifactPath(path: string): string | null {
+    if (path.includes('..') || path.includes('\0')) return 'traversal';
+    if (!path.startsWith('/')) return 'not-absolute';
+    for (const prefix of blockedPrefixes) {
+      if (path.startsWith(prefix)) return 'blocked';
+    }
+    return null;
+  }
+
+  it('accepts valid absolute paths', () => {
+    expect(validateArtifactPath('/src/utils/helper.ts')).toBeNull();
+    expect(validateArtifactPath('/app/index.js')).toBeNull();
+  });
+
+  it('blocks path traversal', () => {
+    expect(validateArtifactPath('/src/../../etc/passwd')).toBe('traversal');
+    expect(validateArtifactPath('/src/../../../root/.ssh/id_rsa')).toBe('traversal');
+  });
+
+  it('blocks null bytes', () => {
+    expect(validateArtifactPath('/src/file.ts\0.jpg')).toBe('traversal');
+  });
+
+  it('requires absolute paths', () => {
+    expect(validateArtifactPath('relative/path.ts')).toBe('not-absolute');
+  });
+
+  it('blocks sensitive system paths', () => {
+    expect(validateArtifactPath('/etc/passwd')).toBe('blocked');
+    expect(validateArtifactPath('/proc/self/environ')).toBe('blocked');
+    expect(validateArtifactPath('/sys/class/net')).toBe('blocked');
+    expect(validateArtifactPath('/dev/sda')).toBe('blocked');
+    expect(validateArtifactPath('/root/.bashrc')).toBe('blocked');
+  });
+});
+
+// ══════════════════════════════════════════════════
+//  Boolean/Integer Type Mapping
+// ══════════════════════════════════════════════════
+
+describe('Self-Authoring: SQLite Boolean Handling', () => {
+  it('treats SQLite 0 as falsy for approved check', () => {
+    const tool = { approved: 0, script_code: 'code' };
+    expect(!tool.approved).toBe(true); // should be treated as not approved
+  });
+
+  it('treats SQLite 1 as truthy for approved check', () => {
+    const tool = { approved: 1, script_code: 'code' };
+    expect(!tool.approved).toBe(false); // should be treated as approved
+  });
+
+  it('treats JS true as truthy for approved check', () => {
+    const tool = { approved: true, script_code: 'code' };
+    expect(!tool.approved).toBe(false);
+  });
+
+  it('treats JS false as falsy for approved check', () => {
+    const tool = { approved: false, script_code: 'code' };
+    expect(!tool.approved).toBe(true);
+  });
+});

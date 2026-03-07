@@ -2,6 +2,7 @@ import { v4 as uuid } from 'uuid';
 import { getDb } from '../../db';
 import { getAgent, updateAgent } from '../agents';
 import { registerCustomTool } from '../tools';
+import { validateArtifactPath, validateToolName } from '../self-authoring';
 import { createKBEntry } from '../knowledge-base';
 import { canModifyAgent } from '../access-control';
 import type { EvolutionProposal, EvolutionAction, SelfEvolutionMode } from '../../types';
@@ -138,6 +139,7 @@ function executeProposal(proposal: EvolutionProposal): void {
 function executeWriteTool(proposal: EvolutionProposal): void {
   const toolConfig = JSON.parse(proposal.diff);
   const toolName = toolConfig.name || `agent-tool-${proposal.id.slice(0, 8)}`;
+  validateToolName(toolName);
 
   if (toolConfig.stored_in_db && toolConfig.code) {
     // Already registered by self-authoring module
@@ -186,6 +188,7 @@ function executeCommitCode(proposal: EvolutionProposal): void {
   if (Array.isArray(changes.files)) {
     for (const file of changes.files) {
       if (file.path && file.content) {
+        validateArtifactPath(file.path);
         // Detect language from file extension
         const ext = file.path.split('.').pop() || 'text';
         const langMap: Record<string, string> = {
