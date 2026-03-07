@@ -9,7 +9,7 @@ import { retrieveMemories, storeMemories } from '../sources/memory';
 import { getDisallowedTools, getDockerSecurityConfig } from '../permissions';
 import { getAgentSkills } from '../skills';
 import { listCustomTools } from '../tools';
-import { getToolExecutionScript } from '../self-authoring';
+import { getToolExecutionScript, getMcpConfigs, getCodeArtifacts, recordToolRun } from '../self-authoring';
 import { bufferEvent } from '../../slack/buffer';
 import { config } from '../../config';
 import { estimateCost, getModelId } from '../../utils/costs';
@@ -189,6 +189,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
   // Collect agent's skills and custom tools for injection
   let skillsConfig = '[]';
   let customToolsConfig = '[]';
+  let codeArtifactsConfig = '[]';
   try {
     const skills = getAgentSkills(agent.id);
     skillsConfig = JSON.stringify(skills.map(s => ({
@@ -210,6 +211,28 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
         language: t.language,
       };
     }));
+    // Collect DB-stored MCP configs
+    const mcpConfigs = getMcpConfigs(agent.id).filter(m => m.approved);
+    if (mcpConfigs.length > 0) {
+      const mcpSkillEntries = mcpConfigs.map(m => ({
+        name: m.name,
+        type: 'mcp',
+        config: JSON.parse(m.config_json),
+        permission_level: 'write',
+      }));
+      const existingSkills = JSON.parse(skillsConfig);
+      skillsConfig = JSON.stringify([...existingSkills, ...mcpSkillEntries]);
+    }
+
+    // Collect DB-stored code artifacts for workspace injection
+    const codeArtifacts = getCodeArtifacts(agent.id);
+    if (codeArtifacts.length > 0) {
+      codeArtifactsConfig = JSON.stringify(codeArtifacts.map(a => ({
+        file_path: a.file_path,
+        content: a.content,
+        language: a.language,
+      })));
+    }
   } catch (err) {
     logger.warn('Failed to load skills/tools for agent', { agentId: agent.id, error: String(err) });
   }
@@ -236,6 +259,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
         PERMISSION_MODE: 'bypassPermissions',
         SKILLS_CONFIG: skillsConfig,
         CUSTOM_TOOLS_CONFIG: customToolsConfig,
+        CODE_ARTIFACTS_CONFIG: codeArtifactsConfig,
         MEMORY_ENABLED: agent.memory_enabled ? '1' : '0',
       },
       networkAllowlist: securityConfig.networkMode === 'bridge' ? ['*'] : undefined,

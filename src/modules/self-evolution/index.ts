@@ -1,5 +1,4 @@
 import { v4 as uuid } from 'uuid';
-import { execSync } from 'child_process';
 import { getDb } from '../../db';
 import { getAgent, updateAgent } from '../agents';
 import { registerCustomTool } from '../tools';
@@ -141,65 +140,81 @@ function executeWriteTool(proposal: EvolutionProposal): void {
   const toolName = toolConfig.name || `agent-tool-${proposal.id.slice(0, 8)}`;
 
   if (toolConfig.stored_in_db && toolConfig.code) {
-    // DB-stored tool (from self-authoring module) — already registered
-    logger.info('Tool stored in DB', { toolName });
+    // Already registered by self-authoring module
+    logger.info('Tool already stored in DB', { toolName });
     return;
   }
 
-  // Legacy: write to disk for file-based tools
-  if (toolConfig.script) {
-    const { mkdirSync, writeFileSync } = require('fs');
-    const scriptPath = `${process.cwd()}/tools/${toolName}.js`;
-    mkdirSync(`${process.cwd()}/tools`, { recursive: true });
-    writeFileSync(scriptPath, toolConfig.script, 'utf-8');
-    toolConfig.script_path = scriptPath;
-    logger.info('Tool script written to disk', { toolName, scriptPath });
-  }
+  // All tool code goes into DB — use script or code field
+  const code = toolConfig.code || toolConfig.script || '';
+  const language = toolConfig.language || 'javascript';
 
-  // Store code in DB if available, otherwise use file path
   registerCustomTool(
     toolName,
     JSON.stringify(toolConfig.schema || {}),
-    toolConfig.script_path || null,
+    null, // no file path — everything in DB
     proposal.agent_id,
-    toolConfig.code ? { code: toolConfig.code, language: toolConfig.language || 'javascript' } : undefined
+    code ? { code, language } : undefined
   );
 
-  if (!toolConfig.stored_in_db) {
-    gitCommitAndPush(`Agent ${proposal.agent_id.slice(0, 8)} wrote tool: ${toolName}`);
-  }
+  logger.info('Tool registered in DB', { toolName, language, codeLength: code.length });
 }
 
 function executeCreateMcp(proposal: EvolutionProposal): void {
+  const db = getDb();
   const mcpConfig = JSON.parse(proposal.diff);
-  const { mkdirSync, writeFileSync } = require('fs');
+  const name = mcpConfig.name || `mcp-${proposal.id.slice(0, 8)}`;
+  const agent = getAgent(proposal.agent_id);
+  const autoApprove = agent?.self_evolution_mode === 'autonomous';
 
-  // Write MCP server config
-  const configDir = `${process.cwd()}/mcp-servers`;
-  mkdirSync(configDir, { recursive: true });
-  const configPath = `${configDir}/${mcpConfig.name || proposal.id.slice(0, 8)}.json`;
-  writeFileSync(configPath, JSON.stringify(mcpConfig, null, 2), 'utf-8');
+  // Upsert MCP config in DB
+  db.prepare(`
+    INSERT INTO mcp_configs (id, agent_id, name, config_json, approved, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+    ON CONFLICT(agent_id, name) DO UPDATE SET
+      config_json = excluded.config_json,
+      updated_at = datetime('now')
+  `).run(uuid(), proposal.agent_id, name, JSON.stringify(mcpConfig), autoApprove ? 1 : 0);
 
-  logger.info('MCP integration created', { configPath });
-  gitCommitAndPush(`Agent ${proposal.agent_id.slice(0, 8)} created MCP: ${mcpConfig.name || 'unnamed'}`);
+  logger.info('MCP config stored in DB', { name, agentId: proposal.agent_id, autoApprove });
 }
 
 function executeCommitCode(proposal: EvolutionProposal): void {
+  const db = getDb();
   const changes = JSON.parse(proposal.diff);
-  const { mkdirSync, writeFileSync } = require('fs');
-  const { dirname } = require('path');
 
   if (Array.isArray(changes.files)) {
     for (const file of changes.files) {
       if (file.path && file.content) {
-        mkdirSync(dirname(file.path), { recursive: true });
-        writeFileSync(file.path, file.content, 'utf-8');
-        logger.info('Code file written by agent', { path: file.path });
+        // Detect language from file extension
+        const ext = file.path.split('.').pop() || 'text';
+        const langMap: Record<string, string> = {
+          js: 'javascript', ts: 'typescript', py: 'python', sh: 'bash',
+          json: 'json', yaml: 'yaml', yml: 'yaml', md: 'markdown',
+          html: 'html', css: 'css', sql: 'sql',
+        };
+        const language = langMap[ext] || 'text';
+
+        // Upsert into code_artifacts table
+        db.prepare(`
+          INSERT INTO code_artifacts (id, agent_id, file_path, content, language, proposal_id, version, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, 1, datetime('now'), datetime('now'))
+          ON CONFLICT(agent_id, file_path) DO UPDATE SET
+            content = excluded.content,
+            language = excluded.language,
+            proposal_id = excluded.proposal_id,
+            version = code_artifacts.version + 1,
+            updated_at = datetime('now')
+        `).run(uuid(), proposal.agent_id, file.path, file.content, language, proposal.id);
+
+        logger.info('Code artifact stored in DB', {
+          path: file.path,
+          language,
+          agentId: proposal.agent_id,
+        });
       }
     }
   }
-
-  gitCommitAndPush(`Agent ${proposal.agent_id.slice(0, 8)}: ${proposal.description.slice(0, 60)}`);
 }
 
 function executeUpdatePrompt(proposal: EvolutionProposal): void {
@@ -219,27 +234,6 @@ function executeAddToKb(proposal: EvolutionProposal): void {
     contributedBy: proposal.agent_id,
     approved: false,
   });
-}
-
-function gitCommitAndPush(message: string): void {
-  try {
-    execSync('git add -A', { cwd: process.cwd(), timeout: 10000 });
-    execSync(`git commit -m "${message.replace(/"/g, '\\"')}"`, {
-      cwd: process.cwd(),
-      timeout: 10000,
-    });
-    logger.info('Git commit created', { message });
-
-    // Push to remote
-    try {
-      execSync('git push', { cwd: process.cwd(), timeout: 30000 });
-      logger.info('Git push succeeded', { message });
-    } catch (pushErr: any) {
-      logger.warn('Git push failed', { error: pushErr.message });
-    }
-  } catch (err: any) {
-    logger.warn('Git commit failed (may be no changes)', { error: err.message });
-  }
 }
 
 // ── Timeout for Approve-First ──

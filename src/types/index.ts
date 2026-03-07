@@ -260,6 +260,28 @@ export interface AuthoredSkill {
   updated_at: string;
 }
 
+export interface McpConfig {
+  id: string;
+  agent_id: string;
+  name: string;
+  config_json: string;
+  approved: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CodeArtifact {
+  id: string;
+  agent_id: string;
+  file_path: string;
+  content: string;
+  language: string;
+  proposal_id: string | null;
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
+
 // ── Dashboard Types ──
 
 export interface DashboardMetrics {

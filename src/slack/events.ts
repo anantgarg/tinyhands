@@ -336,7 +336,7 @@ async function handleAgentChannelCommand(
     }
   }
 
-  // "create a tool that..." — AI-powered tool authoring
+  // "create a tool that..." — AI-powered tool authoring with sandbox testing
   const createToolMatch = lower.match(/^(?:create|write|build|make)\s+(?:a\s+)?tool\s+(?:that|to|for|which)\s+(.+)/);
   if (createToolMatch) {
     try {
@@ -344,25 +344,23 @@ async function handleAgentChannelCommand(
       await postMessage(
         channelId,
         ':hammer_and_wrench: Generating tool implementation...',
-        threadTs,
-        agent.name,
-        agent.avatar_emoji,
+        threadTs, agent.name, agent.avatar_emoji,
       );
 
       const result = await authorTool(agent.id, createToolMatch[1]);
+      const testLine = result.testResult
+        ? `\nSandbox test: ${result.testResult.passed ? 'PASSED' : 'FAILED'} (${result.testResult.durationMs}ms)`
+        : '\nSandbox test: skipped';
       const statusMsg = result.requiresApproval
-        ? '\n:warning: Requires admin approval before use. An admin can say `approve tool ' + result.tool.name + '`'
+        ? '\n:warning: Requires admin approval. Say `approve tool ' + result.tool.name + '`'
         : '\n:white_check_mark: Auto-approved and ready to use.';
 
       await postMessage(
         channelId,
         `:hammer_and_wrench: Tool *${result.tool.name}* created!\n` +
-        `Language: \`${result.tool.language}\`\n` +
-        `Code: ${result.code.split('\n').length} lines (stored in DB)\n` +
-        statusMsg,
-        threadTs,
-        agent.name,
-        agent.avatar_emoji,
+        `Language: \`${result.tool.language}\` | ${result.code.split('\n').length} lines | stored in DB` +
+        testLine + statusMsg,
+        threadTs, agent.name, agent.avatar_emoji,
       );
       return true;
     } catch (err: any) {
@@ -376,28 +374,16 @@ async function handleAgentChannelCommand(
   if (createSkillMatch) {
     try {
       const { authorSkill } = await import('../modules/self-authoring');
-      await postMessage(
-        channelId,
-        ':brain: Generating skill template...',
-        threadTs,
-        agent.name,
-        agent.avatar_emoji,
-      );
+      await postMessage(channelId, ':brain: Generating skill template...', threadTs, agent.name, agent.avatar_emoji);
 
       const skill = await authorSkill(agent.id, createSkillMatch[1]);
-      const statusMsg = skill.approved
-        ? ':white_check_mark: Auto-approved and ready to use.'
-        : ':warning: Requires admin approval.';
+      const statusMsg = skill.approved ? ':white_check_mark: Ready to use.' : ':warning: Requires admin approval.';
 
       await postMessage(
         channelId,
-        `:jigsaw: Skill *${skill.name}* authored!\n` +
-        `Description: ${skill.description}\n` +
-        `Template preview:\n\`\`\`${skill.template.slice(0, 300)}${skill.template.length > 300 ? '...' : ''}\`\`\`\n` +
-        statusMsg,
-        threadTs,
-        agent.name,
-        agent.avatar_emoji,
+        `:jigsaw: Skill *${skill.name}* authored!\n${skill.description}\n` +
+        `\`\`\`${skill.template.slice(0, 300)}${skill.template.length > 300 ? '...' : ''}\`\`\`\n${statusMsg}`,
+        threadTs, agent.name, agent.avatar_emoji,
       );
       return true;
     } catch (err: any) {
@@ -406,17 +392,107 @@ async function handleAgentChannelCommand(
     }
   }
 
-  // "approve tool <name>" — admin approval for agent-authored tools
+  // "approve tool <name>" — admin approval
   const approveToolMatch = lower.match(/^approve\s+tool\s+([\w-]+)/);
   if (approveToolMatch) {
     try {
       const { approveCustomTool } = await import('../modules/tools');
       approveCustomTool(approveToolMatch[1], userId);
-      await postMessage(
-        channelId,
-        `:white_check_mark: Tool *${approveToolMatch[1]}* approved and ready for use.`,
-        threadTs,
-      );
+      await postMessage(channelId, `:white_check_mark: Tool *${approveToolMatch[1]}* approved.`, threadTs);
+      return true;
+    } catch (err: any) {
+      await postMessage(channelId, `:x: ${err.message}`, threadTs);
+      return true;
+    }
+  }
+
+  // "share tool <name> with @agent" — cross-agent tool sharing
+  const shareToolMatch = lower.match(/^share\s+tool\s+([\w-]+)\s+with\s+([\w-]+)/);
+  if (shareToolMatch) {
+    try {
+      const { shareToolWithAgent } = await import('../modules/self-authoring');
+      shareToolWithAgent(shareToolMatch[1], agent.id, shareToolMatch[2]);
+      await postMessage(channelId, `:handshake: Tool *${shareToolMatch[1]}* shared with *${shareToolMatch[2]}*.`, threadTs);
+      return true;
+    } catch (err: any) {
+      await postMessage(channelId, `:x: ${err.message}`, threadTs);
+      return true;
+    }
+  }
+
+  // "rollback tool <name> to version <n>"
+  const rollbackMatch = lower.match(/^rollback\s+tool\s+([\w-]+)\s+(?:to\s+)?(?:v(?:ersion)?\s*)?(\d+)/);
+  if (rollbackMatch) {
+    try {
+      const { rollbackTool } = await import('../modules/self-authoring');
+      rollbackTool(rollbackMatch[1], parseInt(rollbackMatch[2], 10), userId);
+      await postMessage(channelId, `:rewind: Tool *${rollbackMatch[1]}* rolled back to version ${rollbackMatch[2]}.`, threadTs);
+      return true;
+    } catch (err: any) {
+      await postMessage(channelId, `:x: ${err.message}`, threadTs);
+      return true;
+    }
+  }
+
+  // "tool stats" / "tool analytics"
+  if (lower === 'tool stats' || lower === 'tool analytics') {
+    try {
+      const { getAllToolAnalytics } = await import('../modules/self-authoring');
+      const analytics = getAllToolAnalytics(agent.id);
+      if (analytics.length === 0) {
+        await postMessage(channelId, ':bar_chart: No tool usage data yet.', threadTs);
+        return true;
+      }
+      const lines = [':bar_chart: *Tool Analytics*', ''];
+      for (const a of analytics) {
+        const pct = (a.successRate * 100).toFixed(0);
+        lines.push(`*${a.toolName}*: ${a.totalRuns} runs, ${pct}% success, avg ${a.avgDurationMs}ms${a.lastError ? ` | last error: ${a.lastError.slice(0, 80)}` : ''}`);
+      }
+      await postMessage(channelId, lines.join('\n'), threadTs);
+      return true;
+    } catch (err: any) {
+      await postMessage(channelId, `:x: ${err.message}`, threadTs);
+      return true;
+    }
+  }
+
+  // "tool versions <name>"
+  const versionsMatch = lower.match(/^tool\s+versions?\s+([\w-]+)/);
+  if (versionsMatch) {
+    try {
+      const { getToolVersions } = await import('../modules/self-authoring');
+      const versions = getToolVersions(versionsMatch[1]);
+      if (versions.length === 0) {
+        await postMessage(channelId, `:file_folder: No version history for *${versionsMatch[1]}*.`, threadTs);
+        return true;
+      }
+      const lines = [`:file_folder: *Versions for ${versionsMatch[1]}*`, ''];
+      for (const v of versions) {
+        lines.push(`v${v.version} — ${v.created_at} by ${v.changed_by}`);
+      }
+      await postMessage(channelId, lines.join('\n'), threadTs);
+      return true;
+    } catch (err: any) {
+      await postMessage(channelId, `:x: ${err.message}`, threadTs);
+      return true;
+    }
+  }
+
+  // "find tool <query>" — semantic tool discovery
+  const findToolMatch = lower.match(/^(?:find|search|discover)\s+tool(?:s)?\s+(.+)/);
+  if (findToolMatch) {
+    try {
+      const { discoverTools } = await import('../modules/self-authoring');
+      const tools = discoverTools(findToolMatch[1]);
+      if (tools.length === 0) {
+        await postMessage(channelId, `:mag: No tools found matching "${findToolMatch[1]}".`, threadTs);
+        return true;
+      }
+      const lines = [`:mag: *Tools matching "${findToolMatch[1]}"*`, ''];
+      for (const t of tools) {
+        lines.push(`*${t.name}* (\`${t.language}\`) ${t.approved ? '' : '[pending]'} — by ${t.registered_by.slice(0, 8)}`);
+      }
+      await postMessage(channelId, lines.join('\n'), threadTs);
       return true;
     } catch (err: any) {
       await postMessage(channelId, `:x: ${err.message}`, threadTs);
@@ -428,19 +504,28 @@ async function handleAgentChannelCommand(
   if (lower === 'show tools' || lower === 'list tools' || lower === 'my tools') {
     try {
       const { getAgentToolSummary } = await import('../modules/tools');
+      const { getAuthoredSkills, getMcpConfigs, getCodeArtifacts } = await import('../modules/self-authoring');
+
       const summary = getAgentToolSummary(agent.id);
+      const authored = getAuthoredSkills(agent.id);
+      const mcpConfigs = getMcpConfigs(agent.id);
+      const artifacts = getCodeArtifacts(agent.id);
+
       const lines = [
-        `:toolbox: *Tools for ${agent.name}*`,
-        `Built-in: ${summary.builtin.join(', ') || 'none'}`,
-        `Custom: ${summary.custom.join(', ') || 'none'}`,
-        `MCP: ${summary.mcp.join(', ') || 'none'}`,
+        `:toolbox: *Capabilities for ${agent.name}*`,
+        `Built-in tools: ${summary.builtin.join(', ') || 'none'}`,
+        `Custom tools: ${summary.custom.join(', ') || 'none'}`,
+        `MCP integrations: ${summary.mcp.join(', ') || 'none'}`,
       ];
 
-      // Also show authored skills
-      const { getAuthoredSkills } = await import('../modules/self-authoring');
-      const authored = getAuthoredSkills(agent.id);
+      if (mcpConfigs.length > 0) {
+        lines.push(`DB MCP configs: ${mcpConfigs.map(m => `${m.name}${m.approved ? '' : ' (pending)'}`).join(', ')}`);
+      }
       if (authored.length > 0) {
-        lines.push(`\nAuthored skills: ${authored.map(s => `${s.name}${s.approved ? '' : ' (pending)'}`).join(', ')}`);
+        lines.push(`Authored skills: ${authored.map(s => `${s.name}${s.approved ? '' : ' (pending)'}`).join(', ')}`);
+      }
+      if (artifacts.length > 0) {
+        lines.push(`Code artifacts: ${artifacts.length} files (v${Math.max(...artifacts.map(a => a.version))} latest)`);
       }
 
       await postMessage(channelId, lines.join('\n'), threadTs);
