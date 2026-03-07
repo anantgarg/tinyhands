@@ -61,12 +61,21 @@ export function createRunRecord(data: JobData, jobId: string): RunRecord {
   return record;
 }
 
+const ALLOWED_RUN_RECORD_COLUMNS = new Set([
+  'output', 'status', 'input_tokens', 'output_tokens', 'estimated_cost_usd',
+  'duration_ms', 'queue_wait_ms', 'context_tokens_injected', 'tool_calls_count',
+  'model', 'completed_at',
+]);
+
 export function updateRunRecord(id: string, updates: Partial<RunRecord>): void {
   const db = getDb();
   const fields: string[] = [];
   const values: any[] = [];
 
   for (const [key, value] of Object.entries(updates)) {
+    if (!ALLOWED_RUN_RECORD_COLUMNS.has(key)) {
+      throw new Error(`Invalid column for run record update: ${key}`);
+    }
     fields.push(`${key} = ?`);
     values.push(value);
   }

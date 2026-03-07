@@ -8,6 +8,7 @@ describe('Self-Authoring: Code Validation', () => {
   const FORBIDDEN_PATTERNS = [
     /process\.exit/i,
     /require\s*\(\s*['"]child_process['"]\s*\)/,
+    /require\s*\(\s*['"](net|http|https|dgram|cluster|worker_threads|vm)['"]\s*\)/,
     /eval\s*\(/,
     /Function\s*\(/,
     /rm\s+-rf\s+\//,

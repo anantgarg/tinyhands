@@ -117,22 +117,31 @@ export function getProposalHistory(agentId: string): EvolutionProposal[] {
 // ── Execution ──
 
 function executeProposal(proposal: EvolutionProposal): void {
-  switch (proposal.action) {
-    case 'write_tool':
-      executeWriteTool(proposal);
-      break;
-    case 'create_mcp':
-      executeCreateMcp(proposal);
-      break;
-    case 'commit_code':
-      executeCommitCode(proposal);
-      break;
-    case 'update_prompt':
-      executeUpdatePrompt(proposal);
-      break;
-    case 'add_to_kb':
-      executeAddToKb(proposal);
-      break;
+  try {
+    switch (proposal.action) {
+      case 'write_tool':
+        executeWriteTool(proposal);
+        break;
+      case 'create_mcp':
+        executeCreateMcp(proposal);
+        break;
+      case 'commit_code':
+        executeCommitCode(proposal);
+        break;
+      case 'update_prompt':
+        executeUpdatePrompt(proposal);
+        break;
+      case 'add_to_kb':
+        executeAddToKb(proposal);
+        break;
+    }
+  } catch (err: any) {
+    logger.error('Failed to execute proposal', {
+      proposalId: proposal.id,
+      action: proposal.action,
+      error: err.message,
+    });
+    throw new Error(`Failed to execute ${proposal.action} proposal: ${err.message}`);
   }
 }
 

@@ -1,6 +1,6 @@
 import { v4 as uuid } from 'uuid';
 import Dockerode from 'dockerode';
-import { writeFileSync, unlinkSync, mkdtempSync } from 'fs';
+import { writeFileSync, unlinkSync, rmSync, mkdtempSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { getDb } from '../../db';
@@ -137,16 +137,20 @@ export function updateToolCode(
   const tool = getCustomTool(toolName);
   if (!tool) throw new Error(`Tool "${toolName}" not found`);
 
-  // Archive current version
-  db.prepare(`
-    INSERT INTO tool_versions (id, tool_name, version, script_code, language, changed_by, created_at)
-    VALUES (?, ?, (SELECT COALESCE(MAX(version), 0) + 1 FROM tool_versions WHERE tool_name = ?), ?, ?, ?, datetime('now'))
-  `).run(uuid(), toolName, toolName, tool.script_code || '', tool.language, userId);
-
-  // Update to new version
+  // Validate before starting transaction
   validateToolCode(newCode, language);
-  db.prepare('UPDATE custom_tools SET script_code = ?, language = ? WHERE name = ?').run(newCode, language, toolName);
 
+  // Archive + update atomically to prevent race conditions
+  const doUpdate = db.transaction(() => {
+    db.prepare(`
+      INSERT INTO tool_versions (id, tool_name, version, script_code, language, changed_by, created_at)
+      VALUES (?, ?, (SELECT COALESCE(MAX(version), 0) + 1 FROM tool_versions WHERE tool_name = ?), ?, ?, ?, datetime('now'))
+    `).run(uuid(), toolName, toolName, tool.script_code || '', tool.language, userId);
+
+    db.prepare('UPDATE custom_tools SET script_code = ?, language = ? WHERE name = ?').run(newCode, language, toolName);
+  });
+
+  doUpdate();
   logger.info('Tool code updated', { toolName, userId });
 }
 
@@ -281,9 +285,8 @@ async function sandboxTest(
       durationMs: Date.now() - startTime,
     };
   } finally {
-    // Clean up temp file
-    try { unlinkSync(tmpFile); } catch {}
-    try { unlinkSync(tmpDir); } catch {}
+    // Clean up temp file and directory
+    try { rmSync(tmpDir, { recursive: true }); } catch {}
   }
 }
 
@@ -471,9 +474,8 @@ export function createToolPipeline(
     if (!tool) throw new Error(`Pipeline step references unknown tool: ${step.toolName}`);
   }
 
-  // Generate pipeline execution code
+  // Generate pipeline execution code (system-generated, skip user validation)
   const pipelineCode = generatePipelineCode(pipeline);
-  validateToolCode(pipelineCode, 'javascript');
 
   // Build combined schema from first step's input
   const firstTool = getCustomTool(pipeline.steps[0].toolName);
@@ -529,7 +531,7 @@ for (const step of steps) {
   if (!scriptPath) throw new Error('Tool script not found: ' + step.toolName);
 
   const script = fs.readFileSync(scriptPath, 'utf-8');
-  const sandbox = { process: { env: { ...process.env, INPUT: JSON.stringify(stepInput) } }, require, console: { log: function(v) { prevResult = typeof v === 'string' ? JSON.parse(v) : v; } } };
+  const sandbox = { process: { env: { ...process.env, INPUT: JSON.stringify(stepInput) } }, console: { log: function(v) { prevResult = typeof v === 'string' ? JSON.parse(v) : v; } }, JSON, Math, Date, parseInt, parseFloat, encodeURIComponent, decodeURIComponent, Buffer, setTimeout: undefined, setInterval: undefined };
   vm.runInNewContext(script, sandbox, { timeout: 30000 });
 }
 
@@ -778,6 +780,7 @@ Keep templates focused, under 500 words. Use {{placeholders}} for dynamic values
 const FORBIDDEN_PATTERNS = [
   /process\.exit/i,
   /require\s*\(\s*['"]child_process['"]\s*\)/,
+  /require\s*\(\s*['"](net|http|https|dgram|cluster|worker_threads|vm)['"]\s*\)/,
   /eval\s*\(/,
   /Function\s*\(/,
   /rm\s+-rf\s+\//,
