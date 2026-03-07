@@ -1100,6 +1100,13 @@ describe('E2E: Security Validation', () => {
     const dangerous = [
       'process.exit(1)',
       'require("child_process")',
+      'require("net")',
+      'require("http")',
+      'require("https")',
+      'require("dgram")',
+      'require("cluster")',
+      'require("worker_threads")',
+      'require("vm")',
       'eval("alert(1)")',
       'new Function("return 1")()',
       'rm -rf /',
@@ -1507,5 +1514,119 @@ describe('E2E: Error Handling & Edge Cases', () => {
 
     const analytics = getAllToolAnalytics('agent-test-001');
     expect(analytics).toEqual([]);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  19. SQL INJECTION DEFENSE: updateRunRecord column allowlist
+// ══════════════════════════════════════════════════════════════════════════════
+
+describe('E2E: updateRunRecord Column Allowlist', () => {
+  beforeEach(() => setupTestDb());
+  afterEach(() => db.close());
+
+  it('allows valid column updates', async () => {
+    const { createRunRecord, updateRunRecord, getRunRecord } = await import('../../src/modules/execution');
+    createTestAgent();
+
+    const record = createRunRecord({
+      agentId: 'agent-test-001', channelId: 'C123', threadTs: '123.456',
+      input: 'test', userId: 'U001', traceId: 'trace-1',
+    }, 'job-1');
+
+    updateRunRecord(record.id, { status: 'completed' as any, output: 'done' });
+
+    const updated = getRunRecord(record.id);
+    expect(updated!.status).toBe('completed');
+    expect(updated!.output).toBe('done');
+  });
+
+  it('blocks injection via crafted column names', async () => {
+    const { createRunRecord, updateRunRecord } = await import('../../src/modules/execution');
+    createTestAgent();
+
+    const record = createRunRecord({
+      agentId: 'agent-test-001', channelId: 'C123', threadTs: '123.456',
+      input: 'test', userId: 'U001', traceId: 'trace-1',
+    }, 'job-1');
+
+    expect(() => {
+      updateRunRecord(record.id, { 'id = "injected" --': 'hack' } as any);
+    }).toThrow(/Invalid column/);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  20. PROPOSAL EXECUTION ERROR HANDLING
+// ══════════════════════════════════════════════════════════════════════════════
+
+describe('E2E: Proposal Execution Error Handling', () => {
+  beforeEach(() => setupTestDb());
+  afterEach(() => db.close());
+
+  it('wraps execution errors with proposal context', async () => {
+    const { createProposal } = await import('../../src/modules/self-evolution');
+
+    createTestAgent({ selfEvolutionMode: 'autonomous' });
+
+    // Invalid JSON in diff should produce a clear error
+    expect(() => {
+      createProposal('agent-test-001', 'write_tool', 'Bad diff', 'not valid json');
+    }).toThrow(/Failed to execute write_tool/);
+  });
+
+  it('handles commit_code with invalid path gracefully', async () => {
+    const { createProposal } = await import('../../src/modules/self-evolution');
+
+    createTestAgent({ selfEvolutionMode: 'autonomous' });
+
+    expect(() => {
+      createProposal('agent-test-001', 'commit_code', 'Bad path', JSON.stringify({
+        files: [{ path: '/proc/self/environ', content: 'hacked' }],
+      }));
+    }).toThrow(/Failed to execute commit_code/);
+  });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+//  21. PIPELINE SANDBOX SECURITY
+// ══════════════════════════════════════════════════════════════════════════════
+
+describe('E2E: Pipeline Sandbox Security', () => {
+  beforeEach(() => setupTestDb());
+  afterEach(() => db.close());
+
+  it('pipeline code does not expose require to tool scripts', async () => {
+    const { registerCustomTool } = await import('../../src/modules/tools');
+    const { createToolPipeline } = await import('../../src/modules/self-authoring');
+
+    createTestAgent();
+
+    registerCustomTool('step-one', '{}', null, 'agent-test-001', { code: 'x', autoApprove: true });
+
+    const pipeline = createToolPipeline('agent-test-001', {
+      name: 'safe-pipeline',
+      description: 'A pipeline without require',
+      steps: [{ toolName: 'step-one', inputMapping: {} }],
+    });
+
+    // Pipeline code should NOT contain 'require,' (the old pattern that passed host require)
+    expect(pipeline.script_code).not.toMatch(/\brequire\b[^(]/);
+    // Pipeline code uses require('fs') and require('vm') at top level (system code)
+    // but the sandbox object should NOT have require
+    expect(pipeline.script_code).not.toContain(', require,');
+    expect(pipeline.script_code).not.toContain('require:');
+  });
+
+  it('validateToolCode blocks network module requires', async () => {
+    const { validateToolCode } = await import('../../src/modules/self-authoring');
+
+    const networkModules = ['net', 'http', 'https', 'dgram', 'cluster', 'worker_threads', 'vm'];
+    for (const mod of networkModules) {
+      expect(
+        () => validateToolCode(`require("${mod}")`, 'javascript'),
+        `Should block require("${mod}")`
+      ).toThrow(/forbidden pattern/);
+    }
   });
 });
