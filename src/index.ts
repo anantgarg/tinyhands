@@ -1,13 +1,13 @@
 import { createSlackApp } from './slack';
 import { startWebhookServer } from './server';
-import { getDb } from './db';
+import { initDb } from './db';
 import { logger } from './utils/logger';
 
 async function main(): Promise<void> {
   logger.info('Starting TinyJobs...');
 
   // Initialize database
-  getDb();
+  await initDb();
   logger.info('Database initialized');
 
   // Start Slack app (Socket Mode)

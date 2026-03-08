@@ -34,7 +34,7 @@ export async function analyzeGoal(goal: string, existingPrompt?: string): Promis
   ];
 
   const response = await client.messages.create({
-    model: 'claude-sonnet-4-6',
+    model: 'claude-opus-4-6',
     max_tokens: 4096,
     system: `You are an expert agent architect. Given an agent's goal, you deeply analyze what's needed and produce a complete agent configuration. Think step by step about what the agent needs to accomplish its goal.
 

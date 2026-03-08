@@ -22,12 +22,12 @@ const MODEL_INFO: Record<ModelAlias, { name: string; bestFor: string; warning?: 
   },
 };
 
-export function setAgentModel(
+export async function setAgentModel(
   agentId: string,
   model: ModelAlias,
   userId: string
-): { model: ModelAlias; warning?: string } {
-  if (!canModifyAgent(agentId, userId)) {
+): Promise<{ model: ModelAlias; warning?: string }> {
+  if (!(await canModifyAgent(agentId, userId))) {
     throw new Error('Insufficient permissions to change agent model');
   }
 
@@ -35,7 +35,7 @@ export function setAgentModel(
     throw new Error(`Invalid model: ${model}. Valid options: ${VALID_MODELS.join(', ')}`);
   }
 
-  updateAgent(agentId, { model }, userId);
+  await updateAgent(agentId, { model }, userId);
   logger.info('Agent model changed', { agentId, model, userId });
 
   const info = MODEL_INFO[model];
@@ -45,12 +45,12 @@ export function setAgentModel(
   };
 }
 
-export function getAgentModel(agentId: string): {
+export async function getAgentModel(agentId: string): Promise<{
   model: ModelAlias;
   modelId: string;
   info: typeof MODEL_INFO[ModelAlias];
-} {
-  const agent = getAgent(agentId);
+}> {
+  const agent = await getAgent(agentId);
   if (!agent) throw new Error(`Agent ${agentId} not found`);
 
   return {

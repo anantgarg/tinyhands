@@ -3,7 +3,7 @@ import Dockerode from 'dockerode';
 import { writeFileSync, unlinkSync, rmSync, mkdtempSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { getDb } from '../../db';
+import { query, queryOne, execute, withTransaction } from '../../db';
 import { getAgent, updateAgent } from '../agents';
 import { registerCustomTool, getCustomTool, listCustomTools } from '../tools';
 import { registerSkill, attachSkillToAgent } from '../skills';
@@ -48,24 +48,21 @@ export interface ToolAnalytics {
 }
 
 // ══════════════════════════════════════════════════
-//  1. AI-POWERED TOOL AUTHORING (generate → validate → test → store)
+//  1. AI-POWERED TOOL AUTHORING
 // ══════════════════════════════════════════════════
 
 export async function authorTool(
   agentId: string,
   taskDescription: string,
 ): Promise<AuthorToolResult> {
-  const agent = getAgent(agentId);
+  const agent = await getAgent(agentId);
   if (!agent) throw new Error(`Agent ${agentId} not found`);
 
-  // Step 1: AI generates tool specification and implementation
   const { spec, code } = await generateToolCode(taskDescription, agent.name);
 
-  // Step 2: Validate name + code
   validateToolName(spec.name);
   validateToolCode(code, spec.language);
 
-  // Step 3: Sandbox test — run with sample input, verify it doesn't crash
   let testResult: SandboxTestResult | null = null;
   try {
     testResult = await sandboxTest(code, spec.language, spec.inputSchema);
@@ -73,7 +70,6 @@ export async function authorTool(
     logger.warn('Sandbox test failed, proceeding with warning', { error: err.message });
   }
 
-  // Step 4: If test failed, attempt AI auto-fix (one retry)
   let finalCode = code;
   if (testResult && !testResult.passed) {
     try {
@@ -90,9 +86,8 @@ export async function authorTool(
     }
   }
 
-  // Step 5: Store in DB
   const needsApproval = agent.self_evolution_mode === 'approve-first';
-  const tool = registerCustomTool(
+  const tool = await registerCustomTool(
     spec.name,
     JSON.stringify(spec.inputSchema),
     null,
@@ -100,11 +95,9 @@ export async function authorTool(
     { code: finalCode, language: spec.language, autoApprove: !needsApproval }
   );
 
-  // Step 6: Record in tool_runs for analytics baseline
-  recordToolRun(spec.name, agentId, testResult?.passed ?? false, testResult?.durationMs ?? 0, testResult?.error ?? null);
+  await recordToolRun(spec.name, agentId, testResult?.passed ?? false, testResult?.durationMs ?? 0, testResult?.error ?? null);
 
-  // Step 7: Audit trail
-  createProposal(agentId, 'write_tool', `Auto-authored tool: ${spec.name} — ${spec.description}`, JSON.stringify({
+  await createProposal(agentId, 'write_tool', `Auto-authored tool: ${spec.name} — ${spec.description}`, JSON.stringify({
     name: spec.name,
     description: spec.description,
     schema: spec.inputSchema,
@@ -124,58 +117,53 @@ export async function authorTool(
 }
 
 // ══════════════════════════════════════════════════
-//  2. TOOL VERSIONING — rollback to any previous version
+//  2. TOOL VERSIONING
 // ══════════════════════════════════════════════════
 
-export function updateToolCode(
+export async function updateToolCode(
   toolName: string,
   newCode: string,
   language: 'javascript' | 'python' | 'bash',
   userId: string,
-): void {
-  const db = getDb();
-  const tool = getCustomTool(toolName);
+): Promise<void> {
+  const tool = await getCustomTool(toolName);
   if (!tool) throw new Error(`Tool "${toolName}" not found`);
 
-  // Validate before starting transaction
   validateToolCode(newCode, language);
 
-  // Archive + update atomically to prevent race conditions
-  const doUpdate = db.transaction(() => {
-    db.prepare(`
+  await withTransaction(async (client) => {
+    await client.query(`
       INSERT INTO tool_versions (id, tool_name, version, script_code, language, changed_by, created_at)
-      VALUES (?, ?, (SELECT COALESCE(MAX(version), 0) + 1 FROM tool_versions WHERE tool_name = ?), ?, ?, ?, datetime('now'))
-    `).run(uuid(), toolName, toolName, tool.script_code || '', tool.language, userId);
+      VALUES ($1, $2, (SELECT COALESCE(MAX(version), 0) + 1 FROM tool_versions WHERE tool_name = $3), $4, $5, $6, NOW())
+    `, [uuid(), toolName, toolName, tool.script_code || '', tool.language, userId]);
 
-    db.prepare('UPDATE custom_tools SET script_code = ?, language = ? WHERE name = ?').run(newCode, language, toolName);
+    await client.query('UPDATE custom_tools SET script_code = $1, language = $2 WHERE name = $3', [newCode, language, toolName]);
   });
 
-  doUpdate();
   logger.info('Tool code updated', { toolName, userId });
 }
 
-export function rollbackTool(toolName: string, version: number, userId: string): void {
-  const db = getDb();
-  const row = db.prepare(
-    'SELECT script_code, language FROM tool_versions WHERE tool_name = ? AND version = ?'
-  ).get(toolName, version) as { script_code: string; language: string } | undefined;
+export async function rollbackTool(toolName: string, version: number, userId: string): Promise<void> {
+  const row = await queryOne<{ script_code: string; language: string }>(
+    'SELECT script_code, language FROM tool_versions WHERE tool_name = $1 AND version = $2',
+    [toolName, version]
+  );
 
   if (!row) throw new Error(`Version ${version} not found for tool "${toolName}"`);
 
-  // Archive current before rollback
-  updateToolCode(toolName, row.script_code, row.language as any, userId);
+  await updateToolCode(toolName, row.script_code, row.language as any, userId);
   logger.info('Tool rolled back', { toolName, version, userId });
 }
 
-export function getToolVersions(toolName: string): Array<{ version: number; changed_by: string; created_at: string }> {
-  const db = getDb();
-  return db.prepare(
-    'SELECT version, changed_by, created_at FROM tool_versions WHERE tool_name = ? ORDER BY version DESC'
-  ).all(toolName) as any[];
+export async function getToolVersions(toolName: string): Promise<Array<{ version: number; changed_by: string; created_at: string }>> {
+  return query(
+    'SELECT version, changed_by, created_at FROM tool_versions WHERE tool_name = $1 ORDER BY version DESC',
+    [toolName]
+  );
 }
 
 // ══════════════════════════════════════════════════
-//  3. SANDBOX TESTING — validate tool code before deployment
+//  3. SANDBOX TESTING
 // ══════════════════════════════════════════════════
 
 async function sandboxTest(
@@ -185,7 +173,6 @@ async function sandboxTest(
 ): Promise<SandboxTestResult> {
   const startTime = Date.now();
 
-  // Generate sample input from schema
   const sampleInput = generateSampleInput(inputSchema);
   const wrappedCode = wrapForExecution(code, language, 'sandbox-test');
 
@@ -201,7 +188,6 @@ async function sandboxTest(
       return { passed: false, output: '', error: `Unsupported language: ${language}`, durationMs: 0 };
   }
 
-  // Write code to a temp file on host, mount read-only into throwaway container
   const tmpDir = mkdtempSync(join(tmpdir(), 'tj-sandbox-'));
   const tmpFile = join(tmpDir, `test.${ext}`);
   writeFileSync(tmpFile, wrappedCode, 'utf-8');
@@ -217,14 +203,13 @@ async function sandboxTest(
       WorkingDir: '/sandbox',
       HostConfig: {
         Binds: [`${tmpDir}:/sandbox:ro`],
-        Memory: 256 * 1024 * 1024, // 256MB
-        NanoCpus: 0.5e9, // 0.5 CPU
+        Memory: 256 * 1024 * 1024,
+        NanoCpus: 0.5e9,
         NetworkMode: 'none',
         ReadonlyRootfs: true,
         CapDrop: ['ALL'],
         SecurityOpt: ['no-new-privileges:true'],
         AutoRemove: true,
-        // tmpfs for interpreters that need writable /tmp
         Tmpfs: { '/tmp': 'rw,noexec,nosuid,size=16m' },
       },
       Labels: {
@@ -235,7 +220,6 @@ async function sandboxTest(
 
     await container.start();
 
-    // Wait with 15s timeout
     const { exitCode } = await new Promise<{ exitCode: number }>((resolve, reject) => {
       const timer = setTimeout(async () => {
         try { await container!.kill(); } catch {}
@@ -253,7 +237,6 @@ async function sandboxTest(
         });
     });
 
-    // Read logs before container auto-removes
     const logs = await container.logs({ stdout: true, stderr: true, follow: false });
     const output = logs.toString('utf8').trim();
 
@@ -273,7 +256,6 @@ async function sandboxTest(
       durationMs: Date.now() - startTime,
     };
   } catch (err: any) {
-    // Try to clean up container if it wasn't auto-removed
     if (container) {
       try { await container.remove({ force: true }); } catch {}
     }
@@ -285,7 +267,6 @@ async function sandboxTest(
       durationMs: Date.now() - startTime,
     };
   } finally {
-    // Clean up temp file and directory
     try { rmSync(tmpDir, { recursive: true }); } catch {}
   }
 }
@@ -309,7 +290,7 @@ function generateSampleInput(schema: Record<string, any>): Record<string, any> {
 }
 
 // ══════════════════════════════════════════════════
-//  4. AUTO-FIX — AI repairs broken tool code
+//  4. AUTO-FIX
 // ══════════════════════════════════════════════════
 
 async function autoFixToolCode(
@@ -353,97 +334,95 @@ Fix the code. Return ONLY the fixed code.`,
     .map((b: any) => b.text)
     .join('');
 
-  // Strip markdown code fences if present
   const codeMatch = text.match(/```(?:\w+)?\n([\s\S]*?)```/);
   return codeMatch ? codeMatch[1].trim() : text.trim();
 }
 
 // ══════════════════════════════════════════════════
-//  5. TOOL ANALYTICS — track success/failure rates per tool
+//  5. TOOL ANALYTICS
 // ══════════════════════════════════════════════════
 
-export function recordToolRun(
+export async function recordToolRun(
   toolName: string,
   agentId: string,
   success: boolean,
   durationMs: number,
   error: string | null,
-): void {
-  const db = getDb();
-  db.prepare(`
+): Promise<void> {
+  await execute(`
     INSERT INTO tool_runs (id, tool_name, agent_id, success, duration_ms, error, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
-  `).run(uuid(), toolName, agentId, success ? 1 : 0, durationMs, error);
+    VALUES ($1, $2, $3, $4, $5, $6, NOW())
+  `, [uuid(), toolName, agentId, success, durationMs, error]);
 }
 
-export function getToolAnalytics(toolName: string): ToolAnalytics {
-  const db = getDb();
-  const stats = db.prepare(`
+export async function getToolAnalytics(toolName: string): Promise<ToolAnalytics> {
+  const stats = await queryOne(`
     SELECT
       COUNT(*) as total_runs,
-      SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as successes,
+      SUM(CASE WHEN success = TRUE THEN 1 ELSE 0 END) as successes,
       AVG(duration_ms) as avg_duration,
       MAX(created_at) as last_used
-    FROM tool_runs WHERE tool_name = ?
-  `).get(toolName) as any;
+    FROM tool_runs WHERE tool_name = $1
+  `, [toolName]);
 
-  const lastError = db.prepare(
-    'SELECT error FROM tool_runs WHERE tool_name = ? AND success = 0 ORDER BY created_at DESC LIMIT 1'
-  ).get(toolName) as { error: string } | undefined;
+  const lastError = await queryOne<{ error: string }>(
+    'SELECT error FROM tool_runs WHERE tool_name = $1 AND success = FALSE ORDER BY created_at DESC LIMIT 1',
+    [toolName]
+  );
 
   return {
     toolName,
-    totalRuns: stats?.total_runs || 0,
-    successRate: stats?.total_runs > 0 ? (stats.successes / stats.total_runs) : 0,
-    avgDurationMs: Math.round(stats?.avg_duration || 0),
+    totalRuns: parseInt(stats?.total_runs || '0', 10),
+    successRate: stats?.total_runs > 0 ? (parseInt(stats.successes, 10) / parseInt(stats.total_runs, 10)) : 0,
+    avgDurationMs: Math.round(parseFloat(stats?.avg_duration || '0')),
     lastUsed: stats?.last_used || null,
     lastError: lastError?.error || null,
   };
 }
 
-export function getAllToolAnalytics(agentId?: string): ToolAnalytics[] {
-  const db = getDb();
+export async function getAllToolAnalytics(agentId?: string): Promise<ToolAnalytics[]> {
   const toolNames = agentId
-    ? db.prepare('SELECT DISTINCT tool_name FROM tool_runs WHERE agent_id = ?').all(agentId) as { tool_name: string }[]
-    : db.prepare('SELECT DISTINCT tool_name FROM tool_runs').all() as { tool_name: string }[];
+    ? await query<{ tool_name: string }>('SELECT DISTINCT tool_name FROM tool_runs WHERE agent_id = $1', [agentId])
+    : await query<{ tool_name: string }>('SELECT DISTINCT tool_name FROM tool_runs');
 
-  return toolNames.map(t => getToolAnalytics(t.tool_name));
+  const results: ToolAnalytics[] = [];
+  for (const t of toolNames) {
+    results.push(await getToolAnalytics(t.tool_name));
+  }
+  return results;
 }
 
 // ══════════════════════════════════════════════════
-//  6. TOOL SHARING — agents share tools with each other
+//  6. TOOL SHARING
 // ══════════════════════════════════════════════════
 
-export function shareToolWithAgent(
+export async function shareToolWithAgent(
   toolName: string,
   fromAgentId: string,
   toAgentId: string,
-): void {
-  const tool = getCustomTool(toolName);
+): Promise<void> {
+  const tool = await getCustomTool(toolName);
   if (!tool) throw new Error(`Tool "${toolName}" not found`);
   if (tool.registered_by !== fromAgentId) {
     throw new Error(`Agent does not own tool "${toolName}"`);
   }
 
-  const toAgent = getAgent(toAgentId);
+  const toAgent = await getAgent(toAgentId);
   if (!toAgent) throw new Error(`Target agent ${toAgentId} not found`);
 
-  // Add tool to target agent's tool list
   const tools = [...toAgent.tools];
   if (!tools.includes(toolName)) {
     tools.push(toolName);
-    updateAgent(toAgentId, { tools }, fromAgentId);
+    await updateAgent(toAgentId, { tools }, fromAgentId);
   }
 
   logger.info('Tool shared between agents', { toolName, from: fromAgentId, to: toAgentId });
 }
 
-export function discoverTools(query: string, agentId?: string): CustomTool[] {
-  const db = getDb();
-  const allTools = listCustomTools();
+export async function discoverTools(queryText: string, agentId?: string): Promise<CustomTool[]> {
+  const allTools = await listCustomTools();
 
-  // Search by name and schema description
-  const queryLower = query.toLowerCase();
+  const queryLower = queryText.toLowerCase();
   return allTools.filter(t => {
     const nameMatch = t.name.toLowerCase().includes(queryLower);
     const schemaMatch = t.schema_json.toLowerCase().includes(queryLower);
@@ -452,7 +431,7 @@ export function discoverTools(query: string, agentId?: string): CustomTool[] {
 }
 
 // ══════════════════════════════════════════════════
-//  7. TOOL COMPOSITION — chain multiple tools into a pipeline
+//  7. TOOL COMPOSITION
 // ══════════════════════════════════════════════════
 
 export interface ToolPipeline {
@@ -460,28 +439,25 @@ export interface ToolPipeline {
   description: string;
   steps: Array<{
     toolName: string;
-    inputMapping: Record<string, string>; // maps pipeline input keys → tool input keys
+    inputMapping: Record<string, string>;
   }>;
 }
 
-export function createToolPipeline(
+export async function createToolPipeline(
   agentId: string,
   pipeline: ToolPipeline,
-): CustomTool {
-  // Validate all referenced tools exist
+): Promise<CustomTool> {
   for (const step of pipeline.steps) {
-    const tool = getCustomTool(step.toolName);
+    const tool = await getCustomTool(step.toolName);
     if (!tool) throw new Error(`Pipeline step references unknown tool: ${step.toolName}`);
   }
 
-  // Generate pipeline execution code (system-generated, skip user validation)
   const pipelineCode = generatePipelineCode(pipeline);
 
-  // Build combined schema from first step's input
-  const firstTool = getCustomTool(pipeline.steps[0].toolName);
+  const firstTool = await getCustomTool(pipeline.steps[0].toolName);
   const schema = firstTool ? JSON.parse(firstTool.schema_json) : { type: 'object', properties: {} };
 
-  const tool = registerCustomTool(
+  const tool = await registerCustomTool(
     pipeline.name,
     JSON.stringify(schema),
     null,
@@ -499,7 +475,6 @@ export function createToolPipeline(
 }
 
 function generatePipelineCode(pipeline: ToolPipeline): string {
-  // Pipeline code uses vm module (stdlib) to run steps in-process — avoids child_process
   const stepConfigs = JSON.stringify(pipeline.steps.map(s => ({
     toolName: s.toolName,
     inputMapping: s.inputMapping,
@@ -546,12 +521,11 @@ export async function authorSkill(
   agentId: string,
   taskDescription: string,
 ): Promise<AuthoredSkill> {
-  const agent = getAgent(agentId);
+  const agent = await getAgent(agentId);
   if (!agent) throw new Error(`Agent ${agentId} not found`);
 
   const { name, description, template } = await generateSkillTemplate(taskDescription, agent.name);
 
-  const db = getDb();
   const id = uuid();
   const needsApproval = agent.self_evolution_mode === 'approve-first';
 
@@ -568,23 +542,22 @@ export async function authorSkill(
     updated_at: new Date().toISOString(),
   };
 
-  db.prepare(`
+  await execute(`
     INSERT INTO authored_skills (id, agent_id, name, description, skill_type, template, version, approved, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(skill.id, skill.agent_id, skill.name, skill.description,
-    skill.skill_type, skill.template, skill.version, skill.approved ? 1 : 0,
-    skill.created_at, skill.updated_at);
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+  `, [skill.id, skill.agent_id, skill.name, skill.description,
+    skill.skill_type, skill.template, skill.version, skill.approved,
+    skill.created_at, skill.updated_at]);
 
-  // Register globally so other agents can use it
-  registerSkill(name, 'prompt_template', {
+  await registerSkill(name, 'prompt_template', {
     authored_by: agentId,
     description,
     template,
   });
 
-  attachSkillToAgent(agentId, name, 'write', agentId);
+  await attachSkillToAgent(agentId, name, 'write', agentId);
 
-  createProposal(agentId, 'add_to_kb', `Authored skill: ${name}`, JSON.stringify({
+  await createProposal(agentId, 'add_to_kb', `Authored skill: ${name}`, JSON.stringify({
     name, description, template, stored_in_db: true,
   }));
 
@@ -593,76 +566,71 @@ export async function authorSkill(
 }
 
 // ══════════════════════════════════════════════════
-//  9. MCP CONFIG QUERIES (all DB-stored)
+//  9. MCP CONFIG QUERIES
 // ══════════════════════════════════════════════════
 
-export function getMcpConfigs(agentId: string): McpConfig[] {
-  const db = getDb();
-  return db.prepare(
-    'SELECT * FROM mcp_configs WHERE agent_id = ? ORDER BY created_at DESC'
-  ).all(agentId) as McpConfig[];
+export async function getMcpConfigs(agentId: string): Promise<McpConfig[]> {
+  return query<McpConfig>(
+    'SELECT * FROM mcp_configs WHERE agent_id = $1 ORDER BY created_at DESC', [agentId]
+  );
 }
 
-export function approveMcpConfig(id: string, userId: string): void {
-  const db = getDb();
-  const config = db.prepare('SELECT * FROM mcp_configs WHERE id = ?').get(id) as McpConfig | undefined;
-  if (!config) throw new Error(`MCP config ${id} not found`);
-  if (!canModifyAgent(config.agent_id, userId)) throw new Error('Insufficient permissions');
-  db.prepare("UPDATE mcp_configs SET approved = 1, updated_at = datetime('now') WHERE id = ?").run(id);
+export async function approveMcpConfig(id: string, userId: string): Promise<void> {
+  const mcpConfig = await queryOne<McpConfig>('SELECT * FROM mcp_configs WHERE id = $1', [id]);
+  if (!mcpConfig) throw new Error(`MCP config ${id} not found`);
+  if (!(await canModifyAgent(mcpConfig.agent_id, userId))) throw new Error('Insufficient permissions');
+  await execute('UPDATE mcp_configs SET approved = TRUE, updated_at = NOW() WHERE id = $1', [id]);
   logger.info('MCP config approved', { id, userId });
 }
 
 // ══════════════════════════════════════════════════
-//  10. CODE ARTIFACT QUERIES (all DB-stored)
+//  10. CODE ARTIFACT QUERIES
 // ══════════════════════════════════════════════════
 
-export function getCodeArtifacts(agentId: string): CodeArtifact[] {
-  const db = getDb();
-  return db.prepare(
-    'SELECT * FROM code_artifacts WHERE agent_id = ? ORDER BY updated_at DESC'
-  ).all(agentId) as CodeArtifact[];
+export async function getCodeArtifacts(agentId: string): Promise<CodeArtifact[]> {
+  return query<CodeArtifact>(
+    'SELECT * FROM code_artifacts WHERE agent_id = $1 ORDER BY updated_at DESC', [agentId]
+  );
 }
 
-export function getCodeArtifact(agentId: string, filePath: string): CodeArtifact | null {
-  const db = getDb();
-  return db.prepare(
-    'SELECT * FROM code_artifacts WHERE agent_id = ? AND file_path = ?'
-  ).get(agentId, filePath) as CodeArtifact | null;
+export async function getCodeArtifact(agentId: string, filePath: string): Promise<CodeArtifact | null> {
+  const row = await queryOne<CodeArtifact>(
+    'SELECT * FROM code_artifacts WHERE agent_id = $1 AND file_path = $2', [agentId, filePath]
+  );
+  return row || null;
 }
 
 // ══════════════════════════════════════════════════
 //  11. SKILL/TOOL QUERIES
 // ══════════════════════════════════════════════════
 
-export function getAuthoredSkills(agentId: string): AuthoredSkill[] {
-  const db = getDb();
-  return db.prepare(
-    'SELECT * FROM authored_skills WHERE agent_id = ? ORDER BY created_at DESC'
-  ).all(agentId) as AuthoredSkill[];
+export async function getAuthoredSkills(agentId: string): Promise<AuthoredSkill[]> {
+  return query<AuthoredSkill>(
+    'SELECT * FROM authored_skills WHERE agent_id = $1 ORDER BY created_at DESC', [agentId]
+  );
 }
 
-export function getAuthoredSkill(id: string): AuthoredSkill | null {
-  const db = getDb();
-  return db.prepare('SELECT * FROM authored_skills WHERE id = ?').get(id) as AuthoredSkill | null;
+export async function getAuthoredSkill(id: string): Promise<AuthoredSkill | null> {
+  const row = await queryOne<AuthoredSkill>('SELECT * FROM authored_skills WHERE id = $1', [id]);
+  return row || null;
 }
 
-export function approveAuthoredSkill(id: string, userId: string): void {
-  const db = getDb();
-  const skill = getAuthoredSkill(id);
+export async function approveAuthoredSkill(id: string, userId: string): Promise<void> {
+  const skill = await getAuthoredSkill(id);
   if (!skill) throw new Error(`Authored skill ${id} not found`);
-  if (!canModifyAgent(skill.agent_id, userId)) throw new Error('Insufficient permissions');
-  db.prepare("UPDATE authored_skills SET approved = 1, updated_at = datetime('now') WHERE id = ?").run(id);
+  if (!(await canModifyAgent(skill.agent_id, userId))) throw new Error('Insufficient permissions');
+  await execute('UPDATE authored_skills SET approved = TRUE, updated_at = NOW() WHERE id = $1', [id]);
   logger.info('Authored skill approved', { id, userId });
 }
 
-export function updateAuthoredSkillTemplate(id: string, template: string, userId: string): void {
-  const db = getDb();
-  const skill = getAuthoredSkill(id);
+export async function updateAuthoredSkillTemplate(id: string, template: string, userId: string): Promise<void> {
+  const skill = await getAuthoredSkill(id);
   if (!skill) throw new Error(`Authored skill ${id} not found`);
-  if (!canModifyAgent(skill.agent_id, userId)) throw new Error('Insufficient permissions');
-  db.prepare(
-    "UPDATE authored_skills SET template = ?, version = version + 1, updated_at = datetime('now') WHERE id = ?"
-  ).run(template, id);
+  if (!(await canModifyAgent(skill.agent_id, userId))) throw new Error('Insufficient permissions');
+  await execute(
+    'UPDATE authored_skills SET template = $1, version = version + 1, updated_at = NOW() WHERE id = $2',
+    [template, id]
+  );
   logger.info('Authored skill template updated', { id, version: skill.version + 1 });
 }
 
@@ -677,8 +645,7 @@ async function generateToolCode(
   const Anthropic = (await import('@anthropic-ai/sdk')).default;
   const client = new Anthropic();
 
-  // Include existing tools in context so AI avoids duplicates
-  const existingTools = listCustomTools().map(t => t.name).join(', ');
+  const existingTools = (await listCustomTools()).map(t => t.name).join(', ');
 
   const response = await client.messages.create({
     model: 'claude-sonnet-4-6',
@@ -807,9 +774,6 @@ export function validateToolCode(code: string, language: string): void {
   }
 }
 
-/**
- * Validate tool name — must be safe for use as filename and shell arg.
- */
 export function validateToolName(name: string): void {
   if (!name || name.length < 3 || name.length > 40) {
     throw new Error('Tool name must be 3-40 characters');
@@ -822,18 +786,13 @@ export function validateToolName(name: string): void {
   }
 }
 
-/**
- * Validate file path for code artifacts — prevent path traversal.
- */
 export function validateArtifactPath(filePath: string): void {
-  // Normalize and reject traversal
   if (filePath.includes('..') || filePath.includes('\0')) {
     throw new Error('File path must not contain ".." or null bytes');
   }
   if (!filePath.startsWith('/')) {
     throw new Error('File path must be absolute');
   }
-  // Block sensitive paths
   const blockedPrefixes = ['/etc/', '/proc/', '/sys/', '/dev/', '/boot/', '/root/', '/var/run/'];
   for (const prefix of blockedPrefixes) {
     if (filePath.startsWith(prefix)) {
@@ -868,9 +827,8 @@ ${code}`;
   }
 }
 
-export function getToolExecutionScript(toolName: string): string | null {
-  const tool = getCustomTool(toolName);
-  // SQLite returns 0/1 for boolean columns, so use truthiness check
+export async function getToolExecutionScript(toolName: string): Promise<string | null> {
+  const tool = await getCustomTool(toolName);
   if (!tool?.script_code || !tool.approved) return null;
 
   const shebangMap: Record<string, string> = {

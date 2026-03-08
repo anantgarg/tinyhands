@@ -22,7 +22,7 @@ export function registerCommands(app: App): void {
   // /new-agent — Open agent creation modal (just asks for goal)
   app.command('/new-agent', async ({ command, ack }) => {
     await ack();
-    initSuperadmin(command.user_id);
+    await initSuperadmin(command.user_id);
 
     await openModal(command.trigger_id, {
       type: 'modal',
@@ -61,13 +61,18 @@ export function registerCommands(app: App): void {
     await ack();
     const userId = command.user_id;
 
-    const agents = listAgents();
+    const agents = await listAgents();
     if (agents.length === 0) {
       await postMessage(command.channel_id, 'No agents exist yet. Use `/new-agent` to create one.');
       return;
     }
 
-    const editableAgents = agents.filter(a => canModifyAgent(a.id, userId));
+    const editableAgents: typeof agents = [];
+    for (const a of agents) {
+      if (await canModifyAgent(a.id, userId)) {
+        editableAgents.push(a);
+      }
+    }
     if (editableAgents.length === 0) {
       await postMessage(command.channel_id, 'You don\'t have permission to update any agents.');
       return;
@@ -101,7 +106,7 @@ export function registerCommands(app: App): void {
   // /agents — List all agents
   app.command('/agents', async ({ command, ack, respond }) => {
     await ack();
-    const agents = listAgents();
+    const agents = await listAgents();
     if (agents.length === 0) {
       await respond({ text: 'No agents created yet. Use `/new-agent` to create one.', response_type: 'ephemeral' });
       return;
@@ -125,7 +130,7 @@ export function registerCommands(app: App): void {
         const query = args.slice(1).join(' ');
         if (!query) { await respond({ text: 'Usage: `/kb search <query>`', response_type: 'ephemeral' }); return; }
         const { searchKB } = await import('../modules/knowledge-base');
-        const results = searchKB(query);
+        const results = await searchKB(query);
         if (results.length === 0) {
           await respond({ text: 'No KB entries found.', response_type: 'ephemeral' });
         } else {
@@ -165,7 +170,7 @@ export function registerModalHandlers(app: App): void {
 
       // Validate name uniqueness, auto-suffix if needed
       let agentName = analysis.agent_name;
-      if (getAgentByName(agentName)) {
+      if (await getAgentByName(agentName)) {
         agentName = `${agentName}-${Date.now().toString(36).slice(-4)}`;
       }
 
@@ -231,9 +236,9 @@ export function registerModalHandlers(app: App): void {
     const agentId = view.state.values.agent_select.agent_choice.selected_option?.value;
     if (!agentId) { await ack({ response_action: 'errors', errors: { agent_select: 'Please select an agent' } }); return; }
 
-    const agent = getAgent(agentId);
+    const agent = await getAgent(agentId);
     if (!agent) { await ack({ response_action: 'errors', errors: { agent_select: 'Agent not found' } }); return; }
-    if (!canModifyAgent(agentId, userId)) { await ack({ response_action: 'errors', errors: { agent_select: 'Permission denied' } }); return; }
+    if (!(await canModifyAgent(agentId, userId))) { await ack({ response_action: 'errors', errors: { agent_select: 'Permission denied' } }); return; }
 
     await ack({
       response_action: 'update',
@@ -271,8 +276,8 @@ export function registerModalHandlers(app: App): void {
     const newGoal = view.state.values.new_goal.goal_input.value?.trim() || '';
     if (!newGoal) { await ack({ response_action: 'errors', errors: { new_goal: 'Goal is required' } }); return; }
 
-    const agent = getAgent(agentId);
-    if (!agent || !canModifyAgent(agentId, userId)) {
+    const agent = await getAgent(agentId);
+    if (!agent || !(await canModifyAgent(agentId, userId))) {
       await ack({ response_action: 'errors', errors: { new_goal: 'Agent not found or permission denied' } });
       return;
     }
@@ -365,7 +370,7 @@ export function registerConfirmationActions(app: App): void {
 
       const channelId = await createChannel(name);
 
-      const agent = createAgent({
+      const agent = await createAgent({
         name,
         channelId,
         systemPrompt: analysis.system_prompt,
@@ -380,14 +385,14 @@ export function registerConfirmationActions(app: App): void {
 
       // Attach skills
       for (const skillName of analysis.skills) {
-        try { attachSkillToAgent(agent.id, skillName, 'read', userId); }
+        try { await attachSkillToAgent(agent.id, skillName, 'read', userId); }
         catch (err: any) { logger.warn('Skill attach failed', { skillName, error: err.message }); }
       }
 
       // Create triggers
       for (const trigger of analysis.triggers) {
         try {
-          createTrigger({
+          await createTrigger({
             agentId: agent.id,
             triggerType: trigger.type,
             config: { ...trigger.config, description: trigger.description },
@@ -456,12 +461,12 @@ export function registerConfirmationActions(app: App): void {
 
     try {
       const { analysis, agentId, userId } = pending;
-      const agent = getAgent(agentId!);
+      const agent = await getAgent(agentId!);
       if (!agent) throw new Error('Agent not found');
 
       await replyToAction(body, ':gear: Updating agent...');
 
-      updateAgent(agentId!, {
+      await updateAgent(agentId!, {
         system_prompt: analysis.system_prompt,
         tools: analysis.tools,
         model: analysis.model,
@@ -473,13 +478,13 @@ export function registerConfirmationActions(app: App): void {
 
       // Attach new skills
       for (const skillName of analysis.skills) {
-        try { attachSkillToAgent(agentId!, skillName, 'read', userId); } catch { /* may exist */ }
+        try { await attachSkillToAgent(agentId!, skillName, 'read', userId); } catch { /* may exist */ }
       }
 
       // Create new triggers
       for (const trigger of analysis.triggers) {
         try {
-          createTrigger({
+          await createTrigger({
             agentId: agentId!,
             triggerType: trigger.type,
             config: { ...trigger.config, description: trigger.description },

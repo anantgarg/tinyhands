@@ -28,7 +28,7 @@ export function createWebhookServer(): express.Application {
   app.post('/webhooks/agent-:agentName', async (req, res) => {
     const { agentName } = req.params;
 
-    const webhookTriggers = getActiveTriggersByType('webhook');
+    const webhookTriggers = await getActiveTriggersByType('webhook');
     const matching = webhookTriggers.filter(t => {
       const cfg = JSON.parse(t.config_json);
       return cfg.agent_name === agentName;
@@ -61,7 +61,7 @@ export function createWebhookServer(): express.Application {
       return;
     }
 
-    const triggers = getActiveTriggersByType('linear');
+    const triggers = await getActiveTriggersByType('linear');
     if (triggers.length === 0) {
       res.status(200).json({ message: 'No active Linear triggers' });
       return;
@@ -89,7 +89,7 @@ export function createWebhookServer(): express.Application {
       return;
     }
 
-    const triggers = getActiveTriggersByType('zendesk');
+    const triggers = await getActiveTriggersByType('zendesk');
     for (const trigger of triggers) {
       const idempotencyKey = `zendesk:${req.body.ticket_id || uuid()}:${req.body.updated_at || ''}`;
       await fireTrigger({
@@ -111,7 +111,7 @@ export function createWebhookServer(): express.Application {
       return;
     }
 
-    const triggers = getActiveTriggersByType('intercom');
+    const triggers = await getActiveTriggersByType('intercom');
     for (const trigger of triggers) {
       const idempotencyKey = `intercom:${req.body.id || uuid()}`;
       await fireTrigger({

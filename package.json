@@ -12,7 +12,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:integration": "vitest run --config vitest.integration.config.ts",
-    "prepare": "husky install"
+    "prepare": "husky install",
+    "migrate": "npx tsx src/db/migrate.ts"
   },
   "keywords": [
     "slack",
@@ -29,20 +30,20 @@
     "@anthropic-ai/sdk": "^0.39.0",
     "@slack/bolt": "^4.1.0",
     "@slack/web-api": "^7.8.0",
-    "better-sqlite3": "^11.7.0",
     "bullmq": "^5.34.0",
     "dockerode": "^4.0.4",
     "express": "^4.21.0",
     "ioredis": "^5.4.2",
+    "pg": "^8.20.0",
     "uuid": "^11.1.0",
     "winston": "^3.17.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.12",
     "@types/dockerode": "^3.3.34",
     "@types/express": "^5.0.0",
     "@types/node": "^22.10.0",
+    "@types/pg": "^8.18.0",
     "@types/uuid": "^10.0.0",
     "@typescript-eslint/eslint-plugin": "^8.0.0",
     "@typescript-eslint/parser": "^8.0.0",

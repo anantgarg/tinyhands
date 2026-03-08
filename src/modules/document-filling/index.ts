@@ -30,19 +30,23 @@ export interface FillOptions {
   tokenBudget?: number;
 }
 
-export function fillFields(
+export async function fillFields(
   fields: TemplateField[],
   options: FillOptions = {}
-): TemplateField[] {
-  return fields.map(field => fillSingleField(field, options));
+): Promise<TemplateField[]> {
+  const filled: TemplateField[] = [];
+  for (const field of fields) {
+    filled.push(await fillSingleField(field, options));
+  }
+  return filled;
 }
 
-function fillSingleField(
+async function fillSingleField(
   field: TemplateField,
   options: FillOptions
-): TemplateField {
+): Promise<TemplateField> {
   // Search KB for relevant content
-  const kbResults = searchKB(field.name, options.agentId);
+  const kbResults = await searchKB(field.name, options.agentId);
 
   if (kbResults.length === 0) {
     return {
@@ -145,17 +149,17 @@ export function formatGapSummary(unfilled: TemplateField[]): string {
 
 // ── Full Pipeline ──
 
-export function processTemplate(
+export async function processTemplate(
   template: string,
   options: FillOptions = {}
-): {
+): Promise<{
   result: string;
   fields: TemplateField[];
   unfilled: TemplateField[];
   summary: string;
-} {
+}> {
   const fields = extractFields(template);
-  const filledFields = fillFields(fields, options);
+  const filledFields = await fillFields(fields, options);
   const { content, unfilled } = applyFieldsToTemplate(template, filledFields);
   const summary = formatGapSummary(unfilled);
 

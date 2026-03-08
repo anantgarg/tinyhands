@@ -1,5 +1,5 @@
 import { v4 as uuid } from 'uuid';
-import { getDb } from '../../db';
+import { query, queryOne, execute, withTransaction } from '../../db';
 import { chunkText } from '../../utils/chunker';
 import { logger } from '../../utils/logger';
 import type { KBEntry, KBSourceType } from '../../types';
@@ -18,8 +18,7 @@ export interface CreateKBEntryParams {
   approved?: boolean;
 }
 
-export function createKBEntry(params: CreateKBEntryParams): KBEntry {
-  const db = getDb();
+export async function createKBEntry(params: CreateKBEntryParams): Promise<KBEntry> {
   const id = uuid();
 
   const entry: KBEntry = {
@@ -37,104 +36,96 @@ export function createKBEntry(params: CreateKBEntryParams): KBEntry {
     updated_at: new Date().toISOString(),
   };
 
-  const transaction = db.transaction(() => {
-    db.prepare(`
+  await withTransaction(async (client) => {
+    await client.query(`
       INSERT INTO kb_entries (id, title, summary, content, category, tags, access_scope,
         source_type, contributed_by, approved, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+    `, [
       entry.id, entry.title, entry.summary, entry.content, entry.category,
       JSON.stringify(entry.tags), JSON.stringify(entry.access_scope),
-      entry.source_type, entry.contributed_by, entry.approved ? 1 : 0,
+      entry.source_type, entry.contributed_by, entry.approved,
       entry.created_at, entry.updated_at
-    );
+    ]);
 
     // Chunk and index content
     if (entry.approved) {
-      indexKBEntry(entry);
+      await indexKBEntryWithClient(entry, client);
     }
   });
-
-  transaction();
 
   logger.info('KB entry created', { entryId: id, title: params.title, approved: entry.approved });
   return entry;
 }
 
-export function approveKBEntry(entryId: string): KBEntry {
-  const db = getDb();
-  const entry = getKBEntry(entryId);
+export async function approveKBEntry(entryId: string): Promise<KBEntry> {
+  const entry = await getKBEntry(entryId);
   if (!entry) throw new Error(`KB entry ${entryId} not found`);
 
-  db.prepare("UPDATE kb_entries SET approved = 1, updated_at = datetime('now') WHERE id = ?").run(entryId);
-  indexKBEntry(entry);
+  await execute('UPDATE kb_entries SET approved = TRUE, updated_at = NOW() WHERE id = $1', [entryId]);
+  await indexKBEntry(entry);
 
   logger.info('KB entry approved', { entryId });
   return { ...entry, approved: true };
 }
 
-export function getKBEntry(id: string): KBEntry | null {
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM kb_entries WHERE id = ?').get(id) as any;
+export async function getKBEntry(id: string): Promise<KBEntry | null> {
+  const row = await queryOne('SELECT * FROM kb_entries WHERE id = $1', [id]);
   if (!row) return null;
   return deserializeKBEntry(row);
 }
 
-export function listKBEntries(limit: number = 50): KBEntry[] {
-  const db = getDb();
-  return (db.prepare(
-    'SELECT * FROM kb_entries WHERE approved = 1 ORDER BY created_at DESC LIMIT ?'
-  ).all(limit) as any[]).map(deserializeKBEntry);
+export async function listKBEntries(limit: number = 50): Promise<KBEntry[]> {
+  const rows = await query(
+    'SELECT * FROM kb_entries WHERE approved = TRUE ORDER BY created_at DESC LIMIT $1', [limit]
+  );
+  return rows.map(deserializeKBEntry);
 }
 
-export function listPendingEntries(): KBEntry[] {
-  const db = getDb();
-  return (db.prepare(
-    'SELECT * FROM kb_entries WHERE approved = 0 ORDER BY created_at DESC'
-  ).all() as any[]).map(deserializeKBEntry);
+export async function listPendingEntries(): Promise<KBEntry[]> {
+  const rows = await query(
+    'SELECT * FROM kb_entries WHERE approved = FALSE ORDER BY created_at DESC'
+  );
+  return rows.map(deserializeKBEntry);
 }
 
-export function deleteKBEntry(id: string): void {
-  const db = getDb();
-  db.prepare('DELETE FROM kb_chunks WHERE entry_id = ?').run(id);
-  db.prepare('DELETE FROM kb_entries WHERE id = ?').run(id);
-  rebuildKBFts();
+export async function deleteKBEntry(id: string): Promise<void> {
+  await execute('DELETE FROM kb_chunks WHERE entry_id = $1', [id]);
+  await execute('DELETE FROM kb_entries WHERE id = $1', [id]);
   logger.info('KB entry deleted', { entryId: id });
 }
 
 // ── KB Search ──
 
-export function searchKB(
-  query: string,
+export async function searchKB(
+  queryText: string,
   agentId?: string,
   tokenBudget: number = 4000
-): KBEntry[] {
-  const db = getDb();
-  const ftsQuery = query
+): Promise<KBEntry[]> {
+  const ftsQuery = queryText
     .replace(/[^\w\s]/g, ' ')
     .split(/\s+/)
     .filter(w => w.length > 2)
     .slice(0, 10)
-    .join(' OR ');
+    .join(' | ');
 
   if (!ftsQuery) return [];
 
   try {
-    const chunkRows = db.prepare(`
-      SELECT kc.entry_id, kc.content, rank
-      FROM kb_chunks_fts
-      JOIN kb_chunks kc ON kb_chunks_fts.rowid = kc.rowid
-      WHERE kb_chunks_fts MATCH ?
-      ORDER BY rank
+    const chunkRows = await query(`
+      SELECT kc.entry_id, kc.content, ts_rank(kc.search_vector, to_tsquery('english', $1)) AS rank
+      FROM kb_chunks kc
+      WHERE kc.search_vector @@ to_tsquery('english', $1)
+      ORDER BY rank DESC
       LIMIT 20
-    `).all(ftsQuery) as any[];
+    `, [ftsQuery]);
 
     // Get unique entries, applying access scope
     const entryIds = [...new Set(chunkRows.map(r => r.entry_id))];
     const entries: KBEntry[] = [];
 
     for (const entryId of entryIds) {
-      const entry = getKBEntry(entryId);
+      const entry = await getKBEntry(entryId);
       if (!entry || !entry.approved) continue;
 
       // Check access scope
@@ -148,52 +139,45 @@ export function searchKB(
     return entries;
   } catch {
     // Fallback
-    return (db.prepare(`
+    const rows = await query(`
       SELECT * FROM kb_entries
-      WHERE approved = 1 AND content LIKE ?
+      WHERE approved = TRUE AND content LIKE $1
       LIMIT 10
-    `).all(`%${query.slice(0, 50)}%`) as any[]).map(deserializeKBEntry);
+    `, [`%${queryText.slice(0, 50)}%`]);
+    return rows.map(deserializeKBEntry);
   }
 }
 
 // ── Indexing ──
 
-function indexKBEntry(entry: KBEntry): void {
-  const db = getDb();
+async function indexKBEntry(entry: KBEntry): Promise<void> {
   const chunks = chunkText(entry.content, entry.title);
 
-  const insertChunk = db.prepare(`
-    INSERT INTO kb_chunks (id, entry_id, chunk_index, content, content_hash)
-    VALUES (?, ?, ?, ?, ?)
-  `);
-
   for (const chunk of chunks) {
-    insertChunk.run(uuid(), entry.id, chunk.chunkIndex, chunk.content, chunk.contentHash);
+    await execute(`
+      INSERT INTO kb_chunks (id, entry_id, chunk_index, content, content_hash)
+      VALUES ($1, $2, $3, $4, $5)
+    `, [uuid(), entry.id, chunk.chunkIndex, chunk.content, chunk.contentHash]);
   }
-
-  rebuildKBFts();
 }
 
-function rebuildKBFts(): void {
-  const db = getDb();
-  try {
-    db.exec(`
-      DELETE FROM kb_chunks_fts;
-      INSERT INTO kb_chunks_fts(rowid, content)
-        SELECT rowid, content FROM kb_chunks;
-    `);
-  } catch (err) {
-    logger.warn('KB FTS rebuild failed', { error: String(err) });
+async function indexKBEntryWithClient(entry: KBEntry, client: any): Promise<void> {
+  const chunks = chunkText(entry.content, entry.title);
+
+  for (const chunk of chunks) {
+    await client.query(`
+      INSERT INTO kb_chunks (id, entry_id, chunk_index, content, content_hash)
+      VALUES ($1, $2, $3, $4, $5)
+    `, [uuid(), entry.id, chunk.chunkIndex, chunk.content, chunk.contentHash]);
   }
 }
 
 // ── Categories ──
 
-export function getCategories(): string[] {
-  const db = getDb();
-  const rows = db.prepare(
-    'SELECT DISTINCT category FROM kb_entries WHERE approved = 1 ORDER BY category'
-  ).all() as { category: string }[];
+export async function getCategories(): Promise<string[]> {
+  const rows = await query<{ category: string }>(
+    'SELECT DISTINCT category FROM kb_entries WHERE approved = TRUE ORDER BY category'
+  );
   return rows.map(r => r.category);
 }
 
@@ -202,6 +186,5 @@ function deserializeKBEntry(row: any): KBEntry {
     ...row,
     tags: JSON.parse(row.tags || '[]'),
     access_scope: JSON.parse(row.access_scope || '"all"'),
-    approved: !!row.approved,
   };
 }

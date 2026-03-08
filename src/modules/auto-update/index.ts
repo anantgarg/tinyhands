@@ -71,6 +71,15 @@ export async function handleDeploy(payload: any): Promise<DeployResult> {
     logger.info('Deploy: building TypeScript');
     execSync('npm run build', { cwd: process.cwd(), timeout: 60000 });
 
+    // 4.5. Run database migrations
+    const migrationChanged = changedFiles.some((f: string) => f.includes('migrations/'));
+    if (migrationChanged) {
+      logger.info('Deploy: running database migrations (migration files changed)');
+    } else {
+      logger.info('Deploy: running database migrations');
+    }
+    execSync('npm run migrate', { cwd: process.cwd(), timeout: 60000 });
+
     // 5. Graceful PM2 reload (in-flight jobs complete first)
     logger.info('Deploy: reloading PM2');
     execSync('pm2 reload ecosystem.config.js', { cwd: process.cwd(), timeout: 30000 });
