@@ -7,16 +7,7 @@ import { analyzeGoal } from '../modules/agents/goal-analyzer';
 import { attachSkillToAgent } from '../modules/skills';
 import { createTrigger } from '../modules/triggers';
 import { logger } from '../utils/logger';
-
-// ── Pending confirmations store (analysis results waiting for user confirmation) ──
-const pendingConfirmations = new Map<string, {
-  analysis: any;
-  name: string;
-  goal: string;
-  userId: string;
-  agentId?: string; // present for updates
-  expiresAt: number;
-}>();
+import { execute, queryOne } from '../db';
 
 export function registerCommands(app: App): void {
   // /new-agent — Open agent creation modal (just asks for goal)
@@ -166,6 +157,7 @@ export function registerModalHandlers(app: App): void {
 
     try {
       const analysis = await analyzeGoal(goal);
+      logger.info('Goal analysis complete, preparing confirmation', { agentName: analysis.agent_name, userId });
       const confirmId = uuid();
 
       // Validate name uniqueness, auto-suffix if needed
@@ -174,17 +166,15 @@ export function registerModalHandlers(app: App): void {
         agentName = `${agentName}-${Date.now().toString(36).slice(-4)}`;
       }
 
-      pendingConfirmations.set(confirmId, {
-        analysis,
-        name: agentName,
-        goal,
-        userId,
-        expiresAt: Date.now() + 5 * 60 * 1000,
-      });
+      await execute(
+        `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
+        [confirmId, JSON.stringify({ analysis, name: agentName, goal, userId })],
+      );
 
       // Post confirmation to DM since we can't update the modal after async work
       const { getSlackApp } = await import('./index');
       const client = getSlackApp().client;
+      logger.info('Opening DM for confirmation', { userId });
       const dm = await client.conversations.open({ users: userId });
       if (!dm.channel?.id) throw new Error('Could not open DM');
 
@@ -217,8 +207,9 @@ export function registerModalHandlers(app: App): void {
           },
         ],
       });
+      logger.info('Confirmation DM sent', { agentName, userId, channel: dm.channel.id });
     } catch (err: any) {
-      logger.error('Goal analysis failed', { error: err.message, userId });
+      logger.error('Agent creation flow failed', { error: err.message, stack: err.stack, userId });
       try {
         const { getSlackApp } = await import('./index');
         const client = getSlackApp().client;
@@ -291,14 +282,10 @@ export function registerModalHandlers(app: App): void {
       const analysis = await analyzeGoal(newGoal, agent.system_prompt);
       const confirmId = uuid();
 
-      pendingConfirmations.set(confirmId, {
-        analysis,
-        name: agent.name,
-        goal: newGoal,
-        userId,
-        agentId,
-        expiresAt: Date.now() + 5 * 60 * 1000,
-      });
+      await execute(
+        `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
+        [confirmId, JSON.stringify({ analysis, name: agent.name, goal: newGoal, userId, agentId })],
+      );
 
       const { getSlackApp } = await import('./index');
       const client = getSlackApp().client;
@@ -354,17 +341,17 @@ export function registerConfirmationActions(app: App): void {
   app.action('confirm_new_agent', async ({ action, ack, body }) => {
     await ack();
     const confirmId = (action as any).value;
-    const pending = pendingConfirmations.get(confirmId);
+    const row = await queryOne<{ data: any; expires_at: Date }>(
+      `DELETE FROM pending_confirmations WHERE id = $1 RETURNING data, expires_at`, [confirmId],
+    );
 
-    if (!pending || Date.now() > pending.expiresAt) {
+    if (!row || new Date(row.expires_at) < new Date()) {
       await replyToAction(body, ':x: This confirmation has expired. Please run `/new-agent` again.');
-      pendingConfirmations.delete(confirmId);
       return;
     }
-    pendingConfirmations.delete(confirmId);
 
     try {
-      const { analysis, name, goal, userId } = pending;
+      const { analysis, name, goal, userId } = row.data;
 
       await replyToAction(body, ':gear: Creating agent...');
 
@@ -442,7 +429,7 @@ export function registerConfirmationActions(app: App): void {
 
   app.action('cancel_new_agent', async ({ action, ack, body }) => {
     await ack();
-    pendingConfirmations.delete((action as any).value);
+    await execute(`DELETE FROM pending_confirmations WHERE id = $1`, [(action as any).value]);
     await replyToAction(body, ':x: Agent creation cancelled.');
   });
 
@@ -450,17 +437,17 @@ export function registerConfirmationActions(app: App): void {
   app.action('confirm_update_agent', async ({ action, ack, body }) => {
     await ack();
     const confirmId = (action as any).value;
-    const pending = pendingConfirmations.get(confirmId);
+    const row = await queryOne<{ data: any; expires_at: Date }>(
+      `DELETE FROM pending_confirmations WHERE id = $1 RETURNING data, expires_at`, [confirmId],
+    );
 
-    if (!pending || !pending.agentId || Date.now() > pending.expiresAt) {
+    if (!row || !row.data.agentId || new Date(row.expires_at) < new Date()) {
       await replyToAction(body, ':x: This confirmation has expired. Please run `/update-agent` again.');
-      pendingConfirmations.delete(confirmId);
       return;
     }
-    pendingConfirmations.delete(confirmId);
 
     try {
-      const { analysis, agentId, userId } = pending;
+      const { analysis, agentId, userId } = row.data;
       const agent = await getAgent(agentId!);
       if (!agent) throw new Error('Agent not found');
 
@@ -524,7 +511,7 @@ export function registerConfirmationActions(app: App): void {
 
   app.action('cancel_update_agent', async ({ action, ack, body }) => {
     await ack();
-    pendingConfirmations.delete((action as any).value);
+    await execute(`DELETE FROM pending_confirmations WHERE id = $1`, [(action as any).value]);
     await replyToAction(body, ':x: Agent update cancelled.');
   });
 }
