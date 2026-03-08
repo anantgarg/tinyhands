@@ -1,6 +1,6 @@
 import { App, LogLevel } from '@slack/bolt';
 import { config } from '../config';
-import { registerCommands } from './commands';
+import { registerCommands, registerModalHandlers, registerConfirmationActions } from './commands';
 import { registerEvents } from './events';
 import { registerActions } from './actions';
 import { logger } from '../utils/logger';
@@ -16,6 +16,8 @@ export function createSlackApp(): App {
   });
 
   registerCommands(app);
+  registerModalHandlers(app);
+  registerConfirmationActions(app);
   registerEvents(app);
   registerActions(app);
 
@@ -64,6 +66,46 @@ export async function createChannel(name: string): Promise<string> {
     is_private: false,
   });
   return result.channel?.id || '';
+}
+
+export async function postBlocks(
+  channelId: string,
+  blocks: any[],
+  text: string,
+  threadTs?: string,
+): Promise<string | undefined> {
+  const client = getSlackApp().client;
+  const result = await client.chat.postMessage({
+    channel: channelId,
+    blocks,
+    text,
+    thread_ts: threadTs,
+  });
+  return result.ts;
+}
+
+export async function openModal(triggerId: string, view: any): Promise<void> {
+  const client = getSlackApp().client;
+  await client.views.open({
+    trigger_id: triggerId,
+    view,
+  });
+}
+
+export async function pushModal(triggerId: string, view: any): Promise<void> {
+  const client = getSlackApp().client;
+  await client.views.push({
+    trigger_id: triggerId,
+    view,
+  });
+}
+
+export async function updateModal(viewId: string, view: any): Promise<void> {
+  const client = getSlackApp().client;
+  await client.views.update({
+    view_id: viewId,
+    view,
+  });
 }
 
 export async function publishHomeTab(userId: string, blocks: any[]): Promise<void> {

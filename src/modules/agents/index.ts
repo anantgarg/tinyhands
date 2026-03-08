@@ -15,6 +15,8 @@ export interface CreateAgentParams {
   selfEvolutionMode?: SelfEvolutionMode;
   maxTurns?: number;
   memoryEnabled?: boolean;
+  respondToAllMessages?: boolean;
+  relevanceKeywords?: string[];
   createdBy: string;
 }
 
@@ -42,6 +44,8 @@ export function createAgent(params: CreateAgentParams): Agent {
     max_turns: params.maxTurns || 50,
     memory_enabled: params.memoryEnabled || false,
     permission_level: params.permissionLevel || 'standard',
+    respond_to_all_messages: params.respondToAllMessages || false,
+    relevance_keywords: params.relevanceKeywords || [],
     created_by: params.createdBy,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -50,8 +54,8 @@ export function createAgent(params: CreateAgentParams): Agent {
   const insertAgent = db.prepare(`
     INSERT INTO agents (id, name, channel_id, system_prompt, tools, avatar_emoji, status,
       model, streaming_detail, docker_image, self_evolution_mode, max_turns, memory_enabled,
-      permission_level, created_by, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      permission_level, respond_to_all_messages, relevance_keywords, created_by, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const insertVersion = db.prepare(`
@@ -65,7 +69,9 @@ export function createAgent(params: CreateAgentParams): Agent {
       JSON.stringify(agent.tools), agent.avatar_emoji, agent.status,
       agent.model, agent.streaming_detail ? 1 : 0, agent.docker_image,
       agent.self_evolution_mode, agent.max_turns, agent.memory_enabled ? 1 : 0,
-      agent.permission_level, agent.created_by, agent.created_at, agent.updated_at
+      agent.permission_level, agent.respond_to_all_messages ? 1 : 0,
+      JSON.stringify(agent.relevance_keywords),
+      agent.created_by, agent.created_at, agent.updated_at
     );
 
     insertVersion.run(
@@ -160,6 +166,14 @@ export function updateAgent(id: string, updates: Partial<Agent>, changedBy: stri
     fields.push('permission_level = ?');
     values.push(updates.permission_level);
   }
+  if (updates.respond_to_all_messages !== undefined) {
+    fields.push('respond_to_all_messages = ?');
+    values.push(updates.respond_to_all_messages ? 1 : 0);
+  }
+  if (updates.relevance_keywords !== undefined) {
+    fields.push('relevance_keywords = ?');
+    values.push(JSON.stringify(updates.relevance_keywords));
+  }
 
   if (fields.length === 0) return existing;
 
@@ -220,5 +234,7 @@ function deserializeAgent(row: any): Agent {
     tools: JSON.parse(row.tools),
     streaming_detail: !!row.streaming_detail,
     memory_enabled: !!row.memory_enabled,
+    respond_to_all_messages: !!row.respond_to_all_messages,
+    relevance_keywords: JSON.parse(row.relevance_keywords || '[]'),
   };
 }

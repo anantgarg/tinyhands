@@ -33,6 +33,8 @@ export function initializeSchema(database: Database.Database): void {
       max_turns INTEGER NOT NULL DEFAULT 50,
       memory_enabled INTEGER NOT NULL DEFAULT 0,
       permission_level TEXT NOT NULL DEFAULT 'standard',
+      respond_to_all_messages INTEGER NOT NULL DEFAULT 0,
+      relevance_keywords TEXT NOT NULL DEFAULT '[]',
       created_by TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -389,6 +391,14 @@ export function initializeSchema(database: Database.Database): void {
       created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
   `);
+
+  // ── Migrations for existing databases ──
+  try {
+    database.exec(`ALTER TABLE agents ADD COLUMN respond_to_all_messages INTEGER NOT NULL DEFAULT 0`);
+  } catch { /* column already exists */ }
+  try {
+    database.exec(`ALTER TABLE agents ADD COLUMN relevance_keywords TEXT NOT NULL DEFAULT '[]'`);
+  } catch { /* column already exists */ }
 }
 
 export function closeDb(): void {

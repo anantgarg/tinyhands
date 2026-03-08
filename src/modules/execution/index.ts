@@ -137,13 +137,13 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
   const model: ModelAlias = data.modelOverride || agent.model;
   const suppressThinking = model === 'haiku'; // Haiku: no thinking traces
 
-  // Stream initial thinking event to Slack
+  // Update temporary status message with thinking state
   if (data.channelId) {
     bufferEvent(
       data.channelId,
       data.threadTs,
       'thinking',
-      'Analyzing task...',
+      'Thinking...',
       agent.name,
       agent.avatar_emoji,
       suppressThinking
@@ -186,7 +186,8 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
 
   updateRunRecord(runRecord.id, { context_tokens_injected: contextTokens });
 
-  // Build task prompt with context
+  // Build task prompt with system prompt + context
+  const systemPrompt = agent.system_prompt || '';
   const taskPrompt = contextBlock
     ? `${data.input}\n${contextBlock}`
     : data.input;
@@ -258,6 +259,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
       traceId: data.traceId,
       workingDir,
       envVars: {
+        SYSTEM_PROMPT: systemPrompt,
         TASK_PROMPT: taskPrompt,
         MODEL: getModelId(model),
         MAX_TURNS: String(agent.max_turns),
