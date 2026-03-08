@@ -196,7 +196,7 @@ export function getAvailableSkills(): {
   prompt: Array<{ name: string; description: string }>;
 } {
   return {
-    mcp: Object.entries(BUILTIN_MCP_SKILLS).map(([key, val]) => ({ name: key, ...val })),
+    mcp: Object.entries(BUILTIN_MCP_SKILLS).map(([key, val]) => ({ ...val, name: key })),
     prompt: Object.entries(BUILTIN_PROMPT_SKILLS).map(([key, val]) => ({
       name: key,
       description: val.description,

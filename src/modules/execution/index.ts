@@ -439,8 +439,8 @@ Focus on: user preferences, corrections, entities mentioned, procedures learned.
     });
 
     const text = response.content
-      .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
-      .map(b => b.text)
+      .filter((b: any) => b.type === 'text')
+      .map((b: any) => b.text)
       .join('');
 
     const facts = JSON.parse(text) as Array<{ fact: string; category: string }>;
@@ -473,7 +473,7 @@ export function createWorker(): Worker<JobData> {
       return executeAgentRun(job);
     },
     {
-      connection: getRedisConnection(),
+      connection: getRedisConnection() as any,
       concurrency: 1,
       limiter: {
         max: 1,

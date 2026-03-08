@@ -8,7 +8,11 @@ let connection: IORedis;
 
 export function getRedisConnection(): IORedis {
   if (!connection) {
-    connection = new IORedis(config.redis.url, { maxRetriesPerRequest: null });
+    const opts: any = { maxRetriesPerRequest: null };
+    if (config.redis.url.startsWith('rediss://')) {
+      opts.tls = { rejectUnauthorized: false };
+    }
+    connection = new IORedis(config.redis.url, opts);
   }
   return connection;
 }
@@ -22,7 +26,7 @@ let queue: Queue<JobData>;
 export function getQueue(): Queue<JobData> {
   if (!queue) {
     queue = new Queue<JobData>(QUEUE_NAME, {
-      connection: getRedisConnection(),
+      connection: getRedisConnection() as any,
       defaultJobOptions: {
         removeOnComplete: { count: 1000 },
         removeOnFail: { count: 5000 },
@@ -159,7 +163,7 @@ export async function isDuplicateEvent(idempotencyKey: string): Promise<boolean>
 // ── Queue Events ──
 
 export function createQueueEvents(): QueueEvents {
-  return new QueueEvents(QUEUE_NAME, { connection: getRedisConnection() });
+  return new QueueEvents(QUEUE_NAME, { connection: getRedisConnection() as any });
 }
 
 // ── Cleanup ──

@@ -42,7 +42,7 @@ export interface DockerSecurityConfig {
 
 export function getDockerSecurityConfig(level: PermissionLevel): DockerSecurityConfig {
   const base: DockerSecurityConfig = {
-    networkMode: 'none',
+    networkMode: 'bridge',
     readOnlyRootfs: false,
     noNewPrivileges: true,
     dropCapabilities: ['ALL'],
