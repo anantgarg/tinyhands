@@ -197,9 +197,11 @@ async function handleAgentChannelCommand(
       );
       // Trigger initial clone in background
       const repoDir = `/tmp/tinyjobs-sources-cache/${agent.id}/${source.id}`;
-      cloneRepo(parsed.owner, parsed.repo, repoDir, parsed.branch).catch(err => {
+      try {
+        cloneRepo(parsed.owner, parsed.repo, repoDir, parsed.branch);
+      } catch (err: any) {
         logger.error('Initial clone failed', { error: err.message });
-      });
+      }
       return true;
     } catch (err: any) {
       await postMessage(channelId, `:x: Failed to connect: ${err.message}`, threadTs);

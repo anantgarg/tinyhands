@@ -2,6 +2,7 @@ import { getDb } from './db';
 import { getSourcesDueForSync, updateSourceStatus, ingestContent, getSource } from './modules/sources';
 import { checkAlerts } from './modules/observability';
 import { generateDailyDigest } from './modules/observability';
+import { createSlackApp } from './slack';
 import { config } from './config';
 import { logger } from './utils/logger';
 import { postMessage } from './slack';
@@ -16,6 +17,10 @@ async function main(): Promise<void> {
 
   // Initialize database
   getDb();
+
+  // Initialize Slack app so sync can post alerts
+  const app = createSlackApp();
+  await app.start();
 
   // Source sync loop
   setInterval(async () => {
@@ -39,8 +44,8 @@ async function main(): Promise<void> {
             const parsed = parseDriveUri(source.uri);
             if (parsed) {
               const token = await getServiceAccountToken();
-              const content = await fetchDriveFile(parsed.fileId, token);
-              ingestContent(source.id, source.agent_id, [{ path: source.label, content }]);
+              const driveFile = await fetchDriveFile(parsed.fileId, token!);
+              ingestContent(source.id, source.agent_id, [{ path: source.label || parsed.fileId, content: driveFile.content }]);
             }
           }
 

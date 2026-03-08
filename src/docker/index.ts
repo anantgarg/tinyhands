@@ -39,6 +39,13 @@ export async function createAgentContainer(cfg: ContainerConfig): Promise<Docker
   for (const dir of [cfg.workingDir, sourcesCacheDir, memoryDir]) {
     fs.mkdirSync(dir, { recursive: true });
   }
+  // Ensure the workspace dir is writable by the container's agent user (uid 999)
+  try {
+    fs.chownSync(cfg.workingDir, 999, 999);
+  } catch {
+    // Fallback: make world-writable if chown fails
+    fs.chmodSync(cfg.workingDir, 0o777);
+  }
 
   // Apply security config based on permission level
   const securityConfig = getDockerSecurityConfig(cfg.agent.permission_level);

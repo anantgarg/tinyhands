@@ -261,7 +261,7 @@ async function writeBackGoogleSheet(sheetUrl: string, content: string): Promise<
     if (!sheetIdMatch) throw new Error('Invalid Google Sheet URL');
 
     const rows = content.split('\n').map(line => line.split('\t'));
-    await writeGoogleSheet(sheetIdMatch[1], 'Sheet1!A1', rows, token);
+    await writeGoogleSheet(sheetIdMatch[1], 'Sheet1!A1', rows, token!);
     logger.info('Google Sheet written back', { sheetUrl });
     return sheetUrl;
   } catch (err: any) {

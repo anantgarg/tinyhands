@@ -349,8 +349,8 @@ Fix the code. Return ONLY the fixed code.`,
   });
 
   const text = response.content
-    .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
-    .map(b => b.text)
+    .filter((b: any) => b.type === 'text')
+    .map((b: any) => b.text)
     .join('');
 
   // Strip markdown code fences if present
@@ -718,8 +718,8 @@ Rules:
   });
 
   const text = response.content
-    .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
-    .map(b => b.text)
+    .filter((b: any) => b.type === 'text')
+    .map((b: any) => b.text)
     .join('');
 
   const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -763,8 +763,8 @@ Keep templates focused, under 500 words. Use {{placeholders}} for dynamic values
   });
 
   const text = response.content
-    .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
-    .map(b => b.text)
+    .filter((b: any) => b.type === 'text')
+    .map((b: any) => b.text)
     .join('');
 
   const jsonMatch = text.match(/\{[\s\S]*\}/);

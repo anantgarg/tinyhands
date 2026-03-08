@@ -61,8 +61,8 @@ Produce an improved system prompt that addresses the critique while preserving t
     });
 
     const proposed = response.content
-      .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
-      .map(b => b.text)
+      .filter((b: any) => b.type === 'text')
+      .map((b: any) => b.text)
       .join('');
 
     return {

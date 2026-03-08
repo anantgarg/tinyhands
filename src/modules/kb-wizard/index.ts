@@ -84,8 +84,8 @@ export async function generateSuggestions(content: string): Promise<WizardSugges
     });
 
     const text = response.content
-      .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
-      .map(b => b.text)
+      .filter((b: any) => b.type === 'text')
+      .map((b: any) => b.text)
       .join('');
 
     const parsed = JSON.parse(text);
