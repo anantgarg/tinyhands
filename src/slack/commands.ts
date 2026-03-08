@@ -47,7 +47,7 @@ export function registerCommands(app: App): void {
             multiline: true,
             placeholder: {
               type: 'plain_text',
-              text: 'e.g. "Triage incoming Zendesk tickets, classify severity P0-P3, and route to the right team. Should trigger on every new ticket. Respond in a professional but concise tone."',
+              text: 'e.g. "Triage Zendesk tickets, classify P0-P3, route to the right team. Trigger on new tickets."',
             },
           },
           label: { type: 'plain_text', text: 'What should this agent do?' },
