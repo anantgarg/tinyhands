@@ -16,6 +16,9 @@ export const config = {
   google: {
     serviceAccountKeyPath: process.env.GOOGLE_SERVICE_ACCOUNT_KEY_PATH || '',
   },
+  database: {
+    url: process.env.DATABASE_URL || 'postgresql://localhost:5432/tinyjobs',
+  },
   redis: {
     url: process.env.REDIS_URL || 'redis://localhost:6379',
   },

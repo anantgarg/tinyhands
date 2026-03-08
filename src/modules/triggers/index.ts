@@ -1,5 +1,5 @@
 import { v4 as uuid } from 'uuid';
-import { getDb } from '../../db';
+import { query, queryOne, execute } from '../../db';
 import { enqueueRun, isDuplicateEvent } from '../../queue';
 import { canModifyAgent } from '../access-control';
 import type { Trigger, TriggerType, TriggerStatus, JobData } from '../../types';
@@ -14,12 +14,11 @@ export interface CreateTriggerParams {
   createdBy: string;
 }
 
-export function createTrigger(params: CreateTriggerParams): Trigger {
-  if (!canModifyAgent(params.agentId, params.createdBy)) {
+export async function createTrigger(params: CreateTriggerParams): Promise<Trigger> {
+  if (!(await canModifyAgent(params.agentId, params.createdBy))) {
     throw new Error('Insufficient permissions to create trigger');
   }
 
-  const db = getDb();
   const id = uuid();
 
   const trigger: Trigger = {
@@ -32,66 +31,62 @@ export function createTrigger(params: CreateTriggerParams): Trigger {
     created_at: new Date().toISOString(),
   };
 
-  db.prepare(`
+  await execute(`
     INSERT INTO triggers (id, agent_id, trigger_type, config_json, status, created_by, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(trigger.id, trigger.agent_id, trigger.trigger_type,
-    trigger.config_json, trigger.status, trigger.created_by, trigger.created_at);
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
+  `, [trigger.id, trigger.agent_id, trigger.trigger_type,
+    trigger.config_json, trigger.status, trigger.created_by, trigger.created_at]);
 
   logger.info('Trigger created', { triggerId: id, agentId: params.agentId, type: params.triggerType });
   return trigger;
 }
 
-export function getTrigger(id: string): Trigger | null {
-  const db = getDb();
-  return db.prepare('SELECT * FROM triggers WHERE id = ?').get(id) as Trigger | null;
+export async function getTrigger(id: string): Promise<Trigger | null> {
+  const row = await queryOne<Trigger>('SELECT * FROM triggers WHERE id = $1', [id]);
+  return row || null;
 }
 
-export function getAgentTriggers(agentId: string): Trigger[] {
-  const db = getDb();
-  return db.prepare('SELECT * FROM triggers WHERE agent_id = ?').all(agentId) as Trigger[];
+export async function getAgentTriggers(agentId: string): Promise<Trigger[]> {
+  return query<Trigger>('SELECT * FROM triggers WHERE agent_id = $1', [agentId]);
 }
 
-export function getActiveTriggersByType(triggerType: TriggerType): Trigger[] {
-  const db = getDb();
-  return db.prepare(
-    'SELECT * FROM triggers WHERE trigger_type = ? AND status = ?'
-  ).all(triggerType, 'active') as Trigger[];
+export async function getActiveTriggersByType(triggerType: TriggerType): Promise<Trigger[]> {
+  return query<Trigger>(
+    'SELECT * FROM triggers WHERE trigger_type = $1 AND status = $2',
+    [triggerType, 'active']
+  );
 }
 
-export function pauseTrigger(triggerId: string, userId: string): void {
-  const trigger = getTrigger(triggerId);
+export async function pauseTrigger(triggerId: string, userId: string): Promise<void> {
+  const trigger = await getTrigger(triggerId);
   if (!trigger) throw new Error(`Trigger ${triggerId} not found`);
-  if (!canModifyAgent(trigger.agent_id, userId)) {
+  if (!(await canModifyAgent(trigger.agent_id, userId))) {
     throw new Error('Insufficient permissions');
   }
 
-  const db = getDb();
-  db.prepare('UPDATE triggers SET status = ? WHERE id = ?').run('paused', triggerId);
+  await execute('UPDATE triggers SET status = $1 WHERE id = $2', ['paused', triggerId]);
   logger.info('Trigger paused', { triggerId });
 }
 
-export function resumeTrigger(triggerId: string, userId: string): void {
-  const trigger = getTrigger(triggerId);
+export async function resumeTrigger(triggerId: string, userId: string): Promise<void> {
+  const trigger = await getTrigger(triggerId);
   if (!trigger) throw new Error(`Trigger ${triggerId} not found`);
-  if (!canModifyAgent(trigger.agent_id, userId)) {
+  if (!(await canModifyAgent(trigger.agent_id, userId))) {
     throw new Error('Insufficient permissions');
   }
 
-  const db = getDb();
-  db.prepare('UPDATE triggers SET status = ? WHERE id = ?').run('active', triggerId);
+  await execute('UPDATE triggers SET status = $1 WHERE id = $2', ['active', triggerId]);
   logger.info('Trigger resumed', { triggerId });
 }
 
-export function deleteTrigger(triggerId: string, userId: string): void {
-  const trigger = getTrigger(triggerId);
+export async function deleteTrigger(triggerId: string, userId: string): Promise<void> {
+  const trigger = await getTrigger(triggerId);
   if (!trigger) throw new Error(`Trigger ${triggerId} not found`);
-  if (!canModifyAgent(trigger.agent_id, userId)) {
+  if (!(await canModifyAgent(trigger.agent_id, userId))) {
     throw new Error('Insufficient permissions');
   }
 
-  const db = getDb();
-  db.prepare('DELETE FROM triggers WHERE id = ?').run(triggerId);
+  await execute('DELETE FROM triggers WHERE id = $1', [triggerId]);
   logger.info('Trigger deleted', { triggerId });
 }
 
@@ -106,7 +101,7 @@ export interface TriggerEvent {
 }
 
 export async function fireTrigger(event: TriggerEvent): Promise<string | null> {
-  const trigger = getTrigger(event.triggerId);
+  const trigger = await getTrigger(event.triggerId);
   if (!trigger || trigger.status !== 'active') return null;
 
   // Dedup check
@@ -170,15 +165,13 @@ function normalizeEventPayload(triggerType: TriggerType, payload: Record<string,
 const STORM_THRESHOLD = 100; // events per minute
 
 export async function checkTriggerStorm(agentId: string): Promise<boolean> {
-  // In production, this would check Redis for event count per minute
-  // For now, return false (no storm detected)
   return false;
 }
 
 // ── Slack Channel Trigger Matching ──
 
-export function findSlackChannelTriggers(channelId: string): Trigger[] {
-  const triggers = getActiveTriggersByType('slack_channel');
+export async function findSlackChannelTriggers(channelId: string): Promise<Trigger[]> {
+  const triggers = await getActiveTriggersByType('slack_channel');
   return triggers.filter(t => {
     const config = JSON.parse(t.config_json);
     return config.channel_id === channelId;

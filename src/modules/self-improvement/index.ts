@@ -1,6 +1,5 @@
 import { v4 as uuid } from 'uuid';
 import { getAgent, updateAgent, getAgentVersions, revertAgent } from '../agents';
-import { getDb } from '../../db';
 import { logger } from '../../utils/logger';
 
 export interface PromptDiff {
@@ -80,15 +79,15 @@ Produce an improved system prompt that addresses the critique while preserving t
   }
 }
 
-export function applyPromptDiff(
+export async function applyPromptDiff(
   agentId: string,
   newPrompt: string,
   changeNote: string,
   changedBy: string
-): { agent: ReturnType<typeof getAgent>; version: number } {
-  const agent = updateAgent(agentId, { system_prompt: newPrompt }, changedBy);
+): Promise<{ agent: Awaited<ReturnType<typeof getAgent>>; version: number }> {
+  const agent = await updateAgent(agentId, { system_prompt: newPrompt }, changedBy);
 
-  const versions = getAgentVersions(agentId);
+  const versions = await getAgentVersions(agentId);
   const latestVersion = versions[0]?.version || 1;
 
   logger.info('Self-improvement applied', {
@@ -100,19 +99,19 @@ export function applyPromptDiff(
   return { agent, version: latestVersion };
 }
 
-export function revertToVersion(
+export async function revertToVersion(
   agentId: string,
   version: number,
   changedBy: string
-): ReturnType<typeof getAgent> {
-  const agent = revertAgent(agentId, version, changedBy);
+): Promise<Awaited<ReturnType<typeof getAgent>>> {
+  const agent = await revertAgent(agentId, version, changedBy);
 
   logger.info('Agent reverted', { agentId, version, changedBy });
   return agent;
 }
 
-export function checkPromptSize(agentId: string): { tokenCount: number; warning: boolean } {
-  const agent = getAgent(agentId);
+export async function checkPromptSize(agentId: string): Promise<{ tokenCount: number; warning: boolean }> {
+  const agent = await getAgent(agentId);
   if (!agent) throw new Error(`Agent ${agentId} not found`);
 
   const tokenCount = Math.ceil(agent.system_prompt.length / 4);

@@ -1,5 +1,5 @@
 import { v4 as uuid } from 'uuid';
-import { getDb } from '../../db';
+import { query, queryOne, execute } from '../../db';
 import { enqueueRun } from '../../queue';
 import type { WorkflowDefinition, WorkflowRun, WorkflowStatus, WaitingFor, SideEffect, JobData } from '../../types';
 import { logger } from '../../utils/logger';
@@ -16,13 +16,12 @@ export interface WorkflowStep {
   next_on_failure?: string;
 }
 
-export function createWorkflowDefinition(
+export async function createWorkflowDefinition(
   name: string,
   agentId: string,
   steps: WorkflowStep[],
   createdBy: string
-): WorkflowDefinition {
-  const db = getDb();
+): Promise<WorkflowDefinition> {
   const id = uuid();
 
   const definition: WorkflowDefinition = {
@@ -34,26 +33,25 @@ export function createWorkflowDefinition(
     created_at: new Date().toISOString(),
   };
 
-  db.prepare(`
+  await execute(`
     INSERT INTO workflow_definitions (id, name, agent_id, steps_json, created_by, created_at)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(definition.id, definition.name, definition.agent_id,
-    definition.steps_json, definition.created_by, definition.created_at);
+    VALUES ($1, $2, $3, $4, $5, $6)
+  `, [definition.id, definition.name, definition.agent_id,
+    definition.steps_json, definition.created_by, definition.created_at]);
 
   logger.info('Workflow definition created', { workflowId: id, name, agentId });
   return definition;
 }
 
-export function getWorkflowDefinition(id: string): WorkflowDefinition | null {
-  const db = getDb();
-  return db.prepare('SELECT * FROM workflow_definitions WHERE id = ?').get(id) as WorkflowDefinition | null;
+export async function getWorkflowDefinition(id: string): Promise<WorkflowDefinition | null> {
+  const row = await queryOne<WorkflowDefinition>('SELECT * FROM workflow_definitions WHERE id = $1', [id]);
+  return row || null;
 }
 
 // ── Workflow Execution ──
 
-export function startWorkflow(workflowId: string): WorkflowRun {
-  const db = getDb();
-  const definition = getWorkflowDefinition(workflowId);
+export async function startWorkflow(workflowId: string): Promise<WorkflowRun> {
+  const definition = await getWorkflowDefinition(workflowId);
   if (!definition) throw new Error(`Workflow ${workflowId} not found`);
 
   const id = uuid();
@@ -72,47 +70,47 @@ export function startWorkflow(workflowId: string): WorkflowRun {
     updated_at: new Date().toISOString(),
   };
 
-  db.prepare(`
+  await execute(`
     INSERT INTO workflow_runs (id, workflow_id, run_id, current_step, step_state,
       waiting_for, wait_until, status, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(run.id, run.workflow_id, run.run_id, run.current_step,
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+  `, [run.id, run.workflow_id, run.run_id, run.current_step,
     run.step_state, run.waiting_for, run.wait_until, run.status,
-    run.created_at, run.updated_at);
+    run.created_at, run.updated_at]);
 
   logger.info('Workflow started', { workflowRunId: id, workflowId });
 
   // Execute first step
-  executeStep(run);
+  await executeStep(run);
 
   return run;
 }
 
-export function getWorkflowRun(id: string): WorkflowRun | null {
-  const db = getDb();
-  return db.prepare('SELECT * FROM workflow_runs WHERE id = ?').get(id) as WorkflowRun | null;
+export async function getWorkflowRun(id: string): Promise<WorkflowRun | null> {
+  const row = await queryOne<WorkflowRun>('SELECT * FROM workflow_runs WHERE id = $1', [id]);
+  return row || null;
 }
 
-export function getActiveWorkflowRuns(): WorkflowRun[] {
-  const db = getDb();
-  return db.prepare(
-    'SELECT * FROM workflow_runs WHERE status IN (?, ?)'
-  ).all('running', 'waiting') as WorkflowRun[];
+export async function getActiveWorkflowRuns(): Promise<WorkflowRun[]> {
+  return query<WorkflowRun>(
+    'SELECT * FROM workflow_runs WHERE status IN ($1, $2)',
+    ['running', 'waiting']
+  );
 }
 
 export async function executeStep(run: WorkflowRun): Promise<void> {
-  const definition = getWorkflowDefinition(run.workflow_id);
+  const definition = await getWorkflowDefinition(run.workflow_id);
   if (!definition) throw new Error(`Workflow ${run.workflow_id} not found`);
 
   const steps: WorkflowStep[] = JSON.parse(definition.steps_json);
 
   if (run.current_step >= steps.length) {
-    completeWorkflow(run.id);
+    await completeWorkflow(run.id);
     return;
   }
 
   if (run.current_step >= MAX_WORKFLOW_STEPS) {
-    failWorkflow(run.id, 'Max step count exceeded');
+    await failWorkflow(run.id, 'Max step count exceeded');
     return;
   }
 
@@ -139,7 +137,7 @@ export async function executeStep(run: WorkflowRun): Promise<void> {
       const delayMs = step.config.delay_ms || 60000;
       const waitUntil = new Date(Date.now() + delayMs).toISOString();
 
-      updateWorkflowRun(run.id, {
+      await updateWorkflowRun(run.id, {
         waiting_for: 'timer',
         wait_until: waitUntil,
         status: 'waiting',
@@ -148,7 +146,7 @@ export async function executeStep(run: WorkflowRun): Promise<void> {
     }
 
     case 'human_action': {
-      updateWorkflowRun(run.id, {
+      await updateWorkflowRun(run.id, {
         waiting_for: 'human_action',
         status: 'waiting',
       });
@@ -166,14 +164,14 @@ export async function executeStep(run: WorkflowRun): Promise<void> {
       if (nextStep) {
         const stepIdx = steps.findIndex(s => s.id === nextStep);
         if (stepIdx >= 0) {
-          updateWorkflowRun(run.id, { current_step: stepIdx });
-          const updatedRun = getWorkflowRun(run.id)!;
-          await executeStep(updatedRun);
+          await updateWorkflowRun(run.id, { current_step: stepIdx });
+          const updatedRun = await getWorkflowRun(run.id);
+          if (updatedRun) await executeStep(updatedRun);
           return;
         }
       }
 
-      advanceWorkflow(run.id);
+      await advanceWorkflow(run.id);
       break;
     }
   }
@@ -181,28 +179,27 @@ export async function executeStep(run: WorkflowRun): Promise<void> {
 
 // ── Workflow Lifecycle ──
 
-export function advanceWorkflow(workflowRunId: string): void {
-  const db = getDb();
-  const run = getWorkflowRun(workflowRunId);
+export async function advanceWorkflow(workflowRunId: string): Promise<void> {
+  const run = await getWorkflowRun(workflowRunId);
   if (!run) return;
 
   const nextStep = run.current_step + 1;
-  updateWorkflowRun(workflowRunId, {
+  await updateWorkflowRun(workflowRunId, {
     current_step: nextStep,
     waiting_for: null,
     wait_until: null,
     status: 'running',
   });
 
-  const updatedRun = getWorkflowRun(workflowRunId)!;
-  executeStep(updatedRun);
+  const updatedRun = await getWorkflowRun(workflowRunId);
+  if (updatedRun) await executeStep(updatedRun);
 }
 
-export function resolveHumanAction(
+export async function resolveHumanAction(
   workflowRunId: string,
   actionData: Record<string, any>
-): void {
-  const run = getWorkflowRun(workflowRunId);
+): Promise<void> {
+  const run = await getWorkflowRun(workflowRunId);
   if (!run || run.waiting_for !== 'human_action') {
     throw new Error('Workflow is not waiting for human action');
   }
@@ -210,83 +207,81 @@ export function resolveHumanAction(
   const currentState = JSON.parse(run.step_state);
   const newState = { ...currentState, ...actionData };
 
-  updateWorkflowRun(workflowRunId, { step_state: JSON.stringify(newState) });
-  advanceWorkflow(workflowRunId);
+  await updateWorkflowRun(workflowRunId, { step_state: JSON.stringify(newState) });
+  await advanceWorkflow(workflowRunId);
 }
 
-export function completeWorkflow(workflowRunId: string): void {
-  updateWorkflowRun(workflowRunId, { status: 'completed' });
+export async function completeWorkflow(workflowRunId: string): Promise<void> {
+  await updateWorkflowRun(workflowRunId, { status: 'completed' });
   logger.info('Workflow completed', { workflowRunId });
 }
 
-export function failWorkflow(workflowRunId: string, reason: string): void {
-  updateWorkflowRun(workflowRunId, { status: 'failed' });
+export async function failWorkflow(workflowRunId: string, reason: string): Promise<void> {
+  await updateWorkflowRun(workflowRunId, { status: 'failed' });
   logger.error('Workflow failed', { workflowRunId, reason });
 }
 
-function updateWorkflowRun(id: string, updates: Partial<WorkflowRun>): void {
-  const db = getDb();
+async function updateWorkflowRun(id: string, updates: Partial<WorkflowRun>): Promise<void> {
   const fields: string[] = [];
   const values: any[] = [];
+  let paramIdx = 1;
 
   for (const [key, value] of Object.entries(updates)) {
-    fields.push(`${key} = ?`);
+    fields.push(`${key} = $${paramIdx++}`);
     values.push(value);
   }
 
-  fields.push('updated_at = ?');
+  fields.push(`updated_at = $${paramIdx++}`);
   values.push(new Date().toISOString());
   values.push(id);
 
-  db.prepare(`UPDATE workflow_runs SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+  await execute(`UPDATE workflow_runs SET ${fields.join(', ')} WHERE id = $${paramIdx}`, values);
 }
 
 // ── Side Effects Idempotency ──
 
-export function recordSideEffect(
+export async function recordSideEffect(
   workflowRunId: string,
   stepId: string,
   effectType: string,
   effectData: Record<string, any>,
   attemptNumber: number = 1
-): boolean {
-  const db = getDb();
-
+): Promise<boolean> {
   // Check if this side effect was already recorded
-  const existing = db.prepare(
-    'SELECT id FROM side_effects_log WHERE workflow_run_id = ? AND step_id = ? AND effect_type = ?'
-  ).get(workflowRunId, stepId, effectType);
+  const existing = await queryOne(
+    'SELECT id FROM side_effects_log WHERE workflow_run_id = $1 AND step_id = $2 AND effect_type = $3',
+    [workflowRunId, stepId, effectType]
+  );
 
   if (existing) {
     logger.info('Duplicate side effect skipped', { workflowRunId, stepId, effectType });
     return false;
   }
 
-  db.prepare(`
+  await execute(`
     INSERT INTO side_effects_log (id, workflow_run_id, step_id, attempt_number, effect_type, effect_data)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(uuid(), workflowRunId, stepId, attemptNumber, effectType, JSON.stringify(effectData));
+    VALUES ($1, $2, $3, $4, $5, $6)
+  `, [uuid(), workflowRunId, stepId, attemptNumber, effectType, JSON.stringify(effectData)]);
 
   return true;
 }
 
 // ── Timer Recovery ──
 
-export function getExpiredTimers(): WorkflowRun[] {
-  const db = getDb();
-  return db.prepare(`
+export async function getExpiredTimers(): Promise<WorkflowRun[]> {
+  return query<WorkflowRun>(`
     SELECT * FROM workflow_runs
     WHERE status = 'waiting'
     AND waiting_for = 'timer'
     AND wait_until IS NOT NULL
-    AND datetime(wait_until) <= datetime('now')
-  `).all() as WorkflowRun[];
+    AND wait_until <= NOW()
+  `);
 }
 
-export function processExpiredTimers(): number {
-  const expired = getExpiredTimers();
+export async function processExpiredTimers(): Promise<number> {
+  const expired = await getExpiredTimers();
   for (const run of expired) {
-    advanceWorkflow(run.id);
+    await advanceWorkflow(run.id);
   }
   return expired.length;
 }

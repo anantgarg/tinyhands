@@ -1,5 +1,5 @@
 import { v4 as uuid } from 'uuid';
-import { getDb } from '../../db';
+import { query, queryOne, execute } from '../../db';
 import { canModifyAgent } from '../access-control';
 import type { Skill, SkillType, AgentSkill, IntegrationAccess } from '../../types';
 import { logger } from '../../utils/logger';
@@ -61,12 +61,11 @@ const BUILTIN_PROMPT_SKILLS: Record<string, { name: string; description: string;
 
 // ── Skill Registry ──
 
-export function registerSkill(
+export async function registerSkill(
   name: string,
   skillType: SkillType,
   config: Record<string, any>
-): Skill {
-  const db = getDb();
+): Promise<Skill> {
   const id = uuid();
 
   const skill: Skill = {
@@ -79,74 +78,71 @@ export function registerSkill(
     updated_at: new Date().toISOString(),
   };
 
-  db.prepare(`
+  await execute(`
     INSERT INTO skills (id, name, skill_type, config_json, version, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
-  `).run(skill.id, skill.name, skill.skill_type, skill.config_json,
-    skill.version, skill.created_at, skill.updated_at);
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
+  `, [skill.id, skill.name, skill.skill_type, skill.config_json,
+    skill.version, skill.created_at, skill.updated_at]);
 
   logger.info('Skill registered', { skillId: id, name, type: skillType });
   return skill;
 }
 
-export function getSkill(id: string): Skill | null {
-  const db = getDb();
-  return db.prepare('SELECT * FROM skills WHERE id = ?').get(id) as Skill | null;
+export async function getSkill(id: string): Promise<Skill | null> {
+  const row = await queryOne<Skill>('SELECT * FROM skills WHERE id = $1', [id]);
+  return row || null;
 }
 
-export function getSkillByName(name: string): Skill | null {
-  const db = getDb();
-  return db.prepare('SELECT * FROM skills WHERE name = ?').get(name) as Skill | null;
+export async function getSkillByName(name: string): Promise<Skill | null> {
+  const row = await queryOne<Skill>('SELECT * FROM skills WHERE name = $1', [name]);
+  return row || null;
 }
 
-export function listSkills(skillType?: SkillType): Skill[] {
-  const db = getDb();
+export async function listSkills(skillType?: SkillType): Promise<Skill[]> {
   if (skillType) {
-    return db.prepare('SELECT * FROM skills WHERE skill_type = ? ORDER BY name').all(skillType) as Skill[];
+    return query<Skill>('SELECT * FROM skills WHERE skill_type = $1 ORDER BY name', [skillType]);
   }
-  return db.prepare('SELECT * FROM skills ORDER BY name').all() as Skill[];
+  return query<Skill>('SELECT * FROM skills ORDER BY name');
 }
 
-export function updateSkill(id: string, config: Record<string, any>): Skill {
-  const db = getDb();
-  const existing = getSkill(id);
+export async function updateSkill(id: string, config: Record<string, any>): Promise<Skill> {
+  const existing = await getSkill(id);
   if (!existing) throw new Error(`Skill ${id} not found`);
 
-  db.prepare(`
-    UPDATE skills SET config_json = ?, version = version + 1, updated_at = datetime('now') WHERE id = ?
-  `).run(JSON.stringify(config), id);
+  await execute(
+    'UPDATE skills SET config_json = $1, version = version + 1, updated_at = NOW() WHERE id = $2',
+    [JSON.stringify(config), id]
+  );
 
   logger.info('Skill updated', { skillId: id, version: existing.version + 1 });
-  return getSkill(id)!;
+  return (await getSkill(id))!;
 }
 
 // ── Agent-Skill Attachment ──
 
-export function attachSkillToAgent(
+export async function attachSkillToAgent(
   agentId: string,
   skillName: string,
   permissionLevel: IntegrationAccess,
   attachedBy: string
-): AgentSkill {
-  if (!canModifyAgent(agentId, attachedBy)) {
+): Promise<AgentSkill> {
+  if (!(await canModifyAgent(agentId, attachedBy))) {
     throw new Error('Insufficient permissions to attach skill');
   }
 
-  const db = getDb();
-
   // Find or create skill
-  let skill = getSkillByName(skillName);
+  let skill = await getSkillByName(skillName);
   if (!skill) {
     // Check if it's a built-in MCP skill
     const builtinMcp = BUILTIN_MCP_SKILLS[skillName.toLowerCase()];
     if (builtinMcp) {
-      skill = registerSkill(skillName, 'mcp', { builtin: true, ...builtinMcp });
+      skill = await registerSkill(skillName, 'mcp', { builtin: true, ...builtinMcp });
     }
 
     // Check if it's a built-in prompt skill
     const builtinPrompt = BUILTIN_PROMPT_SKILLS[skillName.toLowerCase()];
     if (builtinPrompt) {
-      skill = registerSkill(skillName, 'prompt_template', { builtin: true, ...builtinPrompt });
+      skill = await registerSkill(skillName, 'prompt_template', { builtin: true, ...builtinPrompt });
     }
 
     if (!skill) throw new Error(`Skill "${skillName}" not found`);
@@ -160,35 +156,37 @@ export function attachSkillToAgent(
     attached_at: new Date().toISOString(),
   };
 
-  db.prepare(`
-    INSERT OR REPLACE INTO agent_skills (agent_id, skill_id, permission_level, attached_by, attached_at)
-    VALUES (?, ?, ?, ?, ?)
-  `).run(agentSkill.agent_id, agentSkill.skill_id, agentSkill.permission_level,
-    agentSkill.attached_by, agentSkill.attached_at);
+  await execute(`
+    INSERT INTO agent_skills (agent_id, skill_id, permission_level, attached_by, attached_at)
+    VALUES ($1, $2, $3, $4, $5)
+    ON CONFLICT (agent_id, skill_id) DO UPDATE SET
+      permission_level = EXCLUDED.permission_level,
+      attached_by = EXCLUDED.attached_by,
+      attached_at = EXCLUDED.attached_at
+  `, [agentSkill.agent_id, agentSkill.skill_id, agentSkill.permission_level,
+    agentSkill.attached_by, agentSkill.attached_at]);
 
   logger.info('Skill attached to agent', { agentId, skillName, permissionLevel });
   return agentSkill;
 }
 
-export function detachSkillFromAgent(agentId: string, skillId: string, userId: string): void {
-  if (!canModifyAgent(agentId, userId)) {
+export async function detachSkillFromAgent(agentId: string, skillId: string, userId: string): Promise<void> {
+  if (!(await canModifyAgent(agentId, userId))) {
     throw new Error('Insufficient permissions to detach skill');
   }
 
-  const db = getDb();
-  db.prepare('DELETE FROM agent_skills WHERE agent_id = ? AND skill_id = ?').run(agentId, skillId);
+  await execute('DELETE FROM agent_skills WHERE agent_id = $1 AND skill_id = $2', [agentId, skillId]);
   logger.info('Skill detached from agent', { agentId, skillId });
 }
 
-export function getAgentSkills(agentId: string): Array<Skill & { permission_level: IntegrationAccess }> {
-  const db = getDb();
-  return db.prepare(`
+export async function getAgentSkills(agentId: string): Promise<Array<Skill & { permission_level: IntegrationAccess }>> {
+  return query<Skill & { permission_level: IntegrationAccess }>(`
     SELECT s.*, asl.permission_level
     FROM agent_skills asl
     JOIN skills s ON asl.skill_id = s.id
-    WHERE asl.agent_id = ?
+    WHERE asl.agent_id = $1
     ORDER BY s.name
-  `).all(agentId) as Array<Skill & { permission_level: IntegrationAccess }>;
+  `, [agentId]);
 }
 
 export function getAvailableSkills(): {

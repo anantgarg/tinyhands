@@ -1,6 +1,6 @@
 import { v4 as uuid } from 'uuid';
 import { Worker, Job } from 'bullmq';
-import { getDb } from '../../db';
+import { query, queryOne, execute } from '../../db';
 import { getRedisConnection, recordTokenUsage, checkRateLimit, checkRequestRate } from '../../queue';
 import { createAgentContainer, startContainer, waitForContainer, removeContainer } from '../../docker';
 import { getAgent } from '../agents';
@@ -18,8 +18,7 @@ import type { JobData, RunRecord, RunStatus, ModelAlias, MemoryCategory } from '
 
 // ── Run Record CRUD ──
 
-export function createRunRecord(data: JobData, jobId: string): RunRecord {
-  const db = getDb();
+export async function createRunRecord(data: JobData, jobId: string): Promise<RunRecord> {
   const record: RunRecord = {
     id: uuid(),
     agent_id: data.agentId,
@@ -43,20 +42,20 @@ export function createRunRecord(data: JobData, jobId: string): RunRecord {
     completed_at: null,
   };
 
-  db.prepare(`
+  await execute(`
     INSERT INTO run_history (id, agent_id, channel_id, thread_ts, input, output, status,
       input_tokens, output_tokens, estimated_cost_usd, duration_ms, queue_wait_ms,
       context_tokens_injected, tool_calls_count, trace_id, job_id, model, slack_user_id,
       created_at, completed_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+  `, [
     record.id, record.agent_id, record.channel_id, record.thread_ts,
     record.input, record.output, record.status, record.input_tokens,
     record.output_tokens, record.estimated_cost_usd, record.duration_ms,
     record.queue_wait_ms, record.context_tokens_injected, record.tool_calls_count,
     record.trace_id, record.job_id, record.model, record.slack_user_id,
     record.created_at, record.completed_at
-  );
+  ]);
 
   return record;
 }
@@ -67,42 +66,42 @@ const ALLOWED_RUN_RECORD_COLUMNS = new Set([
   'model', 'completed_at',
 ]);
 
-export function updateRunRecord(id: string, updates: Partial<RunRecord>): void {
-  const db = getDb();
+export async function updateRunRecord(id: string, updates: Partial<RunRecord>): Promise<void> {
   const fields: string[] = [];
   const values: any[] = [];
+  let paramIdx = 1;
 
   for (const [key, value] of Object.entries(updates)) {
     if (!ALLOWED_RUN_RECORD_COLUMNS.has(key)) {
       throw new Error(`Invalid column for run record update: ${key}`);
     }
-    fields.push(`${key} = ?`);
+    fields.push(`${key} = $${paramIdx++}`);
     values.push(value);
   }
 
   if (fields.length === 0) return;
   values.push(id);
 
-  db.prepare(`UPDATE run_history SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+  await execute(`UPDATE run_history SET ${fields.join(', ')} WHERE id = $${paramIdx}`, values);
 }
 
-export function getRunRecord(id: string): RunRecord | null {
-  const db = getDb();
-  return db.prepare('SELECT * FROM run_history WHERE id = ?').get(id) as RunRecord | null;
+export async function getRunRecord(id: string): Promise<RunRecord | null> {
+  const row = await queryOne<RunRecord>('SELECT * FROM run_history WHERE id = $1', [id]);
+  return row || null;
 }
 
-export function getRunsByAgent(agentId: string, limit: number = 20): RunRecord[] {
-  const db = getDb();
-  return db.prepare(
-    'SELECT * FROM run_history WHERE agent_id = ? ORDER BY created_at DESC LIMIT ?'
-  ).all(agentId, limit) as RunRecord[];
+export async function getRunsByAgent(agentId: string, limit: number = 20): Promise<RunRecord[]> {
+  return query<RunRecord>(
+    'SELECT * FROM run_history WHERE agent_id = $1 ORDER BY created_at DESC LIMIT $2',
+    [agentId, limit]
+  );
 }
 
-export function getRecentRuns(limit: number = 20): RunRecord[] {
-  const db = getDb();
-  return db.prepare(
-    'SELECT * FROM run_history ORDER BY created_at DESC LIMIT ?'
-  ).all(limit) as RunRecord[];
+export async function getRecentRuns(limit: number = 20): Promise<RunRecord[]> {
+  return query<RunRecord>(
+    'SELECT * FROM run_history ORDER BY created_at DESC LIMIT $1',
+    [limit]
+  );
 }
 
 // ── Agent Execution ──
@@ -110,11 +109,11 @@ export function getRecentRuns(limit: number = 20): RunRecord[] {
 export async function executeAgentRun(job: Job<JobData>): Promise<string> {
   const { data } = job;
   const startTime = Date.now();
-  const agent = getAgent(data.agentId);
+  const agent = await getAgent(data.agentId);
 
   if (!agent) throw new Error(`Agent ${data.agentId} not found`);
 
-  const runRecord = createRunRecord(data, job.id || '');
+  const runRecord = await createRunRecord(data, job.id || '');
 
   // Check rate limit (TPM and RPM)
   const rateCheck = await checkRateLimit();
@@ -132,7 +131,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
   }
 
   const queueWaitMs = Date.now() - new Date(runRecord.created_at).getTime();
-  updateRunRecord(runRecord.id, { status: 'running', queue_wait_ms: queueWaitMs });
+  await updateRunRecord(runRecord.id, { status: 'running', queue_wait_ms: queueWaitMs });
 
   const model: ModelAlias = data.modelOverride || agent.model;
   const suppressThinking = model === 'haiku'; // Haiku: no thinking traces
@@ -165,7 +164,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
   let contextBlock = '';
   let contextTokens = 0;
   try {
-    const chunks = retrieveContext(agent.id, data.input);
+    const chunks = await retrieveContext(agent.id, data.input);
     if (chunks.length > 0) {
       contextBlock = '\n\n## Relevant Context\n\n' +
         chunks.map(c => `### ${c.file_path}\n${c.content}`).join('\n\n');
@@ -173,7 +172,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
     }
 
     if (agent.memory_enabled) {
-      const memories = retrieveMemories(agent.id, data.input);
+      const memories = await retrieveMemories(agent.id, data.input);
       if (memories.length > 0) {
         contextBlock += '\n\n## Agent Memory\n\n' +
           memories.map(m => `- [${m.category}] ${m.fact}`).join('\n');
@@ -184,7 +183,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
     logger.warn('Context retrieval failed', { traceId: data.traceId, error: String(err) });
   }
 
-  updateRunRecord(runRecord.id, { context_tokens_injected: contextTokens });
+  await updateRunRecord(runRecord.id, { context_tokens_injected: contextTokens });
 
   // Build task prompt with system prompt + context
   const systemPrompt = agent.system_prompt || '';
@@ -201,28 +200,29 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
   let customToolsConfig = '[]';
   let codeArtifactsConfig = '[]';
   try {
-    const skills = getAgentSkills(agent.id);
+    const skills = await getAgentSkills(agent.id);
     skillsConfig = JSON.stringify(skills.map(s => ({
       name: s.name,
       type: s.skill_type,
       config: JSON.parse(s.config_json),
       permission_level: s.permission_level,
     })));
-    const customTools = listCustomTools();
+    const customTools = await listCustomTools();
     const agentCustomTools = customTools.filter(t => agent.tools.includes(t.name));
-    customToolsConfig = JSON.stringify(agentCustomTools.map(t => {
-      // For DB-stored tools, include the executable script inline
-      const execScript = getToolExecutionScript(t.name);
-      return {
+    const customToolEntries = [];
+    for (const t of agentCustomTools) {
+      const execScript = await getToolExecutionScript(t.name);
+      customToolEntries.push({
         name: t.name,
         schema: JSON.parse(t.schema_json),
         script_path: t.script_path,
         script_code: execScript,
         language: t.language,
-      };
-    }));
+      });
+    }
+    customToolsConfig = JSON.stringify(customToolEntries);
     // Collect DB-stored MCP configs
-    const mcpConfigs = getMcpConfigs(agent.id).filter(m => m.approved);
+    const mcpConfigs = (await getMcpConfigs(agent.id)).filter(m => m.approved);
     if (mcpConfigs.length > 0) {
       const mcpSkillEntries = mcpConfigs.map(m => ({
         name: m.name,
@@ -235,7 +235,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
     }
 
     // Collect DB-stored code artifacts for workspace injection
-    const codeArtifacts = getCodeArtifacts(agent.id);
+    const codeArtifacts = await getCodeArtifacts(agent.id);
     if (codeArtifacts.length > 0) {
       codeArtifactsConfig = JSON.stringify(codeArtifacts.map(a => ({
         file_path: a.file_path,
@@ -328,7 +328,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
       ? outputData.output || 'Task completed successfully'
       : `Task failed with exit code ${exitCode}: ${outputData.output}`;
 
-    updateRunRecord(runRecord.id, {
+    await updateRunRecord(runRecord.id, {
       status,
       output,
       input_tokens: outputData.inputTokens,
@@ -378,7 +378,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
     const durationMs = Date.now() - startTime;
     const isTimeout = err.message?.includes('timed out');
 
-    updateRunRecord(runRecord.id, {
+    await updateRunRecord(runRecord.id, {
       status: isTimeout ? 'timeout' : 'failed',
       output: err.message || 'Unknown error',
       duration_ms: durationMs,
@@ -457,7 +457,7 @@ Focus on: user preferences, corrections, entities mentioned, procedures learned.
         }));
 
       if (validFacts.length > 0) {
-        storeMemories(agentId, runId, validFacts);
+        await storeMemories(agentId, runId, validFacts);
         logger.info('Memories extracted from run', { agentId, runId, count: validFacts.length });
       }
     }

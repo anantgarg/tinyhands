@@ -1,115 +1,112 @@
-import { getDb } from '../../db';
+import { query, queryOne, execute } from '../../db';
 import type { AccessRole, Superadmin, AgentAdmin } from '../../types';
 import { logger } from '../../utils/logger';
 
 // ── Superadmin Management ──
 
-export function initSuperadmin(userId: string): boolean {
-  const db = getDb();
-  const existing = db.prepare('SELECT user_id FROM superadmins LIMIT 1').get();
+export async function initSuperadmin(userId: string): Promise<boolean> {
+  const existing = await queryOne('SELECT user_id FROM superadmins LIMIT 1');
   if (existing) return false; // Already initialized
 
-  db.prepare('INSERT INTO superadmins (user_id, granted_by) VALUES (?, ?)').run(userId, 'system');
+  await execute('INSERT INTO superadmins (user_id, granted_by) VALUES ($1, $2)', [userId, 'system']);
   logger.info('Superadmin initialized', { userId });
   return true;
 }
 
-export function addSuperadmin(userId: string, grantedBy: string): void {
-  if (!isSuperadmin(grantedBy)) {
+export async function addSuperadmin(userId: string, grantedBy: string): Promise<void> {
+  if (!(await isSuperadmin(grantedBy))) {
     throw new Error('Only superadmins can add other superadmins');
   }
 
-  const db = getDb();
-  db.prepare(
-    'INSERT OR IGNORE INTO superadmins (user_id, granted_by) VALUES (?, ?)'
-  ).run(userId, grantedBy);
+  await execute(
+    'INSERT INTO superadmins (user_id, granted_by) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+    [userId, grantedBy]
+  );
 
   logger.info('Superadmin added', { userId, grantedBy });
 }
 
-export function removeSuperadmin(userId: string, removedBy: string): void {
-  if (!isSuperadmin(removedBy)) {
+export async function removeSuperadmin(userId: string, removedBy: string): Promise<void> {
+  if (!(await isSuperadmin(removedBy))) {
     throw new Error('Only superadmins can remove other superadmins');
   }
 
-  const db = getDb();
-  const count = (db.prepare('SELECT COUNT(*) as count FROM superadmins').get() as any).count;
+  const countResult = await queryOne<{ count: string }>('SELECT COUNT(*) as count FROM superadmins');
+  const count = parseInt(countResult?.count || '0', 10);
   if (count <= 1) {
     throw new Error('Cannot remove the last superadmin');
   }
 
-  db.prepare('DELETE FROM superadmins WHERE user_id = ?').run(userId);
+  await execute('DELETE FROM superadmins WHERE user_id = $1', [userId]);
   logger.info('Superadmin removed', { userId, removedBy });
 }
 
-export function isSuperadmin(userId: string): boolean {
-  const db = getDb();
-  const row = db.prepare('SELECT user_id FROM superadmins WHERE user_id = ?').get(userId);
+export async function isSuperadmin(userId: string): Promise<boolean> {
+  const row = await queryOne('SELECT user_id FROM superadmins WHERE user_id = $1', [userId]);
   return !!row;
 }
 
-export function listSuperadmins(): Superadmin[] {
-  const db = getDb();
-  return db.prepare('SELECT * FROM superadmins').all() as Superadmin[];
+export async function listSuperadmins(): Promise<Superadmin[]> {
+  return query<Superadmin>('SELECT * FROM superadmins');
 }
 
 // ── Agent Admin Management ──
 
-export function addAgentAdmin(
+export async function addAgentAdmin(
   agentId: string,
   userId: string,
   role: 'owner' | 'admin',
   grantedBy: string
-): void {
-  if (!canModifyAgent(agentId, grantedBy)) {
+): Promise<void> {
+  if (!(await canModifyAgent(agentId, grantedBy))) {
     throw new Error('Insufficient permissions to add agent admin');
   }
 
-  const db = getDb();
-  db.prepare(`
-    INSERT OR REPLACE INTO agent_admins (agent_id, user_id, role, granted_by)
-    VALUES (?, ?, ?, ?)
-  `).run(agentId, userId, role, grantedBy);
+  await execute(`
+    INSERT INTO agent_admins (agent_id, user_id, role, granted_by)
+    VALUES ($1, $2, $3, $4)
+    ON CONFLICT (agent_id, user_id) DO UPDATE SET
+      role = EXCLUDED.role,
+      granted_by = EXCLUDED.granted_by
+  `, [agentId, userId, role, grantedBy]);
 
   logger.info('Agent admin added', { agentId, userId, role, grantedBy });
 }
 
-export function removeAgentAdmin(agentId: string, userId: string, removedBy: string): void {
-  if (!canModifyAgent(agentId, removedBy)) {
+export async function removeAgentAdmin(agentId: string, userId: string, removedBy: string): Promise<void> {
+  if (!(await canModifyAgent(agentId, removedBy))) {
     throw new Error('Insufficient permissions to remove agent admin');
   }
 
-  const db = getDb();
-  db.prepare('DELETE FROM agent_admins WHERE agent_id = ? AND user_id = ?').run(agentId, userId);
+  await execute('DELETE FROM agent_admins WHERE agent_id = $1 AND user_id = $2', [agentId, userId]);
   logger.info('Agent admin removed', { agentId, userId, removedBy });
 }
 
-export function getAgentAdmins(agentId: string): AgentAdmin[] {
-  const db = getDb();
-  return db.prepare('SELECT * FROM agent_admins WHERE agent_id = ?').all(agentId) as AgentAdmin[];
+export async function getAgentAdmins(agentId: string): Promise<AgentAdmin[]> {
+  return query<AgentAdmin>('SELECT * FROM agent_admins WHERE agent_id = $1', [agentId]);
 }
 
 // ── Role Resolution ──
 
-export function getUserRole(agentId: string, userId: string): AccessRole {
-  if (isSuperadmin(userId)) return 'superadmin';
+export async function getUserRole(agentId: string, userId: string): Promise<AccessRole> {
+  if (await isSuperadmin(userId)) return 'superadmin';
 
-  const db = getDb();
-  const admin = db.prepare(
-    'SELECT role FROM agent_admins WHERE agent_id = ? AND user_id = ?'
-  ).get(agentId, userId) as { role: string } | undefined;
+  const admin = await queryOne<{ role: string }>(
+    'SELECT role FROM agent_admins WHERE agent_id = $1 AND user_id = $2',
+    [agentId, userId]
+  );
 
   if (admin?.role === 'owner') return 'owner';
   if (admin?.role === 'admin') return 'admin';
   return 'member';
 }
 
-export function canModifyAgent(agentId: string, userId: string): boolean {
-  const role = getUserRole(agentId, userId);
+export async function canModifyAgent(agentId: string, userId: string): Promise<boolean> {
+  const role = await getUserRole(agentId, userId);
   return role === 'superadmin' || role === 'owner' || role === 'admin';
 }
 
-export function canSendTask(agentId: string, userId: string): boolean {
+export async function canSendTask(agentId: string, userId: string): Promise<boolean> {
   // All workspace members can send tasks
   return true;
 }

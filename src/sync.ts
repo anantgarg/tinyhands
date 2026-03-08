@@ -1,4 +1,4 @@
-import { getDb } from './db';
+import { initDb } from './db';
 import { getSourcesDueForSync, updateSourceStatus, ingestContent, getSource } from './modules/sources';
 import { checkAlerts } from './modules/observability';
 import { generateDailyDigest } from './modules/observability';
@@ -16,7 +16,7 @@ async function main(): Promise<void> {
   logger.info('Starting TinyJobs sync process...');
 
   // Initialize database
-  getDb();
+  await initDb();
 
   // Initialize Slack app so sync can post alerts
   const app = createSlackApp();
@@ -25,12 +25,12 @@ async function main(): Promise<void> {
   // Source sync loop
   setInterval(async () => {
     try {
-      const sources = getSourcesDueForSync();
+      const sources = await getSourcesDueForSync();
       logger.info(`Sync: ${sources.length} sources due for re-index`);
 
       for (const source of sources) {
         try {
-          updateSourceStatus(source.id, 'syncing');
+          await updateSourceStatus(source.id, 'syncing');
 
           // Fetch and re-index based on source type
           if (source.source_type === 'github') {
@@ -38,20 +38,20 @@ async function main(): Promise<void> {
             const repoDir = `/tmp/tinyjobs-sources-cache/${source.agent_id}/${source.id}`;
             await pullLatest(repoDir);
             const files = readRepoFiles(repoDir);
-            ingestContent(source.id, source.agent_id, files);
+            await ingestContent(source.id, source.agent_id, files);
           } else if (source.source_type === 'google_drive') {
             const { fetchDriveFile, parseDriveUri, getServiceAccountToken } = await import('./modules/sources/google-drive');
             const parsed = parseDriveUri(source.uri);
             if (parsed) {
               const token = await getServiceAccountToken();
               const driveFile = await fetchDriveFile(parsed.fileId, token!);
-              ingestContent(source.id, source.agent_id, [{ path: source.label || parsed.fileId, content: driveFile.content }]);
+              await ingestContent(source.id, source.agent_id, [{ path: source.label || parsed.fileId, content: driveFile.content }]);
             }
           }
 
-          updateSourceStatus(source.id, 'active');
+          await updateSourceStatus(source.id, 'active');
         } catch (err: any) {
-          updateSourceStatus(source.id, 'error', err.message);
+          await updateSourceStatus(source.id, 'error', err.message);
           logger.error('Source sync failed', { sourceId: source.id, error: err.message });
         }
       }
@@ -63,7 +63,7 @@ async function main(): Promise<void> {
   // Alert check loop
   setInterval(async () => {
     try {
-      const alerts = checkAlerts();
+      const alerts = await checkAlerts();
       for (const alert of alerts) {
         logger.warn('Alert triggered', {
           condition: alert.condition,
@@ -87,12 +87,12 @@ async function main(): Promise<void> {
   }, ALERT_CHECK_INTERVAL_MS);
 
   // Daily digest (check every minute if it's digest time)
-  setInterval(() => {
+  setInterval(async () => {
     const now = new Date();
     const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
     if (time === config.observability.dailyDigestTime) {
-      const digest = generateDailyDigest();
+      const digest = await generateDailyDigest();
       logger.info('Daily digest generated', { digest: digest.slice(0, 200) });
       // Post digest to #tinyjobs Slack channel
       postMessage(TINYJOBS_CHANNEL, digest).catch((err: any) => {

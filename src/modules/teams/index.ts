@@ -1,5 +1,5 @@
 import { v4 as uuid } from 'uuid';
-import { getDb } from '../../db';
+import { query, queryOne, execute } from '../../db';
 import { getAgent } from '../agents';
 import { enqueueRun } from '../../queue';
 import type { TeamRun, SubAgentRun, RunStatus, JobData } from '../../types';
@@ -10,14 +10,13 @@ const DEFAULT_MAX_DEPTH = 2;
 
 // ── Team Management ──
 
-export function createTeamRun(
+export async function createTeamRun(
   leadAgentId: string,
   leadRunId: string,
   maxConcurrent?: number,
   maxDepth?: number
-): TeamRun {
-  const db = getDb();
-  const agent = getAgent(leadAgentId);
+): Promise<TeamRun> {
+  const agent = await getAgent(leadAgentId);
   if (!agent) throw new Error(`Agent ${leadAgentId} not found`);
 
   if (agent.permission_level !== 'full') {
@@ -35,24 +34,24 @@ export function createTeamRun(
     created_at: new Date().toISOString(),
   };
 
-  db.prepare(`
+  await execute(`
     INSERT INTO team_runs (id, lead_agent_id, lead_run_id, max_concurrent, max_depth, created_at)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(teamRun.id, teamRun.lead_agent_id, teamRun.lead_run_id,
-    teamRun.max_concurrent, teamRun.max_depth, teamRun.created_at);
+    VALUES ($1, $2, $3, $4, $5, $6)
+  `, [teamRun.id, teamRun.lead_agent_id, teamRun.lead_run_id,
+    teamRun.max_concurrent, teamRun.max_depth, teamRun.created_at]);
 
   logger.info('Team run created', { teamRunId: id, leadAgentId });
   return teamRun;
 }
 
-export function getTeamRun(id: string): TeamRun | null {
-  const db = getDb();
-  const row = db.prepare('SELECT * FROM team_runs WHERE id = ?').get(id) as any;
+export async function getTeamRun(id: string): Promise<TeamRun | null> {
+  const row = await queryOne<any>('SELECT * FROM team_runs WHERE id = $1', [id]);
   if (!row) return null;
 
-  const subAgents = db.prepare(
-    'SELECT * FROM sub_agent_runs WHERE team_run_id = ?'
-  ).all(id) as SubAgentRun[];
+  const subAgents = await query<SubAgentRun>(
+    'SELECT * FROM sub_agent_runs WHERE team_run_id = $1',
+    [id]
+  );
 
   return { ...row, sub_agents: subAgents };
 }
@@ -65,8 +64,7 @@ export async function spawnSubAgent(
   task: string,
   depth: number = 1
 ): Promise<SubAgentRun> {
-  const db = getDb();
-  const teamRun = getTeamRun(teamRunId);
+  const teamRun = await getTeamRun(teamRunId);
   if (!teamRun) throw new Error(`Team run ${teamRunId} not found`);
 
   // Check depth limit
@@ -75,19 +73,20 @@ export async function spawnSubAgent(
   }
 
   // Check concurrent limit
-  const activeCount = db.prepare(
-    'SELECT COUNT(*) as count FROM sub_agent_runs WHERE team_run_id = ? AND status IN (?, ?)'
-  ).get(teamRunId, 'queued', 'running') as any;
+  const activeCount = await queryOne<any>(
+    'SELECT COUNT(*) as count FROM sub_agent_runs WHERE team_run_id = $1 AND status IN ($2, $3)',
+    [teamRunId, 'queued', 'running']
+  );
 
-  if (activeCount.count >= teamRun.max_concurrent) {
+  if (parseInt(activeCount?.count || '0', 10) >= teamRun.max_concurrent) {
     throw new Error(`Max concurrent sub-agents (${teamRun.max_concurrent}) reached`);
   }
 
-  const agent = getAgent(agentId);
+  const agent = await getAgent(agentId);
   if (!agent) throw new Error(`Agent ${agentId} not found`);
 
   // Sub-agents inherit lead's permissions but cannot elevate
-  const leadAgent = getAgent(teamRun.lead_agent_id);
+  const leadAgent = await getAgent(teamRun.lead_agent_id);
   if (!leadAgent) throw new Error(`Lead agent not found`);
 
   const id = uuid();
@@ -105,11 +104,11 @@ export async function spawnSubAgent(
     result: null,
   };
 
-  db.prepare(`
+  await execute(`
     INSERT INTO sub_agent_runs (id, team_run_id, agent_id, run_id, depth, status, task, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
-  `).run(subAgentRun.id, subAgentRun.team_run_id, subAgentRun.agent_id,
-    subAgentRun.run_id, subAgentRun.depth, subAgentRun.status, subAgentRun.task);
+    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+  `, [subAgentRun.id, subAgentRun.team_run_id, subAgentRun.agent_id,
+    subAgentRun.run_id, subAgentRun.depth, subAgentRun.status, subAgentRun.task]);
 
   // Enqueue the sub-agent's run
   const jobData: JobData = {
@@ -140,12 +139,12 @@ export async function completeSubAgent(
   status: RunStatus,
   result: string
 ): Promise<void> {
-  const db = getDb();
-  db.prepare(
-    'UPDATE sub_agent_runs SET status = ?, result = ? WHERE id = ?'
-  ).run(status, result, subAgentRunId);
+  await execute(
+    'UPDATE sub_agent_runs SET status = $1, result = $2 WHERE id = $3',
+    [status, result, subAgentRunId]
+  );
 
-  const subRun = db.prepare('SELECT * FROM sub_agent_runs WHERE id = ?').get(subAgentRunId) as SubAgentRun;
+  const subRun = await queryOne<SubAgentRun>('SELECT * FROM sub_agent_runs WHERE id = $1', [subAgentRunId]);
   if (!subRun) return;
 
   logger.info('Sub-agent completed', {
@@ -159,21 +158,21 @@ export async function completeSubAgent(
 }
 
 async function checkTeamCompletion(teamRunId: string): Promise<boolean> {
-  const db = getDb();
-  const pending = db.prepare(
-    'SELECT COUNT(*) as count FROM sub_agent_runs WHERE team_run_id = ? AND status IN (?, ?)'
-  ).get(teamRunId, 'queued', 'running') as any;
+  const pending = await queryOne<any>(
+    'SELECT COUNT(*) as count FROM sub_agent_runs WHERE team_run_id = $1 AND status IN ($2, $3)',
+    [teamRunId, 'queued', 'running']
+  );
 
-  if (pending.count === 0) {
+  if (parseInt(pending?.count || '0', 10) === 0) {
     // All sub-agents done — post aggregated results to lead agent's thread
-    const teamRun = getTeamRun(teamRunId);
+    const teamRun = await getTeamRun(teamRunId);
     if (teamRun) {
-      const leadRun = db.prepare('SELECT * FROM run_history WHERE id = ?').get(teamRun.lead_run_id) as any;
+      const leadRun = await queryOne<any>('SELECT * FROM run_history WHERE id = $1', [teamRun.lead_run_id]);
       if (leadRun?.channel_id && leadRun?.thread_ts) {
         try {
           const { postMessage } = await import('../../slack');
-          const results = getTeamResults(teamRunId);
-          const cost = getTeamCost(teamRunId);
+          const results = await getTeamResults(teamRunId);
+          const cost = await getTeamCost(teamRunId);
 
           let summary = `:checkered_flag: *Team run complete*\n`;
           summary += `Completed: ${results.completed.length} | Failed: ${results.failed.length} | Cost: $${cost.toFixed(4)}\n\n`;
@@ -199,15 +198,15 @@ async function checkTeamCompletion(teamRunId: string): Promise<boolean> {
 
 // ── Results Aggregation ──
 
-export function getTeamResults(teamRunId: string): {
+export async function getTeamResults(teamRunId: string): Promise<{
   completed: SubAgentRun[];
   failed: SubAgentRun[];
   allDone: boolean;
-} {
-  const db = getDb();
-  const subRuns = db.prepare(
-    'SELECT * FROM sub_agent_runs WHERE team_run_id = ?'
-  ).all(teamRunId) as SubAgentRun[];
+}> {
+  const subRuns = await query<SubAgentRun>(
+    'SELECT * FROM sub_agent_runs WHERE team_run_id = $1',
+    [teamRunId]
+  );
 
   return {
     completed: subRuns.filter(r => r.status === 'completed'),
@@ -218,22 +217,21 @@ export function getTeamResults(teamRunId: string): {
 
 // ── Team Cost Attribution ──
 
-export function getTeamCost(teamRunId: string): number {
-  const db = getDb();
-  const result = db.prepare(`
+export async function getTeamCost(teamRunId: string): Promise<number> {
+  const result = await queryOne<any>(`
     SELECT COALESCE(SUM(rh.estimated_cost_usd), 0) as total_cost
     FROM sub_agent_runs sar
     JOIN run_history rh ON sar.run_id = rh.id
-    WHERE sar.team_run_id = ?
-  `).get(teamRunId) as any;
+    WHERE sar.team_run_id = $1
+  `, [teamRunId]);
 
-  return result.total_cost;
+  return parseFloat(result?.total_cost || '0');
 }
 
 // ── Slack Presentation ──
 
-export function formatTeamProgress(teamRunId: string): string {
-  const teamRun = getTeamRun(teamRunId);
+export async function formatTeamProgress(teamRunId: string): Promise<string> {
+  const teamRun = await getTeamRun(teamRunId);
   if (!teamRun) return 'Team run not found';
 
   const subAgents = teamRun.sub_agents;

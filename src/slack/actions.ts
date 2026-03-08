@@ -14,7 +14,7 @@ export function registerActions(app: App): void {
     const userId = (body as any).user?.id;
 
     try {
-      const entry = approveContribution(entryId);
+      const entry = await approveContribution(entryId);
       await postMessage(
         (body as any).channel?.id || '',
         `:white_check_mark: KB entry "${entry.title}" approved by <@${userId}>`,
@@ -30,8 +30,8 @@ export function registerActions(app: App): void {
     const entryId = actionData.value;
     const userId = (body as any).user?.id;
 
-    const { deleteKBEntry } = require('../modules/knowledge-base');
-    deleteKBEntry(entryId);
+    const { deleteKBEntry } = await import('../modules/knowledge-base');
+    await deleteKBEntry(entryId);
 
     await postMessage(
       (body as any).channel?.id || '',
@@ -47,7 +47,7 @@ export function registerActions(app: App): void {
     const userId = (body as any).user?.id;
 
     try {
-      const proposal = approveProposal(proposalId, userId);
+      const proposal = await approveProposal(proposalId, userId);
       await postMessage(
         (body as any).channel?.id || '',
         `:white_check_mark: Evolution proposal approved: ${proposal.description}`,
@@ -64,7 +64,7 @@ export function registerActions(app: App): void {
     const userId = (body as any).user?.id;
 
     try {
-      rejectProposal(proposalId, userId);
+      await rejectProposal(proposalId, userId);
       await postMessage(
         (body as any).channel?.id || '',
         `:x: Evolution proposal rejected by <@${userId}>`,
@@ -81,7 +81,7 @@ export function registerActions(app: App): void {
 
     try {
       const { workflowRunId, actionData: data } = JSON.parse(actionData.value);
-      resolveHumanAction(workflowRunId, data);
+      await resolveHumanAction(workflowRunId, data);
 
       await postMessage(
         (body as any).channel?.id || '',
@@ -95,12 +95,12 @@ export function registerActions(app: App): void {
   // ── Trigger Management ──
   app.action('trigger_pause', async ({ action, ack, body }) => {
     await ack();
-    const { pauseTrigger } = require('../modules/triggers');
+    const { pauseTrigger } = await import('../modules/triggers');
     const actionData = action as any;
     const userId = (body as any).user?.id;
 
     try {
-      pauseTrigger(actionData.value, userId);
+      await pauseTrigger(actionData.value, userId);
       await postMessage(
         (body as any).channel?.id || '',
         ':pause_button: Trigger paused',
@@ -112,12 +112,12 @@ export function registerActions(app: App): void {
 
   app.action('trigger_resume', async ({ action, ack, body }) => {
     await ack();
-    const { resumeTrigger } = require('../modules/triggers');
+    const { resumeTrigger } = await import('../modules/triggers');
     const actionData = action as any;
     const userId = (body as any).user?.id;
 
     try {
-      resumeTrigger(actionData.value, userId);
+      await resumeTrigger(actionData.value, userId);
       await postMessage(
         (body as any).channel?.id || '',
         ':arrow_forward: Trigger resumed',
