@@ -56,6 +56,8 @@ export async function runMigrations(pool: Pool): Promise<void> {
 // Standalone entry point for `npm run migrate`
 if (require.main === module) {
   (async () => {
+    // Load .env when run standalone
+    try { (await import('dotenv')).config(); } catch {}
     const { config } = await import('../config');
     const connectionString = config.database.url;
     const ssl = connectionString.includes('sslmode=require')
