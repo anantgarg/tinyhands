@@ -80,9 +80,9 @@ export async function handleDeploy(payload: any): Promise<DeployResult> {
     }
     execSync('npm run migrate', { cwd: process.cwd(), timeout: 60000 });
 
-    // 5. Graceful PM2 reload (in-flight jobs complete first)
-    logger.info('Deploy: reloading PM2');
-    execSync('pm2 reload ecosystem.config.js', { cwd: process.cwd(), timeout: 30000 });
+    // 5. Restart PM2 (restart instead of reload to avoid duplicate Socket Mode connections)
+    logger.info('Deploy: restarting PM2');
+    execSync('pm2 restart ecosystem.config.js', { cwd: process.cwd(), timeout: 30000 });
 
     const restartTime = Date.now() - startTime;
 
