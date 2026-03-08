@@ -22,6 +22,8 @@ export interface Agent {
   max_turns: number;
   memory_enabled: boolean;
   permission_level: PermissionLevel;
+  respond_to_all_messages: boolean;
+  relevance_keywords: string[];
   created_by: string;
   created_at: string;
   updated_at: string;

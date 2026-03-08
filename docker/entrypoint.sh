@@ -82,7 +82,13 @@ if [ -n "${SKILLS_CONFIG:-}" ] && [ "$SKILLS_CONFIG" != "[]" ]; then
   done
 fi
 
-# ── 4. Build claude command arguments ──
+# ── 4. Inject system prompt as CLAUDE.md ──
+if [ -n "${SYSTEM_PROMPT:-}" ]; then
+  printf '%s' "$SYSTEM_PROMPT" > /workspace/CLAUDE.md
+  echo "[prompt] Injected system prompt as CLAUDE.md" >&2
+fi
+
+# ── 5. Build claude command arguments ──
 CLAUDE_ARGS=(
   "--print"
   "--model" "${MODEL:-claude-sonnet-4-6}"
@@ -99,7 +105,7 @@ if [ -n "${DISALLOWED_TOOLS:-}" ] && [ "$DISALLOWED_TOOLS" != "[]" ]; then
   done
 fi
 
-# ── 5. Build context about available capabilities (no subshell pipes) ──
+# ── 6. Build context about available capabilities (no subshell pipes) ──
 TOOL_CONTEXT=""
 if [ -d "/tools" ] && [ "$(ls -A /tools 2>/dev/null)" ]; then
   TOOL_CONTEXT=$'\n\n## Available Custom Tools\nYou have custom tools in /tools/. To use them, run the script with INPUT env var:\n'
@@ -118,7 +124,7 @@ if [ -d "/workspace/artifacts" ]; then
   fi
 fi
 
-# ── 6. Execute ──
+# ── 7. Execute ──
 START_TIME=$(date +%s%N)
 
 FULL_PROMPT="${TASK_PROMPT}${TOOL_CONTEXT}"

@@ -3,9 +3,10 @@ import { v4 as uuid } from 'uuid';
 import { getAgentByChannel } from '../modules/agents';
 import { enqueueRun } from '../queue';
 import { handleWizardMessage, isInWizard } from './commands';
-import { postMessage, publishHomeTab } from './index';
+import { postMessage, postBlocks, publishHomeTab, updateMessage, getSlackApp } from './index';
 import { detectCritique } from '../modules/self-improvement';
 import { parseModelOverride, stripModelOverride } from '../modules/model-selection';
+import { checkMessageRelevance } from '../modules/agents/goal-analyzer';
 import { findSlackChannelTriggers, fireTrigger } from '../modules/triggers';
 import { buildDashboardBlocks } from '../modules/dashboard';
 import { initSuperadmin } from '../modules/access-control';
@@ -47,6 +48,28 @@ export function registerEvents(app: App): void {
       const modelOverride = parseModelOverride(text);
       const cleanInput = modelOverride ? stripModelOverride(text) : text;
 
+      // Check if agent is @mentioned (always respond to mentions)
+      let botUserId: string | null = null;
+      try {
+        const authResult = await getSlackApp().client.auth.test();
+        botUserId = authResult.user_id as string;
+      } catch { /* ignore */ }
+      const isMentioned = botUserId ? text.includes(`<@${botUserId}>`) : false;
+
+      // Relevance check: only respond if @mentioned, or message is relevant to agent's goal
+      if (!isMentioned) {
+        const isRelevant = await checkMessageRelevance(
+          cleanInput,
+          agent.relevance_keywords,
+          agent.system_prompt,
+          agent.respond_to_all_messages
+        );
+        if (!isRelevant) {
+          logger.debug('Message skipped — not relevant to agent', { agentId: agent.id, message: cleanInput.slice(0, 50) });
+          return;
+        }
+      }
+
       // Check if this is critique (in-thread reply)
       if (msg.thread_ts && detectCritique(cleanInput)) {
         // Handle self-improvement via AI-powered diff generation
@@ -77,16 +100,28 @@ export function registerEvents(app: App): void {
         modelOverride: modelOverride || undefined,
       };
 
-      await enqueueRun(jobData, 'high');
-
-      // Post acknowledgment
-      await postMessage(
+      // Post temporary status message that will be updated with the final output
+      const statusTs = await postBlocks(
         channelId,
-        `:hourglass: Working on it... (trace: \`${traceId.slice(0, 8)}\`)`,
+        [
+          {
+            type: 'context',
+            elements: [
+              { type: 'mrkdwn', text: ':hourglass_flowing_sand: Thinking...' },
+            ],
+          },
+        ],
+        'Thinking...',
         threadTs,
-        agent.name,
-        agent.avatar_emoji
       );
+
+      // Store the status message ts so the buffer can update it when done
+      if (statusTs) {
+        const { setStatusMessageTs } = await import('./buffer');
+        setStatusMessageTs(channelId, threadTs, statusTs);
+      }
+
+      await enqueueRun(jobData, 'high');
 
       logger.info('Task enqueued from Slack', {
         agentId: agent.id,
