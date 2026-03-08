@@ -7,14 +7,14 @@ let pool: Pool | null = null;
 export async function initDb(): Promise<void> {
   if (pool) return;
 
-  const connectionString = config.database.url;
-  const ssl = connectionString.includes('sslmode=require')
-    ? { rejectUnauthorized: false }
-    : undefined;
+  let connectionString = config.database.url;
+  const needsSsl = connectionString.includes('sslmode=');
+  // Strip sslmode from connection string — pg v8.13+ treats it as verify-full
+  connectionString = connectionString.replace(/[?&]sslmode=[^&]*/g, '').replace(/\?$/, '');
 
   pool = new Pool({
     connectionString,
-    ssl,
+    ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
     max: 20,
     idleTimeoutMillis: 30000,
     connectionTimeoutMillis: 5000,

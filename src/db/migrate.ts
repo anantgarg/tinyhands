@@ -59,12 +59,15 @@ if (require.main === module) {
     // Load .env when run standalone
     try { (await import('dotenv')).config(); } catch {}
     const { config } = await import('../config');
-    const connectionString = config.database.url;
-    const ssl = connectionString.includes('sslmode=require')
-      ? { rejectUnauthorized: false }
-      : undefined;
+    let connectionString = config.database.url;
+    const needsSsl = connectionString.includes('sslmode=');
+    // Strip sslmode from connection string — pg v8.13+ treats it as verify-full
+    connectionString = connectionString.replace(/[?&]sslmode=[^&]*/g, '').replace(/\?$/, '');
 
-    const pool = new Pool({ connectionString, ssl });
+    const pool = new Pool({
+      connectionString,
+      ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
+    });
     try {
       await runMigrations(pool);
       console.log('All migrations applied');
