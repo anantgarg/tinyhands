@@ -138,6 +138,12 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
 
   // Update temporary status message with thinking state
   if (data.channelId) {
+    // Pass the status message TS from the job data so the worker can delete it when done
+    if (data.statusMessageTs) {
+      const { setStatusMessageTs } = await import('../../slack/buffer');
+      setStatusMessageTs(data.channelId, data.threadTs, data.statusMessageTs, data.agentId);
+    }
+
     bufferEvent(
       data.channelId,
       data.threadTs,
