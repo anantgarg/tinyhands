@@ -678,22 +678,6 @@ export function registerConfirmationActions(app: App): void {
         } catch (err: any) { logger.warn('Trigger creation failed', { trigger: trigger.type, error: err.message }); }
       }
 
-      const createdItems: string[] = [];
-      if (analysis.new_tools_needed?.length > 0) {
-        const { authorTool } = await import('../modules/self-authoring');
-        for (const tool of analysis.new_tools_needed) {
-          try { await authorTool(agent.id, tool.description); createdItems.push(`tool: ${tool.name}`); }
-          catch (err: any) { logger.warn('Auto-create tool failed', { error: err.message }); }
-        }
-      }
-      if (analysis.new_skills_needed?.length > 0) {
-        const { authorSkill } = await import('../modules/self-authoring');
-        for (const skill of analysis.new_skills_needed) {
-          try { await authorSkill(agent.id, skill.description); createdItems.push(`skill: ${skill.name}`); }
-          catch (err: any) { logger.warn('Auto-create skill failed', { error: err.message }); }
-        }
-      }
-
       const lines = [
         `:white_check_mark: Agent *${agent.name}* is live! Created by <@${userId}>`,
         '',
@@ -703,13 +687,32 @@ export function registerConfirmationActions(app: App): void {
         `*Tools:* ${analysis.tools.join(', ')}`,
         analysis.skills.length > 0 ? `*Skills:* ${analysis.skills.join(', ')}` : '',
         analysis.triggers.length > 0 ? `*Triggers:* ${analysis.triggers.map((t: any) => t.description).join(', ')}` : '',
-        createdItems.length > 0 ? `*Auto-created:* ${createdItems.join(', ')}` : '',
       ].filter(Boolean);
 
       // Post announcement in first channel
       await postMessage(channelIds[0], lines.join('\n'));
       const channelLabels = channelIds.map((c: string) => `<#${c}>`).join(', ');
       await replyToAction(body, `:white_check_mark: Agent *${agent.name}* created! Channels: ${channelLabels}`);
+
+      // Best-effort tool/skill authoring in background (don't block user)
+      (async () => {
+        try {
+          if (analysis.new_tools_needed?.length > 0) {
+            const { authorTool } = await import('../modules/self-authoring');
+            for (const tool of analysis.new_tools_needed) {
+              try { await authorTool(agent.id, tool.description); } catch { /* best effort */ }
+            }
+          }
+          if (analysis.new_skills_needed?.length > 0) {
+            const { authorSkill } = await import('../modules/self-authoring');
+            for (const skill of analysis.new_skills_needed) {
+              try { await authorSkill(agent.id, skill.description); } catch { /* best effort */ }
+            }
+          }
+        } catch (err: any) {
+          logger.warn('Background tool/skill authoring failed', { error: err.message, agentId: agent.id });
+        }
+      })();
 
     } catch (err: any) {
       logger.error('Agent creation failed', { error: err.message });
@@ -778,19 +781,7 @@ export function registerConfirmationActions(app: App): void {
         } catch (err: any) { logger.warn('Trigger creation failed during update', { error: err.message }); }
       }
 
-      if (analysis.new_tools_needed?.length > 0) {
-        const { authorTool } = await import('../modules/self-authoring');
-        for (const tool of analysis.new_tools_needed) {
-          try { await authorTool(agentId!, tool.description); } catch { /* best effort */ }
-        }
-      }
-      if (analysis.new_skills_needed?.length > 0) {
-        const { authorSkill } = await import('../modules/self-authoring');
-        for (const skill of analysis.new_skills_needed) {
-          try { await authorSkill(agentId!, skill.description); } catch { /* best effort */ }
-        }
-      }
-
+      // Send success message immediately — don't block on tool/skill authoring
       const updatedAgent = await getAgent(agentId!);
       const postToChannel = updatedAgent?.channel_ids?.[0] || updatedAgent?.channel_id || agent.channel_id;
       const channelChangeNote = updates.channel_ids
@@ -806,6 +797,26 @@ export function registerConfirmationActions(app: App): void {
         `_${analysis.summary}_`
       );
       await replyToAction(body, `:white_check_mark: Agent *${agent.name}* updated!`);
+
+      // Best-effort tool/skill authoring in background (don't block user)
+      (async () => {
+        try {
+          if (analysis.new_tools_needed?.length > 0) {
+            const { authorTool } = await import('../modules/self-authoring');
+            for (const tool of analysis.new_tools_needed) {
+              try { await authorTool(agentId!, tool.description); } catch { /* best effort */ }
+            }
+          }
+          if (analysis.new_skills_needed?.length > 0) {
+            const { authorSkill } = await import('../modules/self-authoring');
+            for (const skill of analysis.new_skills_needed) {
+              try { await authorSkill(agentId!, skill.description); } catch { /* best effort */ }
+            }
+          }
+        } catch (err: any) {
+          logger.warn('Background tool/skill authoring failed', { error: err.message, agentId });
+        }
+      })();
 
     } catch (err: any) {
       logger.error('Agent update failed', { error: err.message });
