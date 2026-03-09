@@ -155,15 +155,12 @@ export function registerInlineActions(app: App): void {
     const messageTs = (body as any).message?.ts;
     if (!channelId || !messageTs) return;
 
-    // Post in thread asking for the new goal
     const threadTs = messageTs;
     await postMessage(channelId,
-      `Selected *${agent.avatar_emoji} ${agent.name}*\n\nCurrent config: *${agent.model}* model | *${agent.permission_level}* perms | ${agent.tools.length} tools | memory ${agent.memory_enabled ? 'on' : 'off'}\n\n_Reply in this thread with the updated goal._`,
+      `Selected *${agent.avatar_emoji} ${agent.name}*\n\nCurrent config: *${agent.model}* model | *${agent.permission_level}* perms | ${agent.tools.length} tools | memory ${agent.memory_enabled ? 'on' : 'off'} | channel <#${agent.channel_id}>\n\n_Reply in this thread with the updated goal._`,
       threadTs,
     );
 
-    // Update the conversation state to awaiting goal
-    // Delete old state, insert new
     await execute(
       `DELETE FROM pending_confirmations WHERE data->>'type' = 'conversation' AND data->>'threadTs' = $1 AND data->>'userId' = $2`,
       [threadTs, userId],
@@ -181,6 +178,122 @@ export function registerInlineActions(app: App): void {
       })],
     );
   });
+
+  // Handle channel selection for new agent
+  app.action('new_agent_channel_select', async ({ action, ack, body }) => {
+    await ack();
+    const selectedChannel = (action as any).selected_conversation;
+    if (!selectedChannel) return;
+
+    const channelId = body.channel?.id;
+    const messageTs = (body as any).message?.ts;
+    const userId = body.user.id;
+    if (!channelId || !messageTs) return;
+
+    // Find the pending confirmation for this thread
+    const row = await queryOne<{ id: string; data: any }>(
+      `SELECT id, data FROM pending_confirmations
+       WHERE data->>'type' = 'conversation'
+         AND data->>'step' = 'awaiting_channel'
+         AND data->>'threadTs' = $1
+         AND data->>'userId' = $2
+         AND expires_at > NOW()
+       LIMIT 1`,
+      [messageTs, userId],
+    );
+    if (!row) return;
+
+    const conv = row.data;
+    await execute(`DELETE FROM pending_confirmations WHERE id = $1`, [row.id]);
+
+    // Now create the confirmation with the selected channel
+    if (conv.flow === 'new_agent') {
+      await showNewAgentConfirmation(conv.analysis, conv.agentName, conv.goal, userId, channelId, messageTs, selectedChannel);
+    } else if (conv.flow === 'update_agent') {
+      await showUpdateAgentConfirmation(conv.analysis, conv.agentId, conv.goal, userId, channelId, messageTs, selectedChannel);
+    }
+  });
+
+  // Handle "Create new channel" button
+  app.action('new_agent_new_channel', async ({ ack, body }) => {
+    await ack();
+    const channelId = body.channel?.id;
+    const messageTs = (body as any).message?.ts;
+    const userId = body.user.id;
+    if (!channelId || !messageTs) return;
+
+    const row = await queryOne<{ id: string; data: any }>(
+      `SELECT id, data FROM pending_confirmations
+       WHERE data->>'type' = 'conversation'
+         AND data->>'step' = 'awaiting_channel'
+         AND data->>'threadTs' = $1
+         AND data->>'userId' = $2
+         AND expires_at > NOW()
+       LIMIT 1`,
+      [messageTs, userId],
+    );
+    if (!row) return;
+
+    const conv = row.data;
+    await execute(`DELETE FROM pending_confirmations WHERE id = $1`, [row.id]);
+
+    if (conv.flow === 'new_agent') {
+      await showNewAgentConfirmation(conv.analysis, conv.agentName, conv.goal, userId, channelId, messageTs, null);
+    }
+  });
+
+  // Handle channel selection for update-agent
+  app.action('update_agent_channel_select', async ({ action, ack, body }) => {
+    await ack();
+    const selectedChannel = (action as any).selected_conversation;
+    if (!selectedChannel) return;
+
+    const channelId = body.channel?.id;
+    const messageTs = (body as any).message?.ts;
+    const userId = body.user.id;
+    if (!channelId || !messageTs) return;
+
+    const row = await queryOne<{ id: string; data: any }>(
+      `SELECT id, data FROM pending_confirmations
+       WHERE data->>'type' = 'conversation'
+         AND data->>'step' = 'awaiting_channel'
+         AND data->>'threadTs' = $1
+         AND data->>'userId' = $2
+         AND expires_at > NOW()
+       LIMIT 1`,
+      [messageTs, userId],
+    );
+    if (!row) return;
+
+    const conv = row.data;
+    await execute(`DELETE FROM pending_confirmations WHERE id = $1`, [row.id]);
+    await showUpdateAgentConfirmation(conv.analysis, conv.agentId, conv.goal, userId, channelId, messageTs, selectedChannel);
+  });
+
+  // Handle "Keep current channel" button for update-agent
+  app.action('update_agent_keep_channel', async ({ ack, body }) => {
+    await ack();
+    const channelId = body.channel?.id;
+    const messageTs = (body as any).message?.ts;
+    const userId = body.user.id;
+    if (!channelId || !messageTs) return;
+
+    const row = await queryOne<{ id: string; data: any }>(
+      `SELECT id, data FROM pending_confirmations
+       WHERE data->>'type' = 'conversation'
+         AND data->>'step' = 'awaiting_channel'
+         AND data->>'threadTs' = $1
+         AND data->>'userId' = $2
+         AND expires_at > NOW()
+       LIMIT 1`,
+      [messageTs, userId],
+    );
+    if (!row) return;
+
+    const conv = row.data;
+    await execute(`DELETE FROM pending_confirmations WHERE id = $1`, [row.id]);
+    await showUpdateAgentConfirmation(conv.analysis, conv.agentId, conv.goal, userId, channelId, messageTs, null);
+  });
 }
 
 // Handle thread replies for conversational flows
@@ -190,7 +303,6 @@ export async function handleConversationReply(
   threadTs: string,
   text: string,
 ): Promise<boolean> {
-  // Look up any pending conversation for this thread
   const row = await queryOne<{ id: string; data: any }>(
     `SELECT id, data FROM pending_confirmations
      WHERE data->>'type' = 'conversation'
@@ -208,7 +320,6 @@ export async function handleConversationReply(
   const goal = text.trim();
   if (!goal) return false;
 
-  // Delete the conversation state
   await execute(`DELETE FROM pending_confirmations WHERE id = $1`, [row.id]);
 
   if (conv.flow === 'new_agent') {
@@ -225,47 +336,93 @@ async function handleNewAgentGoal(goal: string, userId: string, channelId: strin
 
   try {
     const analysis = await analyzeGoal(goal);
-    logger.info('Goal analysis complete, preparing confirmation', { agentName: analysis.agent_name, userId });
+    logger.info('Goal analysis complete, preparing channel choice', { agentName: analysis.agent_name, userId });
 
     let agentName = analysis.agent_name;
     if (await getAgentByName(agentName)) {
       agentName = `${agentName}-${Date.now().toString(36).slice(-4)}`;
     }
 
-    const confirmId = uuid();
+    // Ask: new channel or existing?
     await execute(
       `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
-      [confirmId, JSON.stringify({ analysis, name: agentName, goal, userId })],
+      [uuid(), JSON.stringify({
+        type: 'conversation',
+        step: 'awaiting_channel',
+        flow: 'new_agent',
+        analysis,
+        agentName,
+        goal,
+        userId,
+        channelId,
+        threadTs,
+      })],
     );
 
-    const configSummary = buildConfigSummary(agentName, analysis, goal);
     await postBlocks(channelId, [
-      { type: 'header', text: { type: 'plain_text', text: `New Agent: ${agentName}` } },
-      { type: 'section', text: { type: 'mrkdwn', text: configSummary } },
-      { type: 'divider' },
+      {
+        type: 'section',
+        text: { type: 'mrkdwn', text: `:white_check_mark: Agent *${agentName}* configured!\n\nWhere should this agent live?` },
+      },
       {
         type: 'actions',
         elements: [
           {
-            type: 'button',
-            text: { type: 'plain_text', text: ':white_check_mark: Confirm & Create' },
-            style: 'primary',
-            action_id: 'confirm_new_agent',
-            value: confirmId,
+            type: 'conversations_select',
+            action_id: 'new_agent_channel_select',
+            placeholder: { type: 'plain_text', text: 'Use existing channel...' },
+            filter: { include: ['public', 'private'], exclude_bot_users: true },
           },
           {
             type: 'button',
-            text: { type: 'plain_text', text: ':x: Cancel' },
-            action_id: 'cancel_new_agent',
-            value: confirmId,
+            text: { type: 'plain_text', text: ':heavy_plus_sign: Create new channel' },
+            action_id: 'new_agent_new_channel',
           },
         ],
       },
-    ], `Agent configuration ready for ${agentName}`, threadTs);
+    ], 'Choose a channel for the agent', threadTs);
   } catch (err: any) {
     logger.error('Agent creation flow failed', { error: err.message, stack: err.stack, userId });
     await postMessage(channelId, `:x: Failed to analyze goal: ${err.message}`, threadTs);
   }
+}
+
+async function showNewAgentConfirmation(
+  analysis: any, agentName: string, goal: string, userId: string,
+  channelId: string, threadTs: string, selectedChannel: string | null,
+): Promise<void> {
+  const confirmId = uuid();
+  const channelLabel = selectedChannel ? `<#${selectedChannel}>` : `#agent-${agentName}` + ' (new)';
+
+  await execute(
+    `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
+    [confirmId, JSON.stringify({ analysis, name: agentName, goal, userId, existingChannelId: selectedChannel })],
+  );
+
+  const configSummary = buildConfigSummary(agentName, analysis, goal);
+  await postBlocks(channelId, [
+    { type: 'header', text: { type: 'plain_text', text: `New Agent: ${agentName}` } },
+    { type: 'section', text: { type: 'mrkdwn', text: `*Channel:* ${channelLabel}\n${configSummary}` } },
+    { type: 'divider' },
+    {
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: ':white_check_mark: Confirm & Create' },
+          style: 'primary',
+          action_id: 'confirm_new_agent',
+          value: confirmId,
+        },
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: ':x: Cancel' },
+          action_id: 'cancel_new_agent',
+          value: confirmId,
+        },
+      ],
+    },
+  ], `Agent configuration ready for ${agentName}`, threadTs);
 }
 
 async function handleUpdateAgentGoal(agentId: string, newGoal: string, userId: string, channelId: string, threadTs: string): Promise<void> {
@@ -279,41 +436,92 @@ async function handleUpdateAgentGoal(agentId: string, newGoal: string, userId: s
 
   try {
     const analysis = await analyzeGoal(newGoal, agent.system_prompt);
-    const confirmId = uuid();
 
+    // Ask about channel change
     await execute(
       `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
-      [confirmId, JSON.stringify({ analysis, name: agent.name, goal: newGoal, userId, agentId })],
+      [uuid(), JSON.stringify({
+        type: 'conversation',
+        step: 'awaiting_channel',
+        flow: 'update_agent',
+        analysis,
+        agentId,
+        goal: newGoal,
+        userId,
+        channelId,
+        threadTs,
+      })],
     );
 
-    const configSummary = buildConfigSummary(agent.name, analysis, newGoal, agent);
     await postBlocks(channelId, [
-      { type: 'header', text: { type: 'plain_text', text: `Update: ${agent.name}` } },
-      { type: 'section', text: { type: 'mrkdwn', text: configSummary } },
-      { type: 'divider' },
+      {
+        type: 'section',
+        text: { type: 'mrkdwn', text: `:white_check_mark: Updated config ready for *${agent.name}*!\n\nCurrently in <#${agent.channel_id}>. Want to change the channel?` },
+      },
       {
         type: 'actions',
         elements: [
           {
-            type: 'button',
-            text: { type: 'plain_text', text: ':white_check_mark: Confirm & Update' },
-            style: 'primary',
-            action_id: 'confirm_update_agent',
-            value: confirmId,
+            type: 'conversations_select',
+            action_id: 'update_agent_channel_select',
+            placeholder: { type: 'plain_text', text: 'Move to different channel...' },
+            filter: { include: ['public', 'private'], exclude_bot_users: true },
           },
           {
             type: 'button',
-            text: { type: 'plain_text', text: ':x: Cancel' },
-            action_id: 'cancel_update_agent',
-            value: confirmId,
+            text: { type: 'plain_text', text: ':thumbsup: Keep current channel' },
+            action_id: 'update_agent_keep_channel',
           },
         ],
       },
-    ], `Update configuration ready for ${agent.name}`, threadTs);
+    ], 'Choose channel for updated agent', threadTs);
   } catch (err: any) {
     logger.error('Update goal analysis failed', { error: err.message, agentId, userId });
     await postMessage(channelId, `:x: Failed to analyze updated goal: ${err.message}`, threadTs);
   }
+}
+
+async function showUpdateAgentConfirmation(
+  analysis: any, agentId: string, newGoal: string, userId: string,
+  channelId: string, threadTs: string, newChannelId: string | null,
+): Promise<void> {
+  const agent = await getAgent(agentId);
+  if (!agent) return;
+
+  const confirmId = uuid();
+  const channelNote = newChannelId && newChannelId !== agent.channel_id
+    ? `\n*Channel:* <#${agent.channel_id}> → <#${newChannelId}>`
+    : '';
+
+  await execute(
+    `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
+    [confirmId, JSON.stringify({ analysis, name: agent.name, goal: newGoal, userId, agentId, newChannelId })],
+  );
+
+  const configSummary = buildConfigSummary(agent.name, analysis, newGoal, agent);
+  await postBlocks(channelId, [
+    { type: 'header', text: { type: 'plain_text', text: `Update: ${agent.name}` } },
+    { type: 'section', text: { type: 'mrkdwn', text: `${channelNote}${channelNote ? '\n' : ''}${configSummary}` } },
+    { type: 'divider' },
+    {
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: ':white_check_mark: Confirm & Update' },
+          style: 'primary',
+          action_id: 'confirm_update_agent',
+          value: confirmId,
+        },
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: ':x: Cancel' },
+          action_id: 'cancel_update_agent',
+          value: confirmId,
+        },
+      ],
+    },
+  ], `Update configuration ready for ${agent.name}`, threadTs);
 }
 
 // ── Modal View Submission Handlers (no-ops for backward compat) ──
@@ -342,15 +550,16 @@ export function registerConfirmationActions(app: App): void {
     }
 
     try {
-      const { analysis, name, goal, userId } = row.data;
+      const { analysis, name, goal, userId, existingChannelId } = row.data;
 
       await replyToAction(body, ':gear: Creating agent...');
 
-      const channelId = await createChannel(name);
+      // Use existing channel or create new one
+      const agentChannelId = existingChannelId || await createChannel(name);
 
       const agent = await createAgent({
         name,
-        channelId,
+        channelId: agentChannelId,
         systemPrompt: analysis.system_prompt,
         tools: analysis.tools,
         model: analysis.model,
@@ -405,8 +614,8 @@ export function registerConfirmationActions(app: App): void {
         createdItems.length > 0 ? `*Auto-created:* ${createdItems.join(', ')}` : '',
       ].filter(Boolean);
 
-      await postMessage(channelId, lines.join('\n'));
-      await replyToAction(body, `:white_check_mark: Agent *${agent.name}* created! Channel: <#${channelId}>`);
+      await postMessage(agentChannelId, lines.join('\n'));
+      await replyToAction(body, `:white_check_mark: Agent *${agent.name}* created! Channel: <#${agentChannelId}>`);
 
     } catch (err: any) {
       logger.error('Agent creation failed', { error: err.message });
@@ -433,13 +642,13 @@ export function registerConfirmationActions(app: App): void {
     }
 
     try {
-      const { analysis, agentId, userId } = row.data;
+      const { analysis, agentId, userId, newChannelId } = row.data;
       const agent = await getAgent(agentId!);
       if (!agent) throw new Error('Agent not found');
 
       await replyToAction(body, ':gear: Updating agent...');
 
-      await updateAgent(agentId!, {
+      const updates: any = {
         system_prompt: analysis.system_prompt,
         tools: analysis.tools,
         model: analysis.model,
@@ -447,7 +656,14 @@ export function registerConfirmationActions(app: App): void {
         memory_enabled: analysis.memory_enabled,
         respond_to_all_messages: analysis.respond_to_all_messages,
         relevance_keywords: analysis.relevance_keywords,
-      }, userId);
+      };
+
+      // Update channel if changed
+      if (newChannelId && newChannelId !== agent.channel_id) {
+        updates.channel_id = newChannelId;
+      }
+
+      await updateAgent(agentId!, updates, userId);
 
       for (const skillName of analysis.skills) {
         try { await attachSkillToAgent(agentId!, skillName, 'read', userId); } catch { /* may exist */ }
@@ -477,11 +693,17 @@ export function registerConfirmationActions(app: App): void {
         }
       }
 
-      await postMessage(agent.channel_id,
+      const effectiveChannelId = newChannelId && newChannelId !== agent.channel_id ? newChannelId : agent.channel_id;
+      const channelChangeNote = newChannelId && newChannelId !== agent.channel_id
+        ? `\n*Channel:* moved to <#${newChannelId}>`
+        : '';
+
+      await postMessage(effectiveChannelId,
         `:arrows_counterclockwise: Agent *${agent.name}* updated by <@${userId}>\n\n` +
         `*Model:* ${analysis.model} | *Permissions:* ${analysis.permission_level} | *Memory:* ${analysis.memory_enabled ? 'on' : 'off'}\n` +
         `*Responds to:* ${analysis.respond_to_all_messages ? 'all messages' : 'relevant messages + @mentions'}\n` +
-        `*Tools:* ${analysis.tools.join(', ')}\n` +
+        `*Tools:* ${analysis.tools.join(', ')}` +
+        channelChangeNote + '\n' +
         `_${analysis.summary}_`
       );
       await replyToAction(body, `:white_check_mark: Agent *${agent.name}* updated!`);
