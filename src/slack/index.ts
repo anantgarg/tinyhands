@@ -1,6 +1,6 @@
 import { App, LogLevel } from '@slack/bolt';
 import { config } from '../config';
-import { registerCommands, registerModalHandlers, registerConfirmationActions } from './commands';
+import { registerCommands, registerModalHandlers, registerConfirmationActions, registerInlineActions } from './commands';
 import { registerEvents } from './events';
 import { registerActions } from './actions';
 import { logger } from '../utils/logger';
@@ -18,6 +18,7 @@ export function createSlackApp(): App {
   registerCommands(app);
   registerModalHandlers(app);
   registerConfirmationActions(app);
+  registerInlineActions(app);
   registerEvents(app);
   registerActions(app);
 

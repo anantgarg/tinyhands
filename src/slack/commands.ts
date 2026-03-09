@@ -2,7 +2,7 @@ import type { App } from '@slack/bolt';
 import { v4 as uuid } from 'uuid';
 import { createAgent, listAgents, getAgent, getAgentByName, updateAgent } from '../modules/agents';
 import { initSuperadmin, canModifyAgent } from '../modules/access-control';
-import { createChannel, postMessage, openModal } from './index';
+import { createChannel, postMessage, postBlocks, getSlackApp } from './index';
 import { analyzeGoal } from '../modules/agents/goal-analyzer';
 import { attachSkillToAgent } from '../modules/skills';
 import { createTrigger } from '../modules/triggers';
@@ -10,44 +10,37 @@ import { logger } from '../utils/logger';
 import { execute, queryOne } from '../db';
 
 export function registerCommands(app: App): void {
-  // /new-agent — Open agent creation modal (just asks for goal)
+  // /new-agent — Start conversational agent creation
   app.command('/new-agent', async ({ command, ack }) => {
     await ack();
     await initSuperadmin(command.user_id);
 
-    await openModal(command.trigger_id, {
-      type: 'modal',
-      callback_id: 'new_agent_modal',
-      title: { type: 'plain_text', text: 'Create New Agent' },
-      submit: { type: 'plain_text', text: 'Create Agent' },
-      close: { type: 'plain_text', text: 'Cancel' },
-      blocks: [
-        {
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: 'Describe what you want this agent to do. Everything else — name, tools, skills, triggers, model, permissions — will be auto-configured.',
-          },
+    const ts = await postBlocks(command.channel_id, [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: ':robot_face: *Let\'s create a new agent!*\n\nDescribe what you want this agent to do. Everything else — name, tools, skills, triggers, model, permissions — will be auto-configured.\n\n_Reply in this thread with the goal._',
         },
-        {
-          type: 'input',
-          block_id: 'agent_goal',
-          element: {
-            type: 'plain_text_input',
-            action_id: 'goal_input',
-            multiline: true,
-            placeholder: {
-              type: 'plain_text',
-              text: 'e.g. "Triage Zendesk tickets, classify P0-P3, route to the right team. Trigger on new tickets."',
-            },
-          },
-          label: { type: 'plain_text', text: 'What should this agent do?' },
-        },
-      ],
-    });
+      },
+    ], 'New agent — describe what it should do');
+
+    if (ts) {
+      await execute(
+        `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
+        [uuid(), JSON.stringify({
+          type: 'conversation',
+          step: 'awaiting_goal',
+          flow: 'new_agent',
+          userId: command.user_id,
+          channelId: command.channel_id,
+          threadTs: ts,
+        })],
+      );
+    }
   });
 
-  // /update-agent — Select agent then provide updated goal
+  // /update-agent — Start conversational agent update
   app.command('/update-agent', async ({ command, ack }) => {
     await ack();
     const userId = command.user_id;
@@ -60,38 +53,42 @@ export function registerCommands(app: App): void {
 
     const editableAgents: typeof agents = [];
     for (const a of agents) {
-      if (await canModifyAgent(a.id, userId)) {
-        editableAgents.push(a);
-      }
+      if (await canModifyAgent(a.id, userId)) editableAgents.push(a);
     }
     if (editableAgents.length === 0) {
       await postMessage(command.channel_id, 'You don\'t have permission to update any agents.');
       return;
     }
 
-    await openModal(command.trigger_id, {
-      type: 'modal',
-      callback_id: 'update_agent_select_modal',
-      title: { type: 'plain_text', text: 'Update Agent' },
-      submit: { type: 'plain_text', text: 'Next' },
-      close: { type: 'plain_text', text: 'Cancel' },
-      blocks: [
-        {
-          type: 'input',
-          block_id: 'agent_select',
-          element: {
-            type: 'static_select',
-            action_id: 'agent_choice',
-            placeholder: { type: 'plain_text', text: 'Choose an agent...' },
-            options: editableAgents.map(a => ({
-              text: { type: 'plain_text' as const, text: `${a.avatar_emoji} ${a.name}` },
-              value: a.id,
-            })),
-          },
-          label: { type: 'plain_text', text: 'Which agent to update?' },
+    const ts = await postBlocks(command.channel_id, [
+      {
+        type: 'section',
+        text: { type: 'mrkdwn', text: ':arrows_counterclockwise: *Which agent do you want to update?*' },
+        accessory: {
+          type: 'static_select',
+          action_id: 'update_agent_select',
+          placeholder: { type: 'plain_text', text: 'Choose an agent...' },
+          options: editableAgents.map(a => ({
+            text: { type: 'plain_text' as const, text: `${a.avatar_emoji} ${a.name}` },
+            value: a.id,
+          })),
         },
-      ],
-    });
+      },
+    ], 'Select an agent to update');
+
+    if (ts) {
+      await execute(
+        `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
+        [uuid(), JSON.stringify({
+          type: 'conversation',
+          step: 'awaiting_agent_select',
+          flow: 'update_agent',
+          userId,
+          channelId: command.channel_id,
+          threadTs: ts,
+        })],
+      );
+    }
   });
 
   // /agents — List all agents
@@ -136,208 +133,202 @@ export function registerCommands(app: App): void {
   });
 }
 
-// ── Modal View Submission Handlers ──
+// ── Conversational Handlers ──
 
-export function registerModalHandlers(app: App): void {
-  // ── New Agent: Goal → Analyze → Confirm ──
-  app.view('new_agent_modal', async ({ ack, view, body }) => {
+export function registerInlineActions(app: App): void {
+  // Handle agent selection dropdown for /update-agent
+  app.action('update_agent_select', async ({ action, ack, body }) => {
+    await ack();
+    const agentId = (action as any).selected_option?.value;
+    if (!agentId) return;
+
     const userId = body.user.id;
-    const goal = view.state.values.agent_goal.goal_input.value?.trim() || '';
-
-    if (!goal) {
-      await ack({ response_action: 'errors', errors: { agent_goal: 'Please describe what the agent should do' } });
+    const agent = await getAgent(agentId);
+    if (!agent) return;
+    if (!(await canModifyAgent(agentId, userId))) {
+      const channelId = body.channel?.id;
+      if (channelId) await postMessage(channelId, ':x: You don\'t have permission to update this agent.');
       return;
     }
 
-    // Show analyzing state
-    await ack({
-      response_action: 'update',
-      view: buildLoadingModal('new_agent_analyzing', 'Analyzing...', 'Deeply analyzing your goal to configure the best agent setup. This takes a few seconds...'),
-    });
+    const channelId = body.channel?.id;
+    const messageTs = (body as any).message?.ts;
+    if (!channelId || !messageTs) return;
 
-    try {
-      const analysis = await analyzeGoal(goal);
-      logger.info('Goal analysis complete, preparing confirmation', { agentName: analysis.agent_name, userId });
-      const confirmId = uuid();
+    // Post in thread asking for the new goal
+    const threadTs = messageTs;
+    await postMessage(channelId,
+      `Selected *${agent.avatar_emoji} ${agent.name}*\n\nCurrent config: *${agent.model}* model | *${agent.permission_level}* perms | ${agent.tools.length} tools | memory ${agent.memory_enabled ? 'on' : 'off'}\n\n_Reply in this thread with the updated goal._`,
+      threadTs,
+    );
 
-      // Validate name uniqueness, auto-suffix if needed
-      let agentName = analysis.agent_name;
-      if (await getAgentByName(agentName)) {
-        agentName = `${agentName}-${Date.now().toString(36).slice(-4)}`;
-      }
-
-      await execute(
-        `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
-        [confirmId, JSON.stringify({ analysis, name: agentName, goal, userId })],
-      );
-
-      // Post confirmation to DM since we can't update the modal after async work
-      const { getSlackApp } = await import('./index');
-      const client = getSlackApp().client;
-      logger.info('Opening DM for confirmation', { userId });
-      const dm = await client.conversations.open({ users: userId });
-      if (!dm.channel?.id) throw new Error('Could not open DM');
-
-      const configSummary = buildConfigSummary(agentName, analysis, goal);
-
-      await client.chat.postMessage({
-        channel: dm.channel.id,
-        text: `Agent configuration ready for *${agentName}*`,
-        blocks: [
-          { type: 'header', text: { type: 'plain_text', text: `New Agent: ${agentName}` } },
-          { type: 'section', text: { type: 'mrkdwn', text: configSummary } },
-          { type: 'divider' },
-          {
-            type: 'actions',
-            elements: [
-              {
-                type: 'button',
-                text: { type: 'plain_text', text: ':white_check_mark: Confirm & Create' },
-                style: 'primary',
-                action_id: 'confirm_new_agent',
-                value: confirmId,
-              },
-              {
-                type: 'button',
-                text: { type: 'plain_text', text: ':x: Cancel' },
-                action_id: 'cancel_new_agent',
-                value: confirmId,
-              },
-            ],
-          },
-        ],
-      });
-      logger.info('Confirmation DM sent', { agentName, userId, channel: dm.channel.id });
-    } catch (err: any) {
-      logger.error('Agent creation flow failed', { error: err.message, stack: err.stack, userId });
-      try {
-        const { getSlackApp } = await import('./index');
-        const client = getSlackApp().client;
-        const dm = await client.conversations.open({ users: userId });
-        if (dm.channel?.id) {
-          await postMessage(dm.channel.id, `:x: Failed to analyze goal: ${err.message}`);
-        }
-      } catch { /* best effort */ }
-    }
+    // Update the conversation state to awaiting goal
+    // Delete old state, insert new
+    await execute(
+      `DELETE FROM pending_confirmations WHERE data->>'type' = 'conversation' AND data->>'threadTs' = $1 AND data->>'userId' = $2`,
+      [threadTs, userId],
+    );
+    await execute(
+      `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
+      [uuid(), JSON.stringify({
+        type: 'conversation',
+        step: 'awaiting_goal',
+        flow: 'update_agent',
+        agentId,
+        userId,
+        channelId,
+        threadTs,
+      })],
+    );
   });
+}
 
-  // ── Update Agent: Select → Goal → Analyze → Confirm ──
-  app.view('update_agent_select_modal', async ({ ack, view, body }) => {
-    const userId = body.user.id;
-    const agentId = view.state.values.agent_select.agent_choice.selected_option?.value;
-    if (!agentId) { await ack({ response_action: 'errors', errors: { agent_select: 'Please select an agent' } }); return; }
+// Handle thread replies for conversational flows
+export async function handleConversationReply(
+  userId: string,
+  channelId: string,
+  threadTs: string,
+  text: string,
+): Promise<boolean> {
+  // Look up any pending conversation for this thread
+  const row = await queryOne<{ id: string; data: any }>(
+    `SELECT id, data FROM pending_confirmations
+     WHERE data->>'type' = 'conversation'
+       AND data->>'step' = 'awaiting_goal'
+       AND data->>'threadTs' = $1
+       AND data->>'userId' = $2
+       AND expires_at > NOW()
+     LIMIT 1`,
+    [threadTs, userId],
+  );
 
-    const agent = await getAgent(agentId);
-    if (!agent) { await ack({ response_action: 'errors', errors: { agent_select: 'Agent not found' } }); return; }
-    if (!(await canModifyAgent(agentId, userId))) { await ack({ response_action: 'errors', errors: { agent_select: 'Permission denied' } }); return; }
+  if (!row) return false;
 
-    await ack({
-      response_action: 'update',
-      view: {
-        type: 'modal',
-        callback_id: 'update_agent_goal_modal',
-        private_metadata: agentId,
-        title: { type: 'plain_text', text: `Update ${agent.name}` },
-        submit: { type: 'plain_text', text: 'Update Agent' },
-        close: { type: 'plain_text', text: 'Cancel' },
-        blocks: [
+  const conv = row.data;
+  const goal = text.trim();
+  if (!goal) return false;
+
+  // Delete the conversation state
+  await execute(`DELETE FROM pending_confirmations WHERE id = $1`, [row.id]);
+
+  if (conv.flow === 'new_agent') {
+    await handleNewAgentGoal(goal, userId, channelId, threadTs);
+  } else if (conv.flow === 'update_agent') {
+    await handleUpdateAgentGoal(conv.agentId, goal, userId, channelId, threadTs);
+  }
+
+  return true;
+}
+
+async function handleNewAgentGoal(goal: string, userId: string, channelId: string, threadTs: string): Promise<void> {
+  await postMessage(channelId, ':gear: Analyzing your goal and configuring the best agent setup...', threadTs);
+
+  try {
+    const analysis = await analyzeGoal(goal);
+    logger.info('Goal analysis complete, preparing confirmation', { agentName: analysis.agent_name, userId });
+
+    let agentName = analysis.agent_name;
+    if (await getAgentByName(agentName)) {
+      agentName = `${agentName}-${Date.now().toString(36).slice(-4)}`;
+    }
+
+    const confirmId = uuid();
+    await execute(
+      `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
+      [confirmId, JSON.stringify({ analysis, name: agentName, goal, userId })],
+    );
+
+    const configSummary = buildConfigSummary(agentName, analysis, goal);
+    await postBlocks(channelId, [
+      { type: 'header', text: { type: 'plain_text', text: `New Agent: ${agentName}` } },
+      { type: 'section', text: { type: 'mrkdwn', text: configSummary } },
+      { type: 'divider' },
+      {
+        type: 'actions',
+        elements: [
           {
-            type: 'context',
-            elements: [{ type: 'mrkdwn', text: `Current: *${agent.model}* model | *${agent.permission_level}* perms | ${agent.tools.length} tools | memory ${agent.memory_enabled ? 'on' : 'off'}` }],
+            type: 'button',
+            text: { type: 'plain_text', text: ':white_check_mark: Confirm & Create' },
+            style: 'primary',
+            action_id: 'confirm_new_agent',
+            value: confirmId,
           },
           {
-            type: 'input',
-            block_id: 'new_goal',
-            element: {
-              type: 'plain_text_input',
-              action_id: 'goal_input',
-              multiline: true,
-              placeholder: { type: 'plain_text', text: 'Describe the updated goal. All configuration will be re-derived from this.' },
-            },
-            label: { type: 'plain_text', text: 'What should this agent do now?' },
+            type: 'button',
+            text: { type: 'plain_text', text: ':x: Cancel' },
+            action_id: 'cancel_new_agent',
+            value: confirmId,
           },
         ],
       },
-    });
-  });
+    ], `Agent configuration ready for ${agentName}`, threadTs);
+  } catch (err: any) {
+    logger.error('Agent creation flow failed', { error: err.message, stack: err.stack, userId });
+    await postMessage(channelId, `:x: Failed to analyze goal: ${err.message}`, threadTs);
+  }
+}
 
-  app.view('update_agent_goal_modal', async ({ ack, view, body }) => {
-    const userId = body.user.id;
-    const agentId = view.private_metadata;
-    const newGoal = view.state.values.new_goal.goal_input.value?.trim() || '';
-    if (!newGoal) { await ack({ response_action: 'errors', errors: { new_goal: 'Goal is required' } }); return; }
+async function handleUpdateAgentGoal(agentId: string, newGoal: string, userId: string, channelId: string, threadTs: string): Promise<void> {
+  const agent = await getAgent(agentId);
+  if (!agent) {
+    await postMessage(channelId, ':x: Agent not found.', threadTs);
+    return;
+  }
 
-    const agent = await getAgent(agentId);
-    if (!agent || !(await canModifyAgent(agentId, userId))) {
-      await ack({ response_action: 'errors', errors: { new_goal: 'Agent not found or permission denied' } });
-      return;
-    }
+  await postMessage(channelId, `:gear: Analyzing updated goal for *${agent.name}*...`, threadTs);
 
-    await ack({
-      response_action: 'update',
-      view: buildLoadingModal('update_agent_processing', 'Analyzing...', 'Analyzing updated goal and reconfiguring agent...'),
-    });
+  try {
+    const analysis = await analyzeGoal(newGoal, agent.system_prompt);
+    const confirmId = uuid();
 
-    try {
-      const analysis = await analyzeGoal(newGoal, agent.system_prompt);
-      const confirmId = uuid();
+    await execute(
+      `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
+      [confirmId, JSON.stringify({ analysis, name: agent.name, goal: newGoal, userId, agentId })],
+    );
 
-      await execute(
-        `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
-        [confirmId, JSON.stringify({ analysis, name: agent.name, goal: newGoal, userId, agentId })],
-      );
-
-      const { getSlackApp } = await import('./index');
-      const client = getSlackApp().client;
-      const dm = await client.conversations.open({ users: userId });
-      if (!dm.channel?.id) throw new Error('Could not open DM');
-
-      const configSummary = buildConfigSummary(agent.name, analysis, newGoal, agent);
-
-      await client.chat.postMessage({
-        channel: dm.channel.id,
-        text: `Update configuration ready for *${agent.name}*`,
-        blocks: [
-          { type: 'header', text: { type: 'plain_text', text: `Update: ${agent.name}` } },
-          { type: 'section', text: { type: 'mrkdwn', text: configSummary } },
-          { type: 'divider' },
+    const configSummary = buildConfigSummary(agent.name, analysis, newGoal, agent);
+    await postBlocks(channelId, [
+      { type: 'header', text: { type: 'plain_text', text: `Update: ${agent.name}` } },
+      { type: 'section', text: { type: 'mrkdwn', text: configSummary } },
+      { type: 'divider' },
+      {
+        type: 'actions',
+        elements: [
           {
-            type: 'actions',
-            elements: [
-              {
-                type: 'button',
-                text: { type: 'plain_text', text: ':white_check_mark: Confirm & Update' },
-                style: 'primary',
-                action_id: 'confirm_update_agent',
-                value: confirmId,
-              },
-              {
-                type: 'button',
-                text: { type: 'plain_text', text: ':x: Cancel' },
-                action_id: 'cancel_update_agent',
-                value: confirmId,
-              },
-            ],
+            type: 'button',
+            text: { type: 'plain_text', text: ':white_check_mark: Confirm & Update' },
+            style: 'primary',
+            action_id: 'confirm_update_agent',
+            value: confirmId,
+          },
+          {
+            type: 'button',
+            text: { type: 'plain_text', text: ':x: Cancel' },
+            action_id: 'cancel_update_agent',
+            value: confirmId,
           },
         ],
-      });
-    } catch (err: any) {
-      logger.error('Update goal analysis failed', { error: err.message, agentId, userId });
-      try {
-        await postMessage(agent.channel_id, `:x: Failed to analyze updated goal: ${err.message}`);
-      } catch { /* best effort */ }
-    }
-  });
+      },
+    ], `Update configuration ready for ${agent.name}`, threadTs);
+  } catch (err: any) {
+    logger.error('Update goal analysis failed', { error: err.message, agentId, userId });
+    await postMessage(channelId, `:x: Failed to analyze updated goal: ${err.message}`, threadTs);
+  }
+}
 
-  // No-op handlers for loading modals
+// ── Modal View Submission Handlers (no-ops for backward compat) ──
+
+export function registerModalHandlers(app: App): void {
+  app.view('new_agent_modal', async ({ ack }) => { await ack(); });
   app.view('new_agent_analyzing', async ({ ack }) => { await ack(); });
+  app.view('update_agent_select_modal', async ({ ack }) => { await ack(); });
+  app.view('update_agent_goal_modal', async ({ ack }) => { await ack(); });
   app.view('update_agent_processing', async ({ ack }) => { await ack(); });
 }
 
 // ── Confirmation Action Handlers ──
 
 export function registerConfirmationActions(app: App): void {
-  // Confirm new agent creation
   app.action('confirm_new_agent', async ({ action, ack, body }) => {
     await ack();
     const confirmId = (action as any).value;
@@ -370,13 +361,11 @@ export function registerConfirmationActions(app: App): void {
         createdBy: userId,
       });
 
-      // Attach skills
       for (const skillName of analysis.skills) {
         try { await attachSkillToAgent(agent.id, skillName, 'read', userId); }
         catch (err: any) { logger.warn('Skill attach failed', { skillName, error: err.message }); }
       }
 
-      // Create triggers
       for (const trigger of analysis.triggers) {
         try {
           await createTrigger({
@@ -388,7 +377,6 @@ export function registerConfirmationActions(app: App): void {
         } catch (err: any) { logger.warn('Trigger creation failed', { trigger: trigger.type, error: err.message }); }
       }
 
-      // Auto-create custom tools/skills
       const createdItems: string[] = [];
       if (analysis.new_tools_needed?.length > 0) {
         const { authorTool } = await import('../modules/self-authoring');
@@ -405,7 +393,6 @@ export function registerConfirmationActions(app: App): void {
         }
       }
 
-      // Announce in agent channel
       const lines = [
         `:white_check_mark: Agent *${agent.name}* is live! Created by <@${userId}>`,
         '',
@@ -433,7 +420,6 @@ export function registerConfirmationActions(app: App): void {
     await replyToAction(body, ':x: Agent creation cancelled.');
   });
 
-  // Confirm agent update
   app.action('confirm_update_agent', async ({ action, ack, body }) => {
     await ack();
     const confirmId = (action as any).value;
@@ -463,12 +449,10 @@ export function registerConfirmationActions(app: App): void {
         relevance_keywords: analysis.relevance_keywords,
       }, userId);
 
-      // Attach new skills
       for (const skillName of analysis.skills) {
         try { await attachSkillToAgent(agentId!, skillName, 'read', userId); } catch { /* may exist */ }
       }
 
-      // Create new triggers
       for (const trigger of analysis.triggers) {
         try {
           await createTrigger({
@@ -480,7 +464,6 @@ export function registerConfirmationActions(app: App): void {
         } catch (err: any) { logger.warn('Trigger creation failed during update', { error: err.message }); }
       }
 
-      // Auto-create tools/skills
       if (analysis.new_tools_needed?.length > 0) {
         const { authorTool } = await import('../modules/self-authoring');
         for (const tool of analysis.new_tools_needed) {
@@ -517,17 +500,6 @@ export function registerConfirmationActions(app: App): void {
 }
 
 // ── Helpers ──
-
-function buildLoadingModal(callbackId: string, title: string, message: string) {
-  return {
-    type: 'modal' as const,
-    callback_id: callbackId,
-    title: { type: 'plain_text' as const, text: title },
-    blocks: [
-      { type: 'section', text: { type: 'mrkdwn', text: `:gear: ${message}` } },
-    ],
-  };
-}
 
 function buildConfigSummary(name: string, analysis: any, goal: string, existingAgent?: any): string {
   const lines: string[] = [];
@@ -589,7 +561,7 @@ async function replyToAction(body: any, text: string): Promise<void> {
   }
 }
 
-// ── Legacy exports (no-op, wizard removed) ──
+// ── Legacy exports (no-op) ──
 
 export async function handleWizardMessage(_u: string, _c: string, _t: string): Promise<string | null> { return null; }
 export function isInWizard(_u: string, _c: string): boolean { return false; }

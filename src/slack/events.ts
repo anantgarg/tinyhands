@@ -2,7 +2,7 @@ import type { App } from '@slack/bolt';
 import { v4 as uuid } from 'uuid';
 import { getAgentByChannel } from '../modules/agents';
 import { enqueueRun } from '../queue';
-import { handleWizardMessage, isInWizard } from './commands';
+import { handleWizardMessage, isInWizard, handleConversationReply } from './commands';
 import { postMessage, postBlocks, publishHomeTab, updateMessage, getSlackApp } from './index';
 import { detectCritique } from '../modules/self-improvement';
 import { parseModelOverride, stripModelOverride } from '../modules/model-selection';
@@ -35,6 +35,12 @@ export function registerEvents(app: App): void {
         await postMessage(channelId, response, threadTs);
       }
       return;
+    }
+
+    // Check if this is a thread reply to a conversational /new-agent or /update-agent flow
+    if (msg.thread_ts) {
+      const handled = await handleConversationReply(userId, channelId, msg.thread_ts, text);
+      if (handled) return;
     }
 
     // Check if message is in an agent channel
