@@ -81,8 +81,11 @@ export async function handleDeploy(payload: any): Promise<DeployResult> {
     execSync('npm run migrate', { cwd: process.cwd(), timeout: 60000 });
 
     // 5. Restart PM2 (restart instead of reload to avoid duplicate Socket Mode connections)
+    // Restart workers/sync first, then listener last — otherwise the listener restart
+    // kills this process before the other restarts can execute
     logger.info('Deploy: restarting PM2');
-    execSync('pm2 restart ecosystem.config.js', { cwd: process.cwd(), timeout: 30000 });
+    execSync('pm2 restart tinyjobs-worker-1 tinyjobs-worker-2 tinyjobs-worker-3 tinyjobs-sync', { cwd: process.cwd(), timeout: 30000 });
+    execSync('pm2 restart tinyjobs-listener', { cwd: process.cwd(), timeout: 30000 });
 
     const restartTime = Date.now() - startTime;
 
