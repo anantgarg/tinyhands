@@ -180,10 +180,11 @@ export function registerInlineActions(app: App): void {
     );
   });
 
-  // Handle channel selection for new agent (multi-select)
+  // Handle channel selection for new agent
   app.action('new_agent_channel_select', async ({ action, ack, body }) => {
     await ack();
-    const selectedChannels: string[] = (action as any).selected_conversations || [];
+    const selected = (action as any).selected_conversation;
+    const selectedChannels: string[] = selected ? [selected] : [];
     if (selectedChannels.length === 0) return;
 
     const channelId = body.channel?.id;
@@ -246,7 +247,8 @@ export function registerInlineActions(app: App): void {
   // Handle channel selection for update-agent (multi-select)
   app.action('update_agent_channel_select', async ({ action, ack, body }) => {
     await ack();
-    const selectedChannels: string[] = (action as any).selected_conversations || [];
+    const selected = (action as any).selected_conversation;
+    const selectedChannels: string[] = selected ? [selected] : [];
     if (selectedChannels.length === 0) return;
 
     const channelId = body.channel?.id;
@@ -369,15 +371,15 @@ async function handleNewAgentGoal(goal: string, userId: string, channelId: strin
     await postBlocks(channelId, [
       {
         type: 'section',
-        text: { type: 'mrkdwn', text: `:white_check_mark: Agent *${agentName}* configured!\n\nWhere should this agent live? You can select multiple channels.` },
+        text: { type: 'mrkdwn', text: `:white_check_mark: Agent *${agentName}* configured!\n\nWhere should this agent live?` },
       },
       {
         type: 'actions',
         elements: [
           {
-            type: 'multi_conversations_select',
+            type: 'conversations_select',
             action_id: 'new_agent_channel_select',
-            placeholder: { type: 'plain_text', text: 'Select channels...' },
+            placeholder: { type: 'plain_text', text: 'Select a channel...' },
             filter: { include: ['public', 'private'], exclude_bot_users: true },
           },
           {
@@ -548,11 +550,11 @@ async function handleUpdateAgentGoal(agentId: string, newGoal: string, userId: s
         type: 'actions',
         elements: [
           {
-            type: 'multi_conversations_select',
+            type: 'conversations_select',
             action_id: 'update_agent_channel_select',
-            placeholder: { type: 'plain_text', text: 'Select channels...' },
+            placeholder: { type: 'plain_text', text: 'Select a channel...' },
             filter: { include: ['public', 'private'], exclude_bot_users: true },
-            initial_conversations: currentChannels,
+            initial_conversation: currentChannels[0],
           },
           {
             type: 'button',
