@@ -137,7 +137,7 @@ export async function getContainerLogs(container: Dockerode.Container): Promise<
     // Fallback: not multiplexed (e.g. TTY mode), strip null bytes
     return buf.toString('utf8').replace(/\0/g, '');
   }
-  return Buffer.concat(chunks).toString('utf8');
+  return Buffer.concat(chunks).toString('utf8').replace(/\0/g, '');
 }
 
 export async function removeContainer(container: Dockerode.Container): Promise<void> {

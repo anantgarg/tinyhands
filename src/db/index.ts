@@ -55,13 +55,18 @@ export async function execute(sql: string, params?: any[]): Promise<{ rowCount: 
 
 export async function withTransaction<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
   const client = await getPool().connect();
+  // Wrap client.query to sanitize params, preventing null byte errors
+  const originalQuery = client.query.bind(client);
+  (client as any).query = (sql: any, params?: any) => {
+    return originalQuery(sql, sanitizeParams(params));
+  };
   try {
-    await client.query('BEGIN');
+    await originalQuery('BEGIN');
     const result = await fn(client);
-    await client.query('COMMIT');
+    await originalQuery('COMMIT');
     return result;
   } catch (err) {
-    await client.query('ROLLBACK');
+    await originalQuery('ROLLBACK');
     throw err;
   } finally {
     client.release();
