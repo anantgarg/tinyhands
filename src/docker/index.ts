@@ -67,7 +67,7 @@ export async function createAgentContainer(cfg: ContainerConfig): Promise<Docker
       Tmpfs: securityConfig.readOnlyRootfs ? { '/tmp': 'rw,noexec,nosuid,size=64m' } : undefined,
       SecurityOpt: securityConfig.noNewPrivileges ? ['no-new-privileges:true'] : [],
       CapDrop: securityConfig.dropCapabilities,
-      AutoRemove: true,
+      AutoRemove: false,
     },
     Labels: {
       'tinyjobs.agent_id': cfg.agent.id,

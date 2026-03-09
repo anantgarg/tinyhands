@@ -295,10 +295,12 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
 
     const durationMs = Date.now() - startTime;
 
-    // Read structured output from container (written to /workspace/.tinyjobs-output.json)
+    // Read structured output from container logs (before removing container)
     let outputData = { output: '', inputTokens: 0, outputTokens: 0, toolCallsCount: 0 };
     try {
-      const logs = await import('../../docker').then(d => d.getContainerLogs(container));
+      const dockerModule = await import('../../docker');
+      const logs = await dockerModule.getContainerLogs(container);
+      await dockerModule.removeContainer(container);
       // Parse structured output from logs
       const jsonMatch = logs.match(/TINYJOBS_OUTPUT:({.*})/);
       if (jsonMatch) {
@@ -318,6 +320,8 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
     } catch {
       outputData.inputTokens = contextTokens + Math.ceil(taskPrompt.length / 4);
       outputData.outputTokens = 200;
+      // Best-effort container cleanup
+      import('../../docker').then(d => d.removeContainer(container)).catch(() => {});
     }
 
     const cost = estimateCost(model, outputData.inputTokens, outputData.outputTokens);
@@ -325,7 +329,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
 
     const status: RunStatus = exitCode === 0 ? 'completed' : 'failed';
     const output = exitCode === 0
-      ? outputData.output || 'Task completed successfully'
+      ? outputData.output.trim() || 'Task completed successfully'
       : `Task failed with exit code ${exitCode}: ${outputData.output}`;
 
     await updateRunRecord(runRecord.id, {
