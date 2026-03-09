@@ -930,7 +930,8 @@ export function registerConfirmationActions(app: App): void {
 function buildConfigSummary(name: string, analysis: any, goal: string, existingAgent?: any): string {
   const lines: string[] = [];
 
-  lines.push(`*Goal:* ${goal.slice(0, 300)}${goal.length > 300 ? '...' : ''}`);
+  const displayGoal = existingAgent && analysis.summary ? analysis.summary : goal;
+  lines.push(`*Goal:* ${displayGoal.slice(0, 300)}${displayGoal.length > 300 ? '...' : ''}`);
   lines.push('');
   lines.push(`*Name:* ${name}`);
   lines.push(`*Model:* \`${analysis.model}\``);
