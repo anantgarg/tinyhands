@@ -287,18 +287,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
 
     const timeoutMs = config.docker.defaultJobTimeoutMs;
 
-    // SDK Watchdog: if no events for 60s, kill container
-    let lastEventTime = Date.now();
-    const watchdog = setInterval(() => {
-      if (Date.now() - lastEventTime > 60000) {
-        logger.warn('SDK watchdog triggered — no events for 60s', { traceId: data.traceId });
-        container.kill().catch(() => {});
-        clearInterval(watchdog);
-      }
-    }, 10000);
-
     const { exitCode } = await waitForContainer(container, timeoutMs);
-    clearInterval(watchdog);
 
     const durationMs = Date.now() - startTime;
 
