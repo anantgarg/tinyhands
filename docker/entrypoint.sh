@@ -128,7 +128,11 @@ fi
 START_TIME=$(date +%s%N)
 
 FULL_PROMPT="${TASK_PROMPT}${TOOL_CONTEXT}"
-OUTPUT=$(echo "${FULL_PROMPT}" | claude "${CLAUDE_ARGS[@]}" 2>/dev/null || echo "Agent execution error")
+STDERR_FILE="/tmp/claude-stderr.log"
+OUTPUT=$(echo "${FULL_PROMPT}" | claude "${CLAUDE_ARGS[@]}" 2>"$STDERR_FILE" || echo "Agent execution error")
+if [ -s "$STDERR_FILE" ]; then
+  echo "[claude-stderr] $(head -c 2000 "$STDERR_FILE")" >&2
+fi
 
 END_TIME=$(date +%s%N)
 DURATION_MS=$(( (END_TIME - START_TIME) / 1000000 ))
