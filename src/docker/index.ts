@@ -121,7 +121,23 @@ export async function getContainerLogs(container: Dockerode.Container): Promise<
     stderr: true,
     follow: false,
   });
-  return logs.toString('utf8');
+  const buf = Buffer.isBuffer(logs) ? logs : Buffer.from(logs);
+  // Demultiplex Docker stream: each frame has an 8-byte header
+  // [stream_type(1), 0x00, 0x00, 0x00, size(4 BE)] followed by payload
+  const chunks: Buffer[] = [];
+  let offset = 0;
+  while (offset + 8 <= buf.length) {
+    const size = buf.readUInt32BE(offset + 4);
+    offset += 8;
+    if (offset + size > buf.length) break;
+    chunks.push(buf.subarray(offset, offset + size));
+    offset += size;
+  }
+  if (chunks.length === 0) {
+    // Fallback: not multiplexed (e.g. TTY mode), strip null bytes
+    return buf.toString('utf8').replace(/\0/g, '');
+  }
+  return Buffer.concat(chunks).toString('utf8');
 }
 
 export async function removeContainer(container: Dockerode.Container): Promise<void> {

@@ -32,18 +32,24 @@ function getPool(): Pool {
   return pool;
 }
 
+// Strip null bytes from string params — Postgres TEXT columns reject 0x00
+function sanitizeParams(params?: any[]): any[] | undefined {
+  if (!params) return params;
+  return params.map(p => (typeof p === 'string' ? p.replace(/\0/g, '') : p));
+}
+
 export async function query<T = any>(sql: string, params?: any[]): Promise<T[]> {
-  const result = await getPool().query(sql, params);
+  const result = await getPool().query(sql, sanitizeParams(params));
   return result.rows as T[];
 }
 
 export async function queryOne<T = any>(sql: string, params?: any[]): Promise<T | undefined> {
-  const result = await getPool().query(sql, params);
+  const result = await getPool().query(sql, sanitizeParams(params));
   return result.rows[0] as T | undefined;
 }
 
 export async function execute(sql: string, params?: any[]): Promise<{ rowCount: number }> {
-  const result = await getPool().query(sql, params);
+  const result = await getPool().query(sql, sanitizeParams(params));
   return { rowCount: result.rowCount || 0 };
 }
 
