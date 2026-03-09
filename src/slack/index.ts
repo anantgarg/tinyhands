@@ -60,6 +60,15 @@ export async function updateMessage(
   });
 }
 
+export async function deleteMessage(channelId: string, ts: string): Promise<void> {
+  const client = getSlackApp().client;
+  try {
+    await client.chat.delete({ channel: channelId, ts });
+  } catch (err: any) {
+    if (err.data?.error !== 'message_not_found') throw err;
+  }
+}
+
 export async function createChannel(name: string): Promise<string> {
   const client = getSlackApp().client;
   const result = await client.conversations.create({

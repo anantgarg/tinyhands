@@ -918,17 +918,27 @@ function buildConfigSummary(name: string, analysis: any, goal: string, existingA
   lines.push(`*Model:* \`${analysis.model}\``);
   lines.push(`*Permissions:* \`${analysis.permission_level}\``);
   lines.push(`*Memory:* ${analysis.memory_enabled ? 'enabled' : 'disabled'}`);
-  lines.push(`*Responds to:* ${analysis.respond_to_all_messages ? 'all messages' : 'relevant messages + @mentions'}`);
   lines.push(`*Tools:* ${analysis.tools.join(', ')}`);
 
   if (analysis.skills?.length > 0) {
     lines.push(`*Skills:* ${analysis.skills.join(', ')}`);
   }
-  if (analysis.triggers?.length > 0) {
-    lines.push(`*Triggers:* ${(analysis.triggers as any[]).map((t: any) => `${t.type}: ${t.description}`).join(', ')}`);
+
+  // When will it respond section
+  lines.push('');
+  lines.push('*:zap: When will it respond:*');
+  if (analysis.respond_to_all_messages) {
+    lines.push('• Responds to *every message* in the channel');
+  } else {
+    lines.push('• Responds when *@mentioned*');
+    if (analysis.relevance_keywords?.length > 0) {
+      lines.push(`• Auto-responds to messages containing: ${analysis.relevance_keywords.slice(0, 10).join(', ')}`);
+    }
   }
-  if (analysis.relevance_keywords?.length > 0) {
-    lines.push(`*Keywords:* ${analysis.relevance_keywords.slice(0, 10).join(', ')}`);
+  if (analysis.triggers?.length > 0) {
+    for (const t of analysis.triggers as any[]) {
+      lines.push(`• Triggered by *${t.type}*: ${t.description}`);
+    }
   }
   if (analysis.new_tools_needed?.length > 0) {
     lines.push(`*Will create tools:* ${analysis.new_tools_needed.map((t: any) => t.name).join(', ')}`);
