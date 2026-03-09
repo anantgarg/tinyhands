@@ -46,7 +46,7 @@ export function getDockerSecurityConfig(level: PermissionLevel): DockerSecurityC
     readOnlyRootfs: false,
     noNewPrivileges: true,
     dropCapabilities: ['ALL'],
-    memoryLimit: 2 * 1024 * 1024 * 1024, // 2GB
+    memoryLimit: 4 * 1024 * 1024 * 1024, // 4GB
     cpuLimit: 1,
   };
 
