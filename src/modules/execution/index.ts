@@ -300,9 +300,10 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
     try {
       const dockerModule = await import('../../docker');
       const logs = await dockerModule.getContainerLogs(container);
+      logger.info('Container logs', { traceId: data.traceId, logsLength: logs.length, logsTail: logs.slice(-500) });
       await dockerModule.removeContainer(container);
-      // Parse structured output from logs
-      const jsonMatch = logs.match(/TINYJOBS_OUTPUT:({.*})/);
+      // Parse structured output from logs — use 's' flag so '.' matches newlines in large outputs
+      const jsonMatch = logs.match(/TINYJOBS_OUTPUT:({.*})/s);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[1]);
         outputData = {
@@ -313,11 +314,13 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
         };
       } else {
         // Fallback: estimate from task
+        logger.warn('No TINYJOBS_OUTPUT found in logs', { traceId: data.traceId, logsTail: logs.slice(-500) });
         outputData.inputTokens = contextTokens + Math.ceil(taskPrompt.length / 4);
         outputData.outputTokens = Math.ceil(logs.length / 4);
         outputData.output = logs.slice(-2000); // Last 2KB of logs
       }
-    } catch {
+    } catch (logErr) {
+      logger.error('Failed to read container logs', { traceId: data.traceId, error: String(logErr) });
       outputData.inputTokens = contextTokens + Math.ceil(taskPrompt.length / 4);
       outputData.outputTokens = 200;
       // Best-effort container cleanup
