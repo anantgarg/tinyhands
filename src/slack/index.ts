@@ -119,3 +119,21 @@ export async function publishHomeTab(userId: string, blocks: any[]): Promise<voi
     },
   });
 }
+
+export async function sendDM(userId: string, text: string, blocks?: any[]): Promise<string | undefined> {
+  const client = getSlackApp().client;
+  const conv = await client.conversations.open({ users: userId });
+  const dmChannelId = conv.channel?.id;
+  if (!dmChannelId) return undefined;
+
+  const result = await client.chat.postMessage({
+    channel: dmChannelId,
+    text,
+    blocks,
+  });
+  return result.ts;
+}
+
+export async function sendDMBlocks(userId: string, blocks: any[], text: string): Promise<string | undefined> {
+  return sendDM(userId, text, blocks);
+}
