@@ -54,6 +54,7 @@ export function bufferEvent(
   if (!buffers.has(key)) {
     const statusTs = pendingStatusMessages.get(key);
     pendingStatusMessages.delete(key);
+    logger.info('Buffer created', { key, statusTs: statusTs || 'none', pendingKeys: [...pendingStatusMessages.keys()].join(',') });
     buffers.set(key, {
       events: [],
       timer: null,
@@ -158,7 +159,12 @@ async function handleDoneEvent(buffer: ChannelBuffer, finalOutput: string): Prom
   try {
     // Delete the "Thinking..." status message and post a fresh one with username/icon
     if (buffer.statusMessageTs) {
-      await deleteMessage(buffer.channelId, buffer.statusMessageTs).catch(() => {});
+      logger.info('Deleting status message', { channelId: buffer.channelId, statusTs: buffer.statusMessageTs });
+      await deleteMessage(buffer.channelId, buffer.statusMessageTs).catch((err) => {
+        logger.warn('Failed to delete status message', { error: String(err), channelId: buffer.channelId, statusTs: buffer.statusMessageTs });
+      });
+    } else {
+      logger.info('No status message to delete', { channelId: buffer.channelId, threadTs: buffer.threadTs });
     }
 
     await postMessage(
