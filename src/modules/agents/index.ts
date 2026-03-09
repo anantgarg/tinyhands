@@ -113,6 +113,10 @@ export async function updateAgent(id: string, updates: Partial<Agent>, changedBy
     fields.push(`name = $${paramIdx++}`);
     values.push(updates.name);
   }
+  if (updates.channel_id !== undefined) {
+    fields.push(`channel_id = $${paramIdx++}`);
+    values.push(updates.channel_id);
+  }
   if (updates.system_prompt !== undefined) {
     fields.push(`system_prompt = $${paramIdx++}`);
     values.push(updates.system_prompt);
