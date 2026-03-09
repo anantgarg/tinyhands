@@ -145,7 +145,8 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
       'Thinking...',
       agent.name,
       agent.avatar_emoji,
-      suppressThinking
+      suppressThinking,
+      data.agentId,
     );
   }
 
@@ -363,7 +364,9 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
         'done',
         output,
         agent.name,
-        agent.avatar_emoji
+        agent.avatar_emoji,
+        false,
+        data.agentId,
       );
     }
 
@@ -402,7 +405,9 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
           ? `Task timed out after ${(durationMs / 1000).toFixed(0)}s`
           : err.message,
         agent.name,
-        agent.avatar_emoji
+        agent.avatar_emoji,
+        false,
+        data.agentId,
       );
     }
 

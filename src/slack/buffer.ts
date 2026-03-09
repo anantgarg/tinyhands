@@ -1,4 +1,4 @@
-import { postMessage, updateMessage } from './index';
+import { postMessage, updateMessage, deleteMessage } from './index';
 import { markdownToSlack } from '../utils/slack-format';
 import { logger } from '../utils/logger';
 
@@ -29,8 +29,8 @@ const BUFFER_INTERVAL_MS = 1500;
 const MAX_THINKING_CHARS = 200;
 const MAX_TOOL_RESULT_CHARS = 150;
 
-export function setStatusMessageTs(channelId: string, threadTs: string, ts: string): void {
-  const key = `${channelId}:${threadTs}`;
+export function setStatusMessageTs(channelId: string, threadTs: string, ts: string, agentId?: string): void {
+  const key = agentId ? `${channelId}:${threadTs}:${agentId}` : `${channelId}:${threadTs}`;
   pendingStatusMessages.set(key, ts);
   // Also set on buffer if it already exists
   const buffer = buffers.get(key);
@@ -46,9 +46,10 @@ export function bufferEvent(
   content: string,
   username?: string,
   iconEmoji?: string,
-  suppressThinking: boolean = false
+  suppressThinking: boolean = false,
+  agentId?: string,
 ): void {
-  const key = `${channelId}:${threadTs}`;
+  const key = agentId ? `${channelId}:${threadTs}:${agentId}` : `${channelId}:${threadTs}`;
 
   if (!buffers.has(key)) {
     const statusTs = pendingStatusMessages.get(key);
@@ -155,26 +156,20 @@ async function flushBuffer(key: string): Promise<void> {
 
 async function handleDoneEvent(buffer: ChannelBuffer, finalOutput: string): Promise<void> {
   try {
-    // Update the temporary status message with the final output (replaces "Thinking...")
+    // Delete the "Thinking..." status message and post a fresh one with username/icon
     if (buffer.statusMessageTs) {
-      await updateMessage(
-        buffer.channelId,
-        buffer.statusMessageTs,
-        finalOutput.slice(0, 3000) // Slack message limit
-      );
-    } else {
-      // No status message to update, post as new message
-      await postMessage(
-        buffer.channelId,
-        finalOutput,
-        buffer.threadTs,
-        buffer.username,
-        buffer.iconEmoji
-      );
+      deleteMessage(buffer.channelId, buffer.statusMessageTs).catch(() => {});
     }
+
+    await postMessage(
+      buffer.channelId,
+      finalOutput.slice(0, 3000), // Slack message limit
+      buffer.threadTs,
+      buffer.username,
+      buffer.iconEmoji
+    );
   } catch (err: any) {
     logger.warn('Failed to post done event', { error: err.message });
-    // Fallback: post as new message
     try {
       await postMessage(
         buffer.channelId,
@@ -201,8 +196,8 @@ export function setMainMessageTs(channelId: string, threadTs: string, ts: string
   }
 }
 
-export function cleanupBuffer(channelId: string, threadTs: string): void {
-  const key = `${channelId}:${threadTs}`;
+export function cleanupBuffer(channelId: string, threadTs: string, agentId?: string): void {
+  const key = agentId ? `${channelId}:${threadTs}:${agentId}` : `${channelId}:${threadTs}`;
   const buffer = buffers.get(key);
   if (buffer?.timer) {
     clearTimeout(buffer.timer);

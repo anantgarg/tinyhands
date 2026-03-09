@@ -94,6 +94,11 @@ export async function getAgentByChannel(channelId: string): Promise<Agent | null
   return deserializeAgent(row);
 }
 
+export async function getAgentsByChannel(channelId: string): Promise<Agent[]> {
+  const rows = await query('SELECT * FROM agents WHERE channel_id = $1 AND status != $2', [channelId, 'archived']);
+  return rows.map(deserializeAgent);
+}
+
 export async function listAgents(): Promise<Agent[]> {
   const rows = await query('SELECT * FROM agents WHERE status != $1 ORDER BY created_at DESC', ['archived']);
   return rows.map(deserializeAgent);
