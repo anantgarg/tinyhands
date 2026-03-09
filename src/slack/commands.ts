@@ -158,7 +158,7 @@ export function registerInlineActions(app: App): void {
 
     const threadTs = (body as any).message?.thread_ts || messageTs;
     await postMessage(channelId,
-      `Selected *${agent.avatar_emoji} ${agent.name}*\n\nCurrent config: *${agent.model}* model | *${agent.permission_level}* perms | ${agent.tools.length} tools | memory ${agent.memory_enabled ? 'on' : 'off'} | channel <#${agent.channel_id}>\n\n_Reply in this thread with the updated goal._`,
+      `Selected *${agent.avatar_emoji} ${agent.name}*\n\nCurrent config: *${agent.model}* model | *${agent.permission_level}* perms | ${agent.tools.length} tools | memory ${agent.memory_enabled ? 'on' : 'off'} | channel <#${agent.channel_id}>\n\n_Reply in this thread with what you want to change — describe a problem, a tweak, or a full new goal._`,
       threadTs,
     );
 
