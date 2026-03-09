@@ -195,8 +195,8 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
   // Build task prompt with system prompt + context
   const systemPrompt = agent.system_prompt || '';
   const taskPrompt = contextBlock
-    ? `${data.input}\n${contextBlock}`
-    : data.input;
+    ? `<user_message>\n${data.input}\n</user_message>\n${contextBlock}`
+    : `<user_message>\n${data.input}\n</user_message>`;
 
   // Get permission config
   const disallowedTools = getDisallowedTools(agent.permission_level);
