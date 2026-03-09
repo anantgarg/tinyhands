@@ -11,6 +11,7 @@ export interface Agent {
   id: string;
   name: string;
   channel_id: string;
+  channel_ids: string[];
   system_prompt: string;
   tools: string[];
   avatar_emoji: string;

@@ -99,9 +99,10 @@ export function registerCommands(app: App): void {
       await respond({ text: 'No agents created yet. Use `/new-agent` to create one.', response_type: 'ephemeral' });
       return;
     }
-    const lines = agents.map(a =>
-      `${a.avatar_emoji} *${a.name}* — <#${a.channel_id}> — ${a.status} — ${a.model} — ${a.permission_level}`
-    );
+    const lines = agents.map(a => {
+      const channels = (a.channel_ids?.length > 0 ? a.channel_ids : [a.channel_id]).map(c => `<#${c}>`).join(', ');
+      return `${a.avatar_emoji} *${a.name}* — ${channels} — ${a.status} — ${a.model} — ${a.permission_level}`;
+    });
     await respond({ text: `*Active Agents (${agents.length}):*\n\n${lines.join('\n')}`, response_type: 'ephemeral' });
   });
 
@@ -155,7 +156,7 @@ export function registerInlineActions(app: App): void {
     const messageTs = (body as any).message?.ts;
     if (!channelId || !messageTs) return;
 
-    const threadTs = messageTs;
+    const threadTs = (body as any).message?.thread_ts || messageTs;
     await postMessage(channelId,
       `Selected *${agent.avatar_emoji} ${agent.name}*\n\nCurrent config: *${agent.model}* model | *${agent.permission_level}* perms | ${agent.tools.length} tools | memory ${agent.memory_enabled ? 'on' : 'off'} | channel <#${agent.channel_id}>\n\n_Reply in this thread with the updated goal._`,
       threadTs,
@@ -179,16 +180,16 @@ export function registerInlineActions(app: App): void {
     );
   });
 
-  // Handle channel selection for new agent
+  // Handle channel selection for new agent (multi-select)
   app.action('new_agent_channel_select', async ({ action, ack, body }) => {
     await ack();
-    const selectedChannel = (action as any).selected_conversation;
-    if (!selectedChannel) return;
+    const selectedChannels: string[] = (action as any).selected_conversations || [];
+    if (selectedChannels.length === 0) return;
 
     const channelId = body.channel?.id;
-    const messageTs = (body as any).message?.ts;
+    const threadTs = (body as any).message?.thread_ts || (body as any).message?.ts;
     const userId = body.user.id;
-    if (!channelId || !messageTs) return;
+    if (!channelId || !threadTs) return;
 
     // Find the pending confirmation for this thread
     const row = await queryOne<{ id: string; data: any }>(
@@ -199,18 +200,18 @@ export function registerInlineActions(app: App): void {
          AND data->>'userId' = $2
          AND expires_at > NOW()
        LIMIT 1`,
-      [messageTs, userId],
+      [threadTs, userId],
     );
     if (!row) return;
 
     const conv = row.data;
     await execute(`DELETE FROM pending_confirmations WHERE id = $1`, [row.id]);
 
-    // Now create the confirmation with the selected channel
+    // Now create the confirmation with the selected channels
     if (conv.flow === 'new_agent') {
-      await showNewAgentConfirmation(conv.analysis, conv.agentName, conv.goal, userId, channelId, messageTs, selectedChannel);
+      await showNewAgentConfirmation(conv.analysis, conv.agentName, conv.goal, userId, channelId, threadTs, selectedChannels);
     } else if (conv.flow === 'update_agent') {
-      await showUpdateAgentConfirmation(conv.analysis, conv.agentId, conv.goal, userId, channelId, messageTs, selectedChannel);
+      await showUpdateAgentConfirmation(conv.analysis, conv.agentId, conv.goal, userId, channelId, threadTs, selectedChannels);
     }
   });
 
@@ -218,9 +219,9 @@ export function registerInlineActions(app: App): void {
   app.action('new_agent_new_channel', async ({ ack, body }) => {
     await ack();
     const channelId = body.channel?.id;
-    const messageTs = (body as any).message?.ts;
+    const threadTs = (body as any).message?.thread_ts || (body as any).message?.ts;
     const userId = body.user.id;
-    if (!channelId || !messageTs) return;
+    if (!channelId || !threadTs) return;
 
     const row = await queryOne<{ id: string; data: any }>(
       `SELECT id, data FROM pending_confirmations
@@ -230,7 +231,7 @@ export function registerInlineActions(app: App): void {
          AND data->>'userId' = $2
          AND expires_at > NOW()
        LIMIT 1`,
-      [messageTs, userId],
+      [threadTs, userId],
     );
     if (!row) return;
 
@@ -238,20 +239,20 @@ export function registerInlineActions(app: App): void {
     await execute(`DELETE FROM pending_confirmations WHERE id = $1`, [row.id]);
 
     if (conv.flow === 'new_agent') {
-      await showNewAgentConfirmation(conv.analysis, conv.agentName, conv.goal, userId, channelId, messageTs, null);
+      await showNewAgentConfirmation(conv.analysis, conv.agentName, conv.goal, userId, channelId, threadTs, null);
     }
   });
 
-  // Handle channel selection for update-agent
+  // Handle channel selection for update-agent (multi-select)
   app.action('update_agent_channel_select', async ({ action, ack, body }) => {
     await ack();
-    const selectedChannel = (action as any).selected_conversation;
-    if (!selectedChannel) return;
+    const selectedChannels: string[] = (action as any).selected_conversations || [];
+    if (selectedChannels.length === 0) return;
 
     const channelId = body.channel?.id;
-    const messageTs = (body as any).message?.ts;
+    const threadTs = (body as any).message?.thread_ts || (body as any).message?.ts;
     const userId = body.user.id;
-    if (!channelId || !messageTs) return;
+    if (!channelId || !threadTs) return;
 
     const row = await queryOne<{ id: string; data: any }>(
       `SELECT id, data FROM pending_confirmations
@@ -261,22 +262,22 @@ export function registerInlineActions(app: App): void {
          AND data->>'userId' = $2
          AND expires_at > NOW()
        LIMIT 1`,
-      [messageTs, userId],
+      [threadTs, userId],
     );
     if (!row) return;
 
     const conv = row.data;
     await execute(`DELETE FROM pending_confirmations WHERE id = $1`, [row.id]);
-    await showUpdateAgentConfirmation(conv.analysis, conv.agentId, conv.goal, userId, channelId, messageTs, selectedChannel);
+    await showUpdateAgentConfirmation(conv.analysis, conv.agentId, conv.goal, userId, channelId, threadTs, selectedChannels);
   });
 
   // Handle "Keep current channel" button for update-agent
   app.action('update_agent_keep_channel', async ({ ack, body }) => {
     await ack();
     const channelId = body.channel?.id;
-    const messageTs = (body as any).message?.ts;
+    const threadTs = (body as any).message?.thread_ts || (body as any).message?.ts;
     const userId = body.user.id;
-    if (!channelId || !messageTs) return;
+    if (!channelId || !threadTs) return;
 
     const row = await queryOne<{ id: string; data: any }>(
       `SELECT id, data FROM pending_confirmations
@@ -286,13 +287,13 @@ export function registerInlineActions(app: App): void {
          AND data->>'userId' = $2
          AND expires_at > NOW()
        LIMIT 1`,
-      [messageTs, userId],
+      [threadTs, userId],
     );
     if (!row) return;
 
     const conv = row.data;
     await execute(`DELETE FROM pending_confirmations WHERE id = $1`, [row.id]);
-    await showUpdateAgentConfirmation(conv.analysis, conv.agentId, conv.goal, userId, channelId, messageTs, null);
+    await showUpdateAgentConfirmation(conv.analysis, conv.agentId, conv.goal, userId, channelId, threadTs, null);
   });
 }
 
@@ -368,15 +369,15 @@ async function handleNewAgentGoal(goal: string, userId: string, channelId: strin
     await postBlocks(channelId, [
       {
         type: 'section',
-        text: { type: 'mrkdwn', text: `:white_check_mark: Agent *${agentName}* configured!\n\nWhere should this agent live?` },
+        text: { type: 'mrkdwn', text: `:white_check_mark: Agent *${agentName}* configured!\n\nWhere should this agent live? You can select multiple channels.` },
       },
       {
         type: 'actions',
         elements: [
           {
-            type: 'conversations_select',
+            type: 'multi_conversations_select',
             action_id: 'new_agent_channel_select',
-            placeholder: { type: 'plain_text', text: 'Use existing channel...' },
+            placeholder: { type: 'plain_text', text: 'Select channels...' },
             filter: { include: ['public', 'private'], exclude_bot_users: true },
           },
           {
@@ -386,7 +387,7 @@ async function handleNewAgentGoal(goal: string, userId: string, channelId: strin
           },
         ],
       },
-    ], 'Choose a channel for the agent', threadTs);
+    ], 'Choose channels for the agent', threadTs);
   } catch (err: any) {
     logger.error('Agent creation flow failed', { error: err.message, stack: err.stack, userId });
     await postMessage(channelId, `:x: Failed to analyze goal: ${err.message}`, threadTs);
@@ -470,20 +471,22 @@ async function handleInfeasibleRequest(
 
 async function showNewAgentConfirmation(
   analysis: any, agentName: string, goal: string, userId: string,
-  channelId: string, threadTs: string, selectedChannel: string | null,
+  channelId: string, threadTs: string, selectedChannels: string[] | null,
 ): Promise<void> {
   const confirmId = uuid();
-  const channelLabel = selectedChannel ? `<#${selectedChannel}>` : `#agent-${agentName}` + ' (new)';
+  const channelLabel = selectedChannels?.length
+    ? selectedChannels.map(c => `<#${c}>`).join(', ')
+    : `#agent-${agentName}` + ' (new)';
 
   await execute(
     `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
-    [confirmId, JSON.stringify({ analysis, name: agentName, goal, userId, existingChannelId: selectedChannel })],
+    [confirmId, JSON.stringify({ analysis, name: agentName, goal, userId, existingChannelIds: selectedChannels })],
   );
 
   const configSummary = buildConfigSummary(agentName, analysis, goal);
   await postBlocks(channelId, [
     { type: 'header', text: { type: 'plain_text', text: `New Agent: ${agentName}` } },
-    { type: 'section', text: { type: 'mrkdwn', text: `*Channel:* ${channelLabel}\n${configSummary}` } },
+    { type: 'section', text: { type: 'mrkdwn', text: `*Channels:* ${channelLabel}\n${configSummary}` } },
     { type: 'divider' },
     {
       type: 'actions',
@@ -534,28 +537,31 @@ async function handleUpdateAgentGoal(agentId: string, newGoal: string, userId: s
       })],
     );
 
+    const currentChannels = agent.channel_ids?.length > 0 ? agent.channel_ids : [agent.channel_id];
+    const currentChannelLabels = currentChannels.map((c: string) => `<#${c}>`).join(', ');
     await postBlocks(channelId, [
       {
         type: 'section',
-        text: { type: 'mrkdwn', text: `:white_check_mark: Updated config ready for *${agent.name}*!\n\nCurrently in <#${agent.channel_id}>. Want to change the channel?` },
+        text: { type: 'mrkdwn', text: `:white_check_mark: Updated config ready for *${agent.name}*!\n\nCurrently in ${currentChannelLabels}. Want to change channels?` },
       },
       {
         type: 'actions',
         elements: [
           {
-            type: 'conversations_select',
+            type: 'multi_conversations_select',
             action_id: 'update_agent_channel_select',
-            placeholder: { type: 'plain_text', text: 'Move to different channel...' },
+            placeholder: { type: 'plain_text', text: 'Select channels...' },
             filter: { include: ['public', 'private'], exclude_bot_users: true },
+            initial_conversations: currentChannels,
           },
           {
             type: 'button',
-            text: { type: 'plain_text', text: ':thumbsup: Keep current channel' },
+            text: { type: 'plain_text', text: ':thumbsup: Keep current channels' },
             action_id: 'update_agent_keep_channel',
           },
         ],
       },
-    ], 'Choose channel for updated agent', threadTs);
+    ], 'Choose channels for updated agent', threadTs);
   } catch (err: any) {
     logger.error('Update goal analysis failed', { error: err.message, agentId, userId });
     await postMessage(channelId, `:x: Failed to analyze updated goal: ${err.message}`, threadTs);
@@ -564,19 +570,21 @@ async function handleUpdateAgentGoal(agentId: string, newGoal: string, userId: s
 
 async function showUpdateAgentConfirmation(
   analysis: any, agentId: string, newGoal: string, userId: string,
-  channelId: string, threadTs: string, newChannelId: string | null,
+  channelId: string, threadTs: string, newChannelIds: string[] | null,
 ): Promise<void> {
   const agent = await getAgent(agentId);
   if (!agent) return;
 
   const confirmId = uuid();
-  const channelNote = newChannelId && newChannelId !== agent.channel_id
-    ? `\n*Channel:* <#${agent.channel_id}> → <#${newChannelId}>`
+  const currentChannels = agent.channel_ids?.length > 0 ? agent.channel_ids : [agent.channel_id];
+  const channelsChanged = newChannelIds && JSON.stringify(newChannelIds.sort()) !== JSON.stringify(currentChannels.sort());
+  const channelNote = channelsChanged
+    ? `\n*Channels:* ${currentChannels.map(c => `<#${c}>`).join(', ')} → ${newChannelIds!.map(c => `<#${c}>`).join(', ')}`
     : '';
 
   await execute(
     `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
-    [confirmId, JSON.stringify({ analysis, name: agent.name, goal: newGoal, userId, agentId, newChannelId })],
+    [confirmId, JSON.stringify({ analysis, name: agent.name, goal: newGoal, userId, agentId, newChannelIds })],
   );
 
   const configSummary = buildConfigSummary(agent.name, analysis, newGoal, agent);
@@ -631,16 +639,17 @@ export function registerConfirmationActions(app: App): void {
     }
 
     try {
-      const { analysis, name, goal, userId, existingChannelId } = row.data;
+      const { analysis, name, goal, userId, existingChannelIds, existingChannelId } = row.data;
 
       await replyToAction(body, ':gear: Creating agent...');
 
-      // Use existing channel or create new one
-      const agentChannelId = existingChannelId || await createChannel(name);
+      // Use existing channels or create new one
+      const channelIds: string[] = existingChannelIds || (existingChannelId ? [existingChannelId] : [await createChannel(name)]);
 
       const agent = await createAgent({
         name,
-        channelId: agentChannelId,
+        channelId: channelIds[0],
+        channelIds,
         systemPrompt: analysis.system_prompt,
         tools: analysis.tools,
         model: analysis.model,
@@ -695,8 +704,10 @@ export function registerConfirmationActions(app: App): void {
         createdItems.length > 0 ? `*Auto-created:* ${createdItems.join(', ')}` : '',
       ].filter(Boolean);
 
-      await postMessage(agentChannelId, lines.join('\n'));
-      await replyToAction(body, `:white_check_mark: Agent *${agent.name}* created! Channel: <#${agentChannelId}>`);
+      // Post announcement in first channel
+      await postMessage(channelIds[0], lines.join('\n'));
+      const channelLabels = channelIds.map((c: string) => `<#${c}>`).join(', ');
+      await replyToAction(body, `:white_check_mark: Agent *${agent.name}* created! Channels: ${channelLabels}`);
 
     } catch (err: any) {
       logger.error('Agent creation failed', { error: err.message });
@@ -723,7 +734,7 @@ export function registerConfirmationActions(app: App): void {
     }
 
     try {
-      const { analysis, agentId, userId, newChannelId } = row.data;
+      const { analysis, agentId, userId, newChannelIds, newChannelId } = row.data;
       const agent = await getAgent(agentId!);
       if (!agent) throw new Error('Agent not found');
 
@@ -739,9 +750,13 @@ export function registerConfirmationActions(app: App): void {
         relevance_keywords: analysis.relevance_keywords,
       };
 
-      // Update channel if changed
-      if (newChannelId && newChannelId !== agent.channel_id) {
-        updates.channel_id = newChannelId;
+      // Update channels if changed
+      const effectiveChannelIds = newChannelIds || (newChannelId ? [newChannelId] : null);
+      if (effectiveChannelIds) {
+        const currentChannels = agent.channel_ids?.length > 0 ? agent.channel_ids : [agent.channel_id];
+        if (JSON.stringify(effectiveChannelIds.sort()) !== JSON.stringify(currentChannels.sort())) {
+          updates.channel_ids = effectiveChannelIds;
+        }
       }
 
       await updateAgent(agentId!, updates, userId);
@@ -774,12 +789,13 @@ export function registerConfirmationActions(app: App): void {
         }
       }
 
-      const effectiveChannelId = newChannelId && newChannelId !== agent.channel_id ? newChannelId : agent.channel_id;
-      const channelChangeNote = newChannelId && newChannelId !== agent.channel_id
-        ? `\n*Channel:* moved to <#${newChannelId}>`
+      const updatedAgent = await getAgent(agentId!);
+      const postToChannel = updatedAgent?.channel_ids?.[0] || updatedAgent?.channel_id || agent.channel_id;
+      const channelChangeNote = updates.channel_ids
+        ? `\n*Channels:* ${updates.channel_ids.map((c: string) => `<#${c}>`).join(', ')}`
         : '';
 
-      await postMessage(effectiveChannelId,
+      await postMessage(postToChannel,
         `:arrows_counterclockwise: Agent *${agent.name}* updated by <@${userId}>\n\n` +
         `*Model:* ${analysis.model} | *Permissions:* ${analysis.permission_level} | *Memory:* ${analysis.memory_enabled ? 'on' : 'off'}\n` +
         `*Responds to:* ${analysis.respond_to_all_messages ? 'all messages' : 'relevant messages + @mentions'}\n` +
