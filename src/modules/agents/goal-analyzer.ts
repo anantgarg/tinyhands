@@ -20,6 +20,8 @@ export interface GoalAnalysis {
   respond_to_all_messages: boolean;
   new_tools_needed: Array<{ name: string; description: string }>;
   new_skills_needed: Array<{ name: string; description: string }>;
+  feasible: boolean;
+  blockers: string[];
   summary: string;
 }
 
@@ -64,6 +66,8 @@ Return ONLY valid JSON matching this schema:
   "respond_to_all_messages": false,
   "new_tools_needed": [{"name": "kebab-case-name", "description": "detailed description of what this tool should do"}],
   "new_skills_needed": [{"name": "kebab-case-name", "description": "detailed description of what this skill template should do"}],
+  "feasible": true,
+  "blockers": [],
   "summary": "2-3 sentence explanation of the configuration and why each choice was made"
 }
 
@@ -77,7 +81,8 @@ IMPORTANT guidelines:
 - Include WebSearch, WebFetch for research-heavy agents
 - Use opus for complex multi-step reasoning, haiku for simple/fast classification, sonnet for general purpose
 - Enable memory for agents that build up context over time
-- If the goal requires capabilities that don't exist in available tools/skills, propose them in new_tools_needed/new_skills_needed with detailed descriptions`,
+- If the goal requires capabilities that don't exist in available tools/skills, propose them in new_tools_needed/new_skills_needed with detailed descriptions
+- FEASIBILITY: Set "feasible" to true if the agent can work with existing tools/skills OR with new ones that can be auto-created (simple scripts, API wrappers, data processing). Set "feasible" to false ONLY if the goal requires platform-level changes that can't be solved by tools/skills alone — e.g., new integrations with external services not yet supported, access to APIs we don't have credentials for, hardware capabilities, or architectural changes to the platform. When feasible is false, list specific blockers explaining what's missing and why it can't be auto-created.`,
     messages: [{
       role: 'user',
       content: existingPrompt
@@ -106,6 +111,8 @@ IMPORTANT guidelines:
   if (!analysis.relevance_keywords) analysis.relevance_keywords = [];
   if (!analysis.triggers) analysis.triggers = [];
   if (analysis.respond_to_all_messages === undefined) analysis.respond_to_all_messages = false;
+  if (analysis.feasible === undefined) analysis.feasible = true;
+  if (!analysis.blockers) analysis.blockers = [];
 
   logger.info('Goal analyzed', {
     goal: goal.slice(0, 100),

@@ -1,8 +1,8 @@
 import type { App } from '@slack/bolt';
 import { v4 as uuid } from 'uuid';
 import { createAgent, listAgents, getAgent, getAgentByName, updateAgent } from '../modules/agents';
-import { initSuperadmin, canModifyAgent } from '../modules/access-control';
-import { createChannel, postMessage, postBlocks, getSlackApp } from './index';
+import { initSuperadmin, canModifyAgent, listSuperadmins } from '../modules/access-control';
+import { createChannel, postMessage, postBlocks, getSlackApp, sendDMBlocks } from './index';
 import { analyzeGoal } from '../modules/agents/goal-analyzer';
 import { attachSkillToAgent } from '../modules/skills';
 import { createTrigger } from '../modules/triggers';
@@ -336,7 +336,13 @@ async function handleNewAgentGoal(goal: string, userId: string, channelId: strin
 
   try {
     const analysis = await analyzeGoal(goal);
-    logger.info('Goal analysis complete, preparing channel choice', { agentName: analysis.agent_name, userId });
+    logger.info('Goal analysis complete', { agentName: analysis.agent_name, feasible: analysis.feasible, userId });
+
+    // If not feasible, queue it and notify owner
+    if (!analysis.feasible) {
+      await handleInfeasibleRequest(analysis, goal, userId, channelId, threadTs);
+      return;
+    }
 
     let agentName = analysis.agent_name;
     if (await getAgentByName(agentName)) {
@@ -385,6 +391,81 @@ async function handleNewAgentGoal(goal: string, userId: string, channelId: strin
     logger.error('Agent creation flow failed', { error: err.message, stack: err.stack, userId });
     await postMessage(channelId, `:x: Failed to analyze goal: ${err.message}`, threadTs);
   }
+}
+
+async function handleInfeasibleRequest(
+  analysis: any, goal: string, userId: string, channelId: string, threadTs: string,
+): Promise<void> {
+  const requestId = uuid();
+  const blockerList = analysis.blockers.map((b: string) => `• ${b}`).join('\n');
+
+  // Store the full request with a long TTL (30 days)
+  await execute(
+    `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 days')`,
+    [requestId, JSON.stringify({
+      type: 'feature_request',
+      analysis,
+      goal,
+      requestedBy: userId,
+      requestedInChannel: channelId,
+      requestedAt: new Date().toISOString(),
+    })],
+  );
+
+  // Inform the requesting user
+  await postMessage(channelId,
+    `:clipboard: *Feature request queued!*\n\n` +
+    `The agent you described requires capabilities that aren't available yet:\n${blockerList}\n\n` +
+    `I've notified the team — we'll let you know once it's ready to be created.`,
+    threadTs,
+  );
+
+  // DM the owner (first superadmin)
+  const superadmins = await listSuperadmins();
+  if (superadmins.length > 0) {
+    const ownerId = superadmins[0].user_id;
+    await sendDMBlocks(ownerId, [
+      {
+        type: 'header',
+        text: { type: 'plain_text', text: ':inbox_tray: New Feature Request' },
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Requested by:* <@${userId}>\n*Goal:* ${goal.slice(0, 500)}\n\n*Blockers:*\n${blockerList}`,
+        },
+      },
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `*Suggested agent name:* \`${analysis.agent_name}\`\n*Model:* ${analysis.model} | *Permissions:* ${analysis.permission_level}\n*Summary:* ${analysis.summary}`,
+        },
+      },
+      { type: 'divider' },
+      {
+        type: 'actions',
+        elements: [
+          {
+            type: 'button',
+            text: { type: 'plain_text', text: ':arrows_counterclockwise: Retry Creation' },
+            style: 'primary',
+            action_id: 'retry_agent_creation',
+            value: requestId,
+          },
+          {
+            type: 'button',
+            text: { type: 'plain_text', text: ':wastebasket: Dismiss' },
+            action_id: 'dismiss_feature_request',
+            value: requestId,
+          },
+        ],
+      },
+    ], `Feature request from <@${userId}>: ${goal.slice(0, 100)}`);
+  }
+
+  logger.info('Infeasible agent request queued', { requestId, userId, blockers: analysis.blockers });
 }
 
 async function showNewAgentConfirmation(
@@ -718,6 +799,111 @@ export function registerConfirmationActions(app: App): void {
     await ack();
     await execute(`DELETE FROM pending_confirmations WHERE id = $1`, [(action as any).value]);
     await replyToAction(body, ':x: Agent update cancelled.');
+  });
+
+  // ── Feature Request Queue Actions ──
+
+  app.action('retry_agent_creation', async ({ action, ack, body }) => {
+    await ack();
+    const requestId = (action as any).value;
+    const row = await queryOne<{ data: any }>(
+      `SELECT data FROM pending_confirmations WHERE id = $1`, [requestId],
+    );
+
+    if (!row || row.data.type !== 'feature_request') {
+      await replyToAction(body, ':x: This feature request no longer exists or has already been processed.');
+      return;
+    }
+
+    const { analysis, goal, requestedBy, requestedInChannel } = row.data;
+
+    await replyToAction(body, ':gear: Re-analyzing and creating agent...');
+
+    try {
+      // Re-analyze the goal (capabilities may have changed since the request was made)
+      const freshAnalysis = await analyzeGoal(goal);
+
+      if (!freshAnalysis.feasible) {
+        const blockerList = freshAnalysis.blockers.map((b: string) => `• ${b}`).join('\n');
+        await replyToAction(body, `:warning: Still not feasible. Remaining blockers:\n${blockerList}`);
+        return;
+      }
+
+      let agentName = freshAnalysis.agent_name;
+      if (await getAgentByName(agentName)) {
+        agentName = `${agentName}-${Date.now().toString(36).slice(-4)}`;
+      }
+
+      // Create a new channel for the agent
+      const agentChannelId = await createChannel(agentName);
+
+      const agent = await createAgent({
+        name: agentName,
+        channelId: agentChannelId,
+        systemPrompt: freshAnalysis.system_prompt,
+        tools: freshAnalysis.tools,
+        model: freshAnalysis.model,
+        permissionLevel: freshAnalysis.permission_level,
+        memoryEnabled: freshAnalysis.memory_enabled,
+        respondToAllMessages: freshAnalysis.respond_to_all_messages,
+        relevanceKeywords: freshAnalysis.relevance_keywords,
+        createdBy: requestedBy,
+      });
+
+      for (const skillName of freshAnalysis.skills) {
+        try { await attachSkillToAgent(agent.id, skillName, 'read', requestedBy); }
+        catch (err: any) { logger.warn('Skill attach failed', { skillName, error: err.message }); }
+      }
+
+      for (const trigger of freshAnalysis.triggers) {
+        try {
+          await createTrigger({
+            agentId: agent.id,
+            triggerType: trigger.type,
+            config: { ...trigger.config, description: trigger.description },
+            createdBy: requestedBy,
+          });
+        } catch (err: any) { logger.warn('Trigger creation failed', { error: err.message }); }
+      }
+
+      if (freshAnalysis.new_tools_needed?.length > 0) {
+        const { authorTool } = await import('../modules/self-authoring');
+        for (const tool of freshAnalysis.new_tools_needed) {
+          try { await authorTool(agent.id, tool.description); } catch { /* best effort */ }
+        }
+      }
+      if (freshAnalysis.new_skills_needed?.length > 0) {
+        const { authorSkill } = await import('../modules/self-authoring');
+        for (const skill of freshAnalysis.new_skills_needed) {
+          try { await authorSkill(agent.id, skill.description); } catch { /* best effort */ }
+        }
+      }
+
+      // Remove the feature request
+      await execute(`DELETE FROM pending_confirmations WHERE id = $1`, [requestId]);
+
+      // Notify the original requester
+      await postMessage(requestedInChannel,
+        `:tada: <@${requestedBy}> Your agent *${agent.name}* has been created! Head over to <#${agentChannelId}> to start using it.`
+      );
+
+      // Confirm to the owner
+      await replyToAction(body,
+        `:white_check_mark: Agent *${agent.name}* created from feature request! <@${requestedBy}> has been notified in <#${requestedInChannel}>.`
+      );
+
+      logger.info('Feature request fulfilled', { requestId, agentId: agent.id, agentName });
+    } catch (err: any) {
+      logger.error('Feature request retry failed', { error: err.message, requestId });
+      await replyToAction(body, `:x: Failed to create agent: ${err.message}`);
+    }
+  });
+
+  app.action('dismiss_feature_request', async ({ action, ack, body }) => {
+    await ack();
+    const requestId = (action as any).value;
+    await execute(`DELETE FROM pending_confirmations WHERE id = $1`, [requestId]);
+    await replyToAction(body, ':wastebasket: Feature request dismissed.');
   });
 }
 
