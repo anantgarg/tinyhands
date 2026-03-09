@@ -522,10 +522,48 @@ async function handleUpdateAgentGoal(agentId: string, newGoal: string, userId: s
 
   try {
     const analysis = await analyzeGoal(newGoal, agent.system_prompt, userId);
-    const currentChannels = agent.channel_ids?.length > 0 ? agent.channel_ids : [agent.channel_id];
 
-    // Skip channel selection — go straight to confirmation with current channels
-    await showUpdateAgentConfirmation(analysis, agentId, newGoal, userId, channelId, threadTs, currentChannels);
+    // Ask about channel change
+    await execute(
+      `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
+      [uuid(), JSON.stringify({
+        type: 'conversation',
+        step: 'awaiting_channel',
+        flow: 'update_agent',
+        analysis,
+        agentId,
+        goal: newGoal,
+        userId,
+        channelId,
+        threadTs,
+      })],
+    );
+
+    const currentChannels = agent.channel_ids?.length > 0 ? agent.channel_ids : [agent.channel_id];
+    const currentChannelLabels = currentChannels.map((c: string) => `<#${c}>`).join(', ');
+    await postBlocks(channelId, [
+      {
+        type: 'section',
+        text: { type: 'mrkdwn', text: `:white_check_mark: Updated config ready for *${agent.name}*!\n\nCurrently in ${currentChannelLabels}. Want to change channels?` },
+      },
+      {
+        type: 'actions',
+        elements: [
+          {
+            type: 'conversations_select',
+            action_id: 'update_agent_channel_select',
+            placeholder: { type: 'plain_text', text: 'Select a channel...' },
+            filter: { include: ['public', 'private'], exclude_bot_users: true },
+            initial_conversation: currentChannels[0],
+          },
+          {
+            type: 'button',
+            text: { type: 'plain_text', text: ':thumbsup: Keep current channels' },
+            action_id: 'update_agent_keep_channel',
+          },
+        ],
+      },
+    ], 'Choose channels for updated agent', threadTs);
   } catch (err: any) {
     logger.error('Update goal analysis failed', { error: err.message, agentId, userId });
     await postMessage(channelId, `:x: Failed to analyze updated goal: ${err.message}`, threadTs);
