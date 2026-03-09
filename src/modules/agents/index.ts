@@ -6,6 +6,7 @@ import { logger } from '../../utils/logger';
 export interface CreateAgentParams {
   name: string;
   channelId: string;
+  channelIds?: string[];
   systemPrompt: string;
   tools?: string[];
   avatarEmoji?: string;
@@ -28,10 +29,12 @@ export async function createAgent(params: CreateAgentParams): Promise<Agent> {
     throw new Error(`Agent with name "${params.name}" already exists`);
   }
 
+  const channelIds = params.channelIds || [params.channelId];
   const agent: Agent = {
     id,
     name: params.name,
-    channel_id: params.channelId,
+    channel_id: channelIds[0],
+    channel_ids: channelIds,
     system_prompt: params.systemPrompt,
     tools: params.tools || ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash', 'WebSearch', 'WebFetch'],
     avatar_emoji: params.avatarEmoji || ':robot_face:',
@@ -52,12 +55,12 @@ export async function createAgent(params: CreateAgentParams): Promise<Agent> {
 
   await withTransaction(async (client) => {
     await client.query(`
-      INSERT INTO agents (id, name, channel_id, system_prompt, tools, avatar_emoji, status,
+      INSERT INTO agents (id, name, channel_id, channel_ids, system_prompt, tools, avatar_emoji, status,
         model, streaming_detail, docker_image, self_evolution_mode, max_turns, memory_enabled,
         permission_level, respond_to_all_messages, relevance_keywords, created_by, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
     `, [
-      agent.id, agent.name, agent.channel_id, agent.system_prompt,
+      agent.id, agent.name, agent.channel_id, agent.channel_ids,
       JSON.stringify(agent.tools), agent.avatar_emoji, agent.status,
       agent.model, agent.streaming_detail, agent.docker_image,
       agent.self_evolution_mode, agent.max_turns, agent.memory_enabled,
@@ -89,13 +92,13 @@ export async function getAgentByName(name: string): Promise<Agent | null> {
 }
 
 export async function getAgentByChannel(channelId: string): Promise<Agent | null> {
-  const row = await queryOne('SELECT * FROM agents WHERE channel_id = $1', [channelId]);
+  const row = await queryOne('SELECT * FROM agents WHERE $1 = ANY(channel_ids) AND status != $2', [channelId, 'archived']);
   if (!row) return null;
   return deserializeAgent(row);
 }
 
 export async function getAgentsByChannel(channelId: string): Promise<Agent[]> {
-  const rows = await query('SELECT * FROM agents WHERE channel_id = $1 AND status != $2', [channelId, 'archived']);
+  const rows = await query('SELECT * FROM agents WHERE $1 = ANY(channel_ids) AND status != $2', [channelId, 'archived']);
   return rows.map(deserializeAgent);
 }
 
@@ -118,9 +121,16 @@ export async function updateAgent(id: string, updates: Partial<Agent>, changedBy
     fields.push(`name = $${paramIdx++}`);
     values.push(updates.name);
   }
-  if (updates.channel_id !== undefined) {
+  if (updates.channel_ids !== undefined) {
+    fields.push(`channel_ids = $${paramIdx++}`);
+    values.push(updates.channel_ids);
+    fields.push(`channel_id = $${paramIdx++}`);
+    values.push(updates.channel_ids[0]);
+  } else if (updates.channel_id !== undefined) {
     fields.push(`channel_id = $${paramIdx++}`);
     values.push(updates.channel_id);
+    fields.push(`channel_ids = $${paramIdx++}`);
+    values.push([updates.channel_id]);
   }
   if (updates.system_prompt !== undefined) {
     fields.push(`system_prompt = $${paramIdx++}`);
@@ -226,5 +236,6 @@ function deserializeAgent(row: any): Agent {
     ...row,
     tools: JSON.parse(row.tools),
     relevance_keywords: JSON.parse(row.relevance_keywords || '[]'),
+    channel_ids: row.channel_ids || [row.channel_id],
   };
 }
