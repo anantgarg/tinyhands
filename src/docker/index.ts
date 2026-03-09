@@ -64,6 +64,7 @@ export async function createAgentContainer(cfg: ContainerConfig): Promise<Docker
       NanoCpus: securityConfig.cpuLimit * 1e9,
       NetworkMode: securityConfig.networkMode,
       ReadonlyRootfs: securityConfig.readOnlyRootfs,
+      Tmpfs: securityConfig.readOnlyRootfs ? { '/tmp': 'rw,noexec,nosuid,size=64m' } : undefined,
       SecurityOpt: securityConfig.noNewPrivileges ? ['no-new-privileges:true'] : [],
       CapDrop: securityConfig.dropCapabilities,
       AutoRemove: true,
