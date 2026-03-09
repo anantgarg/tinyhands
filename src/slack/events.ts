@@ -122,10 +122,9 @@ export function registerEvents(app: App): void {
           threadTs,
         );
 
-        // Store the status message ts so the buffer can delete it when done
+        // Pass status message TS through job data so the worker can delete it
         if (statusTs) {
-          const { setStatusMessageTs } = await import('./buffer');
-          setStatusMessageTs(channelId, threadTs, statusTs, agent.id);
+          jobData.statusMessageTs = statusTs;
         }
 
         await enqueueRun(jobData, 'high');

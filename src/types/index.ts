@@ -78,6 +78,7 @@ export interface JobData {
   triggerId?: string;
   workflowRunId?: string;
   workflowStepIndex?: number;
+  statusMessageTs?: string;
 }
 
 // ── Source Connection Types ──
