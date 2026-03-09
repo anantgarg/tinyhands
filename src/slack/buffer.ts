@@ -158,7 +158,7 @@ async function handleDoneEvent(buffer: ChannelBuffer, finalOutput: string): Prom
   try {
     // Delete the "Thinking..." status message and post a fresh one with username/icon
     if (buffer.statusMessageTs) {
-      deleteMessage(buffer.channelId, buffer.statusMessageTs).catch(() => {});
+      await deleteMessage(buffer.channelId, buffer.statusMessageTs).catch(() => {});
     }
 
     await postMessage(

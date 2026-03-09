@@ -335,7 +335,7 @@ async function handleNewAgentGoal(goal: string, userId: string, channelId: strin
   await postMessage(channelId, ':gear: Analyzing your goal and configuring the best agent setup...', threadTs);
 
   try {
-    const analysis = await analyzeGoal(goal);
+    const analysis = await analyzeGoal(goal, undefined, userId);
     logger.info('Goal analysis complete', { agentName: analysis.agent_name, feasible: analysis.feasible, userId });
 
     // If not feasible, queue it and notify owner
@@ -516,7 +516,7 @@ async function handleUpdateAgentGoal(agentId: string, newGoal: string, userId: s
   await postMessage(channelId, `:gear: Analyzing updated goal for *${agent.name}*...`, threadTs);
 
   try {
-    const analysis = await analyzeGoal(newGoal, agent.system_prompt);
+    const analysis = await analyzeGoal(newGoal, agent.system_prompt, userId);
 
     // Ask about channel change
     await execute(
@@ -821,7 +821,7 @@ export function registerConfirmationActions(app: App): void {
 
     try {
       // Re-analyze the goal (capabilities may have changed since the request was made)
-      const freshAnalysis = await analyzeGoal(goal);
+      const freshAnalysis = await analyzeGoal(goal, undefined, requestedBy);
 
       if (!freshAnalysis.feasible) {
         const blockerList = freshAnalysis.blockers.map((b: string) => `• ${b}`).join('\n');
