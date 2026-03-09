@@ -25,7 +25,7 @@ export interface GoalAnalysis {
   summary: string;
 }
 
-export async function analyzeGoal(goal: string, existingPrompt?: string): Promise<GoalAnalysis> {
+export async function analyzeGoal(goal: string, existingPrompt?: string, requestingUserId?: string): Promise<GoalAnalysis> {
   const client = new Anthropic();
   const builtinTools = getBuiltinTools();
   const availableSkills = getAvailableSkills();
@@ -82,12 +82,13 @@ IMPORTANT guidelines:
 - Use opus for complex multi-step reasoning, haiku for simple/fast classification, sonnet for general purpose
 - Enable memory for agents that build up context over time
 - If the goal requires capabilities that don't exist in available tools/skills, propose them in new_tools_needed/new_skills_needed with detailed descriptions
-- FEASIBILITY: Set "feasible" to true if the agent can work with existing tools/skills OR with new ones that can be auto-created (simple scripts, API wrappers, data processing). Set "feasible" to false ONLY if the goal requires platform-level changes that can't be solved by tools/skills alone — e.g., new integrations with external services not yet supported, access to APIs we don't have credentials for, hardware capabilities, or architectural changes to the platform. When feasible is false, list specific blockers explaining what's missing and why it can't be auto-created.`,
+- FEASIBILITY: Set "feasible" to true if the agent can work with existing tools/skills OR with new ones that can be auto-created (simple scripts, API wrappers, data processing). Set "feasible" to false ONLY if the goal requires platform-level changes that can't be solved by tools/skills alone — e.g., new integrations with external services not yet supported, access to APIs we don't have credentials for, hardware capabilities, or architectural changes to the platform. When feasible is false, list specific blockers explaining what's missing and why it can't be auto-created.
+- SLACK MENTIONS: If the goal references tagging/mentioning/notifying a specific person, use the Slack mention format <@USER_ID> in the system_prompt. The requesting user's Slack ID is provided below — use it when the goal says "tag me", "notify me", "mention me", etc. For other users mentioned by name, include a note in the system_prompt to use <@USER_ID> format and that the admin should configure the correct user ID.`,
     messages: [{
       role: 'user',
-      content: existingPrompt
+      content: (existingPrompt
         ? `Current system prompt:\n${existingPrompt}\n\nNew/updated goal:\n${goal}\n\nKeep the agent_name from current config if not explicitly changing it.`
-        : `Agent goal:\n${goal}`,
+        : `Agent goal:\n${goal}`) + (requestingUserId ? `\n\nRequesting user's Slack ID: ${requestingUserId}` : ''),
     }],
   });
 
