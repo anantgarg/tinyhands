@@ -74,11 +74,11 @@ export function bufferEvent(
     case 'thinking':
       if (suppressThinking) return;
       // Update the temporary status message with thinking state
-      updateStatusMessage(buffer, ':brain: Thinking...');
+      updateStatusMessage(buffer, `${agentPrefix(buffer)}:brain: Thinking...`);
       return;
     case 'tool_use':
       // Update the temporary status message with tool use state
-      updateStatusMessage(buffer, `:wrench: Using \`${truncate(content, 80)}\`...`);
+      updateStatusMessage(buffer, `${agentPrefix(buffer)}:wrench: Using \`${truncate(content, 80)}\`...`);
       return;
     case 'tool_result':
       // Don't show tool results as separate messages
@@ -216,6 +216,11 @@ export function cleanupBuffer(channelId: string, threadTs: string, agentId?: str
   }
   buffers.delete(key);
   pendingStatusMessages.delete(key);
+}
+
+function agentPrefix(buffer: ChannelBuffer): string {
+  if (!buffer.username) return '';
+  return `${buffer.iconEmoji || ':robot_face:'} *${buffer.username}* `;
 }
 
 function truncate(text: string, maxLen: number): string {
