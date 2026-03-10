@@ -72,7 +72,7 @@ export async function deleteMessage(channelId: string, ts: string): Promise<void
 export async function createChannel(name: string): Promise<string> {
   const client = getSlackApp().client;
   const result = await client.conversations.create({
-    name: `agent-${name.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`,
+    name: `tinyjobs-${name.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`,
     is_private: false,
   });
   return result.channel?.id || '';
