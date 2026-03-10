@@ -10,7 +10,7 @@
 import https from 'https';
 import { createKBEntry } from '../knowledge-base';
 import { getApiKey, updateSource, updateSourceStatus } from './index';
-import { getProviderForConnector } from './connectors';
+import { getProviderForConnector, normalizeConnectorType } from './connectors';
 import { logger } from '../../utils/logger';
 import type { KBSource, KBConnectorType } from '../../types';
 
@@ -138,7 +138,8 @@ function parseFrontmatter(content: string): { frontmatter: Record<string, string
 
 export async function syncSource(source: KBSource): Promise<number> {
   const config = JSON.parse(source.config_json);
-  const handler = SYNC_HANDLERS[source.source_type];
+  const resolvedType = normalizeConnectorType(source.source_type);
+  const handler = SYNC_HANDLERS[resolvedType];
   if (!handler) throw new Error(`No sync handler for source type: ${source.source_type}`);
 
   try {

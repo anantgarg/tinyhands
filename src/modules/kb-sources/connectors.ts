@@ -149,12 +149,22 @@ export const CONNECTORS: Record<KBConnectorType, ConnectorDef> = {
   },
 };
 
-export function getConnector(type: KBConnectorType): ConnectorDef {
-  return CONNECTORS[type];
+// Map legacy source_type values to current connector keys
+const LEGACY_TYPE_MAP: Record<string, KBConnectorType> = {
+  firecrawl: 'website',
+  reducto: 'google_drive',
+};
+
+export function normalizeConnectorType(type: string): KBConnectorType {
+  return (LEGACY_TYPE_MAP[type] || type) as KBConnectorType;
 }
 
-export function getProviderForConnector(type: KBConnectorType): KBProviderType {
-  return CONNECTORS[type].provider;
+export function getConnector(type: KBConnectorType | string): ConnectorDef {
+  return CONNECTORS[normalizeConnectorType(type)];
+}
+
+export function getProviderForConnector(type: KBConnectorType | string): KBProviderType {
+  return CONNECTORS[normalizeConnectorType(type)].provider;
 }
 
 export function listConnectors(): ConnectorDef[] {
