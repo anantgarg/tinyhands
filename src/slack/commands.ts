@@ -450,12 +450,19 @@ async function startNewAgentFlow(userId: string, channelId: string): Promise<voi
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: ':robot_face: *Let\'s create a new agent!*\n\nDescribe what you want this agent to do. Everything else — name, tools, skills, triggers, model, permissions — will be auto-configured.\n\n_Reply in this thread with the goal._',
+        text: ':robot_face: *Let\'s create a new agent!*',
       },
     },
-  ], 'New agent — describe what it should do');
+  ], 'New agent');
 
   if (ts) {
+    // Reply in thread to auto-open the thread view
+    await postMessage(
+      channelId,
+      'Describe what you want this agent to do. Everything else — name, tools, skills, triggers, model, permissions — will be auto-configured.',
+      ts,
+    );
+
     await execute(
       `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
       [uuid(), JSON.stringify({
@@ -2156,7 +2163,7 @@ export function registerConfirmationActions(app: App): void {
     );
 
     if (!row || new Date(row.expires_at) < new Date()) {
-      await replyToAction(body, ':x: This confirmation has expired. Please run `/new-agent` again.');
+      await replyToAction(body, ':x: This confirmation has expired. Please run `/agents` and try again.');
       return;
     }
 
@@ -2250,7 +2257,7 @@ export function registerConfirmationActions(app: App): void {
     );
 
     if (!row || !row.data.agentId || new Date(row.expires_at) < new Date()) {
-      await replyToAction(body, ':x: This confirmation has expired. Please run `/update-agent` again.');
+      await replyToAction(body, ':x: This confirmation has expired. Please run `/agents` and try again.');
       return;
     }
 
@@ -2507,7 +2514,7 @@ export function registerConfirmationActions(app: App): void {
 function buildConfigSummary(name: string, analysis: any, goal: string, existingAgent?: any): string {
   const lines: string[] = [];
 
-  const displayGoal = existingAgent && analysis.summary ? analysis.summary : goal;
+  const displayGoal = analysis.summary || goal;
   lines.push(`*Goal:* ${displayGoal.slice(0, 300)}${displayGoal.length > 300 ? '...' : ''}`);
   lines.push('');
   lines.push(`*Name:* ${name}`);
