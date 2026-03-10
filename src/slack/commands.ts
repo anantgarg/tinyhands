@@ -492,7 +492,7 @@ async function showNewAgentConfirmation(
   const confirmId = uuid();
   const channelLabel = selectedChannels?.length
     ? selectedChannels.map(c => `<#${c}>`).join(', ')
-    : `#agent-${agentName}` + ' (new)';
+    : `#tinyjobs-${agentName}` + ' (new)';
 
   await execute(
     `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
