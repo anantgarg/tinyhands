@@ -145,8 +145,8 @@ export async function getContainerLogs(container: Dockerode.Container): Promise<
 export type StreamEventCallback = (line: string) => void;
 
 /**
- * Follow container stdout in real-time, calling onLine for each JSONL event.
- * Also waits for container exit with timeout.
+ * Attach to container stdout BEFORE starting it, then start and stream
+ * JSONL events in real-time. Calls onLine for each line of output.
  * Returns exit code and all collected log lines.
  */
 export async function followContainerOutput(
@@ -156,18 +156,19 @@ export async function followContainerOutput(
 ): Promise<{ exitCode: number; allLogs: string }> {
   const allLogLines: string[] = [];
 
-  // Start following container logs in real-time
-  const logStream = await container.logs({
+  // Attach BEFORE starting — this is critical for real-time streaming.
+  // container.logs({ follow: true }) buffers until exit; attach() streams immediately.
+  const stream = await container.attach({
+    stream: true,
     stdout: true,
     stderr: true,
-    follow: true,
   });
 
   const stdoutStream = new PassThrough();
   const stderrStream = new PassThrough();
 
   // Demux Docker multiplexed stream (8-byte header per frame)
-  (docker as any).modem.demuxStream(logStream, stdoutStream, stderrStream);
+  (docker as any).modem.demuxStream(stream, stdoutStream, stderrStream);
 
   let lineBuffer = '';
   stdoutStream.on('data', (chunk: Buffer) => {
@@ -184,16 +185,18 @@ export async function followContainerOutput(
   });
 
   stderrStream.on('data', (chunk: Buffer) => {
-    // Capture stderr for debugging but don't treat as events
     const text = chunk.toString().trim();
     if (text) allLogLines.push(`[stderr] ${text}`);
   });
+
+  // Start the container AFTER attaching so we don't miss any output
+  await container.start();
 
   // Wait for container to exit
   const { exitCode } = await waitForContainer(container, timeoutMs);
 
   // Small delay to let remaining buffered data flush through streams
-  await new Promise(r => setTimeout(r, 300));
+  await new Promise(r => setTimeout(r, 500));
 
   // Flush remaining buffer
   if (lineBuffer.trim()) {
@@ -201,7 +204,6 @@ export async function followContainerOutput(
     try { onLine(lineBuffer.trim()); } catch {}
   }
 
-  // Clean up
   stdoutStream.destroy();
   stderrStream.destroy();
 
