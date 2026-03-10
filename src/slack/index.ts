@@ -72,11 +72,25 @@ export async function deleteMessage(channelId: string, ts: string): Promise<void
 
 export async function createChannel(name: string): Promise<string> {
   const client = getSlackApp().client;
-  const result = await client.conversations.create({
-    name: `tinyjobs-${name.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`,
-    is_private: false,
-  });
-  return result.channel?.id || '';
+  const channelName = `tinyjobs-${name.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`;
+  try {
+    const result = await client.conversations.create({
+      name: channelName,
+      is_private: false,
+    });
+    return result.channel?.id || '';
+  } catch (err: any) {
+    // Channel already exists — find it and join it
+    if (err.data?.error === 'name_taken') {
+      const list = await client.conversations.list({ types: 'public_channel', limit: 1000 });
+      const existing = list.channels?.find(c => c.name === channelName);
+      if (existing?.id) {
+        try { await client.conversations.join({ channel: existing.id }); } catch { /* already in */ }
+        return existing.id;
+      }
+    }
+    throw err;
+  }
 }
 
 export async function postBlocks(
