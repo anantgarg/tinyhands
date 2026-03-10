@@ -127,7 +127,7 @@ export interface AgentMemory {
 
 // ── Knowledge Base Types ──
 
-export type KBSourceType = 'manual' | 'agent';
+export type KBSourceType = 'manual' | 'agent' | 'google_drive' | 'zendesk_help_center' | 'firecrawl' | 'github' | 'reducto';
 
 export interface KBEntry {
   id: string;
@@ -140,6 +140,39 @@ export interface KBEntry {
   source_type: KBSourceType;
   contributed_by: string | null;
   approved: boolean;
+  kb_source_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+// ── KB Source Types ──
+
+export type KBSourceStatus = 'active' | 'syncing' | 'error' | 'needs_setup';
+export type KBProviderType = 'google' | 'zendesk' | 'firecrawl' | 'github' | 'reducto';
+export type KBConnectorType = 'google_drive' | 'zendesk_help_center' | 'firecrawl' | 'github' | 'reducto';
+
+export interface KBSource {
+  id: string;
+  name: string;
+  source_type: KBConnectorType;
+  config_json: string;
+  status: KBSourceStatus;
+  auto_sync: boolean;
+  sync_interval_hours: number;
+  last_sync_at: string | null;
+  entry_count: number;
+  error_message: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KBApiKey {
+  id: string;
+  provider: KBProviderType;
+  config_json: string;
+  setup_complete: boolean;
+  created_by: string;
   created_at: string;
   updated_at: string;
 }
@@ -238,6 +271,8 @@ export interface Superadmin {
 
 export type ToolType = 'builtin' | 'mcp' | 'custom';
 
+export type ToolAccessLevel = 'read-only' | 'read-write';
+
 export interface CustomTool {
   id: string;
   name: string;
@@ -248,6 +283,8 @@ export interface CustomTool {
   language: 'javascript' | 'python' | 'bash';
   registered_by: string;
   approved: boolean;
+  access_level: ToolAccessLevel;
+  config_json: string;
   created_at: string;
 }
 

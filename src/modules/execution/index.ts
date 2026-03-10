@@ -225,6 +225,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
         script_path: t.script_path,
         script_code: execScript,
         language: t.language,
+        config: JSON.parse(t.config_json || '{}'),
       });
     }
     customToolsConfig = JSON.stringify(customToolEntries);
