@@ -76,11 +76,13 @@ export function registerEvents(app: App): void {
 
       // Check if agent is @mentioned (always respond to mentions)
       const isMentioned = ownBotUserId ? text.includes(`<@${ownBotUserId}>`) : false;
+      // Thread replies are always relevant — the user is continuing a conversation
+      const isThreadReply = !!msg.thread_ts;
 
       // Process each agent in the channel
       for (const agent of agents) {
-        // Relevance check: only respond if @mentioned, or message is relevant to agent's goal
-        if (!isMentioned) {
+        // Relevance check: skip for @mentions and thread replies
+        if (!isMentioned && !isThreadReply) {
           const isRelevant = await checkMessageRelevance(
             cleanInput,
             agent.relevance_keywords,
