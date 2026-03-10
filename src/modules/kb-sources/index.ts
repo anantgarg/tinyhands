@@ -6,6 +6,7 @@ import { query, queryOne, execute } from '../../db';
 import { logger } from '../../utils/logger';
 import type { KBSource, KBApiKey, KBConnectorType, KBProviderType, KBSourceStatus } from '../../types';
 import { getProviderForConnector } from './connectors';
+import { syncSource } from './sync-handlers';
 
 // ── API Key Management ──
 
@@ -182,11 +183,10 @@ export async function startSync(sourceId: string): Promise<void> {
     throw new Error(`Provider ${provider} is not configured. Set up API keys first.`);
   }
 
-  await updateSourceStatus(sourceId, 'syncing');
-  logger.info('KB source sync started', { sourceId, type: source.source_type });
-
-  // TODO: Dispatch actual sync job to worker queue
-  // For now, just mark as syncing — the worker will pick it up
+  // Run sync in the background — don't block the caller
+  syncSource(source).catch(err => {
+    logger.error('Background sync failed', { sourceId, error: err.message });
+  });
 }
 
 export async function flushAndResync(sourceId: string, userId: string): Promise<void> {
