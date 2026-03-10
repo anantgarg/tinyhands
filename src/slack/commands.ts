@@ -157,10 +157,23 @@ export function registerInlineActions(app: App): void {
     if (!channelId || !messageTs) return;
 
     const threadTs = (body as any).message?.thread_ts || messageTs;
-    await postMessage(channelId,
-      `Selected *${agent.avatar_emoji} ${agent.name}*\n\nCurrent config: *${agent.model}* model | *${agent.permission_level}* perms | ${agent.tools.length} tools | memory ${agent.memory_enabled ? 'on' : 'off'} | channel <#${agent.channel_id}>\n\n_Reply in this thread with what you want to change — describe a problem, a tweak, or a full new goal._`,
-      threadTs,
-    );
+    const currentChannels = agent.channel_ids?.length > 0 ? agent.channel_ids : [agent.channel_id];
+    const channelLabels = currentChannels.map((c: string) => `<#${c}>`).join(', ');
+
+    await postBlocks(channelId, [
+      {
+        type: 'section',
+        text: { type: 'mrkdwn', text: `Selected *${agent.avatar_emoji} ${agent.name}*\n\nCurrent config: *${agent.model}* model | *${agent.permission_level}* perms | ${agent.tools.length} tools | memory ${agent.memory_enabled ? 'on' : 'off'} | channels: ${channelLabels}\n\nWhat do you want to update?` },
+      },
+      {
+        type: 'actions',
+        elements: [
+          { type: 'button', text: { type: 'plain_text', text: ':brain: Update Goal' }, action_id: 'update_choice_goal', value: agentId },
+          { type: 'button', text: { type: 'plain_text', text: ':hash: Change Channels' }, action_id: 'update_choice_channels', value: agentId },
+          { type: 'button', text: { type: 'plain_text', text: ':arrows_counterclockwise: Both' }, action_id: 'update_choice_both', value: agentId },
+        ],
+      },
+    ], 'What do you want to update?', threadTs);
 
     await execute(
       `DELETE FROM pending_confirmations WHERE data->>'type' = 'conversation' AND data->>'threadTs' = $1 AND data->>'userId' = $2`,
@@ -170,7 +183,7 @@ export function registerInlineActions(app: App): void {
       `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
       [uuid(), JSON.stringify({
         type: 'conversation',
-        step: 'awaiting_goal',
+        step: 'awaiting_update_choice',
         flow: 'update_agent',
         agentId,
         userId,
@@ -179,6 +192,53 @@ export function registerInlineActions(app: App): void {
       })],
     );
   });
+
+  // Handle update choice buttons (goal/channels/both)
+  for (const choice of ['goal', 'channels', 'both'] as const) {
+    app.action(`update_choice_${choice}`, async ({ action, ack, body }) => {
+      await ack();
+      const agentId = (action as any).value;
+      const userId = body.user.id;
+      const channelId = body.channel?.id;
+      const threadTs = (body as any).message?.thread_ts || (body as any).message?.ts;
+      if (!channelId || !threadTs) return;
+
+      // Update the pending confirmation with the user's choice
+      const row = await queryOne<{ id: string; data: any }>(
+        `SELECT id, data FROM pending_confirmations
+         WHERE data->>'type' = 'conversation'
+           AND data->>'step' = 'awaiting_update_choice'
+           AND data->>'threadTs' = $1
+           AND data->>'userId' = $2
+           AND expires_at > NOW()
+         LIMIT 1`,
+        [threadTs, userId],
+      );
+      if (!row) return;
+      await execute(`DELETE FROM pending_confirmations WHERE id = $1`, [row.id]);
+
+      const updateMode = choice; // 'goal' | 'channels' | 'both'
+
+      if (updateMode === 'channels') {
+        // Ask for channels in thread reply
+        await postMessage(channelId, '_Reply with the channel names or links you want the agent to be in (e.g. `#sales #support`)._', threadTs);
+        await execute(
+          `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
+          [uuid(), JSON.stringify({ type: 'conversation', step: 'awaiting_channels_text', flow: 'update_agent', agentId, userId, channelId, threadTs, updateMode })],
+        );
+      } else {
+        // goal or both — ask for the goal description
+        const prompt = updateMode === 'both'
+          ? '_Reply with what you want to change about the goal. After that, I\'ll ask about channels._'
+          : '_Reply with what you want to change — describe a problem, a tweak, or a full new goal._';
+        await postMessage(channelId, prompt, threadTs);
+        await execute(
+          `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
+          [uuid(), JSON.stringify({ type: 'conversation', step: 'awaiting_goal', flow: 'update_agent', agentId, userId, channelId, threadTs, updateMode })],
+        );
+      }
+    });
+  }
 
   // Handle channel selection for new agent
   app.action('new_agent_channel_select', async ({ action, ack, body }) => {
@@ -306,10 +366,11 @@ export async function handleConversationReply(
   threadTs: string,
   text: string,
 ): Promise<boolean> {
+  // Check for awaiting_goal OR awaiting_channels_text
   const row = await queryOne<{ id: string; data: any }>(
     `SELECT id, data FROM pending_confirmations
      WHERE data->>'type' = 'conversation'
-       AND data->>'step' = 'awaiting_goal'
+       AND data->>'step' IN ('awaiting_goal', 'awaiting_channels_text')
        AND data->>'threadTs' = $1
        AND data->>'userId' = $2
        AND expires_at > NOW()
@@ -320,15 +381,20 @@ export async function handleConversationReply(
   if (!row) return false;
 
   const conv = row.data;
-  const goal = text.trim();
-  if (!goal) return false;
+  const input = text.trim();
+  if (!input) return false;
 
   await execute(`DELETE FROM pending_confirmations WHERE id = $1`, [row.id]);
 
+  if (conv.step === 'awaiting_channels_text') {
+    await handleUpdateAgentChannels(conv.agentId, input, userId, channelId, threadTs, conv.analysis, conv.newGoal);
+    return true;
+  }
+
   if (conv.flow === 'new_agent') {
-    await handleNewAgentGoal(goal, userId, channelId, threadTs);
+    await handleNewAgentGoal(input, userId, channelId, threadTs);
   } else if (conv.flow === 'update_agent') {
-    await handleUpdateAgentGoal(conv.agentId, goal, userId, channelId, threadTs);
+    await handleUpdateAgentGoal(conv.agentId, input, userId, channelId, threadTs, conv.updateMode);
   }
 
   return true;
@@ -511,7 +577,7 @@ async function showNewAgentConfirmation(
   ], `Agent configuration ready for ${agentName}`, threadTs);
 }
 
-async function handleUpdateAgentGoal(agentId: string, newGoal: string, userId: string, channelId: string, threadTs: string): Promise<void> {
+async function handleUpdateAgentGoal(agentId: string, newGoal: string, userId: string, channelId: string, threadTs: string, updateMode?: string): Promise<void> {
   const agent = await getAgent(agentId);
   if (!agent) {
     await postMessage(channelId, ':x: Agent not found.', threadTs);
@@ -524,11 +590,48 @@ async function handleUpdateAgentGoal(agentId: string, newGoal: string, userId: s
     const analysis = await analyzeGoal(newGoal, agent.system_prompt, userId);
     const currentChannels = agent.channel_ids?.length > 0 ? agent.channel_ids : [agent.channel_id];
 
-    // Skip channel selection for updates — go straight to confirmation
-    await showUpdateAgentConfirmation(analysis, agentId, newGoal, userId, channelId, threadTs, currentChannels);
+    if (updateMode === 'both') {
+      // After goal analysis, ask for channels via text reply
+      await postMessage(channelId, `:white_check_mark: Goal analyzed! Now reply with the channel names or links for this agent (e.g. \`#sales #support\`).`, threadTs);
+      await execute(
+        `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
+        [uuid(), JSON.stringify({ type: 'conversation', step: 'awaiting_channels_text', flow: 'update_agent', agentId, userId, channelId, threadTs, analysis, newGoal })],
+      );
+    } else {
+      await showUpdateAgentConfirmation(analysis, agentId, newGoal, userId, channelId, threadTs, currentChannels);
+    }
   } catch (err: any) {
     logger.error('Update goal analysis failed', { error: err.message, agentId, userId });
     await postMessage(channelId, `:x: Failed to analyze updated goal: ${err.message}`, threadTs);
+  }
+}
+
+async function handleUpdateAgentChannels(agentId: string, channelsText: string, userId: string, channelId: string, threadTs: string, existingAnalysis?: any, existingGoal?: string): Promise<void> {
+  const agent = await getAgent(agentId);
+  if (!agent) { await postMessage(channelId, ':x: Agent not found.', threadTs); return; }
+
+  // Parse channel IDs from text like "#channel-name" or "<#C123|channel-name>"
+  const channelIdMatches = channelsText.match(/<#([A-Z0-9]+)(?:\|[^>]+)?>/g);
+  let newChannelIds: string[];
+  if (channelIdMatches) {
+    newChannelIds = channelIdMatches.map(m => m.replace(/<#([A-Z0-9]+)(?:\|[^>]+)?>/, '$1'));
+  } else {
+    await postMessage(channelId, ':x: Could not parse channels. Please mention them as #channel-name.', threadTs);
+    return;
+  }
+
+  if (existingAnalysis) {
+    // "Both" flow — show confirmation with new goal analysis + new channels
+    await showUpdateAgentConfirmation(existingAnalysis, agentId, existingGoal || '', userId, channelId, threadTs, newChannelIds);
+  } else {
+    // "Channels only" flow — update just channels, no goal analysis
+    try {
+      await updateAgent(agentId, { channel_ids: newChannelIds } as any, userId);
+      const channelLabels = newChannelIds.map(c => `<#${c}>`).join(', ');
+      await postMessage(channelId, `:white_check_mark: Agent *${agent.name}* channels updated to ${channelLabels}`, threadTs);
+    } catch (err: any) {
+      await postMessage(channelId, `:x: Failed to update channels: ${err.message}`, threadTs);
+    }
   }
 }
 
@@ -702,7 +805,11 @@ export function registerConfirmationActions(app: App): void {
       return;
     }
 
+    // Wrap in a 60s timeout to prevent infinite hangs
+    const timeout = (ms: number) => new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Update timed out after 60s')), ms));
+
     try {
+      await Promise.race([timeout(60000), (async () => {
       const { analysis, agentId, userId, newChannelIds, newChannelId } = row.data;
       logger.info('confirm_update_agent: fetching agent', { agentId });
       const agent = await getAgent(agentId!);
@@ -729,16 +836,15 @@ export function registerConfirmationActions(app: App): void {
         }
       }
 
-      logger.info('confirm_update_agent: updating agent', { agentId });
+      logger.info('confirm_update_agent: updating DB', { agentId });
       await updateAgent(agentId!, updates, userId);
-      logger.info('confirm_update_agent: agent updated', { agentId });
+      logger.info('confirm_update_agent: DB updated', { agentId });
 
-      for (const skillName of analysis.skills) {
+      for (const skillName of (analysis.skills || [])) {
         try { await attachSkillToAgent(agentId!, skillName, 'read', userId); } catch { /* may exist */ }
       }
-      logger.info('confirm_update_agent: skills attached', { agentId });
 
-      for (const trigger of analysis.triggers) {
+      for (const trigger of (analysis.triggers || [])) {
         try {
           await createTrigger({
             agentId: agentId!,
@@ -749,7 +855,6 @@ export function registerConfirmationActions(app: App): void {
         } catch (err: any) { logger.warn('Trigger creation failed during update', { error: err.message }); }
       }
 
-      // Send success message immediately — don't block on tool/skill authoring
       logger.info('confirm_update_agent: posting success', { agentId });
       const updatedAgent = await getAgent(agentId!);
       const postToChannel = updatedAgent?.channel_ids?.[0] || updatedAgent?.channel_id || agent.channel_id;
@@ -787,6 +892,7 @@ export function registerConfirmationActions(app: App): void {
           logger.warn('Background tool/skill authoring failed', { error: err.message, agentId });
         }
       })();
+      })()]); // Close Promise.race
 
     } catch (err: any) {
       logger.error('Agent update failed', { error: err.message });
