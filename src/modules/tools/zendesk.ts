@@ -69,7 +69,7 @@ const ZENDESK_READ_CODE = `const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
-const configPath = path.join('/tools', 'zendesk-read.config.json');
+const configPath = path.join(__dirname, 'zendesk-read.config.json');
 const config = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, 'utf-8')) : {};
 
 const subdomain = config.subdomain;
@@ -231,7 +231,7 @@ const ZENDESK_WRITE_CODE = `const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
-const configPath = path.join('/tools', 'zendesk-write.config.json');
+const configPath = path.join(__dirname, 'zendesk-write.config.json');
 const config = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, 'utf-8')) : {};
 
 const subdomain = config.subdomain;

@@ -56,7 +56,7 @@ const HUBSPOT_READ_CODE = `const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
-const configPath = path.join('/tools', 'hubspot-read.config.json');
+const configPath = path.join(__dirname, 'hubspot-read.config.json');
 const config = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, 'utf-8')) : {};
 
 const token = config.access_token;
@@ -217,7 +217,7 @@ const HUBSPOT_WRITE_CODE = `const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
-const configPath = path.join('/tools', 'hubspot-write.config.json');
+const configPath = path.join(__dirname, 'hubspot-write.config.json');
 const config = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, 'utf-8')) : {};
 
 const token = config.access_token;

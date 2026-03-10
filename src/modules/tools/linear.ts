@@ -51,7 +51,7 @@ const LINEAR_READ_CODE = `const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
-const configPath = path.join('/tools', 'linear-read.config.json');
+const configPath = path.join(__dirname, 'linear-read.config.json');
 const config = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, 'utf-8')) : {};
 
 const apiKey = config.api_key;
@@ -216,7 +216,7 @@ const LINEAR_WRITE_CODE = `const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
-const configPath = path.join('/tools', 'linear-write.config.json');
+const configPath = path.join(__dirname, 'linear-write.config.json');
 const config = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, 'utf-8')) : {};
 
 const apiKey = config.api_key;

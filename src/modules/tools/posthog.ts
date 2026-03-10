@@ -59,7 +59,7 @@ const POSTHOG_READ_CODE = `const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
-const configPath = path.join('/tools', 'posthog-read.config.json');
+const configPath = path.join(__dirname, 'posthog-read.config.json');
 const config = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, 'utf-8')) : {};
 
 const apiKey = config.api_key;
