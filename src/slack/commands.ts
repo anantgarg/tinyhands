@@ -2,7 +2,7 @@ import type { App } from '@slack/bolt';
 import { v4 as uuid } from 'uuid';
 import { createAgent, listAgents, getAgent, getAgentByName, updateAgent } from '../modules/agents';
 import { initSuperadmin, canModifyAgent, listSuperadmins } from '../modules/access-control';
-import { createChannel, postMessage, postBlocks, getSlackApp, sendDMBlocks } from './index';
+import { createChannel, postMessage, postBlocks, getSlackApp, sendDMBlocks, openModal } from './index';
 import { analyzeGoal } from '../modules/agents/goal-analyzer';
 import { attachSkillToAgent } from '../modules/skills';
 import { createTrigger } from '../modules/triggers';
@@ -10,133 +10,872 @@ import { logger } from '../utils/logger';
 import { execute, queryOne } from '../db';
 
 export function registerCommands(app: App): void {
-  // /new-agent — Start conversational agent creation
+  // /agents — Consolidated interactive agent management
+  app.command('/agents', async ({ command, ack }) => {
+    await ack();
+    await initSuperadmin(command.user_id);
+    const userId = command.user_id;
+
+    const agents = await listAgents();
+
+    const blocks: any[] = [
+      { type: 'header', text: { type: 'plain_text', text: `:robot_face: Agents (${agents.length})` } },
+    ];
+
+    if (agents.length === 0) {
+      blocks.push({
+        type: 'section',
+        text: { type: 'mrkdwn', text: '_No agents created yet. Click the button below to create your first one._' },
+      });
+    } else {
+      for (const a of agents) {
+        const channels = (a.channel_ids?.length > 0 ? a.channel_ids : [a.channel_id]).map((c: string) => `<#${c}>`).join(', ');
+        const statusIcon = a.status === 'active' ? ':large_green_circle:' : a.status === 'paused' ? ':double_vertical_bar:' : ':red_circle:';
+
+        const overflowOptions: any[] = [
+          { text: { type: 'plain_text', text: ':gear: View Config' }, value: `view_config:${a.id}` },
+          { text: { type: 'plain_text', text: ':pencil: Update' }, value: `update:${a.id}` },
+        ];
+
+        if (a.status === 'active') {
+          overflowOptions.push({ text: { type: 'plain_text', text: ':double_vertical_bar: Pause' }, value: `pause:${a.id}` });
+        } else if (a.status === 'paused') {
+          overflowOptions.push({ text: { type: 'plain_text', text: ':arrow_forward: Resume' }, value: `resume:${a.id}` });
+        }
+
+        if (await canModifyAgent(a.id, userId)) {
+          overflowOptions.push({ text: { type: 'plain_text', text: ':wastebasket: Delete' }, value: `delete:${a.id}` });
+        }
+
+        blocks.push({
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `${statusIcon} *${a.avatar_emoji} ${a.name}*\n${channels} · \`${a.model}\` · \`${a.permission_level}\` · ${a.tools.length} tools · memory ${a.memory_enabled ? 'on' : 'off'}`,
+          },
+          accessory: {
+            type: 'overflow',
+            action_id: 'agent_overflow',
+            options: overflowOptions,
+          },
+        });
+      }
+    }
+
+    blocks.push({ type: 'divider' });
+    blocks.push({
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: ':heavy_plus_sign: New Agent' },
+          style: 'primary',
+          action_id: 'agents_new_agent',
+        },
+      ],
+    });
+
+    await postBlocks(command.channel_id, blocks, 'Agents');
+  });
+
+  // /new-agent — Alias, starts new agent flow directly
   app.command('/new-agent', async ({ command, ack }) => {
     await ack();
     await initSuperadmin(command.user_id);
+    await startNewAgentFlow(command.user_id, command.channel_id);
+  });
 
-    const ts = await postBlocks(command.channel_id, [
+  // /update-agent — Alias, shows agent selector
+  app.command('/update-agent', async ({ command, ack }) => {
+    await ack();
+    await startUpdateAgentFlow(command.user_id, command.channel_id);
+  });
+
+  // /tools — Interactive admin tool management
+  app.command('/tools', async ({ command, ack }) => {
+    await ack();
+    const userId = command.user_id;
+
+    const { isSuperadmin } = await import('../modules/access-control');
+    if (!(await isSuperadmin(userId))) {
+      await postMessage(command.channel_id, ':lock: Only admins can manage tools. Use `/new-agent` to create agents with existing tools.');
+      return;
+    }
+
+    const { listCustomTools: listAll } = await import('../modules/tools');
+    const tools = await listAll();
+
+    if (tools.length === 0) {
+      await postBlocks(command.channel_id, [
+        { type: 'section', text: { type: 'mrkdwn', text: ':toolbox: *No custom tools registered yet.*\n\nRegister tools via code, then manage them here.' } },
+      ], 'No tools');
+      return;
+    }
+
+    const blocks: any[] = [
+      { type: 'header', text: { type: 'plain_text', text: `:toolbox: Custom Tools (${tools.length})` } },
+    ];
+
+    for (const t of tools) {
+      const config = JSON.parse(t.config_json || '{}');
+      const configKeys = Object.keys(config);
+      const schema = JSON.parse(t.schema_json || '{}');
+      const desc = schema.description ? schema.description.slice(0, 100) : '';
+      const statusIcon = t.approved ? ':white_check_mark:' : ':hourglass:';
+      const configNote = configKeys.length > 0
+        ? `Config: ${configKeys.map(k => `\`${k}\``).join(', ')}`
+        : '_No config set_';
+
+      blocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `${statusIcon} *${t.name}* — \`${t.access_level}\` · \`${t.language}\`\n${desc}\n${configNote}`,
+        },
+        accessory: {
+          type: 'overflow',
+          action_id: 'tool_overflow',
+          options: [
+            { text: { type: 'plain_text', text: ':gear: Configure' }, value: `configure:${t.name}` },
+            { text: { type: 'plain_text', text: ':shield: Change Access Level' }, value: `access:${t.name}` },
+            { text: { type: 'plain_text', text: ':link: Add to Agent' }, value: `add_to_agent:${t.name}` },
+            ...(!t.approved ? [{ text: { type: 'plain_text' as const, text: ':white_check_mark: Approve' }, value: `approve:${t.name}` }] : []),
+            { text: { type: 'plain_text', text: ':wastebasket: Delete' }, value: `delete:${t.name}` },
+          ],
+        },
+      });
+      blocks.push({ type: 'divider' });
+    }
+
+    await postBlocks(command.channel_id, blocks, 'Custom Tools');
+  });
+
+  // /kb — Interactive knowledge base management
+  app.command('/kb', async ({ command, ack }) => {
+    await ack();
+    const userId = command.user_id;
+    const subcommand = command.text.trim().split(/\s+/)[0]?.toLowerCase() || '';
+    const { isSuperadmin } = await import('../modules/access-control');
+    const isAdmin = await isSuperadmin(userId);
+
+    if (subcommand === 'search') {
+      const queryText = command.text.trim().slice('search'.length).trim();
+      if (!queryText) {
+        await postMessage(command.channel_id, 'Usage: `/kb search <query>`');
+        return;
+      }
+      const { searchKB } = await import('../modules/knowledge-base');
+      const results = await searchKB(queryText);
+      if (results.length === 0) {
+        await postMessage(command.channel_id, ':mag: No KB entries found.');
+        return;
+      }
+      const blocks: any[] = [
+        { type: 'header', text: { type: 'plain_text', text: `:mag: KB Results (${results.length})` } },
+      ];
+      for (const r of results.slice(0, 10)) {
+        blocks.push({
+          type: 'section',
+          text: { type: 'mrkdwn', text: `*${r.title}* (${r.category})\n${r.summary.slice(0, 200)}` },
+          ...(isAdmin ? {
+            accessory: {
+              type: 'overflow',
+              action_id: 'kb_entry_overflow',
+              options: [
+                { text: { type: 'plain_text', text: ':eyes: View' }, value: `view:${r.id}` },
+                { text: { type: 'plain_text', text: ':wastebasket: Delete' }, value: `delete:${r.id}` },
+              ],
+            },
+          } : {}),
+        });
+      }
+      await postBlocks(command.channel_id, blocks, 'KB search results');
+      return;
+    }
+
+    if (subcommand === 'add') {
+      await openModal(command.trigger_id, {
+        type: 'modal',
+        callback_id: 'kb_add_modal',
+        title: { type: 'plain_text', text: 'Add KB Entry' },
+        submit: { type: 'plain_text', text: 'Add' },
+        blocks: [
+          {
+            type: 'input', block_id: 'title_block',
+            label: { type: 'plain_text', text: 'Title' },
+            element: { type: 'plain_text_input', action_id: 'title_input', placeholder: { type: 'plain_text', text: 'e.g. Zendesk API Rate Limits' } },
+          },
+          {
+            type: 'input', block_id: 'category_block',
+            label: { type: 'plain_text', text: 'Category' },
+            element: {
+              type: 'static_select', action_id: 'category_input',
+              options: ['General', 'Engineering', 'Product', 'Support', 'Sales', 'HR', 'Legal', 'Finance', 'Operations'].map(c => ({
+                text: { type: 'plain_text' as const, text: c }, value: c.toLowerCase(),
+              })),
+            },
+          },
+          {
+            type: 'input', block_id: 'content_block',
+            label: { type: 'plain_text', text: 'Content' },
+            element: { type: 'plain_text_input', action_id: 'content_input', multiline: true, placeholder: { type: 'plain_text', text: 'Paste the knowledge content here...' } },
+          },
+          {
+            type: 'input', block_id: 'tags_block', optional: true,
+            label: { type: 'plain_text', text: 'Tags (comma-separated)' },
+            element: { type: 'plain_text_input', action_id: 'tags_input', placeholder: { type: 'plain_text', text: 'e.g. zendesk, api, limits' } },
+          },
+        ],
+      });
+      return;
+    }
+
+    // Default: show KB dashboard (admin gets full view with sources)
+    if (!isAdmin) {
+      await postMessage(command.channel_id, 'Usage: `/kb search <query>` or `/kb add`');
+      return;
+    }
+
+    const { listKBEntries, listPendingEntries, getCategories } = await import('../modules/knowledge-base');
+    const { listSources } = await import('../modules/kb-sources');
+    const [entries, pending, categories, sources] = await Promise.all([
+      listKBEntries(10), listPendingEntries(), getCategories(), listSources(),
+    ]);
+
+    const blocks: any[] = [
+      { type: 'header', text: { type: 'plain_text', text: ':books: Knowledge Base' } },
       {
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: ':robot_face: *Let\'s create a new agent!*\n\nDescribe what you want this agent to do. Everything else — name, tools, skills, triggers, model, permissions — will be auto-configured.\n\n_Reply in this thread with the goal._',
+          text: `*${entries.length}+ entries* | *${pending.length} pending* | *${categories.length} categories* | *${sources.length} sources*`,
         },
       },
-    ], 'New agent — describe what it should do');
+    ];
 
-    if (ts) {
-      await execute(
-        `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
-        [uuid(), JSON.stringify({
-          type: 'conversation',
-          step: 'awaiting_goal',
-          flow: 'new_agent',
-          userId: command.user_id,
-          channelId: command.channel_id,
-          threadTs: ts,
-        })],
-      );
-    }
-  });
+    // ── Sources Section ──
+    blocks.push({ type: 'divider' });
+    blocks.push({ type: 'section', text: { type: 'mrkdwn', text: ':link: *Connected Sources*' } });
 
-  // /update-agent — Start conversational agent update
-  app.command('/update-agent', async ({ command, ack }) => {
-    await ack();
-    const userId = command.user_id;
+    if (sources.length === 0) {
+      blocks.push({ type: 'section', text: { type: 'mrkdwn', text: '_No sources connected yet. Add one below._' } });
+    } else {
+      for (const s of sources) {
+        const statusIcon = s.status === 'active' ? ':large_green_circle:' :
+          s.status === 'syncing' ? ':arrows_counterclockwise:' :
+          s.status === 'needs_setup' ? ':warning:' : ':red_circle:';
+        const syncNote = s.auto_sync ? 'auto-sync on' : 'auto-sync off';
+        const lastSync = s.last_sync_at ? `last sync ${timeAgo(s.last_sync_at)}` : 'never synced';
 
-    const agents = await listAgents();
-    if (agents.length === 0) {
-      await postMessage(command.channel_id, 'No agents exist yet. Use `/new-agent` to create one.');
-      return;
-    }
+        const overflowOpts: any[] = [
+          { text: { type: 'plain_text', text: ':gear: Configure' }, value: `configure:${s.id}` },
+          { text: { type: 'plain_text', text: ':arrows_counterclockwise: Sync Now' }, value: `sync:${s.id}` },
+          { text: { type: 'plain_text', text: ':put_litter_in_its_place: Flush & Re-sync' }, value: `flush:${s.id}` },
+          { text: { type: 'plain_text', text: s.auto_sync ? ':no_bell: Disable Auto-sync' : ':bell: Enable Auto-sync' }, value: `toggle_sync:${s.id}` },
+          { text: { type: 'plain_text', text: ':wastebasket: Remove' }, value: `remove:${s.id}` },
+        ];
 
-    const editableAgents: typeof agents = [];
-    for (const a of agents) {
-      if (await canModifyAgent(a.id, userId)) editableAgents.push(a);
-    }
-    if (editableAgents.length === 0) {
-      await postMessage(command.channel_id, 'You don\'t have permission to update any agents.');
-      return;
-    }
-
-    const ts = await postBlocks(command.channel_id, [
-      {
-        type: 'section',
-        text: { type: 'mrkdwn', text: ':arrows_counterclockwise: *Which agent do you want to update?*' },
-        accessory: {
-          type: 'static_select',
-          action_id: 'update_agent_select',
-          placeholder: { type: 'plain_text', text: 'Choose an agent...' },
-          options: editableAgents.map(a => ({
-            text: { type: 'plain_text' as const, text: `${a.avatar_emoji} ${a.name}` },
-            value: a.id,
-          })),
-        },
-      },
-    ], 'Select an agent to update');
-
-    if (ts) {
-      await execute(
-        `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
-        [uuid(), JSON.stringify({
-          type: 'conversation',
-          step: 'awaiting_agent_select',
-          flow: 'update_agent',
-          userId,
-          channelId: command.channel_id,
-          threadTs: ts,
-        })],
-      );
-    }
-  });
-
-  // /agents — List all agents
-  app.command('/agents', async ({ command, ack, respond }) => {
-    await ack();
-    const agents = await listAgents();
-    if (agents.length === 0) {
-      await respond({ text: 'No agents created yet. Use `/new-agent` to create one.', response_type: 'ephemeral' });
-      return;
-    }
-    const lines = agents.map(a => {
-      const channels = (a.channel_ids?.length > 0 ? a.channel_ids : [a.channel_id]).map(c => `<#${c}>`).join(', ');
-      return `${a.avatar_emoji} *${a.name}* — ${channels} — ${a.status} — ${a.model} — ${a.permission_level}`;
-    });
-    await respond({ text: `*Active Agents (${agents.length}):*\n\n${lines.join('\n')}`, response_type: 'ephemeral' });
-  });
-
-  // /kb — Knowledge base commands
-  app.command('/kb', async ({ command, ack, respond }) => {
-    await ack();
-    const args = command.text.trim().split(/\s+/);
-    const subcommand = args[0];
-    switch (subcommand) {
-      case 'add':
-        await respond({ text: 'Upload a file or paste content to add to the knowledge base.', response_type: 'ephemeral' });
-        break;
-      case 'search': {
-        const query = args.slice(1).join(' ');
-        if (!query) { await respond({ text: 'Usage: `/kb search <query>`', response_type: 'ephemeral' }); return; }
-        const { searchKB } = await import('../modules/knowledge-base');
-        const results = await searchKB(query);
-        if (results.length === 0) {
-          await respond({ text: 'No KB entries found.', response_type: 'ephemeral' });
-        } else {
-          const lines = results.map(r => `• *${r.title}* (${r.category}): ${r.summary}`);
-          await respond({ text: `*KB Results:*\n${lines.join('\n')}`, response_type: 'ephemeral' });
-        }
-        break;
+        blocks.push({
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `${statusIcon} *${s.name}* (\`${s.source_type}\`)\n${s.entry_count} entries · ${syncNote} · ${lastSync}${s.error_message ? `\n:x: ${s.error_message.slice(0, 100)}` : ''}`,
+          },
+          accessory: {
+            type: 'overflow',
+            action_id: 'kb_source_overflow',
+            options: overflowOpts,
+          },
+        });
       }
-      default:
-        await respond({ text: 'Usage: `/kb add` or `/kb search <query>`', response_type: 'ephemeral' });
     }
+
+    blocks.push({
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: ':heavy_plus_sign: Add Source' },
+          action_id: 'kb_add_source',
+        },
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: ':key: API Keys' },
+          action_id: 'kb_manage_api_keys',
+        },
+      ],
+    });
+
+    // ── Pending Section ──
+    if (pending.length > 0) {
+      blocks.push({ type: 'divider' });
+      blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `:hourglass: *Pending Approval (${pending.length})*` } });
+
+      for (const p of pending.slice(0, 5)) {
+        blocks.push({
+          type: 'section',
+          text: { type: 'mrkdwn', text: `*${p.title}* (${p.category})\n${p.summary.slice(0, 150)}${p.contributed_by ? ` — by ${p.contributed_by.slice(0, 8)}` : ''}` },
+          accessory: {
+            type: 'overflow',
+            action_id: 'kb_entry_overflow',
+            options: [
+              { text: { type: 'plain_text', text: ':white_check_mark: Approve' }, value: `approve:${p.id}` },
+              { text: { type: 'plain_text', text: ':eyes: View' }, value: `view:${p.id}` },
+              { text: { type: 'plain_text', text: ':wastebasket: Delete' }, value: `delete:${p.id}` },
+            ],
+          },
+        });
+      }
+    }
+
+    // ── Recent Entries ──
+    if (entries.length > 0) {
+      blocks.push({ type: 'divider' });
+      blocks.push({ type: 'section', text: { type: 'mrkdwn', text: ':white_check_mark: *Recent Entries*' } });
+
+      for (const e of entries.slice(0, 5)) {
+        const tagStr = e.tags.length > 0 ? ` · ${e.tags.slice(0, 3).join(', ')}` : '';
+        blocks.push({
+          type: 'section',
+          text: { type: 'mrkdwn', text: `*${e.title}* (${e.category}${tagStr})\n${e.summary.slice(0, 150)}` },
+          accessory: {
+            type: 'overflow',
+            action_id: 'kb_entry_overflow',
+            options: [
+              { text: { type: 'plain_text', text: ':eyes: View' }, value: `view:${e.id}` },
+              { text: { type: 'plain_text', text: ':wastebasket: Delete' }, value: `delete:${e.id}` },
+            ],
+          },
+        });
+      }
+    }
+
+    blocks.push({ type: 'divider' });
+    blocks.push({
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: ':heavy_plus_sign: Add Entry' },
+          action_id: 'kb_add_entry_btn',
+        },
+      ],
+    });
+
+    await postBlocks(command.channel_id, blocks, 'Knowledge Base');
   });
+}
+
+// ── Helper: start new/update agent flows ──
+
+async function startNewAgentFlow(userId: string, channelId: string): Promise<void> {
+  const ts = await postBlocks(channelId, [
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: ':robot_face: *Let\'s create a new agent!*\n\nDescribe what you want this agent to do. Everything else — name, tools, skills, triggers, model, permissions — will be auto-configured.\n\n_Reply in this thread with the goal._',
+      },
+    },
+  ], 'New agent — describe what it should do');
+
+  if (ts) {
+    await execute(
+      `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
+      [uuid(), JSON.stringify({
+        type: 'conversation',
+        step: 'awaiting_goal',
+        flow: 'new_agent',
+        userId,
+        channelId,
+        threadTs: ts,
+      })],
+    );
+  }
+}
+
+async function startUpdateAgentFlow(userId: string, channelId: string): Promise<void> {
+  const agents = await listAgents();
+  if (agents.length === 0) {
+    await postMessage(channelId, 'No agents exist yet. Use `/agents` to create one.');
+    return;
+  }
+
+  const editableAgents: typeof agents = [];
+  for (const a of agents) {
+    if (await canModifyAgent(a.id, userId)) editableAgents.push(a);
+  }
+  if (editableAgents.length === 0) {
+    await postMessage(channelId, 'You don\'t have permission to update any agents.');
+    return;
+  }
+
+  const ts = await postBlocks(channelId, [
+    {
+      type: 'section',
+      text: { type: 'mrkdwn', text: ':arrows_counterclockwise: *Which agent do you want to update?*' },
+      accessory: {
+        type: 'static_select',
+        action_id: 'update_agent_select',
+        placeholder: { type: 'plain_text', text: 'Choose an agent...' },
+        options: editableAgents.map(a => ({
+          text: { type: 'plain_text' as const, text: `${a.avatar_emoji} ${a.name}` },
+          value: a.id,
+        })),
+      },
+    },
+  ], 'Select an agent to update');
+
+  if (ts) {
+    await execute(
+      `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
+      [uuid(), JSON.stringify({
+        type: 'conversation',
+        step: 'awaiting_agent_select',
+        flow: 'update_agent',
+        userId,
+        channelId,
+        threadTs: ts,
+      })],
+    );
+  }
+}
+
+function timeAgo(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
 }
 
 // ── Conversational Handlers ──
 
 export function registerInlineActions(app: App): void {
+  // ── Agent overflow menu ──
+  app.action('agent_overflow', async ({ action, ack, body }) => {
+    await ack();
+    const selected = (action as any).selected_option?.value as string;
+    if (!selected) return;
+
+    const [actionType, agentId] = selected.split(':');
+    const userId = body.user.id;
+    const channelId = body.channel?.id;
+    const triggerId = (body as any).trigger_id;
+
+    switch (actionType) {
+      case 'view_config': {
+        const agent = await getAgent(agentId);
+        if (!agent) { if (channelId) await postMessage(channelId, ':x: Agent not found.'); return; }
+        const channels = (agent.channel_ids?.length > 0 ? agent.channel_ids : [agent.channel_id]).map((c: string) => `<#${c}>`).join(', ');
+        const blocks: any[] = [
+          { type: 'header', text: { type: 'plain_text', text: `${agent.avatar_emoji} ${agent.name}` } },
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `*Status:* ${agent.status}\n*Model:* \`${agent.model}\`\n*Permissions:* \`${agent.permission_level}\`\n*Memory:* ${agent.memory_enabled ? 'on' : 'off'}\n*Channels:* ${channels}\n*Tools:* ${agent.tools.join(', ') || 'none'}\n*Responds to:* ${agent.respond_to_all_messages ? 'all messages' : 'relevant messages + @mentions'}`,
+            },
+          },
+          { type: 'divider' },
+          {
+            type: 'section',
+            text: { type: 'mrkdwn', text: `*System Prompt:*\n\`\`\`${agent.system_prompt.slice(0, 2500)}${agent.system_prompt.length > 2500 ? '...' : ''}\`\`\`` },
+          },
+        ];
+        if (channelId) await postBlocks(channelId, blocks, `Config: ${agent.name}`);
+        break;
+      }
+
+      case 'update': {
+        if (!channelId) return;
+        if (!(await canModifyAgent(agentId, userId))) {
+          await postMessage(channelId, ':x: You don\'t have permission to update this agent.');
+          return;
+        }
+        const agent = await getAgent(agentId);
+        if (!agent) return;
+        const currentChannels = agent.channel_ids?.length > 0 ? agent.channel_ids : [agent.channel_id];
+        const channelLabels = currentChannels.map((c: string) => `<#${c}>`).join(', ');
+
+        const ts = await postBlocks(channelId, [
+          {
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `Selected *${agent.avatar_emoji} ${agent.name}*\n\n` +
+                `Current config: *${agent.model}* model | *${agent.permission_level}* perms | ${agent.tools.length} tools | memory ${agent.memory_enabled ? 'on' : 'off'} | channels: ${channelLabels}\n\n` +
+                `_What would you like to change? Reply in this thread._`,
+            },
+          },
+        ], `Update ${agent.name}`);
+
+        if (ts) {
+          await execute(
+            `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
+            [uuid(), JSON.stringify({
+              type: 'conversation',
+              step: 'awaiting_update_request',
+              flow: 'update_agent',
+              agentId,
+              userId,
+              channelId,
+              threadTs: ts,
+            })],
+          );
+        }
+        break;
+      }
+
+      case 'pause': {
+        try {
+          await updateAgent(agentId, { status: 'paused' } as any, userId);
+          const agent = await getAgent(agentId);
+          if (channelId) await postMessage(channelId, `:double_vertical_bar: Agent *${agent?.name || agentId}* paused.`);
+        } catch (err: any) {
+          if (channelId) await postMessage(channelId, `:x: ${err.message}`);
+        }
+        break;
+      }
+
+      case 'resume': {
+        try {
+          await updateAgent(agentId, { status: 'active' } as any, userId);
+          const agent = await getAgent(agentId);
+          if (channelId) await postMessage(channelId, `:arrow_forward: Agent *${agent?.name || agentId}* resumed.`);
+        } catch (err: any) {
+          if (channelId) await postMessage(channelId, `:x: ${err.message}`);
+        }
+        break;
+      }
+
+      case 'delete': {
+        if (!(await canModifyAgent(agentId, userId))) {
+          if (channelId) await postMessage(channelId, ':x: You don\'t have permission to delete this agent.');
+          return;
+        }
+        // Show confirmation
+        if (channelId) {
+          const agent = await getAgent(agentId);
+          await postBlocks(channelId, [
+            {
+              type: 'section',
+              text: { type: 'mrkdwn', text: `:warning: Are you sure you want to delete *${agent?.name || agentId}*? This cannot be undone.` },
+            },
+            {
+              type: 'actions',
+              elements: [
+                {
+                  type: 'button',
+                  text: { type: 'plain_text', text: ':wastebasket: Yes, delete' },
+                  style: 'danger',
+                  action_id: 'confirm_delete_agent',
+                  value: agentId,
+                },
+                {
+                  type: 'button',
+                  text: { type: 'plain_text', text: 'Cancel' },
+                  action_id: 'cancel_delete_agent',
+                  value: agentId,
+                },
+              ],
+            },
+          ], 'Confirm delete');
+        }
+        break;
+      }
+    }
+  });
+
+  // "New Agent" button from /agents dashboard
+  app.action('agents_new_agent', async ({ ack, body }) => {
+    await ack();
+    const channelId = body.channel?.id;
+    if (!channelId) return;
+    await startNewAgentFlow(body.user.id, channelId);
+  });
+
+  // Confirm/cancel delete agent
+  app.action('confirm_delete_agent', async ({ action, ack, body }) => {
+    await ack();
+    const agentId = (action as any).value;
+    const userId = body.user.id;
+    try {
+      const agent = await getAgent(agentId);
+      await execute('DELETE FROM agents WHERE id = $1', [agentId]);
+      await replyToAction(body, `:wastebasket: Agent *${agent?.name || agentId}* deleted.`);
+    } catch (err: any) {
+      await replyToAction(body, `:x: ${err.message}`);
+    }
+  });
+
+  app.action('cancel_delete_agent', async ({ ack, body }) => {
+    await ack();
+    await replyToAction(body, ':ok: Deletion cancelled.');
+  });
+
+  // ── KB Source overflow menu ──
+  app.action('kb_source_overflow', async ({ action, ack, body }) => {
+    await ack();
+    const selected = (action as any).selected_option?.value as string;
+    if (!selected) return;
+
+    const colonIdx = selected.indexOf(':');
+    const actionType = selected.slice(0, colonIdx);
+    const sourceId = selected.slice(colonIdx + 1);
+    const userId = body.user.id;
+    const channelId = body.channel?.id;
+    const triggerId = (body as any).trigger_id;
+
+    const { isSuperadmin } = await import('../modules/access-control');
+    if (!(await isSuperadmin(userId))) return;
+
+    const { getSource, startSync, flushAndResync, toggleAutoSync, deleteSource } = await import('../modules/kb-sources');
+    const source = await getSource(sourceId);
+    if (!source) { if (channelId) await postMessage(channelId, ':x: Source not found.'); return; }
+
+    switch (actionType) {
+      case 'configure': {
+        const { getConnector } = await import('../modules/kb-sources/connectors');
+        const connector = getConnector(source.source_type);
+        const config = JSON.parse(source.config_json || '{}');
+
+        const configBlocks: any[] = [
+          { type: 'section', text: { type: 'mrkdwn', text: `*Current config for ${source.name}:*\n${Object.keys(config).length > 0 ? Object.entries(config).map(([k, v]) => `• \`${k}\` = \`${String(v).slice(0, 50)}\``).join('\n') : '_No config set_'}` } },
+          { type: 'divider' },
+        ];
+
+        // Build input fields from connector definition
+        for (const field of connector.configFields) {
+          configBlocks.push({
+            type: 'input', block_id: `src_cfg_${field.key}`, optional: field.optional !== false,
+            label: { type: 'plain_text', text: field.label },
+            element: {
+              type: 'plain_text_input', action_id: `src_input_${field.key}`,
+              placeholder: { type: 'plain_text', text: field.placeholder },
+              ...(config[field.key] ? { initial_value: config[field.key] } : {}),
+            },
+          });
+        }
+
+        await openModal(triggerId, {
+          type: 'modal',
+          callback_id: 'kb_source_config_modal',
+          private_metadata: JSON.stringify({ sourceId, sourceType: source.source_type }),
+          title: { type: 'plain_text', text: `Configure Source`.slice(0, 24) },
+          submit: { type: 'plain_text', text: 'Save' },
+          blocks: configBlocks,
+        });
+        break;
+      }
+
+      case 'sync': {
+        try {
+          await startSync(sourceId);
+          if (channelId) await postMessage(channelId, `:arrows_counterclockwise: Sync started for *${source.name}*`);
+        } catch (err: any) {
+          if (channelId) {
+            if (err.message.includes('not configured')) {
+              await postMessage(channelId, `:warning: ${err.message}\n\nUse the :key: *API Keys* button to set up credentials.`);
+            } else {
+              await postMessage(channelId, `:x: ${err.message}`);
+            }
+          }
+        }
+        break;
+      }
+
+      case 'flush': {
+        try {
+          await flushAndResync(sourceId, userId);
+          if (channelId) await postMessage(channelId, `:put_litter_in_its_place: Flushed & re-syncing *${source.name}*`);
+        } catch (err: any) {
+          if (channelId) await postMessage(channelId, `:x: ${err.message}`);
+        }
+        break;
+      }
+
+      case 'toggle_sync': {
+        const newState = !source.auto_sync;
+        await toggleAutoSync(sourceId, newState);
+        if (channelId) await postMessage(channelId, `${newState ? ':bell:' : ':no_bell:'} Auto-sync ${newState ? 'enabled' : 'disabled'} for *${source.name}*`);
+        break;
+      }
+
+      case 'remove': {
+        await deleteSource(sourceId, userId);
+        if (channelId) await postMessage(channelId, `:wastebasket: Source *${source.name}* removed.`);
+        break;
+      }
+    }
+  });
+
+  // "Add Source" button
+  app.action('kb_add_source', async ({ ack, body }) => {
+    await ack();
+    const triggerId = (body as any).trigger_id;
+    const { listConnectors } = await import('../modules/kb-sources/connectors');
+    const connectors = listConnectors();
+
+    await openModal(triggerId, {
+      type: 'modal',
+      callback_id: 'kb_add_source_modal',
+      title: { type: 'plain_text', text: 'Add KB Source' },
+      submit: { type: 'plain_text', text: 'Next' },
+      blocks: [
+        {
+          type: 'input', block_id: 'source_name_block',
+          label: { type: 'plain_text', text: 'Source Name' },
+          element: { type: 'plain_text_input', action_id: 'source_name_input', placeholder: { type: 'plain_text', text: 'e.g. Engineering Docs' } },
+        },
+        {
+          type: 'input', block_id: 'source_type_block',
+          label: { type: 'plain_text', text: 'Source Type' },
+          element: {
+            type: 'static_select', action_id: 'source_type_input',
+            options: connectors.map(c => ({
+              text: { type: 'plain_text' as const, text: `${c.icon} ${c.label}` },
+              value: c.type,
+            })),
+          },
+        },
+      ],
+    });
+  });
+
+  // "API Keys" button
+  app.action('kb_manage_api_keys', async ({ ack, body }) => {
+    await ack();
+    const triggerId = (body as any).trigger_id;
+    const { listApiKeys } = await import('../modules/kb-sources');
+    const { listConnectors } = await import('../modules/kb-sources/connectors');
+    const keys = await listApiKeys();
+    const connectors = listConnectors();
+
+    // Group unique providers
+    const providers = [...new Set(connectors.map(c => c.provider))];
+    const keyMap = new Map(keys.map(k => [k.provider, k]));
+
+    const blocks: any[] = [];
+    for (const provider of providers) {
+      const key = keyMap.get(provider);
+      const statusIcon = key?.setup_complete ? ':white_check_mark:' : ':x:';
+      const connector = connectors.find(c => c.provider === provider)!;
+
+      blocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `${statusIcon} *${provider}* — ${connector.label}\n${key ? (key.setup_complete ? 'Configured' : 'Incomplete setup') : 'Not configured'}`,
+        },
+        accessory: {
+          type: 'button',
+          text: { type: 'plain_text', text: key ? ':gear: Update' : ':key: Setup' },
+          action_id: 'kb_setup_api_key',
+          value: provider,
+        },
+      });
+    }
+
+    await openModal(triggerId, {
+      type: 'modal',
+      callback_id: 'kb_api_keys_view',
+      title: { type: 'plain_text', text: 'API Keys' },
+      close: { type: 'plain_text', text: 'Done' },
+      blocks,
+    });
+  });
+
+  // Setup individual API key button (inside the API Keys modal)
+  app.action('kb_setup_api_key', async ({ action, ack, body }) => {
+    await ack();
+    const provider = (action as any).value;
+    const triggerId = (body as any).trigger_id;
+
+    const { getApiKey } = await import('../modules/kb-sources');
+    const { CONNECTORS } = await import('../modules/kb-sources/connectors');
+
+    // Find connector that uses this provider
+    const connector = Object.values(CONNECTORS).find(c => c.provider === provider)!;
+    const existingKey = await getApiKey(provider);
+    const existingConfig = existingKey ? JSON.parse(existingKey.config_json) : {};
+
+    const blocks: any[] = [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `:key: *Setup ${provider} API credentials*\n\n` +
+            connector.setupSteps.join('\n'),
+        },
+      },
+      { type: 'divider' },
+    ];
+
+    for (const key of connector.requiredKeys) {
+      blocks.push({
+        type: 'input', block_id: `apikey_${key}`,
+        label: { type: 'plain_text', text: key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) },
+        element: {
+          type: 'plain_text_input', action_id: `apikey_input_${key}`,
+          placeholder: { type: 'plain_text', text: `Enter ${key}...` },
+          ...(existingConfig[key] ? { initial_value: existingConfig[key] } : {}),
+        },
+      });
+    }
+
+    await openModal(triggerId, {
+      type: 'modal',
+      callback_id: 'kb_api_key_save_modal',
+      private_metadata: JSON.stringify({ provider, requiredKeys: connector.requiredKeys }),
+      title: { type: 'plain_text', text: `Setup ${provider}`.slice(0, 24) },
+      submit: { type: 'plain_text', text: 'Save' },
+      blocks,
+    });
+  });
+
+  // "Add Entry" button from KB dashboard
+  app.action('kb_add_entry_btn', async ({ ack, body }) => {
+    await ack();
+    const triggerId = (body as any).trigger_id;
+    await openModal(triggerId, {
+      type: 'modal',
+      callback_id: 'kb_add_modal',
+      title: { type: 'plain_text', text: 'Add KB Entry' },
+      submit: { type: 'plain_text', text: 'Add' },
+      blocks: [
+        {
+          type: 'input', block_id: 'title_block',
+          label: { type: 'plain_text', text: 'Title' },
+          element: { type: 'plain_text_input', action_id: 'title_input', placeholder: { type: 'plain_text', text: 'e.g. Zendesk API Rate Limits' } },
+        },
+        {
+          type: 'input', block_id: 'category_block',
+          label: { type: 'plain_text', text: 'Category' },
+          element: {
+            type: 'static_select', action_id: 'category_input',
+            options: ['General', 'Engineering', 'Product', 'Support', 'Sales', 'HR', 'Legal', 'Finance', 'Operations'].map(c => ({
+              text: { type: 'plain_text' as const, text: c }, value: c.toLowerCase(),
+            })),
+          },
+        },
+        {
+          type: 'input', block_id: 'content_block',
+          label: { type: 'plain_text', text: 'Content' },
+          element: { type: 'plain_text_input', action_id: 'content_input', multiline: true, placeholder: { type: 'plain_text', text: 'Paste the knowledge content here...' } },
+        },
+        {
+          type: 'input', block_id: 'tags_block', optional: true,
+          label: { type: 'plain_text', text: 'Tags (comma-separated)' },
+          element: { type: 'plain_text_input', action_id: 'tags_input', placeholder: { type: 'plain_text', text: 'e.g. zendesk, api, limits' } },
+        },
+      ],
+    });
+  });
+
   // Handle agent selection dropdown for /update-agent
   app.action('update_agent_select', async ({ action, ack, body }) => {
     await ack();
@@ -305,6 +1044,453 @@ export function registerInlineActions(app: App): void {
     const conv = row.data;
     await execute(`DELETE FROM pending_confirmations WHERE id = $1`, [row.id]);
     await showUpdateAgentConfirmation(conv.analysis, conv.agentId, conv.goal, userId, channelId, threadTs, null);
+  });
+
+  // ── Tool overflow menu actions ──
+  app.action('tool_overflow', async ({ action, ack, body }) => {
+    await ack();
+    const selected = (action as any).selected_option?.value as string;
+    if (!selected) return;
+
+    const [actionType, toolName] = selected.split(':');
+    const userId = body.user.id;
+    const channelId = body.channel?.id;
+    const triggerId = (body as any).trigger_id;
+
+    const { isSuperadmin } = await import('../modules/access-control');
+    if (!(await isSuperadmin(userId))) return;
+
+    const {
+      getCustomTool, getToolConfig, approveCustomTool, deleteCustomTool,
+    } = await import('../modules/tools');
+
+    switch (actionType) {
+      case 'configure': {
+        const tool = await getCustomTool(toolName);
+        if (!tool) return;
+        const config = JSON.parse(tool.config_json || '{}');
+        const configKeys = Object.keys(config);
+
+        const existingBlocks: any[] = configKeys.length > 0
+          ? [{
+              type: 'section', block_id: 'existing_config',
+              text: {
+                type: 'mrkdwn',
+                text: '*Current config:*\n' + configKeys.map(k => {
+                  const v = String(config[k]);
+                  const masked = v.length > 6 ? v.slice(0, 3) + '***' + v.slice(-3) : '***';
+                  return `• \`${k}\` = \`${masked}\``;
+                }).join('\n'),
+              },
+            }]
+          : [{ type: 'section', text: { type: 'mrkdwn', text: '_No config set yet_' } }];
+
+        const { openModal } = await import('./index');
+        await openModal(triggerId, {
+          type: 'modal',
+          callback_id: 'tool_config_modal',
+          private_metadata: toolName,
+          title: { type: 'plain_text', text: `Configure ${toolName}`.slice(0, 24) },
+          submit: { type: 'plain_text', text: 'Save' },
+          blocks: [
+            ...existingBlocks,
+            { type: 'divider' },
+            {
+              type: 'input', block_id: 'config_key', optional: true,
+              label: { type: 'plain_text', text: 'Config Key' },
+              element: { type: 'plain_text_input', action_id: 'key_input', placeholder: { type: 'plain_text', text: 'e.g. subdomain, email, api_token' } },
+            },
+            {
+              type: 'input', block_id: 'config_value', optional: true,
+              label: { type: 'plain_text', text: 'Config Value' },
+              element: { type: 'plain_text_input', action_id: 'value_input', placeholder: { type: 'plain_text', text: 'e.g. mycompany' } },
+            },
+            {
+              type: 'input', block_id: 'remove_key', optional: true,
+              label: { type: 'plain_text', text: 'Remove Key (leave blank to skip)' },
+              element: { type: 'plain_text_input', action_id: 'remove_input', placeholder: { type: 'plain_text', text: 'e.g. old_key' } },
+            },
+          ],
+        });
+        break;
+      }
+
+      case 'access': {
+        const tool = await getCustomTool(toolName);
+        if (!tool) return;
+        const { openModal } = await import('./index');
+        await openModal(triggerId, {
+          type: 'modal',
+          callback_id: 'tool_access_modal',
+          private_metadata: toolName,
+          title: { type: 'plain_text', text: `Access: ${toolName}`.slice(0, 24) },
+          submit: { type: 'plain_text', text: 'Update' },
+          blocks: [{
+            type: 'input', block_id: 'access_level',
+            label: { type: 'plain_text', text: 'Access Level' },
+            element: {
+              type: 'static_select', action_id: 'access_select',
+              initial_option: {
+                text: { type: 'plain_text', text: tool.access_level },
+                value: tool.access_level,
+              },
+              options: [
+                { text: { type: 'plain_text', text: 'read-only' }, value: 'read-only' },
+                { text: { type: 'plain_text', text: 'read-write' }, value: 'read-write' },
+              ],
+            },
+          }],
+        });
+        break;
+      }
+
+      case 'add_to_agent': {
+        const agents = await listAgents();
+        if (agents.length === 0) {
+          if (channelId) await postMessage(channelId, ':x: No agents exist yet.');
+          return;
+        }
+        const { openModal } = await import('./index');
+        await openModal(triggerId, {
+          type: 'modal',
+          callback_id: 'tool_add_to_agent_modal',
+          private_metadata: toolName,
+          title: { type: 'plain_text', text: `Add to Agent` },
+          submit: { type: 'plain_text', text: 'Add' },
+          blocks: [{
+            type: 'input', block_id: 'agent_select_block',
+            label: { type: 'plain_text', text: `Add *${toolName}* to:` },
+            element: {
+              type: 'static_select', action_id: 'agent_select',
+              options: agents.map(a => ({
+                text: { type: 'plain_text' as const, text: `${a.avatar_emoji} ${a.name}` },
+                value: a.id,
+              })),
+            },
+          }],
+        });
+        break;
+      }
+
+      case 'approve': {
+        try {
+          await approveCustomTool(toolName, userId);
+          if (channelId) await postMessage(channelId, `:white_check_mark: Tool *${toolName}* approved.`);
+        } catch (err: any) {
+          if (channelId) await postMessage(channelId, `:x: ${err.message}`);
+        }
+        break;
+      }
+
+      case 'delete': {
+        try {
+          await deleteCustomTool(toolName, userId);
+          if (channelId) await postMessage(channelId, `:wastebasket: Tool *${toolName}* deleted.`);
+        } catch (err: any) {
+          if (channelId) await postMessage(channelId, `:x: ${err.message}`);
+        }
+        break;
+      }
+    }
+  });
+
+  // ── KB entry overflow menu actions ──
+  app.action('kb_entry_overflow', async ({ action, ack, body }) => {
+    await ack();
+    const selected = (action as any).selected_option?.value as string;
+    if (!selected) return;
+
+    const [actionType, entryId] = selected.split(':');
+    const userId = body.user.id;
+    const channelId = body.channel?.id;
+
+    const { getKBEntry, approveKBEntry, deleteKBEntry } = await import('../modules/knowledge-base');
+
+    switch (actionType) {
+      case 'view': {
+        const entry = await getKBEntry(entryId);
+        if (!entry) { if (channelId) await postMessage(channelId, ':x: Entry not found.'); return; }
+        const tagStr = entry.tags.length > 0 ? `\n*Tags:* ${entry.tags.join(', ')}` : '';
+        const blocks: any[] = [
+          { type: 'header', text: { type: 'plain_text', text: entry.title } },
+          { type: 'section', text: { type: 'mrkdwn', text: `*Category:* ${entry.category} | *Status:* ${entry.approved ? 'Approved' : 'Pending'}${tagStr}\n\n*Summary:* ${entry.summary}` } },
+          { type: 'divider' },
+          { type: 'section', text: { type: 'mrkdwn', text: entry.content.slice(0, 2900) + (entry.content.length > 2900 ? '\n_...truncated_' : '') } },
+        ];
+        if (channelId) await postBlocks(channelId, blocks, entry.title);
+        break;
+      }
+      case 'approve': {
+        try {
+          const entry = await approveKBEntry(entryId);
+          if (channelId) await postMessage(channelId, `:white_check_mark: KB entry *${entry.title}* approved and indexed.`);
+        } catch (err: any) {
+          if (channelId) await postMessage(channelId, `:x: ${err.message}`);
+        }
+        break;
+      }
+      case 'delete': {
+        const entry = await getKBEntry(entryId);
+        try {
+          await deleteKBEntry(entryId);
+          if (channelId) await postMessage(channelId, `:wastebasket: KB entry${entry ? ` *${entry.title}*` : ''} deleted.`);
+        } catch (err: any) {
+          if (channelId) await postMessage(channelId, `:x: ${err.message}`);
+        }
+        break;
+      }
+    }
+  });
+}
+
+// ── Tool Modal Submissions ──
+
+export function registerToolAndKBModals(app: App): void {
+  // Tool config modal
+  app.view('tool_config_modal', async ({ ack, body, view }) => {
+    await ack();
+    const toolName = view.private_metadata;
+    const userId = body.user.id;
+    const vals = view.state.values;
+
+    const { setToolConfigKey, removeToolConfigKey } = await import('../modules/tools');
+
+    const key = vals.config_key?.key_input?.value?.trim();
+    const value = vals.config_value?.value_input?.value?.trim();
+    const removeKey = vals.remove_key?.remove_input?.value?.trim();
+
+    try {
+      if (key && value) {
+        await setToolConfigKey(toolName, key, value, userId);
+      }
+      if (removeKey) {
+        await removeToolConfigKey(toolName, removeKey, userId);
+      }
+      // DM the user confirmation
+      await sendDMBlocks(userId, [
+        { type: 'section', text: { type: 'mrkdwn', text: `:white_check_mark: *${toolName}* config updated.` + (key ? `\nSet \`${key}\`` : '') + (removeKey ? `\nRemoved \`${removeKey}\`` : '') } },
+      ], `Tool config updated: ${toolName}`);
+    } catch (err: any) {
+      await sendDMBlocks(userId, [
+        { type: 'section', text: { type: 'mrkdwn', text: `:x: Failed to update *${toolName}* config: ${err.message}` } },
+      ], 'Config update failed');
+    }
+  });
+
+  // Tool access level modal
+  app.view('tool_access_modal', async ({ ack, body, view }) => {
+    await ack();
+    const toolName = view.private_metadata;
+    const userId = body.user.id;
+    const accessLevel = view.state.values.access_level?.access_select?.selected_option?.value;
+
+    if (accessLevel && (accessLevel === 'read-only' || accessLevel === 'read-write')) {
+      try {
+        const { updateToolAccessLevel } = await import('../modules/tools');
+        await updateToolAccessLevel(toolName, accessLevel, userId);
+        await sendDMBlocks(userId, [
+          { type: 'section', text: { type: 'mrkdwn', text: `:white_check_mark: *${toolName}* access level set to \`${accessLevel}\`` } },
+        ], 'Access level updated');
+      } catch (err: any) {
+        await sendDMBlocks(userId, [
+          { type: 'section', text: { type: 'mrkdwn', text: `:x: ${err.message}` } },
+        ], 'Access update failed');
+      }
+    }
+  });
+
+  // Tool add-to-agent modal
+  app.view('tool_add_to_agent_modal', async ({ ack, body, view }) => {
+    await ack();
+    const toolName = view.private_metadata;
+    const userId = body.user.id;
+    const agentId = view.state.values.agent_select_block?.agent_select?.selected_option?.value;
+
+    if (agentId) {
+      try {
+        const { addToolToAgent } = await import('../modules/tools');
+        await addToolToAgent(agentId, toolName, userId);
+        const agent = await getAgent(agentId);
+        await sendDMBlocks(userId, [
+          { type: 'section', text: { type: 'mrkdwn', text: `:white_check_mark: *${toolName}* added to agent *${agent?.name || agentId}*` } },
+        ], 'Tool added to agent');
+      } catch (err: any) {
+        await sendDMBlocks(userId, [
+          { type: 'section', text: { type: 'mrkdwn', text: `:x: ${err.message}` } },
+        ], 'Add to agent failed');
+      }
+    }
+  });
+
+  // KB add entry modal
+  app.view('kb_add_modal', async ({ ack, body, view }) => {
+    await ack();
+    const userId = body.user.id;
+    const vals = view.state.values;
+
+    const title = vals.title_block?.title_input?.value?.trim();
+    const category = vals.category_block?.category_input?.selected_option?.value || 'general';
+    const content = vals.content_block?.content_input?.value?.trim();
+    const tagsRaw = vals.tags_block?.tags_input?.value?.trim() || '';
+
+    if (!title || !content) {
+      await sendDMBlocks(userId, [
+        { type: 'section', text: { type: 'mrkdwn', text: ':x: Title and content are required.' } },
+      ], 'KB add failed');
+      return;
+    }
+
+    const tags = tagsRaw ? tagsRaw.split(',').map((t: string) => t.trim()).filter(Boolean) : [];
+
+    try {
+      const { createKBEntry } = await import('../modules/knowledge-base');
+      const entry = await createKBEntry({
+        title,
+        summary: content.slice(0, 200),
+        content,
+        category,
+        tags,
+        accessScope: 'all',
+        sourceType: 'manual',
+        contributedBy: userId,
+        approved: true,
+      });
+
+      await sendDMBlocks(userId, [
+        { type: 'section', text: { type: 'mrkdwn', text: `:white_check_mark: KB entry *${entry.title}* created and indexed!\nCategory: ${category} | Tags: ${tags.join(', ') || 'none'}` } },
+      ], 'KB entry created');
+    } catch (err: any) {
+      await sendDMBlocks(userId, [
+        { type: 'section', text: { type: 'mrkdwn', text: `:x: Failed to create KB entry: ${err.message}` } },
+      ], 'KB add failed');
+    }
+  });
+
+  // ── KB Source Modals ──
+
+  // Add source modal (step 1: name + type)
+  app.view('kb_add_source_modal', async ({ ack, body, view }) => {
+    await ack();
+    const userId = body.user.id;
+    const vals = view.state.values;
+    const name = vals.source_name_block?.source_name_input?.value?.trim();
+    const sourceType = vals.source_type_block?.source_type_input?.selected_option?.value;
+
+    if (!name || !sourceType) {
+      await sendDMBlocks(userId, [
+        { type: 'section', text: { type: 'mrkdwn', text: ':x: Name and source type are required.' } },
+      ], 'Source add failed');
+      return;
+    }
+
+    try {
+      const { getConnector, getProviderForConnector } = await import('../modules/kb-sources/connectors');
+      const { createSource, isProviderConfigured } = await import('../modules/kb-sources');
+      const connectorType = sourceType as import('../types').KBConnectorType;
+      const connector = getConnector(connectorType);
+      const provider = getProviderForConnector(connectorType);
+      const providerReady = await isProviderConfigured(provider);
+
+      // Create the source
+      const source = await createSource({
+        name,
+        sourceType: connectorType,
+        config: {},
+        createdBy: userId,
+      });
+
+      if (!providerReady) {
+        // Notify that API keys need to be set up first, with setup steps
+        await sendDMBlocks(userId, [
+          { type: 'section', text: { type: 'mrkdwn', text: `:white_check_mark: Source *${name}* created, but *${provider}* API keys need to be configured before syncing.` } },
+          { type: 'divider' },
+          { type: 'section', text: { type: 'mrkdwn', text: `*Setup steps for ${connector.label}:*\n\n${connector.setupSteps.join('\n')}` } },
+          { type: 'section', text: { type: 'mrkdwn', text: `_Use \`/kb\` → :key: *API Keys* to enter your credentials, then configure and sync the source._` } },
+        ], `Source created: ${name}`);
+      } else {
+        await sendDMBlocks(userId, [
+          { type: 'section', text: { type: 'mrkdwn', text: `:white_check_mark: Source *${name}* created!\n\nAPI keys for *${provider}* are already configured. Use the :gear: *Configure* action on the source in \`/kb\` to set source-specific settings (folder ID, URL, etc.), then sync.` } },
+        ], `Source created: ${name}`);
+      }
+    } catch (err: any) {
+      await sendDMBlocks(userId, [
+        { type: 'section', text: { type: 'mrkdwn', text: `:x: Failed to create source: ${err.message}` } },
+      ], 'Source add failed');
+    }
+  });
+
+  // Source config modal (source-specific settings like folder ID, URL, etc.)
+  app.view('kb_source_config_modal', async ({ ack, body, view }) => {
+    await ack();
+    const userId = body.user.id;
+    const meta = JSON.parse(view.private_metadata);
+    const { sourceId, sourceType } = meta;
+    const vals = view.state.values;
+
+    try {
+      const { getConnector } = await import('../modules/kb-sources/connectors');
+      const { updateSource } = await import('../modules/kb-sources');
+      const connector = getConnector(sourceType);
+
+      const config: Record<string, string> = {};
+      for (const field of connector.configFields) {
+        const val = vals[`src_cfg_${field.key}`]?.[`src_input_${field.key}`]?.value?.trim();
+        if (val) config[field.key] = val;
+      }
+
+      await updateSource(sourceId, { config_json: JSON.stringify(config) });
+
+      await sendDMBlocks(userId, [
+        { type: 'section', text: { type: 'mrkdwn', text: `:white_check_mark: Source config updated.\n${Object.entries(config).map(([k, v]) => `• \`${k}\` = \`${v}\``).join('\n') || '_No fields set_'}` } },
+      ], 'Source config updated');
+    } catch (err: any) {
+      await sendDMBlocks(userId, [
+        { type: 'section', text: { type: 'mrkdwn', text: `:x: Failed to update source config: ${err.message}` } },
+      ], 'Source config failed');
+    }
+  });
+
+  // API Key save modal
+  app.view('kb_api_key_save_modal', async ({ ack, body, view }) => {
+    await ack();
+    const userId = body.user.id;
+    const meta = JSON.parse(view.private_metadata);
+    const { provider, requiredKeys } = meta;
+    const vals = view.state.values;
+
+    try {
+      const { setApiKey } = await import('../modules/kb-sources');
+      const config: Record<string, string> = {};
+
+      for (const key of requiredKeys) {
+        const val = vals[`apikey_${key}`]?.[`apikey_input_${key}`]?.value?.trim();
+        if (val) config[key] = val;
+      }
+
+      await setApiKey(provider, config, userId);
+
+      const allSet = requiredKeys.every((k: string) => config[k] && config[k].length > 0);
+      await sendDMBlocks(userId, [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: allSet
+              ? `:white_check_mark: *${provider}* API credentials saved and verified! You can now sync sources that use ${provider}.`
+              : `:warning: *${provider}* credentials partially saved. Missing: ${requiredKeys.filter((k: string) => !config[k]).join(', ')}`,
+          },
+        },
+      ], `API key ${allSet ? 'saved' : 'partially saved'}: ${provider}`);
+    } catch (err: any) {
+      await sendDMBlocks(userId, [
+        { type: 'section', text: { type: 'mrkdwn', text: `:x: Failed to save API key: ${err.message}` } },
+      ], 'API key save failed');
+    }
+  });
+
+  // API Keys view (close-only, no submission needed)
+  app.view('kb_api_keys_view', async ({ ack }) => {
+    await ack();
   });
 }
 
@@ -785,12 +1971,15 @@ export function registerConfirmationActions(app: App): void {
       // Use existing channels or create new one
       const channelIds: string[] = existingChannelIds || (existingChannelId ? [existingChannelId] : [await createChannel(name)]);
 
+      // Merge builtin tools + read-only custom tools into agent's tool list
+      const agentTools = [...analysis.tools, ...(analysis.custom_tools || [])];
+
       const agent = await createAgent({
         name,
         channelId: channelIds[0],
         channelIds,
         systemPrompt: analysis.system_prompt,
-        tools: analysis.tools,
+        tools: agentTools,
         model: analysis.model,
         permissionLevel: analysis.permission_level,
         memoryEnabled: analysis.memory_enabled,
@@ -815,13 +2004,14 @@ export function registerConfirmationActions(app: App): void {
         } catch (err: any) { logger.warn('Trigger creation failed', { trigger: trigger.type, error: err.message }); }
       }
 
+      const allTools = [...analysis.tools, ...(analysis.custom_tools || [])];
       const lines = [
         `:white_check_mark: Agent *${agent.name}* is live! Created by <@${userId}>`,
         '',
         `*Goal:* ${goal.slice(0, 300)}`,
         `*Model:* ${analysis.model} | *Permissions:* ${analysis.permission_level} | *Memory:* ${analysis.memory_enabled ? 'on' : 'off'}`,
         `*Responds to:* ${analysis.respond_to_all_messages ? 'all messages' : 'relevant messages + @mentions'}`,
-        `*Tools:* ${analysis.tools.join(', ')}`,
+        `*Tools:* ${allTools.join(', ')}`,
         analysis.skills.length > 0 ? `*Skills:* ${analysis.skills.join(', ')}` : '',
         analysis.triggers.length > 0 ? `*Triggers:* ${analysis.triggers.map((t: any) => t.description).join(', ')}` : '',
       ].filter(Boolean);
@@ -831,25 +2021,15 @@ export function registerConfirmationActions(app: App): void {
       const channelLabels = channelIds.map((c: string) => `<#${c}>`).join(', ');
       await replyToAction(body, `:white_check_mark: Agent *${agent.name}* created! Channels: ${channelLabels}`);
 
-      // Best-effort tool/skill authoring in background (don't block user)
-      (async () => {
-        try {
-          if (analysis.new_tools_needed?.length > 0) {
-            const { authorTool } = await import('../modules/self-authoring');
-            for (const tool of analysis.new_tools_needed) {
-              try { await authorTool(agent.id, tool.description); } catch { /* best effort */ }
-            }
-          }
-          if (analysis.new_skills_needed?.length > 0) {
-            const { authorSkill } = await import('../modules/self-authoring');
-            for (const skill of analysis.new_skills_needed) {
-              try { await authorSkill(agent.id, skill.description); } catch { /* best effort */ }
-            }
-          }
-        } catch (err: any) {
-          logger.warn('Background tool/skill authoring failed', { error: err.message, agentId: agent.id });
-        }
-      })();
+      // If write tools were requested, notify admin for approval
+      if (analysis.write_tools_requested?.length > 0) {
+        await notifyAdminWriteToolRequest(agent.id, agent.name, analysis.write_tools_requested, userId);
+      }
+
+      // If new tools were needed (admin-only creation), notify admin
+      if (analysis.new_tools_needed?.length > 0) {
+        await notifyAdminNewToolRequest(agent.id, agent.name, analysis.new_tools_needed, goal, userId);
+      }
 
     } catch (err: any) {
       logger.error('Agent creation failed', { error: err.message });
@@ -889,9 +2069,10 @@ export function registerConfirmationActions(app: App): void {
 
       await replyToAction(body, ':gear: Updating agent...');
 
+      const mergedTools = [...analysis.tools, ...(analysis.custom_tools || [])];
       const updates: any = {
         system_prompt: analysis.system_prompt,
-        tools: analysis.tools,
+        tools: mergedTools,
         model: analysis.model,
         permission_level: analysis.permission_level,
         memory_enabled: analysis.memory_enabled,
@@ -934,36 +2115,27 @@ export function registerConfirmationActions(app: App): void {
         ? `\n*Channels:* ${updates.channel_ids.map((c: string) => `<#${c}>`).join(', ')}`
         : '';
 
+      const allUpdateTools = [...analysis.tools, ...(analysis.custom_tools || [])];
       await postMessage(postToChannel,
         `:arrows_counterclockwise: Agent *${agent.name}* updated by <@${userId}>\n\n` +
         `*Model:* ${analysis.model} | *Permissions:* ${analysis.permission_level} | *Memory:* ${analysis.memory_enabled ? 'on' : 'off'}\n` +
         `*Responds to:* ${analysis.respond_to_all_messages ? 'all messages' : 'relevant messages + @mentions'}\n` +
-        `*Tools:* ${analysis.tools.join(', ')}` +
+        `*Tools:* ${allUpdateTools.join(', ')}` +
         channelChangeNote + '\n' +
         `_${analysis.summary}_`
       );
       await replyToAction(body, `:white_check_mark: Agent *${agent.name}* updated!`);
       logger.info('confirm_update_agent: done', { agentId });
 
-      // Best-effort tool/skill authoring in background (don't block user)
-      (async () => {
-        try {
-          if (analysis.new_tools_needed?.length > 0) {
-            const { authorTool } = await import('../modules/self-authoring');
-            for (const tool of analysis.new_tools_needed) {
-              try { await authorTool(agentId!, tool.description); } catch { /* best effort */ }
-            }
-          }
-          if (analysis.new_skills_needed?.length > 0) {
-            const { authorSkill } = await import('../modules/self-authoring');
-            for (const skill of analysis.new_skills_needed) {
-              try { await authorSkill(agentId!, skill.description); } catch { /* best effort */ }
-            }
-          }
-        } catch (err: any) {
-          logger.warn('Background tool/skill authoring failed', { error: err.message, agentId });
-        }
-      })();
+      // If write tools were requested, notify admin for approval
+      if (analysis.write_tools_requested?.length > 0) {
+        await notifyAdminWriteToolRequest(agentId!, agent.name, analysis.write_tools_requested, userId);
+      }
+
+      // If new tools were needed, notify admin
+      if (analysis.new_tools_needed?.length > 0) {
+        await notifyAdminNewToolRequest(agentId!, agent.name, analysis.new_tools_needed, row.data.goal || '', userId);
+      }
       })()]); // Close Promise.race
 
     } catch (err: any) {
@@ -1014,11 +2186,12 @@ export function registerConfirmationActions(app: App): void {
       // Create a new channel for the agent
       const agentChannelId = await createChannel(agentName);
 
+      const retryTools = [...freshAnalysis.tools, ...(freshAnalysis.custom_tools || [])];
       const agent = await createAgent({
         name: agentName,
         channelId: agentChannelId,
         systemPrompt: freshAnalysis.system_prompt,
-        tools: freshAnalysis.tools,
+        tools: retryTools,
         model: freshAnalysis.model,
         permissionLevel: freshAnalysis.permission_level,
         memoryEnabled: freshAnalysis.memory_enabled,
@@ -1043,17 +2216,12 @@ export function registerConfirmationActions(app: App): void {
         } catch (err: any) { logger.warn('Trigger creation failed', { error: err.message }); }
       }
 
+      // If new tools or write tools were needed, notify admin
       if (freshAnalysis.new_tools_needed?.length > 0) {
-        const { authorTool } = await import('../modules/self-authoring');
-        for (const tool of freshAnalysis.new_tools_needed) {
-          try { await authorTool(agent.id, tool.description); } catch { /* best effort */ }
-        }
+        await notifyAdminNewToolRequest(agent.id, agent.name, freshAnalysis.new_tools_needed, goal, requestedBy);
       }
-      if (freshAnalysis.new_skills_needed?.length > 0) {
-        const { authorSkill } = await import('../modules/self-authoring');
-        for (const skill of freshAnalysis.new_skills_needed) {
-          try { await authorSkill(agent.id, skill.description); } catch { /* best effort */ }
-        }
+      if (freshAnalysis.write_tools_requested?.length > 0) {
+        await notifyAdminWriteToolRequest(agent.id, agent.name, freshAnalysis.write_tools_requested, requestedBy);
       }
 
       // Remove the feature request
@@ -1082,6 +2250,59 @@ export function registerConfirmationActions(app: App): void {
     await execute(`DELETE FROM pending_confirmations WHERE id = $1`, [requestId]);
     await replyToAction(body, ':wastebasket: Feature request dismissed.');
   });
+
+  // ── Write Tool Approval Actions ──
+
+  app.action('approve_write_tools', async ({ action, ack, body }) => {
+    await ack();
+    const requestId = (action as any).value;
+    const row = await queryOne<{ data: any }>(
+      `SELECT data FROM pending_confirmations WHERE id = $1`, [requestId],
+    );
+
+    if (!row || row.data.type !== 'write_tool_approval') {
+      await replyToAction(body, ':x: This request no longer exists.');
+      return;
+    }
+
+    const { agentId, agentName, writeTools, requestedBy } = row.data;
+
+    try {
+      const { addToolToAgent } = await import('../modules/tools');
+      const adminUserId = body.user.id;
+      for (const toolName of writeTools) {
+        try { await addToolToAgent(agentId, toolName, adminUserId); }
+        catch (err: any) { logger.warn('Write tool attach failed', { toolName, error: err.message }); }
+      }
+
+      await execute(`DELETE FROM pending_confirmations WHERE id = $1`, [requestId]);
+      await replyToAction(body, `:white_check_mark: Write tools (${writeTools.join(', ')}) approved and added to *${agentName}*!`);
+
+      // Notify the requesting user
+      const agentObj = await getAgent(agentId);
+      if (agentObj) {
+        const postChannel = agentObj.channel_ids?.[0] || agentObj.channel_id;
+        await postMessage(postChannel,
+          `:unlock: <@${requestedBy}> The write tools (${writeTools.join(', ')}) have been approved for *${agentName}* by an admin.`
+        );
+      }
+    } catch (err: any) {
+      await replyToAction(body, `:x: Failed to approve: ${err.message}`);
+    }
+  });
+
+  app.action('deny_write_tools', async ({ action, ack, body }) => {
+    await ack();
+    const requestId = (action as any).value;
+    await execute(`DELETE FROM pending_confirmations WHERE id = $1`, [requestId]);
+    await replyToAction(body, ':x: Write tool request denied.');
+  });
+
+  app.action('ack_new_tool_request', async ({ action, ack, body }) => {
+    await ack();
+    const requestId = (action as any).value;
+    await replyToAction(body, ':white_check_mark: Acknowledged. The tool(s) will need to be created by an admin via code.');
+  });
 }
 
 // ── Helpers ──
@@ -1096,7 +2317,12 @@ function buildConfigSummary(name: string, analysis: any, goal: string, existingA
   lines.push(`*Model:* \`${analysis.model}\``);
   lines.push(`*Permissions:* \`${analysis.permission_level}\``);
   lines.push(`*Memory:* ${analysis.memory_enabled ? 'enabled' : 'disabled'}`);
-  lines.push(`*Tools:* ${analysis.tools.join(', ')}`);
+  const allConfigTools = [...analysis.tools, ...(analysis.custom_tools || [])];
+  lines.push(`*Tools:* ${allConfigTools.join(', ')}`);
+
+  if (analysis.write_tools_requested?.length > 0) {
+    lines.push(`*Write tools (pending admin approval):* ${analysis.write_tools_requested.join(', ')}`);
+  }
 
   if (analysis.skills?.length > 0) {
     lines.push(`*Skills:* ${analysis.skills.join(', ')}`);
@@ -1119,10 +2345,10 @@ function buildConfigSummary(name: string, analysis: any, goal: string, existingA
     }
   }
   if (analysis.new_tools_needed?.length > 0) {
-    lines.push(`*Will create tools:* ${analysis.new_tools_needed.map((t: any) => t.name).join(', ')}`);
+    lines.push(`*Needs tools (admin must create):* ${analysis.new_tools_needed.map((t: any) => t.name).join(', ')}`);
   }
   if (analysis.new_skills_needed?.length > 0) {
-    lines.push(`*Will create skills:* ${analysis.new_skills_needed.map((s: any) => s.name).join(', ')}`);
+    lines.push(`*Needs skills (admin must create):* ${analysis.new_skills_needed.map((s: any) => s.name).join(', ')}`);
   }
 
   if (existingAgent) {
@@ -1141,6 +2367,106 @@ function buildConfigSummary(name: string, analysis: any, goal: string, existingA
   lines.push(`_${analysis.summary}_`);
 
   return lines.join('\n');
+}
+
+async function notifyAdminWriteToolRequest(
+  agentId: string, agentName: string, writeTools: string[], requestedBy: string,
+): Promise<void> {
+  const superadmins = await listSuperadmins();
+  if (superadmins.length === 0) return;
+
+  const requestId = uuid();
+  await execute(
+    `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 days')`,
+    [requestId, JSON.stringify({
+      type: 'write_tool_approval',
+      agentId,
+      agentName,
+      writeTools,
+      requestedBy,
+    })],
+  );
+
+  const toolList = writeTools.map(t => `• \`${t}\``).join('\n');
+  await sendDMBlocks(superadmins[0].user_id, [
+    {
+      type: 'header',
+      text: { type: 'plain_text', text: ':lock: Write Tool Approval Request' },
+    },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `<@${requestedBy}> created agent *${agentName}* which needs read-write tools:\n${toolList}\n\nApprove to add these tools to the agent.`,
+      },
+    },
+    {
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: ':white_check_mark: Approve' },
+          style: 'primary',
+          action_id: 'approve_write_tools',
+          value: requestId,
+        },
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: ':x: Deny' },
+          action_id: 'deny_write_tools',
+          value: requestId,
+        },
+      ],
+    },
+  ], `Write tool approval for ${agentName}`);
+}
+
+async function notifyAdminNewToolRequest(
+  agentId: string, agentName: string,
+  newTools: Array<{ name: string; description: string }>,
+  goal: string, requestedBy: string,
+): Promise<void> {
+  const superadmins = await listSuperadmins();
+  if (superadmins.length === 0) return;
+
+  const requestId = uuid();
+  await execute(
+    `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 days')`,
+    [requestId, JSON.stringify({
+      type: 'new_tool_request',
+      agentId,
+      agentName,
+      newTools,
+      goal,
+      requestedBy,
+    })],
+  );
+
+  const toolList = newTools.map(t => `• *${t.name}*: ${t.description}`).join('\n');
+  await sendDMBlocks(superadmins[0].user_id, [
+    {
+      type: 'header',
+      text: { type: 'plain_text', text: ':wrench: New Tool Request' },
+    },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `<@${requestedBy}> created agent *${agentName}* which needs tools that don't exist yet:\n${toolList}\n\n*Agent goal:* ${goal.slice(0, 500)}`,
+      },
+    },
+    {
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: ':white_check_mark: Acknowledge' },
+          action_id: 'ack_new_tool_request',
+          value: requestId,
+        },
+      ],
+    },
+  ], `New tool request for ${agentName}`);
 }
 
 async function replyToAction(body: any, text: string): Promise<void> {

@@ -2,7 +2,7 @@ import { v4 as uuid } from 'uuid';
 import { query, queryOne, execute } from '../../db';
 import { getAgent, updateAgent } from '../agents';
 import { canModifyAgent } from '../access-control';
-import type { CustomTool, ToolType } from '../../types';
+import type { CustomTool, ToolType, ToolAccessLevel } from '../../types';
 import { logger } from '../../utils/logger';
 
 // ── Built-in Tools ──
@@ -72,26 +72,31 @@ export async function removeToolFromAgent(
 }
 
 // ── Custom Tools ──
+// NOTE: Custom tools are created by admins via code only — not via Slack.
 
 export async function registerCustomTool(
   name: string,
   schemaJson: string,
   scriptPathOrCode: string | null,
   registeredBy: string,
-  options?: { code?: string; language?: 'javascript' | 'python' | 'bash'; autoApprove?: boolean }
+  options?: {
+    code?: string;
+    language?: 'javascript' | 'python' | 'bash';
+    autoApprove?: boolean;
+    accessLevel?: ToolAccessLevel;
+    configJson?: string;
+  }
 ): Promise<CustomTool> {
   const id = uuid();
-
-  // Admins or agent self-authoring (agent IDs are UUIDs)
-  const isSuperadminRow = await queryOne('SELECT user_id FROM superadmins WHERE user_id = $1', [registeredBy]);
-  const isAgentAuthored = !isSuperadminRow;
 
   const existing = await queryOne('SELECT id FROM custom_tools WHERE name = $1', [name]);
   if (existing) throw new Error(`Tool "${name}" already registered`);
 
   const scriptCode = options?.code || null;
   const language = options?.language || 'javascript';
-  const approved = options?.autoApprove || !isAgentAuthored;
+  const approved = options?.autoApprove ?? true;
+  const accessLevel = options?.accessLevel || 'read-only';
+  const configJson = options?.configJson || '{}';
 
   const tool: CustomTool = {
     id,
@@ -103,17 +108,19 @@ export async function registerCustomTool(
     language,
     registered_by: registeredBy,
     approved,
+    access_level: accessLevel,
+    config_json: configJson,
     created_at: new Date().toISOString(),
   };
 
   await execute(`
-    INSERT INTO custom_tools (id, name, tool_type, schema_json, script_code, script_path, language, registered_by, approved, created_at)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+    INSERT INTO custom_tools (id, name, tool_type, schema_json, script_code, script_path, language, registered_by, approved, access_level, config_json, created_at)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
   `, [tool.id, tool.name, tool.tool_type, tool.schema_json,
     tool.script_code, tool.script_path, tool.language, tool.registered_by,
-    tool.approved, tool.created_at]);
+    tool.approved, tool.access_level, tool.config_json, tool.created_at]);
 
-  logger.info('Custom tool registered', { toolId: id, name, registeredBy, approved, language });
+  logger.info('Custom tool registered', { toolId: id, name, registeredBy, approved, accessLevel, language });
   return tool;
 }
 
@@ -140,6 +147,24 @@ export async function listCustomTools(): Promise<CustomTool[]> {
   return query<CustomTool>('SELECT * FROM custom_tools ORDER BY name');
 }
 
+/**
+ * List only approved read-only custom tools — safe for user-created agents.
+ */
+export async function listUserAvailableTools(): Promise<CustomTool[]> {
+  return query<CustomTool>(
+    `SELECT * FROM custom_tools WHERE approved = TRUE AND access_level = 'read-only' ORDER BY name`
+  );
+}
+
+/**
+ * List approved read-write custom tools — requires admin approval to attach.
+ */
+export async function listWriteTools(): Promise<CustomTool[]> {
+  return query<CustomTool>(
+    `SELECT * FROM custom_tools WHERE approved = TRUE AND access_level = 'read-write' ORDER BY name`
+  );
+}
+
 export async function deleteCustomTool(name: string, userId: string): Promise<void> {
   const isSuperadminRow = await queryOne('SELECT user_id FROM superadmins WHERE user_id = $1', [userId]);
   if (!isSuperadminRow) {
@@ -148,6 +173,92 @@ export async function deleteCustomTool(name: string, userId: string): Promise<vo
 
   await execute('DELETE FROM custom_tools WHERE name = $1', [name]);
   logger.info('Custom tool deleted', { name, userId });
+}
+
+// ── Tool Config & Access Level Management (admin only) ──
+
+export async function updateToolConfig(
+  name: string,
+  configJson: string,
+  userId: string,
+): Promise<void> {
+  const isSuperadminRow = await queryOne('SELECT user_id FROM superadmins WHERE user_id = $1', [userId]);
+  if (!isSuperadminRow) throw new Error('Only admins can update tool config');
+
+  const tool = await getCustomTool(name);
+  if (!tool) throw new Error(`Tool "${name}" not found`);
+
+  await execute('UPDATE custom_tools SET config_json = $1 WHERE name = $2', [configJson, name]);
+  logger.info('Tool config updated', { name, userId });
+}
+
+export async function setToolConfigKey(
+  name: string,
+  key: string,
+  value: string,
+  userId: string,
+): Promise<Record<string, any>> {
+  const isSuperadminRow = await queryOne('SELECT user_id FROM superadmins WHERE user_id = $1', [userId]);
+  if (!isSuperadminRow) throw new Error('Only admins can update tool config');
+
+  const tool = await getCustomTool(name);
+  if (!tool) throw new Error(`Tool "${name}" not found`);
+
+  const config = JSON.parse(tool.config_json || '{}');
+  config[key] = value;
+  const newConfigJson = JSON.stringify(config);
+
+  await execute('UPDATE custom_tools SET config_json = $1 WHERE name = $2', [newConfigJson, name]);
+  logger.info('Tool config key set', { name, key, userId });
+  return config;
+}
+
+export async function removeToolConfigKey(
+  name: string,
+  key: string,
+  userId: string,
+): Promise<Record<string, any>> {
+  const isSuperadminRow = await queryOne('SELECT user_id FROM superadmins WHERE user_id = $1', [userId]);
+  if (!isSuperadminRow) throw new Error('Only admins can update tool config');
+
+  const tool = await getCustomTool(name);
+  if (!tool) throw new Error(`Tool "${name}" not found`);
+
+  const config = JSON.parse(tool.config_json || '{}');
+  delete config[key];
+  const newConfigJson = JSON.stringify(config);
+
+  await execute('UPDATE custom_tools SET config_json = $1 WHERE name = $2', [newConfigJson, name]);
+  logger.info('Tool config key removed', { name, key, userId });
+  return config;
+}
+
+export async function getToolConfig(
+  name: string,
+  userId: string,
+): Promise<Record<string, any>> {
+  const isSuperadminRow = await queryOne('SELECT user_id FROM superadmins WHERE user_id = $1', [userId]);
+  if (!isSuperadminRow) throw new Error('Only admins can view tool config');
+
+  const tool = await getCustomTool(name);
+  if (!tool) throw new Error(`Tool "${name}" not found`);
+
+  return JSON.parse(tool.config_json || '{}');
+}
+
+export async function updateToolAccessLevel(
+  name: string,
+  accessLevel: ToolAccessLevel,
+  userId: string,
+): Promise<void> {
+  const isSuperadminRow = await queryOne('SELECT user_id FROM superadmins WHERE user_id = $1', [userId]);
+  if (!isSuperadminRow) throw new Error('Only admins can change tool access level');
+
+  const tool = await getCustomTool(name);
+  if (!tool) throw new Error(`Tool "${name}" not found`);
+
+  await execute('UPDATE custom_tools SET access_level = $1 WHERE name = $2', [accessLevel, name]);
+  logger.info('Tool access level updated', { name, accessLevel, userId });
 }
 
 // ── Agent Tool Summary ──

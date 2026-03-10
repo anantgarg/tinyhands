@@ -1,12 +1,14 @@
 import Anthropic from '@anthropic-ai/sdk';
-import { getBuiltinTools } from '../tools';
+import { getBuiltinTools, listUserAvailableTools, listWriteTools } from '../tools';
 import { getAvailableSkills } from '../skills';
+import { isSuperadmin } from '../access-control';
 import { logger } from '../../utils/logger';
 
 export interface GoalAnalysis {
   agent_name: string;
   system_prompt: string;
   tools: string[];
+  custom_tools: string[];
   skills: string[];
   model: 'opus' | 'sonnet' | 'haiku';
   permission_level: 'read-only' | 'standard' | 'full';
@@ -20,6 +22,7 @@ export interface GoalAnalysis {
   respond_to_all_messages: boolean;
   new_tools_needed: Array<{ name: string; description: string }>;
   new_skills_needed: Array<{ name: string; description: string }>;
+  write_tools_requested: string[];
   feasible: boolean;
   blockers: string[];
   summary: string;
@@ -30,10 +33,39 @@ export async function analyzeGoal(goal: string, existingPrompt?: string, request
   const builtinTools = getBuiltinTools();
   const availableSkills = getAvailableSkills();
 
+  // Determine if requesting user is admin
+  const isAdmin = requestingUserId ? await isSuperadmin(requestingUserId) : false;
+
+  // Get available custom tools
+  const readOnlyTools = await listUserAvailableTools();
+  const writeTools = await listWriteTools();
+
+  const readOnlyToolList = readOnlyTools.map(t => {
+    const schema = JSON.parse(t.schema_json || '{}');
+    return `${t.name} (read-only): ${schema.description || 'Custom tool'}`;
+  });
+
+  const writeToolList = writeTools.map(t => {
+    const schema = JSON.parse(t.schema_json || '{}');
+    return `${t.name} (read-write): ${schema.description || 'Custom tool'}`;
+  });
+
   const skillList = [
     ...availableSkills.mcp.map(s => `MCP: ${s.name} (${s.capabilities.join(', ')})`),
     ...availableSkills.prompt.map(s => `Prompt: ${s.name} (${s.description})`),
   ];
+
+  const customToolsSection = readOnlyToolList.length > 0 || writeToolList.length > 0
+    ? `\nAvailable custom tools (read-only, always available):\n${readOnlyToolList.join('\n') || '(none)'}\n\nAvailable custom tools (read-write, requires admin approval):\n${writeToolList.join('\n') || '(none)'}`
+    : '';
+
+  const userRestrictions = isAdmin
+    ? ''
+    : `\nIMPORTANT RESTRICTIONS (requesting user is NOT an admin):
+- The agent can ONLY use existing tools listed above. Do NOT propose new_tools_needed or new_skills_needed.
+- For custom_tools, ONLY include read-only tools. If the goal requires read-write tools, list them in "write_tools_requested" — an admin will need to approve them.
+- If the goal requires capabilities that don't exist in available tools, set "feasible" to false and list what's missing in "blockers". The user will be able to submit a feature request.
+- permission_level must be "read-only" or "standard" (not "full").`;
 
   const response = await client.messages.create({
     model: 'claude-opus-4-6',
@@ -41,16 +73,19 @@ export async function analyzeGoal(goal: string, existingPrompt?: string, request
     system: `You are an expert agent architect. Given an agent's goal, you deeply analyze what's needed and produce a complete agent configuration. Think step by step about what the agent needs to accomplish its goal.
 
 Available built-in tools: ${builtinTools.join(', ')}
+${customToolsSection}
 Available MCP/prompt skills:
 ${skillList.join('\n')}
 
 Available trigger types: slack_channel, linear, zendesk, intercom, webhook
+${userRestrictions}
 
 Return ONLY valid JSON matching this schema:
 {
   "agent_name": "short-kebab-case-name (max 20 chars, descriptive)",
   "system_prompt": "A comprehensive system prompt. This is the MOST IMPORTANT part. It must clearly define:\n1. WHO the agent is (role, personality)\n2. WHAT it does (specific tasks, responsibilities)\n3. HOW it behaves (tone, format, decision-making rules)\n4. WHEN it should respond vs stay silent\n5. Its tools and how to use them\n6. Output format preferences (use Slack mrkdwn: *bold*, _italic_, \`code\`, bullet lists with •)\n7. Constraints and limitations\nThe prompt should be detailed enough that the agent knows exactly what to do without further guidance.",
   "tools": ["list", "of", "required", "builtin", "tools"],
+  "custom_tools": ["list", "of", "required", "custom", "tool", "names"],
   "skills": ["list", "of", "required", "skill", "names", "from", "available", "ones"],
   "model": "sonnet|opus|haiku",
   "permission_level": "read-only|standard|full",
@@ -66,6 +101,7 @@ Return ONLY valid JSON matching this schema:
   "respond_to_all_messages": false,
   "new_tools_needed": [{"name": "kebab-case-name", "description": "detailed description of what this tool should do"}],
   "new_skills_needed": [{"name": "kebab-case-name", "description": "detailed description of what this skill template should do"}],
+  "write_tools_requested": ["names-of-read-write-custom-tools-the-agent-needs"],
   "feasible": true,
   "blockers": [],
   "summary": "2-3 sentence explanation of the configuration and why each choice was made"
@@ -76,13 +112,14 @@ IMPORTANT guidelines:
 - respond_to_all_messages should be true ONLY if the agent's goal explicitly requires responding to every single message (e.g., a chatbot that handles all incoming queries). For most agents, this should be false — they should only respond to messages relevant to their goal.
 - relevance_keywords: list words/phrases that, if present in a message, indicate the agent should process it. Include both obvious keywords and contextual ones. For agents that should respond to all messages, this can be empty.
 - triggers: if the goal mentions reacting to external events (new tickets, issues, PRs, webhooks, messages in other channels), configure appropriate triggers. Leave empty if the agent only responds to direct messages in its channel.
+- custom_tools: include names of custom tools from the available list that the agent needs. Only include read-only tools unless the user is an admin.
+- write_tools_requested: if the goal would benefit from read-write custom tools, list their names here. These will require admin approval.
 - Always include Read, Glob, Grep for code/content-related agents
 - Include Write, Edit, Bash for agents that modify files or run commands
 - Include WebSearch, WebFetch for research-heavy agents
 - Use opus for complex multi-step reasoning, haiku for simple/fast classification, sonnet for general purpose
 - Enable memory for agents that build up context over time
-- If the goal requires capabilities that don't exist in available tools/skills, propose them in new_tools_needed/new_skills_needed with detailed descriptions
-- FEASIBILITY: Set "feasible" to true if the agent can work with existing tools/skills OR with new ones that can be auto-created (simple scripts, API wrappers, data processing). Set "feasible" to false ONLY if the goal requires platform-level changes that can't be solved by tools/skills alone — e.g., new integrations with external services not yet supported, access to APIs we don't have credentials for, hardware capabilities, or architectural changes to the platform. When feasible is false, list specific blockers explaining what's missing and why it can't be auto-created.
+- FEASIBILITY: Set "feasible" to true if the agent can work with existing tools/skills. Set "feasible" to false if the goal requires tools or capabilities that don't exist yet — list specific blockers. If new tools are needed, include them in new_tools_needed so an admin can build them.
 - SLACK MENTIONS: If the goal references tagging/mentioning/notifying a specific person, use the Slack mention format <@USER_ID> in the system_prompt. The requesting user's Slack ID is provided below — use it when the goal says "tag me", "notify me", "mention me", etc. For other users mentioned by name, include a note in the system_prompt to use <@USER_ID> format and that the admin should configure the correct user ID.`,
     messages: [{
       role: 'user',
@@ -108,20 +145,51 @@ IMPORTANT guidelines:
   // Validate tools are real builtin tools
   analysis.tools = analysis.tools.filter(t => builtinTools.includes(t));
 
+  // Validate custom_tools exist
+  if (!analysis.custom_tools) analysis.custom_tools = [];
+  const validReadOnlyNames = new Set(readOnlyTools.map(t => t.name));
+  const validWriteNames = new Set(writeTools.map(t => t.name));
+
+  if (!isAdmin) {
+    // Non-admin: only allow read-only custom tools
+    analysis.custom_tools = analysis.custom_tools.filter(t => validReadOnlyNames.has(t));
+    // Clear new_tools_needed — users can't create tools
+    analysis.new_tools_needed = [];
+    analysis.new_skills_needed = [];
+    // Cap permission level
+    if (analysis.permission_level === 'full') {
+      analysis.permission_level = 'standard';
+    }
+  } else {
+    // Admin: allow both read-only and read-write
+    analysis.custom_tools = analysis.custom_tools.filter(t =>
+      validReadOnlyNames.has(t) || validWriteNames.has(t)
+    );
+  }
+
+  // Validate write_tools_requested
+  if (!analysis.write_tools_requested) analysis.write_tools_requested = [];
+  analysis.write_tools_requested = analysis.write_tools_requested.filter(t => validWriteNames.has(t));
+
   // Ensure defaults
   if (!analysis.relevance_keywords) analysis.relevance_keywords = [];
   if (!analysis.triggers) analysis.triggers = [];
   if (analysis.respond_to_all_messages === undefined) analysis.respond_to_all_messages = false;
   if (analysis.feasible === undefined) analysis.feasible = true;
   if (!analysis.blockers) analysis.blockers = [];
+  if (!analysis.new_tools_needed) analysis.new_tools_needed = [];
+  if (!analysis.new_skills_needed) analysis.new_skills_needed = [];
 
   logger.info('Goal analyzed', {
     goal: goal.slice(0, 100),
     tools: analysis.tools,
+    customTools: analysis.custom_tools,
+    writeToolsRequested: analysis.write_tools_requested,
     skills: analysis.skills,
     model: analysis.model,
     triggers: analysis.triggers.length,
     respondToAll: analysis.respond_to_all_messages,
+    isAdmin,
   });
 
   return analysis;

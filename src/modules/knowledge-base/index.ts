@@ -16,6 +16,7 @@ export interface CreateKBEntryParams {
   sourceType: KBSourceType;
   contributedBy?: string;
   approved?: boolean;
+  kbSourceId?: string;
 }
 
 export async function createKBEntry(params: CreateKBEntryParams): Promise<KBEntry> {
@@ -32,6 +33,7 @@ export async function createKBEntry(params: CreateKBEntryParams): Promise<KBEntr
     source_type: params.sourceType,
     contributed_by: params.contributedBy || null,
     approved: params.sourceType === 'manual' ? true : (params.approved || false),
+    kb_source_id: params.kbSourceId || null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   };
@@ -39,13 +41,13 @@ export async function createKBEntry(params: CreateKBEntryParams): Promise<KBEntr
   await withTransaction(async (client) => {
     await client.query(`
       INSERT INTO kb_entries (id, title, summary, content, category, tags, access_scope,
-        source_type, contributed_by, approved, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+        source_type, contributed_by, approved, kb_source_id, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
     `, [
       entry.id, entry.title, entry.summary, entry.content, entry.category,
       JSON.stringify(entry.tags), JSON.stringify(entry.access_scope),
       entry.source_type, entry.contributed_by, entry.approved,
-      entry.created_at, entry.updated_at
+      entry.kb_source_id, entry.created_at, entry.updated_at
     ]);
 
     // Chunk and index content
@@ -186,5 +188,6 @@ function deserializeKBEntry(row: any): KBEntry {
     ...row,
     tags: JSON.parse(row.tags || '[]'),
     access_scope: JSON.parse(row.access_scope || '"all"'),
+    kb_source_id: row.kb_source_id || null,
   };
 }

@@ -30,7 +30,15 @@ if [ -n "${CUSTOM_TOOLS_CONFIG:-}" ] && [ "$CUSTOM_TOOLS_CONFIG" != "[]" ]; then
       esac
       printf '%s' "$SCRIPT_CODE" > "/tools/${TOOL_NAME}.${EXT}"
       chmod +x "/tools/${TOOL_NAME}.${EXT}"
-      echo "[tools] Installed: $TOOL_NAME ($LANG)" >&2
+
+      # Write tool config (API keys, etc.) as a separate JSON file
+      TOOL_CFG=$(echo "$CUSTOM_TOOLS_CONFIG" | jq -r ".[$i].config // {}")
+      if [ "$TOOL_CFG" != "{}" ] && [ -n "$TOOL_CFG" ] && [ "$TOOL_CFG" != "null" ]; then
+        printf '%s' "$TOOL_CFG" > "/tools/${TOOL_NAME}.config.json"
+        echo "[tools] Installed: $TOOL_NAME ($LANG) + config" >&2
+      else
+        echo "[tools] Installed: $TOOL_NAME ($LANG)" >&2
+      fi
       continue
     fi
 
