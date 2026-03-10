@@ -100,6 +100,8 @@ export async function postBlocks(
   blocks: any[],
   text: string,
   threadTs?: string,
+  username?: string,
+  iconEmoji?: string,
 ): Promise<string | undefined> {
   const client = getSlackApp().client;
   const result = await client.chat.postMessage({
@@ -107,6 +109,8 @@ export async function postBlocks(
     blocks,
     text,
     thread_ts: threadTs,
+    username,
+    icon_emoji: iconEmoji,
   });
   return result.ts;
 }

@@ -122,19 +122,21 @@ export function registerEvents(app: App): void {
           modelOverride: modelOverride || undefined,
         };
 
-        // Post temporary status message with agent name
+        // Post temporary status message with agent identity
         const statusTs = await postBlocks(
           channelId,
           [
             {
               type: 'context',
               elements: [
-                { type: 'mrkdwn', text: `${agent.avatar_emoji} *${agent.name}* :hourglass_flowing_sand: Thinking...` },
+                { type: 'mrkdwn', text: `:hourglass_flowing_sand: Thinking...` },
               ],
             },
           ],
           `${agent.name} is thinking...`,
           threadTs,
+          agent.name,
+          agent.avatar_emoji,
         );
 
         // Pass status message TS through job data so the worker can delete it

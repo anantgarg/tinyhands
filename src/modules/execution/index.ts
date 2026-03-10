@@ -294,8 +294,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
       networkAllowlist: securityConfig.networkMode === 'bridge' ? ['*'] : undefined,
     });
 
-    await startContainer(container);
-
+    // followContainerOutput attaches before starting for real-time streaming
     const timeoutMs = config.docker.defaultJobTimeoutMs;
 
     // Stream container output in real-time for live status updates
