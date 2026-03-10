@@ -9,6 +9,53 @@ import { createTrigger } from '../modules/triggers';
 import { logger } from '../utils/logger';
 import { execute, queryOne } from '../db';
 
+// ── Available Tool Integrations ──
+// These can be registered by admins via /tools in Slack
+
+interface ToolIntegration {
+  id: string;
+  label: string;
+  icon: string;
+  description: string;
+  tools: string[];  // tool names that get registered
+  requiredConfigKeys: string[];  // config keys needed after registration
+}
+
+const TOOL_INTEGRATIONS: ToolIntegration[] = [
+  {
+    id: 'zendesk',
+    label: 'Zendesk',
+    icon: ':headphones:',
+    description: 'Search tickets, get details, create tickets, add comments, manage tags/priority.',
+    tools: ['zendesk-read', 'zendesk-write'],
+    requiredConfigKeys: ['subdomain', 'email', 'api_token'],
+  },
+  {
+    id: 'linear',
+    label: 'Linear',
+    icon: ':clipboard:',
+    description: 'Search issues, manage projects/teams/cycles, create and update issues.',
+    tools: ['linear-read', 'linear-write'],
+    requiredConfigKeys: ['api_key'],
+  },
+  {
+    id: 'posthog',
+    label: 'PostHog',
+    icon: ':bar_chart:',
+    description: 'Query events, get person details, list feature flags, view insights and cohorts.',
+    tools: ['posthog-read'],
+    requiredConfigKeys: ['api_key', 'project_id'],
+  },
+  {
+    id: 'hubspot',
+    label: 'HubSpot',
+    icon: ':handshake:',
+    description: 'Search contacts/deals/companies, manage CRM records, create tasks and notes.',
+    tools: ['hubspot-read', 'hubspot-write'],
+    requiredConfigKeys: ['access_token'],
+  },
+];
+
 export function registerCommands(app: App): void {
   // /agents — Consolidated interactive agent management
   app.command('/agents', async ({ command, ack }) => {
@@ -98,56 +145,85 @@ export function registerCommands(app: App): void {
 
     const { isSuperadmin } = await import('../modules/access-control');
     if (!(await isSuperadmin(userId))) {
-      await postMessage(command.channel_id, ':lock: Only admins can manage tools. Use `/new-agent` to create agents with existing tools.');
+      await postMessage(command.channel_id, ':lock: Only admins can manage tools. Use `/agents` to create agents with existing tools.');
       return;
     }
 
-    const { listCustomTools: listAll } = await import('../modules/tools');
+    const { listCustomTools: listAll, getCustomTool } = await import('../modules/tools');
     const tools = await listAll();
-
-    if (tools.length === 0) {
-      await postBlocks(command.channel_id, [
-        { type: 'section', text: { type: 'mrkdwn', text: ':toolbox: *No custom tools registered yet.*\n\nRegister tools via code, then manage them here.' } },
-      ], 'No tools');
-      return;
-    }
+    const registeredNames = new Set(tools.map(t => t.name));
 
     const blocks: any[] = [
-      { type: 'header', text: { type: 'plain_text', text: `:toolbox: Custom Tools (${tools.length})` } },
+      { type: 'header', text: { type: 'plain_text', text: `:toolbox: Tools` } },
     ];
 
-    for (const t of tools) {
-      const config = JSON.parse(t.config_json || '{}');
-      const configKeys = Object.keys(config);
-      const schema = JSON.parse(t.schema_json || '{}');
-      const desc = schema.description ? schema.description.slice(0, 100) : '';
-      const statusIcon = t.approved ? ':white_check_mark:' : ':hourglass:';
-      const configNote = configKeys.length > 0
-        ? `Config: ${configKeys.map(k => `\`${k}\``).join(', ')}`
-        : '_No config set_';
+    // ── Registered Tools ──
+    if (tools.length > 0) {
+      blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `:white_check_mark: *Registered (${tools.length})*` } });
 
-      blocks.push({
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `${statusIcon} *${t.name}* — \`${t.access_level}\` · \`${t.language}\`\n${desc}\n${configNote}`,
-        },
-        accessory: {
-          type: 'overflow',
-          action_id: 'tool_overflow',
-          options: [
-            { text: { type: 'plain_text', text: ':gear: Configure' }, value: `configure:${t.name}` },
-            { text: { type: 'plain_text', text: ':shield: Change Access Level' }, value: `access:${t.name}` },
-            { text: { type: 'plain_text', text: ':link: Add to Agent' }, value: `add_to_agent:${t.name}` },
-            ...(!t.approved ? [{ text: { type: 'plain_text' as const, text: ':white_check_mark: Approve' }, value: `approve:${t.name}` }] : []),
-            { text: { type: 'plain_text', text: ':wastebasket: Delete' }, value: `delete:${t.name}` },
-          ],
-        },
-      });
+      for (const t of tools) {
+        const config = JSON.parse(t.config_json || '{}');
+        const configKeys = Object.keys(config);
+        const schema = JSON.parse(t.schema_json || '{}');
+        const desc = schema.description ? schema.description.slice(0, 100) : '';
+        const statusIcon = configKeys.length > 0 ? ':large_green_circle:' : ':yellow_circle:';
+        const configNote = configKeys.length > 0
+          ? `Config: ${configKeys.map(k => `\`${k}\``).join(', ')}`
+          : '_Needs config — click :gear: Configure_';
+
+        blocks.push({
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `${statusIcon} *${t.name}* — \`${t.access_level}\` · \`${t.language}\`\n${desc}\n${configNote}`,
+          },
+          accessory: {
+            type: 'overflow',
+            action_id: 'tool_overflow',
+            options: [
+              { text: { type: 'plain_text', text: ':gear: Configure' }, value: `configure:${t.name}` },
+              { text: { type: 'plain_text', text: ':shield: Change Access Level' }, value: `access:${t.name}` },
+              { text: { type: 'plain_text', text: ':link: Add to Agent' }, value: `add_to_agent:${t.name}` },
+              ...(!t.approved ? [{ text: { type: 'plain_text' as const, text: ':white_check_mark: Approve' }, value: `approve:${t.name}` }] : []),
+              { text: { type: 'plain_text', text: ':wastebasket: Delete' }, value: `delete:${t.name}` },
+            ],
+          },
+        });
+      }
       blocks.push({ type: 'divider' });
     }
 
-    await postBlocks(command.channel_id, blocks, 'Custom Tools');
+    // ── Available Integrations (not yet registered) ──
+    const availableIntegrations = TOOL_INTEGRATIONS.filter(
+      i => i.tools.some(t => !registeredNames.has(t)),
+    );
+
+    if (availableIntegrations.length > 0) {
+      blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `:heavy_plus_sign: *Available Integrations*` } });
+
+      for (const integration of availableIntegrations) {
+        const unregistered = integration.tools.filter(t => !registeredNames.has(t));
+        blocks.push({
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `${integration.icon} *${integration.label}*\n${integration.description}\nTools: ${unregistered.map(t => `\`${t}\``).join(', ')}`,
+          },
+          accessory: {
+            type: 'button',
+            text: { type: 'plain_text', text: ':heavy_plus_sign: Register' },
+            action_id: 'register_tool_integration',
+            value: integration.id,
+          },
+        });
+      }
+    }
+
+    if (tools.length === 0 && availableIntegrations.length === 0) {
+      blocks.push({ type: 'section', text: { type: 'mrkdwn', text: '_No tools available._' } });
+    }
+
+    await postBlocks(command.channel_id, blocks, 'Tools');
   });
 
   // /kb — Interactive knowledge base management
@@ -837,6 +913,54 @@ export function registerInlineActions(app: App): void {
     });
   });
 
+  // ── Register tool integration ──
+  app.action('register_tool_integration', async ({ action, ack, body }) => {
+    await ack();
+    const integrationId = (action as any).value;
+    const userId = body.user.id;
+    const channelId = body.channel?.id;
+    const triggerId = (body as any).trigger_id;
+
+    const { isSuperadmin } = await import('../modules/access-control');
+    if (!(await isSuperadmin(userId))) return;
+
+    const integration = TOOL_INTEGRATIONS.find(i => i.id === integrationId);
+    if (!integration) return;
+
+    // Build a modal asking for the required config keys
+    const blocks: any[] = [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `${integration.icon} *Register ${integration.label}*\n\n${integration.description}\n\nThis will register: ${integration.tools.map(t => `\`${t}\``).join(', ')}\n\nEnter your API credentials below:`,
+        },
+      },
+      { type: 'divider' },
+    ];
+
+    for (const key of integration.requiredConfigKeys) {
+      const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      blocks.push({
+        type: 'input', block_id: `reg_cfg_${key}`,
+        label: { type: 'plain_text', text: label },
+        element: {
+          type: 'plain_text_input', action_id: `reg_input_${key}`,
+          placeholder: { type: 'plain_text', text: `Enter ${label}...` },
+        },
+      });
+    }
+
+    await openModal(triggerId, {
+      type: 'modal',
+      callback_id: 'register_tool_modal',
+      private_metadata: JSON.stringify({ integrationId, requiredKeys: integration.requiredConfigKeys }),
+      title: { type: 'plain_text', text: `Register ${integration.label}`.slice(0, 24) },
+      submit: { type: 'plain_text', text: 'Register' },
+      blocks,
+    });
+  });
+
   // "Add Entry" button from KB dashboard
   app.action('kb_add_entry_btn', async ({ ack, body }) => {
     await ack();
@@ -1491,6 +1615,79 @@ export function registerToolAndKBModals(app: App): void {
   // API Keys view (close-only, no submission needed)
   app.view('kb_api_keys_view', async ({ ack }) => {
     await ack();
+  });
+
+  // ── Register Tool Integration Modal ──
+  app.view('register_tool_modal', async ({ ack, body, view }) => {
+    await ack();
+    const userId = body.user.id;
+    const meta = JSON.parse(view.private_metadata);
+    const { integrationId, requiredKeys } = meta;
+    const vals = view.state.values;
+
+    const integration = TOOL_INTEGRATIONS.find(i => i.id === integrationId);
+    if (!integration) return;
+
+    // Collect config values
+    const config: Record<string, string> = {};
+    for (const key of requiredKeys) {
+      const val = vals[`reg_cfg_${key}`]?.[`reg_input_${key}`]?.value?.trim();
+      if (val) config[key] = val;
+    }
+
+    const missingKeys = requiredKeys.filter((k: string) => !config[k]);
+    if (missingKeys.length > 0) {
+      await sendDMBlocks(userId, [
+        { type: 'section', text: { type: 'mrkdwn', text: `:x: Missing required fields: ${missingKeys.join(', ')}` } },
+      ], 'Registration failed');
+      return;
+    }
+
+    try {
+      // Call the appropriate registration function
+      switch (integrationId) {
+        case 'zendesk': {
+          const { registerZendeskTools } = await import('../modules/tools/zendesk');
+          await registerZendeskTools(userId, {
+            subdomain: config.subdomain,
+            email: config.email,
+            api_token: config.api_token,
+          });
+          break;
+        }
+        case 'linear': {
+          const { registerLinearTools } = await import('../modules/tools/linear');
+          await registerLinearTools(userId, { api_key: config.api_key });
+          break;
+        }
+        case 'posthog': {
+          const { registerPostHogTools } = await import('../modules/tools/posthog');
+          await registerPostHogTools(userId, {
+            api_key: config.api_key,
+            project_id: config.project_id,
+            ...(config.host ? { host: config.host } : {}),
+          });
+          break;
+        }
+        case 'hubspot': {
+          const { registerHubSpotTools } = await import('../modules/tools/hubspot');
+          await registerHubSpotTools(userId, { access_token: config.access_token });
+          break;
+        }
+        default:
+          throw new Error(`Unknown integration: ${integrationId}`);
+      }
+
+      const toolList = integration.tools.map(t => `\`${t}\``).join(', ');
+      await sendDMBlocks(userId, [
+        { type: 'section', text: { type: 'mrkdwn', text: `:white_check_mark: *${integration.label}* registered!\n\nTools created: ${toolList}\nAPI credentials saved.\n\nUse \`/tools\` to manage, or add them to agents via the overflow menu.` } },
+      ], `${integration.label} registered`);
+
+    } catch (err: any) {
+      await sendDMBlocks(userId, [
+        { type: 'section', text: { type: 'mrkdwn', text: `:x: Failed to register ${integration.label}: ${err.message}` } },
+      ], 'Registration failed');
+    }
   });
 }
 
