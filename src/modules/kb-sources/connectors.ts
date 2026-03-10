@@ -18,15 +18,15 @@ export const CONNECTORS: Record<KBConnectorType, ConnectorDef> = {
   google_drive: {
     type: 'google_drive',
     label: 'Google Drive',
-    icon: ':google:',
+    icon: ':file_folder:',
     provider: 'google',
-    description: 'Import docs, sheets, and files from Google Drive folders.',
+    description: 'Import docs, sheets, PDFs, and files from Google Drive folders. PDFs and images are automatically OCR-processed.',
     requiredKeys: ['client_id', 'client_secret', 'refresh_token'],
     setupSteps: [
       '1. Go to https://console.cloud.google.com/apis/credentials',
       '2. Create a new project (or select existing)',
-      '3. Enable the *Google Drive API* under APIs & Services → Library',
-      '4. Go to *Credentials* → Create Credentials → *OAuth 2.0 Client ID*',
+      '3. Enable the *Google Drive API* under APIs & Services > Library',
+      '4. Go to *Credentials* > Create Credentials > *OAuth 2.0 Client ID*',
       '5. Set application type to *Web application*',
       '6. Add `https://developers.google.com/oauthplayground` as an authorized redirect URI',
       '7. Copy the *Client ID* and *Client Secret*',
@@ -45,12 +45,12 @@ export const CONNECTORS: Record<KBConnectorType, ConnectorDef> = {
   zendesk_help_center: {
     type: 'zendesk_help_center',
     label: 'Zendesk Help Center',
-    icon: ':zendesk:',
+    icon: ':ticket:',
     provider: 'zendesk',
     description: 'Import articles from your Zendesk Help Center.',
     requiredKeys: ['subdomain', 'email', 'api_token'],
     setupSteps: [
-      '1. Go to Zendesk Admin Center → Apps and integrations → APIs → Zendesk API',
+      '1. Go to Zendesk Admin Center > Apps and integrations > APIs > Zendesk API',
       '2. Enable *Token Access*',
       '3. Click *Add API token*, give it a label like "TinyJobs KB"',
       '4. Copy the generated API token (you won\'t be able to see it again)',
@@ -63,16 +63,16 @@ export const CONNECTORS: Record<KBConnectorType, ConnectorDef> = {
     ],
   },
 
-  firecrawl: {
-    type: 'firecrawl',
-    label: 'Website (Firecrawl)',
+  website: {
+    type: 'website',
+    label: 'Website',
     icon: ':globe_with_meridians:',
     provider: 'firecrawl',
-    description: 'Scrape and import content from any website using Firecrawl.',
+    description: 'Scrape and import content from any website or documentation site.',
     requiredKeys: ['api_key'],
     setupSteps: [
       '1. Go to https://firecrawl.dev and sign up / log in',
-      '2. Navigate to your Dashboard → API Keys',
+      '2. Navigate to your Dashboard > API Keys',
       '3. Create a new API key',
       '4. Copy the API key',
     ],
@@ -87,16 +87,16 @@ export const CONNECTORS: Record<KBConnectorType, ConnectorDef> = {
   github: {
     type: 'github',
     label: 'GitHub',
-    icon: ':github:',
+    icon: ':computer:',
     provider: 'github',
     description: 'Import docs, READMEs, Mintlify projects, or source code from GitHub repos.',
     requiredKeys: ['token'],
     setupSteps: [
-      '1. Go to https://github.com/settings/tokens → *Fine-grained tokens* (recommended)',
+      '1. Go to https://github.com/settings/tokens > *Fine-grained tokens* (recommended)',
       '2. Click "Generate new token"',
       '3. Give it a name like "TinyJobs KB"',
       '4. Set repository access to *Only select repositories* and pick the repos you need',
-      '5. Under Permissions → Repository permissions, grant *Contents: Read-only*',
+      '5. Under Permissions > Repository permissions, grant *Contents: Read-only*',
       '6. Click *Generate token* and copy it',
     ],
     configFields: [
@@ -107,34 +107,15 @@ export const CONNECTORS: Record<KBConnectorType, ConnectorDef> = {
     ],
   },
 
-  reducto: {
-    type: 'reducto',
-    label: 'Document OCR (Reducto)',
-    icon: ':page_facing_up:',
-    provider: 'reducto',
-    description: 'Extract text from PDFs, images, and scanned documents using Reducto OCR.',
-    requiredKeys: ['api_key'],
-    setupSteps: [
-      '1. Go to https://reducto.ai and sign up / log in',
-      '2. Navigate to your account settings or API section',
-      '3. Generate a new API key',
-      '4. Copy the API key',
-    ],
-    configFields: [
-      { key: 'document_url', label: 'Document URL', placeholder: 'e.g. https://example.com/report.pdf' },
-      { key: 'document_type', label: 'Document type', placeholder: 'pdf | image | scan', optional: true },
-    ],
-  },
-
   hubspot_kb: {
     type: 'hubspot_kb',
     label: 'HubSpot Knowledge Base',
-    icon: ':hubspot:',
+    icon: ':orange_book:',
     provider: 'hubspot',
     description: 'Import knowledge base articles from HubSpot CMS.',
     requiredKeys: ['access_token'],
     setupSteps: [
-      '1. Go to HubSpot → Settings → Integrations → Private Apps',
+      '1. Go to HubSpot > Settings > Integrations > Private Apps',
       '2. Click *Create a private app*',
       '3. Give it a name like "TinyJobs KB"',
       '4. Under *Scopes*, add: `cms.knowledge_base.articles.read`',
@@ -149,13 +130,13 @@ export const CONNECTORS: Record<KBConnectorType, ConnectorDef> = {
 
   linear_docs: {
     type: 'linear_docs',
-    label: 'Linear (Projects & Docs)',
-    icon: ':linear:',
+    label: 'Linear Docs',
+    icon: ':pencil2:',
     provider: 'linear',
     description: 'Import project documents and issue descriptions from Linear.',
     requiredKeys: ['api_key'],
     setupSteps: [
-      '1. Go to Linear → Settings → API → *Personal API keys*',
+      '1. Go to Linear > Settings > API > *Personal API keys*',
       '2. Click *Create key*',
       '3. Give it a label like "TinyJobs KB"',
       '4. Copy the generated API key',

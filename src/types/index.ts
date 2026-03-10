@@ -127,7 +127,7 @@ export interface AgentMemory {
 
 // ── Knowledge Base Types ──
 
-export type KBSourceType = 'manual' | 'agent' | 'google_drive' | 'zendesk_help_center' | 'firecrawl' | 'github' | 'reducto' | 'hubspot_kb' | 'linear_docs';
+export type KBSourceType = 'manual' | 'agent' | 'google_drive' | 'zendesk_help_center' | 'website' | 'github' | 'hubspot_kb' | 'linear_docs';
 
 export interface KBEntry {
   id: string;
@@ -148,8 +148,8 @@ export interface KBEntry {
 // ── KB Source Types ──
 
 export type KBSourceStatus = 'active' | 'syncing' | 'error' | 'needs_setup';
-export type KBProviderType = 'google' | 'zendesk' | 'firecrawl' | 'github' | 'reducto' | 'hubspot' | 'linear';
-export type KBConnectorType = 'google_drive' | 'zendesk_help_center' | 'firecrawl' | 'github' | 'reducto' | 'hubspot_kb' | 'linear_docs';
+export type KBProviderType = 'google' | 'zendesk' | 'firecrawl' | 'github' | 'hubspot' | 'linear';
+export type KBConnectorType = 'google_drive' | 'zendesk_help_center' | 'website' | 'github' | 'hubspot_kb' | 'linear_docs';
 
 export interface KBSource {
   id: string;
