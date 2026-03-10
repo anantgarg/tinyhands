@@ -7,12 +7,16 @@ import { logger } from '../utils/logger';
 
 let app: App;
 
+/**
+ * Create a full Slack app with Socket Mode (events, commands, actions).
+ * Only the LISTENER process should use this.
+ */
 export function createSlackApp(): App {
   app = new App({
     token: config.slack.botToken,
     appToken: config.slack.appToken,
     socketMode: true,
-    logLevel: LogLevel.DEBUG,
+    logLevel: LogLevel.INFO,
   });
 
   // Global error handler — catch any unhandled errors in event/action handlers
@@ -29,6 +33,22 @@ export function createSlackApp(): App {
   registerActions(app);
 
   return app;
+}
+
+/**
+ * Initialize the Slack app WITHOUT starting Socket Mode.
+ * Workers and sync processes should call this to get the Web API client
+ * without opening extra WebSocket connections.
+ */
+export function initSlackClient(): void {
+  if (app) return; // already initialized
+  app = new App({
+    token: config.slack.botToken,
+    appToken: config.slack.appToken,
+    socketMode: true,
+    logLevel: LogLevel.INFO,
+  });
+  // Don't call app.start() — we only need the Web API client
 }
 
 export function getSlackApp(): App {
@@ -171,4 +191,39 @@ export async function sendDM(userId: string, text: string, blocks?: any[]): Prom
 
 export async function sendDMBlocks(userId: string, blocks: any[], text: string): Promise<string | undefined> {
   return sendDM(userId, text, blocks);
+}
+
+/**
+ * Fetch thread conversation history for context in follow-up messages.
+ * Returns messages formatted as a conversation transcript.
+ */
+export async function getThreadHistory(channelId: string, threadTs: string, limit: number = 20): Promise<string> {
+  const client = getSlackApp().client;
+  try {
+    const result = await client.conversations.replies({
+      channel: channelId,
+      ts: threadTs,
+      limit,
+      inclusive: true,
+    });
+
+    if (!result.messages || result.messages.length <= 1) return '';
+
+    // Get our own bot info for labeling
+    const authResult = await client.auth.test();
+    const botUserId = authResult.user_id;
+
+    // Format messages as conversation, excluding the very latest (that's the current input)
+    const history = result.messages.slice(0, -1).map(msg => {
+      const isBot = msg.bot_id || msg.user === botUserId;
+      const role = isBot ? 'assistant' : 'user';
+      const text = msg.text || '';
+      return `[${role}]: ${text}`;
+    }).join('\n\n');
+
+    return history;
+  } catch (err: any) {
+    logger.warn('Failed to fetch thread history', { error: err.message, channelId, threadTs });
+    return '';
+  }
 }

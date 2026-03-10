@@ -3,7 +3,7 @@ import { v4 as uuid } from 'uuid';
 import { getAgentByChannel, getAgentsByChannel } from '../modules/agents';
 import { enqueueRun } from '../queue';
 import { handleWizardMessage, isInWizard, handleConversationReply } from './commands';
-import { postMessage, postBlocks, publishHomeTab, updateMessage, getSlackApp } from './index';
+import { postMessage, postBlocks, publishHomeTab, updateMessage, getSlackApp, getThreadHistory } from './index';
 import { detectCritique } from '../modules/self-improvement';
 import { parseModelOverride, stripModelOverride } from '../modules/model-selection';
 import { checkMessageRelevance } from '../modules/agents/goal-analyzer';
@@ -141,11 +141,21 @@ export function registerEvents(app: App): void {
 
         // Normal agent task — enqueue
         const traceId = uuid();
+
+        // For thread replies, fetch conversation history so the agent has context
+        let inputWithContext = cleanInput;
+        if (isThreadReply) {
+          const history = await getThreadHistory(channelId, threadTs);
+          if (history) {
+            inputWithContext = `<conversation_history>\n${history}\n</conversation_history>\n\n<current_message>\n${cleanInput}\n</current_message>`;
+          }
+        }
+
         const jobData: JobData = {
           agentId: agent.id,
           channelId,
           threadTs,
-          input: cleanInput,
+          input: inputWithContext,
           userId,
           traceId,
           modelOverride: modelOverride || undefined,

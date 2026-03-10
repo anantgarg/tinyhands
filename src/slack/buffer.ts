@@ -73,12 +73,12 @@ export function bufferEvent(
   switch (eventType) {
     case 'thinking':
       if (suppressThinking) return;
-      // Update the temporary status message with thinking state
-      updateStatusMessage(buffer, `${agentPrefix(buffer)}:brain: Thinking...`);
+      // Update the temporary status message — no agent prefix needed, chat:write.customize shows the name
+      updateStatusMessage(buffer, `:brain: Thinking...`);
       return;
     case 'tool_use':
       // Update the temporary status message with tool use state
-      updateStatusMessage(buffer, `${agentPrefix(buffer)}:wrench: Using \`${truncate(content, 80)}\`...`);
+      updateStatusMessage(buffer, `:wrench: Using \`${truncate(content, 80)}\`...`);
       return;
     case 'tool_result':
       // Don't show tool results as separate messages
