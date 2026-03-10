@@ -111,6 +111,7 @@ fi
 # ── 5. Build claude command arguments ──
 CLAUDE_ARGS=(
   "--print"
+  "--verbose"
   "--output-format" "stream-json"
   "--model" "${MODEL:-claude-sonnet-4-6}"
   "--max-turns" "${MAX_TURNS:-25}"

@@ -167,11 +167,8 @@ async function handleDoneEvent(buffer: ChannelBuffer, finalOutput: string): Prom
       logger.info('No status message to delete', { channelId: buffer.channelId, threadTs: buffer.threadTs });
     }
 
-    // Prefix with agent name/emoji if available
-    const prefix = buffer.username
-      ? `${buffer.iconEmoji || ':robot_face:'} *${buffer.username}*\n`
-      : '';
-    const fullOutput = `${prefix}${finalOutput}`.slice(0, 3000);
+    // No text prefix needed — chat:write.customize shows agent name/emoji as the bot identity
+    const fullOutput = finalOutput.slice(0, 3000);
 
     await postMessage(
       buffer.channelId,
