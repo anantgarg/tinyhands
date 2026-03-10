@@ -1,5 +1,5 @@
 import { createWorker } from './modules/execution';
-import { createSlackApp } from './slack';
+import { initSlackClient } from './slack';
 import { initDb } from './db';
 import { processExpiredTimers } from './modules/workflows';
 import { expireOldProposals } from './modules/self-evolution';
@@ -13,9 +13,8 @@ async function main(): Promise<void> {
   // Initialize database
   await initDb();
 
-  // Initialize Slack app so workers can post results back
-  const app = createSlackApp();
-  await app.start();
+  // Initialize Slack Web API client only (no Socket Mode — avoids extra WebSocket connections)
+  initSlackClient();
   logger.info(`Worker ${workerId} Slack client initialized`);
 
   // Create BullMQ worker

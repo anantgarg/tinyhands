@@ -2,7 +2,7 @@ import { initDb } from './db';
 import { getSourcesDueForSync, updateSourceStatus, ingestContent, getSource } from './modules/sources';
 import { checkAlerts } from './modules/observability';
 import { generateDailyDigest } from './modules/observability';
-import { createSlackApp } from './slack';
+import { initSlackClient } from './slack';
 import { config } from './config';
 import { logger } from './utils/logger';
 import { postMessage } from './slack';
@@ -18,9 +18,8 @@ async function main(): Promise<void> {
   // Initialize database
   await initDb();
 
-  // Initialize Slack app so sync can post alerts
-  const app = createSlackApp();
-  await app.start();
+  // Initialize Slack Web API client only (no Socket Mode — avoids extra WebSocket connections)
+  initSlackClient();
 
   // Source sync loop
   setInterval(async () => {
