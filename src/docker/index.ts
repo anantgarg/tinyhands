@@ -1,5 +1,6 @@
 import Dockerode from 'dockerode';
 import fs from 'fs';
+import { PassThrough } from 'stream';
 import { config } from '../config';
 import { getDockerSecurityConfig } from '../modules/permissions';
 import type { Agent } from '../types';
@@ -139,6 +140,72 @@ export async function getContainerLogs(container: Dockerode.Container): Promise<
     return buf.toString('utf8').replace(/\0/g, '');
   }
   return Buffer.concat(chunks).toString('utf8').replace(/\0/g, '');
+}
+
+export type StreamEventCallback = (line: string) => void;
+
+/**
+ * Follow container stdout in real-time, calling onLine for each JSONL event.
+ * Also waits for container exit with timeout.
+ * Returns exit code and all collected log lines.
+ */
+export async function followContainerOutput(
+  container: Dockerode.Container,
+  onLine: StreamEventCallback,
+  timeoutMs: number,
+): Promise<{ exitCode: number; allLogs: string }> {
+  const allLogLines: string[] = [];
+
+  // Start following container logs in real-time
+  const logStream = await container.logs({
+    stdout: true,
+    stderr: true,
+    follow: true,
+  });
+
+  const stdoutStream = new PassThrough();
+  const stderrStream = new PassThrough();
+
+  // Demux Docker multiplexed stream (8-byte header per frame)
+  (docker as any).modem.demuxStream(logStream, stdoutStream, stderrStream);
+
+  let lineBuffer = '';
+  stdoutStream.on('data', (chunk: Buffer) => {
+    lineBuffer += chunk.toString();
+    const lines = lineBuffer.split('\n');
+    lineBuffer = lines.pop() || '';
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed) {
+        allLogLines.push(trimmed);
+        try { onLine(trimmed); } catch (e) { /* ignore callback errors */ }
+      }
+    }
+  });
+
+  stderrStream.on('data', (chunk: Buffer) => {
+    // Capture stderr for debugging but don't treat as events
+    const text = chunk.toString().trim();
+    if (text) allLogLines.push(`[stderr] ${text}`);
+  });
+
+  // Wait for container to exit
+  const { exitCode } = await waitForContainer(container, timeoutMs);
+
+  // Small delay to let remaining buffered data flush through streams
+  await new Promise(r => setTimeout(r, 300));
+
+  // Flush remaining buffer
+  if (lineBuffer.trim()) {
+    allLogLines.push(lineBuffer.trim());
+    try { onLine(lineBuffer.trim()); } catch {}
+  }
+
+  // Clean up
+  stdoutStream.destroy();
+  stderrStream.destroy();
+
+  return { exitCode, allLogs: allLogLines.join('\n') };
 }
 
 export async function removeContainer(container: Dockerode.Container): Promise<void> {
