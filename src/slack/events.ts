@@ -33,15 +33,32 @@ async function getOwnBotIdentity(): Promise<void> {
 export function registerEvents(app: App): void {
   // ── Message Events ──
   app.event('message', async ({ event, client }) => {
+    try {
     const msg = event as any;
+
+    logger.info('Message event received', {
+      channel: msg.channel,
+      user: msg.user,
+      subtype: msg.subtype,
+      thread_ts: msg.thread_ts,
+      ts: msg.ts,
+      bot_id: msg.bot_id,
+      textPreview: (msg.text || '').slice(0, 60),
+    });
 
     // Skip non-message subtypes (message_changed, message_deleted, etc.)
     // but allow bot_message and undefined subtype (normal messages)
-    if (msg.subtype && msg.subtype !== 'bot_message') return;
+    if (msg.subtype && msg.subtype !== 'bot_message') {
+      logger.info('Skipping message — subtype filtered', { subtype: msg.subtype });
+      return;
+    }
 
     // Ignore our own bot's messages to prevent infinite loops
     await getOwnBotIdentity();
-    if (msg.bot_id && (msg.bot_id === ownBotId || msg.user === ownBotUserId)) return;
+    if (msg.bot_id && (msg.bot_id === ownBotId || msg.user === ownBotUserId)) {
+      logger.info('Skipping own bot message', { bot_id: msg.bot_id, ownBotId, ownBotUserId });
+      return;
+    }
 
     const channelId = msg.channel;
     const userId = msg.user || msg.bot_id; // bot messages may not have user
@@ -50,6 +67,7 @@ export function registerEvents(app: App): void {
 
     // Check if user is in creation wizard
     if (isInWizard(userId, channelId)) {
+      logger.info('Message handled by wizard', { userId, channelId });
       const response = await handleWizardMessage(userId, channelId, text);
       if (response) {
         await postMessage(channelId, response, threadTs);
@@ -59,12 +77,21 @@ export function registerEvents(app: App): void {
 
     // Check if this is a thread reply to a conversational /new-agent or /update-agent flow
     if (msg.thread_ts) {
-      const handled = await handleConversationReply(userId, channelId, msg.thread_ts, text);
-      if (handled) return;
+      try {
+        const handled = await handleConversationReply(userId, channelId, msg.thread_ts, text);
+        if (handled) {
+          logger.info('Thread reply handled by conversation flow', { threadTs: msg.thread_ts });
+          return;
+        }
+      } catch (err: any) {
+        logger.error('handleConversationReply threw', { threadTs: msg.thread_ts, error: err.message });
+      }
+      logger.info('Thread reply — continuing to agent check', { threadTs: msg.thread_ts, channelId });
     }
 
     // Check if message is in an agent channel (supports multiple agents per channel)
     const agents = await getAgentsByChannel(channelId);
+    logger.info('Agent lookup result', { channelId, agentCount: agents.length, agentNames: agents.map(a => a.name) });
     if (agents.length > 0) {
       // Handle interactive agent-channel commands (use first agent for channel-level commands)
       const interactiveResult = await handleAgentChannelCommand(text, agents[0], channelId, userId, threadTs);
@@ -168,6 +195,9 @@ export function registerEvents(app: App): void {
         sourceChannel: channelId,
         sourceThreadTs: threadTs,
       });
+    }
+    } catch (err: any) {
+      logger.error('Unhandled error in message handler', { error: err.message, stack: err.stack });
     }
   });
 

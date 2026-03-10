@@ -308,10 +308,10 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
         try {
           const event = JSON.parse(line);
 
-          // Track tool use for live "Using tool X..." updates
+          // Track tool use for live "Using tool X..." updates — always update for each tool
           if (event.type === 'content_block_start' && event.content_block?.type === 'tool_use') {
             const toolName = event.content_block.name || 'tool';
-            if (data.channelId && lastStreamEventType !== 'tool_use') {
+            if (data.channelId) {
               bufferEvent(data.channelId, data.threadTs, 'tool_use', toolName, agent.name, agent.avatar_emoji, false, data.agentId);
             }
             lastStreamEventType = 'tool_use';
