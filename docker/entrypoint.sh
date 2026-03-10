@@ -111,6 +111,7 @@ fi
 # ── 5. Build claude command arguments ──
 CLAUDE_ARGS=(
   "--print"
+  "--output-format" "stream-json"
   "--model" "${MODEL:-claude-sonnet-4-6}"
   "--max-turns" "${MAX_TURNS:-25}"
 )
@@ -128,10 +129,20 @@ fi
 # ── 6. Build context about available capabilities (no subshell pipes) ──
 TOOL_CONTEXT=""
 if [ -d "$TOOLS_DIR" ] && [ "$(ls -A "$TOOLS_DIR" 2>/dev/null)" ]; then
-  TOOL_CONTEXT=$'\n\n## Available Custom Tools\nYou have custom tools in '"$TOOLS_DIR"'/. To use them, run the script with INPUT env var:\n'
+  TOOL_CONTEXT=$'\n\n## Available Custom Tools\nYou have custom tools installed. Execute them using Bash. ALWAYS run tools yourself — NEVER ask the user to run them.\n'
   for script in "$TOOLS_DIR"/*; do
-    TOOL_CONTEXT="${TOOL_CONTEXT}- $(basename "$script")"$'\n'
+    BASENAME=$(basename "$script")
+    # Skip config files from the tool listing
+    case "$BASENAME" in *.config.json) continue ;; esac
+    EXT="${BASENAME##*.}"
+    case "$EXT" in
+      js)  TOOL_CONTEXT="${TOOL_CONTEXT}"$'\n'"- ${BASENAME}: Run with \`INPUT='"'"'{\"your\":\"params\"}'"'"' node ${TOOLS_DIR}/${BASENAME}\`" ;;
+      py)  TOOL_CONTEXT="${TOOL_CONTEXT}"$'\n'"- ${BASENAME}: Run with \`INPUT='"'"'{\"your\":\"params\"}'"'"' python3 ${TOOLS_DIR}/${BASENAME}\`" ;;
+      sh)  TOOL_CONTEXT="${TOOL_CONTEXT}"$'\n'"- ${BASENAME}: Run with \`INPUT='"'"'{\"your\":\"params\"}'"'"' bash ${TOOLS_DIR}/${BASENAME}\`" ;;
+      *)   TOOL_CONTEXT="${TOOL_CONTEXT}"$'\n'"- ${BASENAME}" ;;
+    esac
   done
+  TOOL_CONTEXT="${TOOL_CONTEXT}"$'\n\nIf a tool has a matching .config.json file, the tool reads it automatically. Pass query parameters via the INPUT env var as JSON.\n'
 fi
 
 if [ -d "/workspace/artifacts" ]; then
@@ -149,7 +160,11 @@ START_TIME=$(date +%s%N)
 
 FULL_PROMPT="${TASK_PROMPT}${TOOL_CONTEXT}"
 STDERR_FILE="/tmp/claude-stderr.log"
-OUTPUT=$(echo "${FULL_PROMPT}" | claude "${CLAUDE_ARGS[@]}" 2>"$STDERR_FILE" || echo "Agent execution error")
+OUTPUT_FILE="/tmp/claude-output.jsonl"
+
+# Stream JSONL events to stdout (host reads them in real-time) and capture to file
+echo "${FULL_PROMPT}" | claude "${CLAUDE_ARGS[@]}" 2>"$STDERR_FILE" | tee "$OUTPUT_FILE" || true
+
 if [ -s "$STDERR_FILE" ]; then
   echo "[claude-stderr] $(head -c 2000 "$STDERR_FILE")" >&2
 fi
@@ -157,7 +172,21 @@ fi
 END_TIME=$(date +%s%N)
 DURATION_MS=$(( (END_TIME - START_TIME) / 1000000 ))
 
-# Emit structured output for the host to parse
-cat <<EOJSON
-TINYJOBS_OUTPUT:{"output":$(echo "$OUTPUT" | head -c 10000 | jq -Rs .),"input_tokens":0,"output_tokens":0,"tool_calls_count":0,"duration_ms":$DURATION_MS}
+# Parse the final result event from JSONL output
+RESULT_LINE=$(grep '"type":"result"' "$OUTPUT_FILE" 2>/dev/null | tail -1 || true)
+if [ -n "$RESULT_LINE" ]; then
+  RESULT_TEXT=$(echo "$RESULT_LINE" | jq -r '.result // ""')
+  INPUT_TOKENS=$(echo "$RESULT_LINE" | jq -r '.usage.input_tokens // 0')
+  OUTPUT_TOKENS=$(echo "$RESULT_LINE" | jq -r '.usage.output_tokens // 0')
+  COST_USD=$(echo "$RESULT_LINE" | jq -r '.total_cost_usd // 0')
+  NUM_TURNS=$(echo "$RESULT_LINE" | jq -r '.num_turns // 0')
+  cat <<EOJSON
+TINYJOBS_OUTPUT:{"output":$(echo "$RESULT_TEXT" | head -c 10000 | jq -Rs .),"input_tokens":$INPUT_TOKENS,"output_tokens":$OUTPUT_TOKENS,"tool_calls_count":$NUM_TURNS,"duration_ms":$DURATION_MS,"cost_usd":$COST_USD}
 EOJSON
+else
+  # Fallback: no result event found, extract any text content
+  FALLBACK_OUTPUT=$(grep '"type":"content_block_stop"' "$OUTPUT_FILE" 2>/dev/null | tail -1 || true)
+  cat <<EOJSON
+TINYJOBS_OUTPUT:{"output":"Agent completed but no structured result captured","input_tokens":0,"output_tokens":0,"tool_calls_count":0,"duration_ms":$DURATION_MS}
+EOJSON
+fi

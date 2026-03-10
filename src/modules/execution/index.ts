@@ -2,7 +2,7 @@ import { v4 as uuid } from 'uuid';
 import { Worker, Job } from 'bullmq';
 import { query, queryOne, execute } from '../../db';
 import { getRedisConnection, recordTokenUsage, checkRateLimit, checkRequestRate } from '../../queue';
-import { createAgentContainer, startContainer, waitForContainer, removeContainer } from '../../docker';
+import { createAgentContainer, startContainer, waitForContainer, removeContainer, followContainerOutput } from '../../docker';
 import { getAgent } from '../agents';
 import { retrieveContext } from '../sources';
 import { retrieveMemories, storeMemories } from '../sources/memory';
@@ -229,6 +229,16 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
       });
     }
     customToolsConfig = JSON.stringify(customToolEntries);
+
+    // If agent has custom tools, ensure Bash is allowed (needed to execute tool scripts)
+    if (customToolEntries.length > 0) {
+      const bashIdx = disallowedTools.indexOf('Bash');
+      if (bashIdx !== -1) {
+        disallowedTools.splice(bashIdx, 1);
+        logger.info('Auto-allowed Bash for agent with custom tools', { agentId: agent.id, toolCount: customToolEntries.length });
+      }
+    }
+
     // Collect DB-stored MCP configs
     const mcpConfigs = (await getMcpConfigs(agent.id)).filter(m => m.approved);
     if (mcpConfigs.length > 0) {
@@ -288,19 +298,57 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
 
     const timeoutMs = config.docker.defaultJobTimeoutMs;
 
-    const { exitCode } = await waitForContainer(container, timeoutMs);
+    // Stream container output in real-time for live status updates
+    let outputData = { output: '', inputTokens: 0, outputTokens: 0, toolCallsCount: 0, costUsd: 0 };
+    let lastStreamEventType = '';
+
+    const { exitCode, allLogs } = await followContainerOutput(
+      container,
+      (line) => {
+        // Parse JSONL events from Claude's stream-json output for live status updates
+        try {
+          const event = JSON.parse(line);
+
+          // Track tool use for live "Using tool X..." updates
+          if (event.type === 'content_block_start' && event.content_block?.type === 'tool_use') {
+            const toolName = event.content_block.name || 'tool';
+            if (data.channelId && lastStreamEventType !== 'tool_use') {
+              bufferEvent(data.channelId, data.threadTs, 'tool_use', toolName, agent.name, agent.avatar_emoji, false, data.agentId);
+            }
+            lastStreamEventType = 'tool_use';
+          }
+
+          // Track thinking for live "Thinking..." updates
+          if (event.type === 'content_block_start' && event.content_block?.type === 'thinking') {
+            if (data.channelId && lastStreamEventType !== 'thinking') {
+              bufferEvent(data.channelId, data.threadTs, 'thinking', 'Thinking...', agent.name, agent.avatar_emoji, suppressThinking, data.agentId);
+            }
+            lastStreamEventType = 'thinking';
+          }
+
+          // Track text output start
+          if (event.type === 'content_block_start' && event.content_block?.type === 'text') {
+            if (data.channelId) {
+              bufferEvent(data.channelId, data.threadTs, 'thinking', 'Writing response...', agent.name, agent.avatar_emoji, suppressThinking, data.agentId);
+            }
+            lastStreamEventType = 'text';
+          }
+        } catch {
+          // Not JSON or parse error — ignore (could be TINYJOBS_OUTPUT or stderr)
+        }
+      },
+      timeoutMs,
+    );
 
     const durationMs = Date.now() - startTime;
 
-    // Read structured output from container logs (before removing container)
-    let outputData = { output: '', inputTokens: 0, outputTokens: 0, toolCallsCount: 0 };
+    // Parse structured output from collected logs
     try {
-      const dockerModule = await import('../../docker');
-      const logs = await dockerModule.getContainerLogs(container);
-      logger.info('Container logs', { traceId: data.traceId, logsLength: logs.length, logsTail: logs.slice(-500) });
-      await dockerModule.removeContainer(container);
-      // Parse structured output from logs — use 's' flag so '.' matches newlines in large outputs
-      const jsonMatch = logs.match(/TINYJOBS_OUTPUT:({.*})/s);
+      logger.info('Container logs', { traceId: data.traceId, logsLength: allLogs.length, logsTail: allLogs.slice(-500) });
+      await removeContainer(container);
+
+      // Parse TINYJOBS_OUTPUT from logs
+      const jsonMatch = allLogs.match(/TINYJOBS_OUTPUT:({.*})/s);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[1]);
         outputData = {
@@ -308,23 +356,29 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
           inputTokens: parsed.input_tokens || 0,
           outputTokens: parsed.output_tokens || 0,
           toolCallsCount: parsed.tool_calls_count || 0,
+          costUsd: parsed.cost_usd || 0,
         };
       } else {
-        // Fallback: estimate from task
-        logger.warn('No TINYJOBS_OUTPUT found in logs', { traceId: data.traceId, logsTail: logs.slice(-500) });
-        outputData.inputTokens = contextTokens + Math.ceil(taskPrompt.length / 4);
-        outputData.outputTokens = Math.ceil(logs.length / 4);
-        outputData.output = logs.slice(-2000); // Last 2KB of logs
+        // Fallback: try to extract result from stream-json result event
+        const resultMatch = allLogs.match(/"type":"result".*?"result":"(.*?)"/s);
+        if (resultMatch) {
+          outputData.output = resultMatch[1];
+        } else {
+          logger.warn('No TINYJOBS_OUTPUT found in logs', { traceId: data.traceId, logsTail: allLogs.slice(-500) });
+          outputData.inputTokens = contextTokens + Math.ceil(taskPrompt.length / 4);
+          outputData.outputTokens = Math.ceil(allLogs.length / 4);
+          outputData.output = allLogs.slice(-2000);
+        }
       }
     } catch (logErr) {
-      logger.error('Failed to read container logs', { traceId: data.traceId, error: String(logErr) });
+      logger.error('Failed to parse container logs', { traceId: data.traceId, error: String(logErr) });
       outputData.inputTokens = contextTokens + Math.ceil(taskPrompt.length / 4);
       outputData.outputTokens = 200;
       // Best-effort container cleanup
-      import('../../docker').then(d => d.removeContainer(container)).catch(() => {});
+      removeContainer(container).catch(() => {});
     }
 
-    const cost = estimateCost(model, outputData.inputTokens, outputData.outputTokens);
+    const cost = outputData.costUsd > 0 ? outputData.costUsd : estimateCost(model, outputData.inputTokens, outputData.outputTokens);
     await recordTokenUsage(outputData.inputTokens + outputData.outputTokens);
 
     const status: RunStatus = exitCode === 0 ? 'completed' : 'failed';
