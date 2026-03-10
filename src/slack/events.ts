@@ -17,14 +17,34 @@ import { logger } from '../utils/logger';
 
 const EVENT_BUFFER_INTERVAL_MS = 1500;
 
+// Cache our own bot user ID so we only ignore our own messages, not other bots
+let ownBotUserId: string | null = null;
+let ownBotId: string | null = null;
+
+async function getOwnBotIdentity(): Promise<void> {
+  if (ownBotUserId) return;
+  try {
+    const authResult = await getSlackApp().client.auth.test();
+    ownBotUserId = authResult.user_id as string;
+    ownBotId = authResult.bot_id as string || null;
+  } catch { /* will retry next message */ }
+}
+
 export function registerEvents(app: App): void {
   // ── Message Events ──
   app.event('message', async ({ event, client }) => {
     const msg = event as any;
-    if (msg.bot_id || msg.subtype) return; // Ignore bot messages
+
+    // Skip non-message subtypes (message_changed, message_deleted, etc.)
+    // but allow bot_message and undefined subtype (normal messages)
+    if (msg.subtype && msg.subtype !== 'bot_message') return;
+
+    // Ignore our own bot's messages to prevent infinite loops
+    await getOwnBotIdentity();
+    if (msg.bot_id && (msg.bot_id === ownBotId || msg.user === ownBotUserId)) return;
 
     const channelId = msg.channel;
-    const userId = msg.user;
+    const userId = msg.user || msg.bot_id; // bot messages may not have user
     const text = msg.text || '';
     const threadTs = msg.thread_ts || msg.ts;
 
@@ -55,12 +75,7 @@ export function registerEvents(app: App): void {
       const cleanInput = modelOverride ? stripModelOverride(text) : text;
 
       // Check if agent is @mentioned (always respond to mentions)
-      let botUserId: string | null = null;
-      try {
-        const authResult = await getSlackApp().client.auth.test();
-        botUserId = authResult.user_id as string;
-      } catch { /* ignore */ }
-      const isMentioned = botUserId ? text.includes(`<@${botUserId}>`) : false;
+      const isMentioned = ownBotUserId ? text.includes(`<@${ownBotUserId}>`) : false;
 
       // Process each agent in the channel
       for (const agent of agents) {
