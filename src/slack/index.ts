@@ -12,7 +12,12 @@ export function createSlackApp(): App {
     token: config.slack.botToken,
     appToken: config.slack.appToken,
     socketMode: true,
-    logLevel: LogLevel.INFO,
+    logLevel: LogLevel.DEBUG,
+  });
+
+  // Global error handler — catch any unhandled errors in event/action handlers
+  app.error(async (error) => {
+    logger.error('Bolt global error handler', { error: String(error), message: (error as any)?.message, stack: (error as any)?.stack });
   });
 
   registerCommands(app);
