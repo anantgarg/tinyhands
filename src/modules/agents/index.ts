@@ -61,7 +61,7 @@ export async function createAgent(params: CreateAgentParams): Promise<Agent> {
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
     `, [
       agent.id, agent.name, agent.channel_id, agent.channel_ids,
-      JSON.stringify(agent.tools), agent.avatar_emoji, agent.status,
+      agent.system_prompt, JSON.stringify(agent.tools), agent.avatar_emoji, agent.status,
       agent.model, agent.streaming_detail, agent.docker_image,
       agent.self_evolution_mode, agent.max_turns, agent.memory_enabled,
       agent.permission_level, agent.respond_to_all_messages,
