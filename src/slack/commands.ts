@@ -25,7 +25,7 @@ const TOOL_INTEGRATIONS: ToolIntegration[] = [
   {
     id: 'zendesk',
     label: 'Zendesk',
-    icon: ':headphones:',
+    icon: ':ticket:',
     description: 'Search tickets, get details, create tickets, add comments, manage tags/priority.',
     tools: ['zendesk-read', 'zendesk-write'],
     requiredConfigKeys: ['subdomain', 'email', 'api_token'],
@@ -33,7 +33,7 @@ const TOOL_INTEGRATIONS: ToolIntegration[] = [
   {
     id: 'linear',
     label: 'Linear',
-    icon: ':clipboard:',
+    icon: ':pencil2:',
     description: 'Search issues, manage projects/teams/cycles, create and update issues.',
     tools: ['linear-read', 'linear-write'],
     requiredConfigKeys: ['api_key'],
@@ -49,7 +49,7 @@ const TOOL_INTEGRATIONS: ToolIntegration[] = [
   {
     id: 'hubspot',
     label: 'HubSpot',
-    icon: ':handshake:',
+    icon: ':orange_book:',
     description: 'Search contacts/deals/companies, manage CRM records, create tasks and notes.',
     tools: ['hubspot-read', 'hubspot-write'],
     requiredConfigKeys: ['access_token'],
