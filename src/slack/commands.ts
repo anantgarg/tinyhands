@@ -2,7 +2,7 @@ import type { App } from '@slack/bolt';
 import { v4 as uuid } from 'uuid';
 import { createAgent, listAgents, getAgent, getAgentByName, updateAgent } from '../modules/agents';
 import { initSuperadmin, canModifyAgent, listSuperadmins } from '../modules/access-control';
-import { createChannel, postMessage, postBlocks, getSlackApp, sendDMBlocks, openModal } from './index';
+import { createChannel, postMessage, postBlocks, getSlackApp, sendDMBlocks, openModal, pushModal } from './index';
 import { analyzeGoal } from '../modules/agents/goal-analyzer';
 import { attachSkillToAgent } from '../modules/skills';
 import { createTrigger } from '../modules/triggers';
@@ -903,7 +903,7 @@ export function registerInlineActions(app: App): void {
       });
     }
 
-    await openModal(triggerId, {
+    await pushModal(triggerId, {
       type: 'modal',
       callback_id: 'kb_api_key_save_modal',
       private_metadata: JSON.stringify({ provider, requiredKeys: connector.requiredKeys }),
