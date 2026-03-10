@@ -71,7 +71,7 @@ The GitHub connector automatically detects Mintlify documentation projects:
 - Creates properly categorized KB entries with titles and descriptions from frontmatter
 
 ### More Features
-- **Autonomous Execution** — BullMQ job queue dispatches tasks to Docker-isolated Claude containers with streaming output to Slack threads
+- **Autonomous Execution** — BullMQ job queue dispatches tasks to Docker-isolated Claude containers with real-time streaming status (Thinking → Using tool → Writing response) to Slack threads
 - **Self-Improvement** — Critique an agent's output in-thread and it proposes diffs to its own system prompt. Full version history.
 - **Agent Memory** — Optional persistent memory across runs
 - **Event Triggers** — Fire agents on Slack messages, Linear updates, Zendesk tickets, or any webhook
@@ -219,11 +219,12 @@ npx tsx src/db/migrate.ts
 2. Enable **Socket Mode** under Settings and generate an App-Level Token (`xapp-...`)
 3. Under **OAuth & Permissions**, add these Bot Token Scopes:
    - `channels:manage`, `channels:read`, `channels:history`, `channels:join`
-   - `chat:write`, `chat:write.customize`
+   - `chat:write`, `chat:write.customize` (enables per-agent bot name and avatar)
    - `commands`
    - `users:read`
    - `reactions:read`, `reactions:write`
    - `files:read`
+   - `im:history`, `im:write` (for superadmin DM commands)
 4. Under **Slash Commands**, create:
    - `/agents` — Manage AI agents
    - `/tools` — Manage tool integrations
