@@ -17,9 +17,9 @@ TinyJobs turns your Slack workspace into an AI operations center. Each agent get
 ## Features
 
 ### Agent Management
-- Create agents via `/new-agent` — describe what you want in plain English, and TinyJobs picks the right model, tools, and settings
-- Update agents via `/update-agent` — change goals, add/remove channels, adjust behavior
-- View and manage all agents via `/agents` — interactive dashboard with pause, resume, delete, and config viewing
+- Run `/agents` to open the interactive agent dashboard — create, update, pause, resume, and delete agents all from one place
+- Click **+ New Agent** and describe what you want in plain English — TinyJobs picks the right model, tools, and settings
+- Use the overflow menu on any agent to update its goal, channels, or config
 - Each agent gets a dedicated Slack channel with a custom avatar emoji and persona
 
 ### Tool Integrations
@@ -79,9 +79,7 @@ The GitHub connector automatically detects Mintlify documentation projects:
 
 | Command | Description |
 |---------|-------------|
-| `/agents` | Interactive agent dashboard — view, create, update, pause, delete |
-| `/new-agent` | Create a new agent (shortcut to the agent wizard) |
-| `/update-agent` | Update an existing agent's goal or channels |
+| `/agents` | Interactive agent dashboard — create, update, pause, resume, delete |
 | `/tools` | View registered tool integrations, register new ones |
 | `/kb` | Knowledge base dashboard — sources, entries, API keys |
 
@@ -219,8 +217,6 @@ npx tsx src/db/migrate.ts
    - `files:read`
 4. Under **Slash Commands**, create:
    - `/agents` — Manage AI agents
-   - `/new-agent` — Create a new agent
-   - `/update-agent` — Update an existing agent
    - `/tools` — Manage tool integrations
    - `/kb` — Knowledge base dashboard
 5. Under **Interactivity & Shortcuts**, enable Interactivity
@@ -257,7 +253,7 @@ The first user to run `/agents` is automatically promoted to superadmin. Superad
 
 ### Creating an Agent
 
-1. Run `/new-agent` in any Slack channel
+1. Run `/agents` and click **+ New Agent**
 2. Describe what you want the agent to do in plain English (e.g., "A customer support agent that can look up Zendesk tickets and answer questions from our help docs")
 3. TinyJobs analyzes your goal and suggests a name, model, tools, and system prompt
 4. Confirm, and a new Slack channel is created for your agent
