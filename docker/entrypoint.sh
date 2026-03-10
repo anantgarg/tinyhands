@@ -4,7 +4,16 @@ set -euo pipefail
 # ── TinyJobs Agent Container Entrypoint ──
 # All tools, MCP configs, and code artifacts are injected from DB — zero filesystem dependency
 
-mkdir -p /tools /workspace/artifacts
+mkdir -p /tmp/tools /workspace/artifacts 2>/dev/null || mkdir -p /tmp/tools /tmp/workspace/artifacts
+# Use /tmp/tools if /tools is read-only, and symlink so tool code can find configs at /tools/
+TOOLS_DIR="/tools"
+if ! mkdir -p "$TOOLS_DIR" 2>/dev/null || ! touch "$TOOLS_DIR/.write-test" 2>/dev/null; then
+  TOOLS_DIR="/tmp/tools"
+  mkdir -p "$TOOLS_DIR"
+  ln -sfn "$TOOLS_DIR" /tools 2>/dev/null || true
+else
+  rm -f "$TOOLS_DIR/.write-test"
+fi
 
 # ── 1. Install custom tools (DB-stored code → /tools/) ──
 if [ -n "${CUSTOM_TOOLS_CONFIG:-}" ] && [ "$CUSTOM_TOOLS_CONFIG" != "[]" ]; then
@@ -28,13 +37,13 @@ if [ -n "${CUSTOM_TOOLS_CONFIG:-}" ] && [ "$CUSTOM_TOOLS_CONFIG" != "[]" ]; then
         bash)       EXT="sh" ;;
         *)          EXT="js" ;;
       esac
-      printf '%s' "$SCRIPT_CODE" > "/tools/${TOOL_NAME}.${EXT}"
-      chmod +x "/tools/${TOOL_NAME}.${EXT}"
+      printf '%s' "$SCRIPT_CODE" > "${TOOLS_DIR}/${TOOL_NAME}.${EXT}"
+      chmod +x "${TOOLS_DIR}/${TOOL_NAME}.${EXT}"
 
       # Write tool config (API keys, etc.) as a separate JSON file
       TOOL_CFG=$(echo "$CUSTOM_TOOLS_CONFIG" | jq -r ".[$i].config // {}")
       if [ "$TOOL_CFG" != "{}" ] && [ -n "$TOOL_CFG" ] && [ "$TOOL_CFG" != "null" ]; then
-        printf '%s' "$TOOL_CFG" > "/tools/${TOOL_NAME}.config.json"
+        printf '%s' "$TOOL_CFG" > "${TOOLS_DIR}/${TOOL_NAME}.config.json"
         echo "[tools] Installed: $TOOL_NAME ($LANG) + config" >&2
       else
         echo "[tools] Installed: $TOOL_NAME ($LANG)" >&2
@@ -118,9 +127,9 @@ fi
 
 # ── 6. Build context about available capabilities (no subshell pipes) ──
 TOOL_CONTEXT=""
-if [ -d "/tools" ] && [ "$(ls -A /tools 2>/dev/null)" ]; then
-  TOOL_CONTEXT=$'\n\n## Available Custom Tools\nYou have custom tools in /tools/. To use them, run the script with INPUT env var:\n'
-  for script in /tools/*; do
+if [ -d "$TOOLS_DIR" ] && [ "$(ls -A "$TOOLS_DIR" 2>/dev/null)" ]; then
+  TOOL_CONTEXT=$'\n\n## Available Custom Tools\nYou have custom tools in '"$TOOLS_DIR"'/. To use them, run the script with INPUT env var:\n'
+  for script in "$TOOLS_DIR"/*; do
     TOOL_CONTEXT="${TOOL_CONTEXT}- $(basename "$script")"$'\n'
   done
 fi
