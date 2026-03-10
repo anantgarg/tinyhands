@@ -67,7 +67,7 @@ export async function analyzeGoal(goal: string, existingPrompt?: string, request
 - If the goal requires capabilities that don't exist in available tools, set "feasible" to false and list what's missing in "blockers". The user will be able to submit a feature request.
 - permission_level must be "read-only" or "standard" (not "full").`;
 
-  const response = await client.messages.create({
+  const apiPromise = client.messages.create({
     model: 'claude-opus-4-6',
     max_tokens: 4096,
     system: `You are an expert agent architect. Given an agent's goal, you deeply analyze what's needed and produce a complete agent configuration. Think step by step about what the agent needs to accomplish its goal.
@@ -128,6 +128,12 @@ IMPORTANT guidelines:
         : `Agent goal:\n${goal}`) + (requestingUserId ? `\n\nRequesting user's Slack ID: ${requestingUserId}` : ''),
     }],
   });
+
+  // 90-second timeout to avoid hanging forever
+  const timeoutPromise = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error('Goal analysis timed out after 90 seconds. Please try again.')), 90000),
+  );
+  const response = await Promise.race([apiPromise, timeoutPromise]);
 
   const text = response.content
     .filter((b): b is Anthropic.TextBlock => b.type === 'text')
