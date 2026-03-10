@@ -522,48 +522,10 @@ async function handleUpdateAgentGoal(agentId: string, newGoal: string, userId: s
 
   try {
     const analysis = await analyzeGoal(newGoal, agent.system_prompt, userId);
-
-    // Ask about channel change
-    await execute(
-      `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
-      [uuid(), JSON.stringify({
-        type: 'conversation',
-        step: 'awaiting_channel',
-        flow: 'update_agent',
-        analysis,
-        agentId,
-        goal: newGoal,
-        userId,
-        channelId,
-        threadTs,
-      })],
-    );
-
     const currentChannels = agent.channel_ids?.length > 0 ? agent.channel_ids : [agent.channel_id];
-    const currentChannelLabels = currentChannels.map((c: string) => `<#${c}>`).join(', ');
-    await postBlocks(channelId, [
-      {
-        type: 'section',
-        text: { type: 'mrkdwn', text: `:white_check_mark: Updated config ready for *${agent.name}*!\n\nCurrently in ${currentChannelLabels}. Want to change channels?` },
-      },
-      {
-        type: 'actions',
-        elements: [
-          {
-            type: 'conversations_select',
-            action_id: 'update_agent_channel_select',
-            placeholder: { type: 'plain_text', text: 'Select a channel...' },
-            filter: { include: ['public', 'private'], exclude_bot_users: true },
-            initial_conversation: currentChannels[0],
-          },
-          {
-            type: 'button',
-            text: { type: 'plain_text', text: ':thumbsup: Keep current channels' },
-            action_id: 'update_agent_keep_channel',
-          },
-        ],
-      },
-    ], 'Choose channels for updated agent', threadTs);
+
+    // Skip channel selection for updates — go straight to confirmation
+    await showUpdateAgentConfirmation(analysis, agentId, newGoal, userId, channelId, threadTs, currentChannels);
   } catch (err: any) {
     logger.error('Update goal analysis failed', { error: err.message, agentId, userId });
     await postMessage(channelId, `:x: Failed to analyze updated goal: ${err.message}`, threadTs);
@@ -729,6 +691,8 @@ export function registerConfirmationActions(app: App): void {
   app.action('confirm_update_agent', async ({ action, ack, body }) => {
     await ack();
     const confirmId = (action as any).value;
+    logger.info('confirm_update_agent: start', { confirmId });
+
     const row = await queryOne<{ data: any; expires_at: Date }>(
       `DELETE FROM pending_confirmations WHERE id = $1 RETURNING data, expires_at`, [confirmId],
     );
@@ -740,6 +704,7 @@ export function registerConfirmationActions(app: App): void {
 
     try {
       const { analysis, agentId, userId, newChannelIds, newChannelId } = row.data;
+      logger.info('confirm_update_agent: fetching agent', { agentId });
       const agent = await getAgent(agentId!);
       if (!agent) throw new Error('Agent not found');
 
@@ -764,11 +729,14 @@ export function registerConfirmationActions(app: App): void {
         }
       }
 
+      logger.info('confirm_update_agent: updating agent', { agentId });
       await updateAgent(agentId!, updates, userId);
+      logger.info('confirm_update_agent: agent updated', { agentId });
 
       for (const skillName of analysis.skills) {
         try { await attachSkillToAgent(agentId!, skillName, 'read', userId); } catch { /* may exist */ }
       }
+      logger.info('confirm_update_agent: skills attached', { agentId });
 
       for (const trigger of analysis.triggers) {
         try {
@@ -782,6 +750,7 @@ export function registerConfirmationActions(app: App): void {
       }
 
       // Send success message immediately — don't block on tool/skill authoring
+      logger.info('confirm_update_agent: posting success', { agentId });
       const updatedAgent = await getAgent(agentId!);
       const postToChannel = updatedAgent?.channel_ids?.[0] || updatedAgent?.channel_id || agent.channel_id;
       const channelChangeNote = updates.channel_ids
@@ -797,6 +766,7 @@ export function registerConfirmationActions(app: App): void {
         `_${analysis.summary}_`
       );
       await replyToAction(body, `:white_check_mark: Agent *${agent.name}* updated!`);
+      logger.info('confirm_update_agent: done', { agentId });
 
       // Best-effort tool/skill authoring in background (don't block user)
       (async () => {
