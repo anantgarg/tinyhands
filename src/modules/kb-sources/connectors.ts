@@ -125,6 +125,47 @@ export const CONNECTORS: Record<KBConnectorType, ConnectorDef> = {
       { key: 'document_type', label: 'Document type', placeholder: 'pdf | image | scan', optional: true },
     ],
   },
+
+  hubspot_kb: {
+    type: 'hubspot_kb',
+    label: 'HubSpot Knowledge Base',
+    icon: ':hubspot:',
+    provider: 'hubspot',
+    description: 'Import knowledge base articles from HubSpot CMS.',
+    requiredKeys: ['access_token'],
+    setupSteps: [
+      '1. Go to HubSpot → Settings → Integrations → Private Apps',
+      '2. Click *Create a private app*',
+      '3. Give it a name like "TinyJobs KB"',
+      '4. Under *Scopes*, add: `cms.knowledge_base.articles.read`',
+      '5. Click *Create app*, then *Continue creating*',
+      '6. Copy the *Access Token* shown',
+    ],
+    configFields: [
+      { key: 'portal_id', label: 'Portal ID', placeholder: 'e.g. 12345678' },
+      { key: 'state', label: 'Article state filter', placeholder: 'PUBLISHED (default)', optional: true },
+    ],
+  },
+
+  linear_docs: {
+    type: 'linear_docs',
+    label: 'Linear (Projects & Docs)',
+    icon: ':linear:',
+    provider: 'linear',
+    description: 'Import project documents and issue descriptions from Linear.',
+    requiredKeys: ['api_key'],
+    setupSteps: [
+      '1. Go to Linear → Settings → API → *Personal API keys*',
+      '2. Click *Create key*',
+      '3. Give it a label like "TinyJobs KB"',
+      '4. Copy the generated API key',
+    ],
+    configFields: [
+      { key: 'team_key', label: 'Team key (optional)', placeholder: 'e.g. ENG', optional: true },
+      { key: 'include_issues', label: 'Include issues', placeholder: 'true or false', optional: true },
+      { key: 'include_projects', label: 'Include project docs', placeholder: 'true (default)', optional: true },
+    ],
+  },
 };
 
 export function getConnector(type: KBConnectorType): ConnectorDef {
