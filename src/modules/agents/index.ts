@@ -76,6 +76,12 @@ export async function createAgent(params: CreateAgentParams): Promise<Agent> {
   });
 
   logger.info('Agent created', { agentId: id, name: params.name });
+
+  // Auto-join the bot to assigned channels so it receives events
+  import('../../slack').then(({ ensureBotInChannels }) =>
+    ensureBotInChannels(channelIds)
+  ).catch(() => {});
+
   return agent;
 }
 
@@ -105,6 +111,25 @@ export async function getAgentsByChannel(channelId: string): Promise<Agent[]> {
 export async function listAgents(): Promise<Agent[]> {
   const rows = await query('SELECT * FROM agents WHERE status != $1 ORDER BY created_at DESC', ['archived']);
   return rows.map(deserializeAgent);
+}
+
+/**
+ * Ensure the bot is a member of every channel assigned to an active agent.
+ * Call once at startup.
+ */
+export async function ensureBotInAllAgentChannels(): Promise<void> {
+  const agents = await listAgents();
+  const allChannels = new Set<string>();
+  for (const agent of agents) {
+    for (const ch of (agent.channel_ids || [])) {
+      allChannels.add(ch);
+    }
+  }
+  if (allChannels.size > 0) {
+    logger.info('Ensuring bot is in all agent channels', { count: allChannels.size });
+    const { ensureBotInChannels } = await import('../../slack');
+    await ensureBotInChannels([...allChannels]);
+  }
 }
 
 export async function updateAgent(id: string, updates: Partial<Agent>, changedBy: string): Promise<Agent> {
@@ -204,6 +229,15 @@ export async function updateAgent(id: string, updates: Partial<Agent>, changedBy
   });
 
   logger.info('Agent updated', { agentId: id, fields: fields.map(f => f.split(' =')[0]) });
+
+  // Auto-join the bot to any new channels
+  const newChannelIds = updates.channel_ids || (updates.channel_id ? [updates.channel_id] : null);
+  if (newChannelIds) {
+    import('../../slack').then(({ ensureBotInChannels }) =>
+      ensureBotInChannels(newChannelIds)
+    ).catch(() => {});
+  }
+
   return (await getAgent(id))!;
 }
 
