@@ -78,6 +78,7 @@ Available MCP/prompt skills:
 ${skillList.join('\n')}
 
 Available trigger types: slack_channel, linear, zendesk, intercom, webhook
+NOTE: Schedule-based triggers (cron, hourly, daily, weekly, fortnightly, monthly, time-based) are NOT yet available. If the user requests a schedule-based trigger, set "feasible" to false and add "Schedule-based triggers (e.g. daily, hourly, weekly) are not yet supported" to "blockers".
 ${userRestrictions}
 
 Return ONLY valid JSON matching this schema:

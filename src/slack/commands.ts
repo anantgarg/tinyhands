@@ -456,10 +456,14 @@ async function startNewAgentFlow(userId: string, channelId: string): Promise<voi
   ], 'New agent');
 
   if (ts) {
-    // Reply in thread to auto-open the thread view
+    // Reply in thread to auto-open the thread view — explain the process upfront
     await postMessage(
       channelId,
-      'Describe what you want this agent to do. Everything else — name, tools, skills, triggers, model, permissions — will be auto-configured.',
+      'I\'ll walk you through two quick steps:\n\n'
+      + '*Step 1:* What should this agent do? _(its goal/purpose)_\n'
+      + '*Step 2:* When should it run? _(trigger or schedule)_\n\n'
+      + 'Everything else — name, tools, model, permissions — will be auto-configured.\n\n'
+      + '*Let\'s start with Step 1:* Describe what you want this agent to achieve. Focus on the _what_, not the _when_ — we\'ll cover timing next.',
       ts,
     );
 
@@ -1708,7 +1712,7 @@ export async function handleConversationReply(
   const row = await queryOne<{ id: string; data: any }>(
     `SELECT id, data FROM pending_confirmations
      WHERE data->>'type' = 'conversation'
-       AND data->>'step' IN ('awaiting_goal', 'awaiting_update_request')
+       AND data->>'step' IN ('awaiting_goal', 'awaiting_when', 'awaiting_update_request')
        AND data->>'threadTs' = $1
        AND data->>'userId' = $2
        AND expires_at > NOW()
@@ -1729,6 +1733,11 @@ export async function handleConversationReply(
     return true;
   }
 
+  if (conv.step === 'awaiting_when' && conv.flow === 'new_agent') {
+    await handleNewAgentWhen(conv.goal, input, userId, channelId, threadTs);
+    return true;
+  }
+
   if (conv.flow === 'new_agent') {
     await handleNewAgentGoal(input, userId, channelId, threadTs);
   } else if (conv.flow === 'update_agent') {
@@ -1739,10 +1748,44 @@ export async function handleConversationReply(
 }
 
 async function handleNewAgentGoal(goal: string, userId: string, channelId: string, threadTs: string): Promise<void> {
+  // Step 1 complete — save goal and ask Step 2: When should it run?
+  await execute(
+    `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
+    [uuid(), JSON.stringify({
+      type: 'conversation',
+      step: 'awaiting_when',
+      flow: 'new_agent',
+      goal,
+      userId,
+      channelId,
+      threadTs,
+    })],
+  );
+
+  await postMessage(
+    channelId,
+    ':white_check_mark: Got it!\n\n'
+    + '*Step 2:* When should this agent run? Pick an option or describe your own:\n\n'
+    + '*Message-based:*\n'
+    + '• `every message` — responds to every message in its channel\n'
+    + '• `when tagged` — only responds when @mentioned\n'
+    + '• `when relevant` — responds when the message matches certain criteria (describe what\'s relevant)\n\n'
+    + '*Schedule-based:*\n'
+    + '• `hourly` / `daily` / `weekly` / `fortnightly` / `monthly`\n'
+    + '• Or a custom schedule like "every Monday at 9am" or "every 6 hours"\n\n'
+    + '_You can combine these too, e.g. "when tagged, and also daily at 9am"_',
+    threadTs,
+  );
+}
+
+async function handleNewAgentWhen(goal: string, whenInput: string, userId: string, channelId: string, threadTs: string): Promise<void> {
+  // Combine goal + when into a unified prompt for goal analysis
+  const combinedGoal = `${goal}\n\nTRIGGER/SCHEDULE: ${whenInput}`;
+
   await postMessage(channelId, ':gear: Analyzing your goal and configuring the best agent setup...', threadTs);
 
   try {
-    const analysis = await analyzeGoal(goal, undefined, userId);
+    const analysis = await analyzeGoal(combinedGoal, undefined, userId);
     logger.info('Goal analysis complete', { agentName: analysis.agent_name, feasible: analysis.feasible, userId });
 
     // If not feasible, queue it and notify owner
