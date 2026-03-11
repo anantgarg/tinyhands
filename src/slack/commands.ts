@@ -803,125 +803,137 @@ export function registerInlineActions(app: App): void {
   // "Add Source" button
   app.action('kb_add_source', async ({ ack, body }) => {
     await ack();
-    const triggerId = (body as any).trigger_id;
+    const userId = body.user.id;
+    const channelId = (body as any).channel?.id || (body as any).container?.channel_id;
+    if (!channelId) return;
+
     const { listConnectors } = await import('../modules/kb-sources/connectors');
     const connectors = listConnectors();
 
-    await openModal(triggerId, {
-      type: 'modal',
-      callback_id: 'kb_add_source_modal',
-      title: { type: 'plain_text', text: 'Add KB Source' },
-      submit: { type: 'plain_text', text: 'Next' },
-      blocks: [
-        {
-          type: 'input', block_id: 'source_name_block',
-          label: { type: 'plain_text', text: 'Source Name' },
-          element: { type: 'plain_text_input', action_id: 'source_name_input', placeholder: { type: 'plain_text', text: 'e.g. Engineering Docs' } },
-        },
-        {
-          type: 'input', block_id: 'source_type_block',
-          label: { type: 'plain_text', text: 'Source Type' },
-          element: {
-            type: 'static_select', action_id: 'source_type_input',
-            options: connectors.map(c => ({
-              text: { type: 'plain_text' as const, text: `${c.icon} ${c.label}` },
-              value: c.type,
-            })),
-          },
-        },
-      ],
-    });
+    const ts = await postBlocks(channelId, [
+      { type: 'section', text: { type: 'mrkdwn', text: ':file_folder: *Add a Knowledge Source*' } },
+    ], 'Add knowledge source');
+
+    if (ts) {
+      const typeButtons = connectors.map(c => ({
+        type: 'button' as const,
+        text: { type: 'plain_text' as const, text: `${c.icon} ${c.label}` },
+        action_id: `kb_source_type_${c.type}`,
+        value: c.type,
+      }));
+
+      await postBlocks(channelId, [
+        { type: 'section', text: { type: 'mrkdwn', text: 'I\'ll walk you through the setup step by step.\n\n*Step 1:* What type of source do you want to connect?' } },
+        { type: 'actions', elements: typeButtons },
+      ], 'Select source type', ts);
+
+      await execute(
+        `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
+        [uuid(), JSON.stringify({
+          type: 'conversation',
+          step: 'awaiting_source_type',
+          flow: 'add_source',
+          userId,
+          channelId,
+          threadTs: ts,
+        })],
+      );
+    }
   });
 
-  // "API Keys" button
+  // Source type selection buttons (one per connector type)
+  const { listConnectors: getConnectorList } = require('../modules/kb-sources/connectors');
+  for (const connector of getConnectorList()) {
+    app.action(`kb_source_type_${connector.type}`, async ({ ack, body }: any) => {
+      await ack();
+      const userId = body.user.id;
+      const channelId = body.channel?.id || body.container?.channel_id;
+      const threadTs = body.message?.thread_ts || body.message?.ts;
+      if (!channelId || !threadTs) return;
+
+      // Clean up the type-selection state
+      await execute(
+        `DELETE FROM pending_confirmations WHERE data->>'type' = 'conversation' AND data->>'flow' = 'add_source' AND data->>'threadTs' = $1 AND data->>'userId' = $2`,
+        [threadTs, userId],
+      );
+
+      await handleSourceTypeSelected(connector.type, userId, channelId, threadTs);
+    });
+  }
+
+  // "API Keys" button — thread-based flow
   app.action('kb_manage_api_keys', async ({ ack, body }) => {
     await ack();
-    const triggerId = (body as any).trigger_id;
+    const userId = body.user.id;
+    const channelId = (body as any).channel?.id || (body as any).container?.channel_id;
+    if (!channelId) return;
+
     const { listApiKeys } = await import('../modules/kb-sources');
     const { listConnectors } = await import('../modules/kb-sources/connectors');
     const keys = await listApiKeys();
     const connectors = listConnectors();
 
-    // Group unique providers
-    const providers = [...new Set(connectors.map(c => c.provider))];
-    const keyMap = new Map(keys.map(k => [k.provider, k]));
+    const providers = [...new Set(connectors.map((c: any) => c.provider))];
+    const keyMap = new Map(keys.map((k: any) => [k.provider, k]));
 
-    const blocks: any[] = [];
-    for (const provider of providers) {
+    const statusLines = providers.map((provider: string) => {
       const key = keyMap.get(provider);
-      const statusIcon = key?.setup_complete ? ':white_check_mark:' : ':x:';
-      const connector = connectors.find(c => c.provider === provider)!;
-
-      blocks.push({
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `${statusIcon} *${provider}* — ${connector.label}\n${key ? (key.setup_complete ? 'Configured' : 'Incomplete setup') : 'Not configured'}`,
-        },
-        accessory: {
-          type: 'button',
-          text: { type: 'plain_text', text: key ? ':gear: Update' : ':key: Setup' },
-          action_id: 'kb_setup_api_key',
-          value: provider,
-        },
-      });
-    }
-
-    await openModal(triggerId, {
-      type: 'modal',
-      callback_id: 'kb_api_keys_view',
-      title: { type: 'plain_text', text: 'API Keys' },
-      close: { type: 'plain_text', text: 'Done' },
-      blocks,
+      const connector = connectors.find((c: any) => c.provider === provider)!;
+      const icon = key?.setup_complete ? ':white_check_mark:' : ':x:';
+      const status = key ? (key.setup_complete ? 'Configured' : 'Incomplete') : 'Not configured';
+      return `${icon} *${provider}* (${connector.label}) — ${status}`;
     });
+
+    const ts = await postBlocks(channelId, [
+      { type: 'section', text: { type: 'mrkdwn', text: ':key: *API Keys*' } },
+    ], 'API Keys');
+
+    if (ts) {
+      const providerButtons = providers.map((provider: string) => {
+        const key = keyMap.get(provider);
+        return {
+          type: 'button' as const,
+          text: { type: 'plain_text' as const, text: key?.setup_complete ? `:gear: ${provider}` : `:key: ${provider}` },
+          action_id: `kb_api_key_setup_${provider}`,
+          value: provider,
+        };
+      });
+
+      await postBlocks(channelId, [
+        { type: 'section', text: { type: 'mrkdwn', text: statusLines.join('\n') + '\n\nSelect a provider to set up or update:' } },
+        { type: 'actions', elements: providerButtons },
+      ], 'Select provider', ts);
+    }
   });
 
-  // Setup individual API key button (inside the API Keys modal)
+  // Individual provider API key setup buttons
+  const { listConnectors: getConnectors2 } = require('../modules/kb-sources/connectors');
+  const uniqueProviders = [...new Set(getConnectors2().map((c: any) => c.provider))] as string[];
+  for (const provider of uniqueProviders) {
+    app.action(`kb_api_key_setup_${provider}`, async ({ ack, body }: any) => {
+      await ack();
+      const userId = body.user.id;
+      const channelId = body.channel?.id || body.container?.channel_id;
+      const threadTs = body.message?.thread_ts || body.message?.ts;
+      if (!channelId || !threadTs) return;
+
+      await startApiKeySetup(provider, userId, channelId, threadTs);
+    });
+  }
+
+  // Legacy modal handler — keep for backward compat
   app.action('kb_setup_api_key', async ({ action, ack, body }) => {
     await ack();
     const provider = (action as any).value;
-    const triggerId = (body as any).trigger_id;
+    const userId = body.user.id;
+    const channelId = (body as any).channel?.id;
+    if (!channelId) return;
 
-    const { getApiKey } = await import('../modules/kb-sources');
-    const { CONNECTORS } = await import('../modules/kb-sources/connectors');
-
-    // Find connector that uses this provider
-    const connector = Object.values(CONNECTORS).find(c => c.provider === provider)!;
-    const existingKey = await getApiKey(provider);
-    const existingConfig = existingKey ? JSON.parse(existingKey.config_json) : {};
-
-    const blocks: any[] = [
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `:key: *Setup ${provider} API credentials*\n\n` +
-            connector.setupSteps.join('\n'),
-        },
-      },
-      { type: 'divider' },
-    ];
-
-    for (const key of connector.requiredKeys) {
-      blocks.push({
-        type: 'input', block_id: `apikey_${key}`,
-        label: { type: 'plain_text', text: key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) },
-        element: {
-          type: 'plain_text_input', action_id: `apikey_input_${key}`,
-          placeholder: { type: 'plain_text', text: `Enter ${key}...` },
-          ...(existingConfig[key] ? { initial_value: existingConfig[key] } : {}),
-        },
-      });
-    }
-
-    await pushModal(triggerId, {
-      type: 'modal',
-      callback_id: 'kb_api_key_save_modal',
-      private_metadata: JSON.stringify({ provider, requiredKeys: connector.requiredKeys }),
-      title: { type: 'plain_text', text: `Setup ${provider}`.slice(0, 24) },
-      submit: { type: 'plain_text', text: 'Save' },
-      blocks,
-    });
+    // Redirect to thread-based flow
+    const ts = await postBlocks(channelId, [
+      { type: 'section', text: { type: 'mrkdwn', text: `:key: *Setup ${provider} API Keys*` } },
+    ], `Setup ${provider}`);
+    if (ts) await startApiKeySetup(provider, userId, channelId, ts);
   });
 
   // ── Register tool integration ──
@@ -1712,7 +1724,7 @@ export async function handleConversationReply(
   const row = await queryOne<{ id: string; data: any }>(
     `SELECT id, data FROM pending_confirmations
      WHERE data->>'type' = 'conversation'
-       AND data->>'step' IN ('awaiting_goal', 'awaiting_when', 'awaiting_update_request')
+       AND data->>'step' IN ('awaiting_goal', 'awaiting_when', 'awaiting_update_request', 'awaiting_source_api_keys', 'awaiting_source_details', 'awaiting_api_keys')
        AND data->>'threadTs' = $1
        AND data->>'userId' = $2
        AND expires_at > NOW()
@@ -1735,6 +1747,22 @@ export async function handleConversationReply(
 
   if (conv.step === 'awaiting_when' && conv.flow === 'new_agent') {
     await handleNewAgentWhen(conv.goal, input, userId, channelId, threadTs);
+    return true;
+  }
+
+  // Source/API key conversation flows
+  if (conv.step === 'awaiting_source_api_keys' && conv.flow === 'add_source') {
+    await handleSourceApiKeys(input, conv.sourceType, userId, channelId, threadTs);
+    return true;
+  }
+
+  if (conv.step === 'awaiting_source_details' && conv.flow === 'add_source') {
+    await handleSourceDetails(input, conv.sourceType, userId, channelId, threadTs);
+    return true;
+  }
+
+  if (conv.step === 'awaiting_api_keys' && conv.flow === 'api_keys') {
+    await handleApiKeysInput(input, conv.provider, userId, channelId, threadTs);
     return true;
   }
 
@@ -2714,6 +2742,339 @@ async function notifyAdminNewToolRequest(
       ],
     },
   ], `New tool request for ${agentName}`);
+}
+
+// ── Thread-based Source & API Key Flows ──
+
+async function handleSourceTypeSelected(
+  sourceType: string, userId: string, channelId: string, threadTs: string,
+): Promise<void> {
+  const { getConnector } = await import('../modules/kb-sources/connectors');
+  const { isProviderConfigured } = await import('../modules/kb-sources');
+  const connector = getConnector(sourceType);
+
+  const providerReady = await isProviderConfigured(connector.provider);
+
+  if (!providerReady) {
+    // Need API keys first — show setup steps and ask for keys
+    const keyFields = connector.requiredKeys.map(k =>
+      `\`${k}\`: your_value_here`
+    ).join('\n');
+
+    await postMessage(
+      channelId,
+      `:white_check_mark: *${connector.icon} ${connector.label}* selected.\n\n`
+      + `*Step 2:* I need your *${connector.provider}* API credentials first.\n\n`
+      + `*How to get them:*\n${connector.setupSteps.join('\n')}\n\n`
+      + `Once you have them, paste them here in this format (one per line):\n\`\`\`\n${keyFields}\n\`\`\``,
+      threadTs,
+    );
+
+    await execute(
+      `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
+      [uuid(), JSON.stringify({
+        type: 'conversation',
+        step: 'awaiting_source_api_keys',
+        flow: 'add_source',
+        sourceType,
+        userId,
+        channelId,
+        threadTs,
+      })],
+    );
+  } else {
+    // API keys ready — ask for source name and config
+    await askForSourceDetails(connector, sourceType, userId, channelId, threadTs);
+  }
+}
+
+async function askForSourceDetails(
+  connector: any, sourceType: string, userId: string, channelId: string, threadTs: string,
+): Promise<void> {
+  const requiredFields = connector.configFields.filter((f: any) => !f.optional);
+  const optionalFields = connector.configFields.filter((f: any) => f.optional);
+
+  let configPrompt = ':white_check_mark: API keys are configured!\n\n'
+    + `*Step 3:* Give this source a name and configure it.\n\n`
+    + `Please reply with the details in this format:\n\`\`\`\n`
+    + `name: My Source Name\n`;
+
+  for (const field of connector.configFields) {
+    configPrompt += `${field.key}: ${field.placeholder}${field.optional ? ' (optional)' : ''}\n`;
+  }
+  configPrompt += '```';
+
+  if (requiredFields.length === 0) {
+    configPrompt = ':white_check_mark: API keys are configured!\n\n'
+      + `*Step 3:* Give this source a name.\n\n`
+      + `Please reply with a name for this source, e.g.:\n`
+      + `\`Engineering Docs\``;
+  }
+
+  await postMessage(channelId, configPrompt, threadTs);
+
+  await execute(
+    `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
+    [uuid(), JSON.stringify({
+      type: 'conversation',
+      step: 'awaiting_source_details',
+      flow: 'add_source',
+      sourceType,
+      userId,
+      channelId,
+      threadTs,
+    })],
+  );
+}
+
+async function handleSourceApiKeys(
+  text: string, sourceType: string, userId: string, channelId: string, threadTs: string,
+): Promise<void> {
+  const { getConnector } = await import('../modules/kb-sources/connectors');
+  const { setApiKey } = await import('../modules/kb-sources');
+  const connector = getConnector(sourceType);
+
+  // Parse key: value pairs from text
+  const config: Record<string, string> = {};
+  const lines = text.split('\n');
+  for (const line of lines) {
+    const colonIdx = line.indexOf(':');
+    if (colonIdx > 0) {
+      const key = line.slice(0, colonIdx).trim().replace(/`/g, '');
+      const val = line.slice(colonIdx + 1).trim();
+      if (key && val && val !== 'your_value_here') {
+        config[key] = val;
+      }
+    }
+  }
+
+  // Check that all required keys are present
+  const missing = connector.requiredKeys.filter((k: string) => !config[k]);
+  if (missing.length > 0) {
+    await postMessage(
+      channelId,
+      `:warning: Missing required keys: ${missing.map((k: string) => `\`${k}\``).join(', ')}\n\nPlease provide all keys in the format:\n\`key: value\` (one per line)`,
+      threadTs,
+    );
+    // Re-insert state to keep waiting
+    await execute(
+      `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
+      [uuid(), JSON.stringify({
+        type: 'conversation',
+        step: 'awaiting_source_api_keys',
+        flow: 'add_source',
+        sourceType,
+        userId,
+        channelId,
+        threadTs,
+      })],
+    );
+    return;
+  }
+
+  try {
+    await setApiKey(connector.provider, config, userId);
+    await postMessage(channelId, `:white_check_mark: *${connector.provider}* API keys saved!`, threadTs);
+
+    // Now ask for source details
+    await askForSourceDetails(connector, sourceType, userId, channelId, threadTs);
+  } catch (err: any) {
+    await postMessage(channelId, `:x: Failed to save API keys: ${err.message}`, threadTs);
+  }
+}
+
+async function handleSourceDetails(
+  text: string, sourceType: string, userId: string, channelId: string, threadTs: string,
+): Promise<void> {
+  const { getConnector } = await import('../modules/kb-sources/connectors');
+  const { createSource, startSync } = await import('../modules/kb-sources');
+  const connector = getConnector(sourceType);
+
+  // Parse the reply for name and config fields
+  const config: Record<string, string> = {};
+  let sourceName = '';
+
+  const lines = text.split('\n');
+  for (const line of lines) {
+    const colonIdx = line.indexOf(':');
+    if (colonIdx > 0) {
+      const key = line.slice(0, colonIdx).trim().replace(/`/g, '').toLowerCase();
+      const val = line.slice(colonIdx + 1).trim();
+      if (key === 'name') {
+        sourceName = val;
+      } else if (val) {
+        // Match against known config fields
+        const matchedField = connector.configFields.find((f: any) =>
+          f.key.toLowerCase() === key || f.label.toLowerCase() === key
+        );
+        if (matchedField) {
+          config[matchedField.key] = val;
+        }
+      }
+    }
+  }
+
+  // If no structured format found, treat the whole reply as the name
+  if (!sourceName && Object.keys(config).length === 0) {
+    sourceName = text.trim();
+  }
+
+  if (!sourceName) {
+    await postMessage(channelId, ':warning: Please provide at least a name for this source.', threadTs);
+    // Re-insert state
+    await execute(
+      `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
+      [uuid(), JSON.stringify({
+        type: 'conversation',
+        step: 'awaiting_source_details',
+        flow: 'add_source',
+        sourceType,
+        userId,
+        channelId,
+        threadTs,
+      })],
+    );
+    return;
+  }
+
+  try {
+    const source = await createSource({
+      name: sourceName,
+      sourceType: sourceType as any,
+      config,
+      createdBy: userId,
+    });
+
+    let msg = `:white_check_mark: Source *${sourceName}* created!\n`
+      + `• Type: ${connector.icon} ${connector.label}\n`
+      + `• Status: \`${source.status}\`\n`;
+
+    if (Object.keys(config).length > 0) {
+      msg += `• Config: ${Object.entries(config).map(([k, v]) => `${k}=\`${v}\``).join(', ')}\n`;
+    }
+
+    if (source.status === 'active') {
+      try {
+        await startSync(source.id);
+        msg += '\n:arrows_counterclockwise: Sync started in background!';
+      } catch (syncErr: any) {
+        msg += `\n:warning: Sync failed to start: ${syncErr.message}`;
+      }
+    }
+
+    await postMessage(channelId, msg, threadTs);
+  } catch (err: any) {
+    await postMessage(channelId, `:x: Failed to create source: ${err.message}`, threadTs);
+  }
+}
+
+async function startApiKeySetup(
+  provider: string, userId: string, channelId: string, threadTs: string,
+): Promise<void> {
+  const { getApiKey } = await import('../modules/kb-sources');
+  const { CONNECTORS } = await import('../modules/kb-sources/connectors');
+
+  const connector = Object.values(CONNECTORS).find((c: any) => c.provider === provider);
+  if (!connector) return;
+
+  const existingKey = await getApiKey(provider as any);
+  const existingConfig = existingKey ? JSON.parse(existingKey.config_json) : {};
+
+  let msg = `:key: *Setup ${provider} API credentials*\n\n`
+    + `*How to get them:*\n${connector.setupSteps.join('\n')}\n\n`;
+
+  if (existingKey?.setup_complete) {
+    const maskedKeys = connector.requiredKeys.map((k: string) => {
+      const val = existingConfig[k];
+      if (!val) return `\`${k}\`: _(not set)_`;
+      const masked = val.length > 8 ? val.slice(0, 4) + '...' + val.slice(-4) : '****';
+      return `\`${k}\`: \`${masked}\``;
+    }).join('\n');
+    msg += `*Current values:*\n${maskedKeys}\n\n`;
+  }
+
+  const keyFields = connector.requiredKeys.map((k: string) =>
+    `\`${k}\`: ${existingConfig[k] ? '(keep current or paste new value)' : 'your_value_here'}`
+  ).join('\n');
+
+  msg += `Paste your credentials here (one per line):\n\`\`\`\n${keyFields}\n\`\`\``;
+
+  await postMessage(channelId, msg, threadTs);
+
+  await execute(
+    `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
+    [uuid(), JSON.stringify({
+      type: 'conversation',
+      step: 'awaiting_api_keys',
+      flow: 'api_keys',
+      provider,
+      userId,
+      channelId,
+      threadTs,
+    })],
+  );
+}
+
+async function handleApiKeysInput(
+  text: string, provider: string, userId: string, channelId: string, threadTs: string,
+): Promise<void> {
+  const { setApiKey, getApiKey } = await import('../modules/kb-sources');
+  const { CONNECTORS } = await import('../modules/kb-sources/connectors');
+
+  const connector = Object.values(CONNECTORS).find((c: any) => c.provider === provider);
+  if (!connector) return;
+
+  // Get existing config to preserve unchanged values
+  const existingKey = await getApiKey(provider as any);
+  const existingConfig = existingKey ? JSON.parse(existingKey.config_json) : {};
+
+  // Parse key: value pairs
+  const config: Record<string, string> = { ...existingConfig };
+  const lines = text.split('\n');
+  for (const line of lines) {
+    const colonIdx = line.indexOf(':');
+    if (colonIdx > 0) {
+      const key = line.slice(0, colonIdx).trim().replace(/`/g, '');
+      const val = line.slice(colonIdx + 1).trim();
+      if (key && val && val !== 'your_value_here' && !val.startsWith('(keep current')) {
+        config[key] = val;
+      }
+    }
+  }
+
+  const missing = connector.requiredKeys.filter((k: string) => !config[k]);
+  if (missing.length > 0) {
+    await postMessage(
+      channelId,
+      `:warning: Missing required keys: ${missing.map((k: string) => `\`${k}\``).join(', ')}\n\nPlease provide all keys.`,
+      threadTs,
+    );
+    await execute(
+      `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
+      [uuid(), JSON.stringify({
+        type: 'conversation',
+        step: 'awaiting_api_keys',
+        flow: 'api_keys',
+        provider,
+        userId,
+        channelId,
+        threadTs,
+      })],
+    );
+    return;
+  }
+
+  try {
+    await setApiKey(provider as any, config, userId);
+    await postMessage(
+      channelId,
+      `:white_check_mark: *${provider}* API keys saved and verified!\n`
+      + `Keys configured: ${connector.requiredKeys.map((k: string) => `\`${k}\``).join(', ')}`,
+      threadTs,
+    );
+  } catch (err: any) {
+    await postMessage(channelId, `:x: Failed to save: ${err.message}`, threadTs);
+  }
 }
 
 async function replyToAction(body: any, text: string): Promise<void> {
