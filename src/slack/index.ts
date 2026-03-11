@@ -194,6 +194,26 @@ export async function sendDMBlocks(userId: string, blocks: any[], text: string):
 }
 
 /**
+ * Ensure the bot is a member of the given channels so it receives events.
+ * Silently ignores failures (e.g. missing scope, private channels).
+ */
+export async function ensureBotInChannels(channelIds: string[]): Promise<void> {
+  const client = getSlackApp().client;
+  for (const channelId of channelIds) {
+    try {
+      await client.conversations.join({ channel: channelId });
+      logger.info('Bot joined channel', { channelId });
+    } catch (err: any) {
+      // already_in_channel, missing_scope, channel_not_found, etc.
+      const code = err.data?.error || err.message;
+      if (code !== 'already_in_channel') {
+        logger.warn('Could not auto-join channel — invite the bot manually', { channelId, error: code });
+      }
+    }
+  }
+}
+
+/**
  * Fetch thread conversation history for context in follow-up messages.
  * Returns messages formatted as a conversation transcript.
  */
