@@ -174,19 +174,20 @@ END_TIME=$(date +%s%N)
 DURATION_MS=$(( (END_TIME - START_TIME) / 1000000 ))
 
 # Parse the final result event from JSONL output
+# Use a single jq call to build the output JSON — avoids shell escaping issues
+# that can corrupt special characters (backslashes, quotes, etc.) in agent output
 RESULT_LINE=$(grep '"type":"result"' "$OUTPUT_FILE" 2>/dev/null | tail -1 || true)
 if [ -n "$RESULT_LINE" ]; then
-  RESULT_TEXT=$(echo "$RESULT_LINE" | jq -r '.result // ""')
-  INPUT_TOKENS=$(echo "$RESULT_LINE" | jq -r '.usage.input_tokens // 0')
-  OUTPUT_TOKENS=$(echo "$RESULT_LINE" | jq -r '.usage.output_tokens // 0')
-  COST_USD=$(echo "$RESULT_LINE" | jq -r '.total_cost_usd // 0')
-  NUM_TURNS=$(echo "$RESULT_LINE" | jq -r '.num_turns // 0')
-  cat <<EOJSON
-TINYHANDS_OUTPUT:{"output":$(echo "$RESULT_TEXT" | head -c 10000 | jq -Rs .),"input_tokens":$INPUT_TOKENS,"output_tokens":$OUTPUT_TOKENS,"tool_calls_count":$NUM_TURNS,"duration_ms":$DURATION_MS,"cost_usd":$COST_USD}
-EOJSON
+  printf 'TINYHANDS_OUTPUT:'
+  echo "$RESULT_LINE" | jq -c --arg dur "$DURATION_MS" '{
+    output: (.result // ""),
+    input_tokens: (.usage.input_tokens // 0),
+    output_tokens: (.usage.output_tokens // 0),
+    tool_calls_count: (.num_turns // 0),
+    duration_ms: ($dur | tonumber),
+    cost_usd: (.total_cost_usd // 0)
+  }'
 else
-  # Fallback: no result event found, extract any text content
-  FALLBACK_OUTPUT=$(grep '"type":"content_block_stop"' "$OUTPUT_FILE" 2>/dev/null | tail -1 || true)
   cat <<EOJSON
 TINYHANDS_OUTPUT:{"output":"Agent completed but no structured result captured","input_tokens":0,"output_tokens":0,"tool_calls_count":0,"duration_ms":$DURATION_MS}
 EOJSON
