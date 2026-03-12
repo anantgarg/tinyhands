@@ -148,33 +148,32 @@ describe('Slack buffer module', () => {
   // ── tool_use events ──
 
   describe('tool_use events', () => {
-    it('should update status message with tool name', async () => {
+    it('should update status message with friendly tool name', async () => {
       setStatusMessageTs('C001', '111.222', 'status-ts-1');
       bufferEvent('C001', '111.222', 'text', 'init');
-      bufferEvent('C001', '111.222', 'tool_use', 'web_search');
+      bufferEvent('C001', '111.222', 'tool_use', 'WebFetch');
 
       await vi.runAllTimersAsync();
 
       expect(mockUpdateMessage).toHaveBeenCalledWith(
         'C001',
         'status-ts-1',
-        ':wrench: Using `web_search`...',
+        ':wrench: Fetching a webpage...',
       );
     });
 
-    it('should truncate long tool names to 80 characters', async () => {
+    it('should fall back to "Using <name>" for unknown tools', async () => {
       setStatusMessageTs('C001', '111.222', 'status-ts-1');
       bufferEvent('C001', '111.222', 'text', 'init');
-      const longToolName = 'a'.repeat(100);
-      bufferEvent('C001', '111.222', 'tool_use', longToolName);
+      bufferEvent('C001', '111.222', 'tool_use', 'custom_tool');
 
       await vi.runAllTimersAsync();
 
-      const statusText = mockUpdateMessage.mock.calls[0][2];
-      // The tool name inside backticks should be truncated (80 chars + wrapper text)
-      // Full format: `:wrench: Using \`<truncated>\`...`
-      expect(statusText.length).toBeLessThanOrEqual(100);
-      expect(statusText).toContain('...');
+      expect(mockUpdateMessage).toHaveBeenCalledWith(
+        'C001',
+        'status-ts-1',
+        ':wrench: Using custom_tool...',
+      );
     });
   });
 

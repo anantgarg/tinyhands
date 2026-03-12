@@ -78,7 +78,7 @@ export function bufferEvent(
       return;
     case 'tool_use':
       // Update the temporary status message with tool use state
-      updateStatusMessage(buffer, `:wrench: Using \`${truncate(content, 80)}\`...`);
+      updateStatusMessage(buffer, `:wrench: ${friendlyToolName(content)}...`);
       return;
     case 'tool_result':
       // Don't show tool results as separate messages
@@ -229,6 +229,23 @@ export function cleanupBuffer(channelId: string, threadTs: string, agentId?: str
 function agentPrefix(buffer: ChannelBuffer): string {
   if (!buffer.username) return '';
   return `${buffer.iconEmoji || ':robot_face:'} *${buffer.username}* `;
+}
+
+const TOOL_DISPLAY_NAMES: Record<string, string> = {
+  WebFetch: 'Fetching a webpage',
+  WebSearch: 'Searching the web',
+  Bash: 'Running a command',
+  Read: 'Reading a file',
+  Write: 'Writing a file',
+  Edit: 'Editing a file',
+  Grep: 'Searching code',
+  Glob: 'Finding files',
+  LSP: 'Analyzing code',
+  NotebookEdit: 'Editing a notebook',
+};
+
+function friendlyToolName(toolName: string): string {
+  return TOOL_DISPLAY_NAMES[toolName] || `Using ${toolName}`;
 }
 
 function truncate(text: string, maxLen: number): string {
