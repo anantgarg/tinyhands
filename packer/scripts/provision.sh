@@ -8,7 +8,10 @@ echo "=== TinyJobs: Provisioning image ==="
 # ── System updates ──
 apt-get update
 apt-get upgrade -y
-apt-get install -y curl git jq ufw fail2ban
+apt-get install -y curl git jq ufw fail2ban unattended-upgrades
+
+# ── Enable automatic security updates (DO Marketplace requirement) ──
+dpkg-reconfigure -plow unattended-upgrades
 
 # ── Install Docker Engine + Compose plugin ──
 curl -fsSL https://get.docker.com | sh
