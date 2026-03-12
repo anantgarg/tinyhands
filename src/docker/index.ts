@@ -60,6 +60,7 @@ export async function createAgentContainer(cfg: ContainerConfig): Promise<Docker
       Memory: 4 * 1024 * 1024 * 1024, // 4GB
       NanoCpus: 1e9, // 1 CPU
       NetworkMode: 'bridge',
+      ExtraHosts: ['host.docker.internal:host-gateway'],
       SecurityOpt: ['no-new-privileges:true'],
       CapDrop: ['ALL'],
       AutoRemove: false,
