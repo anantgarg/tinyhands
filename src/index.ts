@@ -21,6 +21,14 @@ async function main(): Promise<void> {
     logger.warn('Auto-join agent channels failed', { error: err.message })
   );
 
+  // Register built-in tools (KB, etc.)
+  try {
+    const { registerKBTools } = await import('./modules/tools/kb');
+    await registerKBTools();
+  } catch (err: any) {
+    logger.warn('KB tool registration failed', { error: err.message });
+  }
+
   // Start webhook server (Express)
   startWebhookServer();
 

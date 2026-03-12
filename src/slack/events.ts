@@ -113,8 +113,14 @@ export function registerEvents(app: App): void {
 
       // Process each agent in the channel
       for (const agent of agents) {
-        // Relevance check: skip for @mentions and thread replies
-        if (!isMentioned && !isThreadReply) {
+        // mentions_only agents only respond to @mentions and thread replies
+        if (agent.mentions_only && !isMentioned && !isThreadReply) {
+          logger.debug('Message skipped — agent is mentions-only', { agentId: agent.id });
+          continue;
+        }
+
+        // Relevance check: skip for @mentions, thread replies, and mentions-only agents
+        if (!isMentioned && !isThreadReply && !agent.mentions_only) {
           const isRelevant = await checkMessageRelevance(
             cleanInput,
             agent.relevance_keywords,

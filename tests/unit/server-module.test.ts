@@ -9,6 +9,9 @@ const mockFireTrigger = vi.fn();
 const mockVerifyLinearSignature = vi.fn();
 const mockVerifyZendeskSignature = vi.fn();
 const mockVerifyIntercomSignature = vi.fn();
+const mockSearchKB = vi.fn();
+const mockListKBEntries = vi.fn();
+const mockGetCategories = vi.fn();
 
 vi.mock('../../src/modules/auto-update', () => ({
   deployWebhookHandler: (...args: any[]) => mockDeployWebhookHandler(...args),
@@ -25,9 +28,15 @@ vi.mock('../../src/utils/webhooks', () => ({
   verifyIntercomSignature: (...args: any[]) => mockVerifyIntercomSignature(...args),
 }));
 
+vi.mock('../../src/modules/knowledge-base', () => ({
+  searchKB: (...args: any[]) => mockSearchKB(...args),
+  listKBEntries: (...args: any[]) => mockListKBEntries(...args),
+  getCategories: (...args: any[]) => mockGetCategories(...args),
+}));
+
 vi.mock('../../src/config', () => ({
   config: {
-    server: { port: 3000 },
+    server: { port: 3000, internalSecret: '' },
   },
 }));
 
@@ -498,6 +507,82 @@ describe('Webhook Server', () => {
 
       expect(res.status).toBe(200);
       expect(mockFireTrigger).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // ────────────────────────────────────────────────
+  // Internal KB API
+  // ────────────────────────────────────────────────
+  describe('POST /internal/kb/search', () => {
+    it('returns search results', async () => {
+      mockSearchKB.mockResolvedValueOnce([
+        { id: 'e1', title: 'Getting Started', summary: 'How to begin', content: 'Full content here', category: 'docs', tags: ['intro'] },
+      ]);
+
+      const res = await makeTestRequest(app, 'POST', '/internal/kb/search', {
+        query: 'getting started',
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body.results).toHaveLength(1);
+      expect(res.body.results[0].title).toBe('Getting Started');
+      expect(mockSearchKB).toHaveBeenCalledWith('getting started', undefined, 4000);
+    });
+
+    it('returns 400 when query is missing', async () => {
+      const res = await makeTestRequest(app, 'POST', '/internal/kb/search', {});
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('query is required');
+    });
+
+    it('passes agent_id when provided', async () => {
+      mockSearchKB.mockResolvedValueOnce([]);
+
+      await makeTestRequest(app, 'POST', '/internal/kb/search', {
+        query: 'test',
+        agent_id: 'agent-123',
+      });
+
+      expect(mockSearchKB).toHaveBeenCalledWith('test', 'agent-123', 4000);
+    });
+  });
+
+  describe('GET /internal/kb/list', () => {
+    it('returns KB entries', async () => {
+      mockListKBEntries.mockResolvedValueOnce([
+        { id: 'e1', title: 'Doc 1', summary: 'Summary', category: 'docs', tags: [] },
+      ]);
+
+      const res = await makeTestRequest(app, 'GET', '/internal/kb/list');
+
+      expect(res.status).toBe(200);
+      expect(res.body.entries).toHaveLength(1);
+      expect(mockListKBEntries).toHaveBeenCalledWith(20);
+    });
+
+    it('filters by category', async () => {
+      mockListKBEntries.mockResolvedValueOnce([
+        { id: 'e1', title: 'Doc', summary: 'S', category: 'faq', tags: [] },
+        { id: 'e2', title: 'Other', summary: 'S', category: 'docs', tags: [] },
+      ]);
+
+      const res = await makeTestRequest(app, 'GET', '/internal/kb/list?category=faq');
+
+      expect(res.status).toBe(200);
+      expect(res.body.entries).toHaveLength(1);
+      expect(res.body.entries[0].title).toBe('Doc');
+    });
+  });
+
+  describe('GET /internal/kb/categories', () => {
+    it('returns category list', async () => {
+      mockGetCategories.mockResolvedValueOnce(['docs', 'faq', 'guides']);
+
+      const res = await makeTestRequest(app, 'GET', '/internal/kb/categories');
+
+      expect(res.status).toBe(200);
+      expect(res.body.categories).toEqual(['docs', 'faq', 'guides']);
     });
   });
 });

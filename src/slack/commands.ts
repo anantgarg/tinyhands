@@ -62,6 +62,14 @@ const TOOL_INTEGRATIONS: ToolIntegration[] = [
     tools: ['serpapi-read'],
     requiredConfigKeys: ['api_key'],
   },
+  {
+    id: 'kb',
+    label: 'Knowledge Base',
+    icon: ':books:',
+    description: 'Search and browse the internal knowledge base. No API keys needed.',
+    tools: ['kb-search'],
+    requiredConfigKeys: [],
+  },
 ];
 
 export function registerCommands(app: App): void {
@@ -572,7 +580,7 @@ export function registerInlineActions(app: App): void {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `*Status:* ${agent.status}\n*Model:* ${agent.model}\n*Effort:* ${maxTurnsToEffort(agent.max_turns)}\n*Memory:* ${agent.memory_enabled ? 'on' : 'off'}\n*Channels:* ${channels}\n*Tools:* ${agent.tools.join(', ') || 'none'}\n*Responds to:* ${agent.respond_to_all_messages ? 'all messages' : 'relevant messages + @mentions'}`,
+              text: `*Status:* ${agent.status}\n*Model:* ${agent.model}\n*Effort:* ${maxTurnsToEffort(agent.max_turns)}\n*Memory:* ${agent.memory_enabled ? 'on' : 'off'}\n*Channels:* ${channels}\n*Tools:* ${agent.tools.join(', ') || 'none'}\n*Responds to:* ${respondModeLabelFromAgent(agent)}`,
             },
           },
           { type: 'divider' },
@@ -1725,6 +1733,11 @@ export function registerToolAndKBModals(app: App): void {
           await registerSerpApiTools(userId, { api_key: config.api_key });
           break;
         }
+        case 'kb': {
+          const { registerKBTools } = await import('../modules/tools/kb');
+          await registerKBTools();
+          break;
+        }
         default:
           throw new Error(`Unknown integration: ${integrationId}`);
       }
@@ -2342,6 +2355,7 @@ export function registerConfirmationActions(app: App): void {
         model: finalModel,
         memoryEnabled: analysis.memory_enabled,
         respondToAllMessages: analysis.respond_to_all_messages,
+        mentionsOnly: analysis.mentions_only,
         relevanceKeywords: analysis.relevance_keywords,
         createdBy: userId,
         maxTurns: finalMaxTurns,
@@ -2353,7 +2367,7 @@ export function registerConfirmationActions(app: App): void {
         '',
         `*Goal:* ${goal.slice(0, 300)}`,
         `*Model:* ${finalModel} | *Memory:* ${analysis.memory_enabled ? 'on' : 'off'}`,
-        `*Responds to:* ${analysis.respond_to_all_messages ? 'all messages' : 'relevant messages + @mentions'}`,
+        `*Responds to:* ${respondModeLabel(analysis)}`,
         `*Tools:* ${allTools.join(', ')}`,
         analysis.skills.length > 0 ? `*Skills:* ${analysis.skills.join(', ')}` : '',
         analysis.triggers.length > 0 ? `*Triggers:* ${analysis.triggers.map((t: any) => t.description).join(', ')}` : '',
@@ -2455,6 +2469,7 @@ export function registerConfirmationActions(app: App): void {
         max_turns: finalMaxTurns,
         memory_enabled: analysis.memory_enabled,
         respond_to_all_messages: analysis.respond_to_all_messages,
+        mentions_only: analysis.mentions_only,
         relevance_keywords: analysis.relevance_keywords,
       };
 
@@ -2489,7 +2504,7 @@ export function registerConfirmationActions(app: App): void {
         await postMessage(postToChannel,
           `:arrows_counterclockwise: Agent *${agent.name}* updated by <@${userId}>\n\n` +
           `*Model:* ${analysis.model} | *Memory:* ${analysis.memory_enabled ? 'on' : 'off'}\n` +
-          `*Responds to:* ${analysis.respond_to_all_messages ? 'all messages' : 'relevant messages + @mentions'}\n` +
+          `*Responds to:* ${respondModeLabel(analysis)}\n` +
           `*Tools:* ${allUpdateTools.join(', ')}` +
           channelChangeNote + '\n' +
           `_${analysis.summary}_`
@@ -2633,6 +2648,7 @@ export function registerConfirmationActions(app: App): void {
         model: freshAnalysis.model,
         memoryEnabled: freshAnalysis.memory_enabled,
         respondToAllMessages: freshAnalysis.respond_to_all_messages,
+        mentionsOnly: freshAnalysis.mentions_only,
         relevanceKeywords: freshAnalysis.relevance_keywords,
         createdBy: requestedBy,
       });
@@ -2838,6 +2854,18 @@ function maxTurnsToEffort(maxTurns: number): string {
   return 'max';
 }
 
+function respondModeLabel(analysis: { respond_to_all_messages: boolean; mentions_only?: boolean }): string {
+  if (analysis.respond_to_all_messages) return 'all messages';
+  if (analysis.mentions_only) return '@mentions only';
+  return 'relevant messages + @mentions';
+}
+
+function respondModeLabelFromAgent(agent: { respond_to_all_messages: boolean; mentions_only: boolean }): string {
+  if (agent.respond_to_all_messages) return 'all messages';
+  if (agent.mentions_only) return '@mentions only';
+  return 'relevant messages + @mentions';
+}
+
 function buildModelAndEffortBlocks(confirmId: string, selectedModel: string, selectedEffort: string): any[] {
   const models = [
     { text: { type: 'plain_text' as const, text: 'Haiku — fast, simple tasks' }, value: 'haiku' },
@@ -2949,6 +2977,8 @@ function buildConfigSummary(name: string, analysis: any, goal: string, existingA
   lines.push('*:zap: When will it respond:*');
   if (analysis.respond_to_all_messages) {
     lines.push('• Responds to *every message* in the channel');
+  } else if (analysis.mentions_only) {
+    lines.push('• Responds only when *@mentioned*');
   } else {
     lines.push('• Responds when *@mentioned*');
     if (analysis.relevance_keywords?.length > 0) {

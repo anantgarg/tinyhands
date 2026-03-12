@@ -16,6 +16,7 @@ export interface CreateAgentParams {
   maxTurns?: number;
   memoryEnabled?: boolean;
   respondToAllMessages?: boolean;
+  mentionsOnly?: boolean;
   relevanceKeywords?: string[];
   createdBy: string;
 }
@@ -45,6 +46,7 @@ export async function createAgent(params: CreateAgentParams): Promise<Agent> {
     max_turns: params.maxTurns || 50,
     memory_enabled: params.memoryEnabled || false,
     respond_to_all_messages: params.respondToAllMessages || false,
+    mentions_only: params.mentionsOnly || false,
     relevance_keywords: params.relevanceKeywords || [],
     created_by: params.createdBy,
     created_at: new Date().toISOString(),
@@ -55,14 +57,14 @@ export async function createAgent(params: CreateAgentParams): Promise<Agent> {
     await client.query(`
       INSERT INTO agents (id, name, channel_id, channel_ids, system_prompt, tools, avatar_emoji, status,
         model, streaming_detail, docker_image, self_evolution_mode, max_turns, memory_enabled,
-        respond_to_all_messages, relevance_keywords, created_by, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
+        respond_to_all_messages, mentions_only, relevance_keywords, created_by, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
     `, [
       agent.id, agent.name, agent.channel_id, agent.channel_ids,
       agent.system_prompt, JSON.stringify(agent.tools), agent.avatar_emoji, agent.status,
       agent.model, agent.streaming_detail, agent.docker_image,
       agent.self_evolution_mode, agent.max_turns, agent.memory_enabled,
-      agent.respond_to_all_messages,
+      agent.respond_to_all_messages, agent.mentions_only,
       JSON.stringify(agent.relevance_keywords),
       agent.created_by, agent.created_at, agent.updated_at
     ]);
@@ -194,6 +196,10 @@ export async function updateAgent(id: string, updates: Partial<Agent>, changedBy
   if (updates.respond_to_all_messages !== undefined) {
     fields.push(`respond_to_all_messages = $${paramIdx++}`);
     values.push(updates.respond_to_all_messages);
+  }
+  if (updates.mentions_only !== undefined) {
+    fields.push(`mentions_only = $${paramIdx++}`);
+    values.push(updates.mentions_only);
   }
   if (updates.relevance_keywords !== undefined) {
     fields.push(`relevance_keywords = $${paramIdx++}`);

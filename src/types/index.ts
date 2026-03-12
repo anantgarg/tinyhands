@@ -23,6 +23,7 @@ export interface Agent {
   max_turns: number;
   memory_enabled: boolean;
   respond_to_all_messages: boolean;
+  mentions_only: boolean;
   relevance_keywords: string[];
   created_by: string;
   created_at: string;

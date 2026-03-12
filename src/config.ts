@@ -25,6 +25,7 @@ export const config = {
   server: {
     port: parseInt(process.env.PORT || '3000', 10),
     nodeEnv: process.env.NODE_ENV || 'development',
+    internalSecret: process.env.INTERNAL_API_SECRET || '',
   },
   observability: {
     logLevel: process.env.LOG_LEVEL || 'info',

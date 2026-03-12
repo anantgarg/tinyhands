@@ -246,6 +246,7 @@ const TOOL_DISPLAY_NAMES: Record<string, string> = {
   Agent: 'Working on a subtask',
   TodoWrite: 'Planning tasks',
   TodoRead: 'Checking tasks',
+  'kb-search': 'Searching knowledge base',
 };
 
 function friendlyToolName(toolName: string): string {

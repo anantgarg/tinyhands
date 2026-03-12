@@ -19,6 +19,7 @@ export interface GoalAnalysis {
   }>;
   relevance_keywords: string[];
   respond_to_all_messages: boolean;
+  mentions_only: boolean;
   new_tools_needed: Array<{ name: string; description: string }>;
   new_skills_needed: Array<{ name: string; description: string }>;
   write_tools_requested: string[];
@@ -107,6 +108,7 @@ Return ONLY valid JSON matching this schema:
   ],
   "relevance_keywords": ["keywords", "that", "indicate", "a", "message", "is", "relevant", "to", "this", "agent"],
   "respond_to_all_messages": false,
+  "mentions_only": false,
   "new_tools_needed": [{"name": "kebab-case-name", "description": "detailed description of what this tool should do"}],
   "new_skills_needed": [{"name": "kebab-case-name", "description": "detailed description of what this skill template should do"}],
   "write_tools_requested": ["names-of-read-write-custom-tools-the-agent-needs"],
@@ -117,10 +119,13 @@ Return ONLY valid JSON matching this schema:
 
 IMPORTANT guidelines:
 - The system_prompt is the agent's brain. Make it extremely detailed and specific to the goal. Include explicit instructions about output formatting for Slack (no markdown headers, use *bold* not **bold**, use • for bullets, etc.)
-- respond_to_all_messages should be true ONLY if the agent's goal explicitly requires responding to every single message (e.g., a chatbot that handles all incoming queries). For most agents, this should be false — they should only respond to messages relevant to their goal.
-- relevance_keywords: list words/phrases that, if present in a message, indicate the agent should process it. Include both obvious keywords and contextual ones. For agents that should respond to all messages, this can be empty.
+- RESPONSE MODE — there are three modes, choose ONE based on the TRIGGER/SCHEDULE instructions:
+  - "every message": set respond_to_all_messages=true, mentions_only=false. Use when the goal requires responding to every single message.
+  - "when tagged" / "mentions only": set respond_to_all_messages=false, mentions_only=true. The agent ONLY responds when @mentioned or in thread replies. Use this when the TRIGGER/SCHEDULE says "when tagged", "when mentioned", or "mentions only".
+  - "when relevant" (default): set respond_to_all_messages=false, mentions_only=false. The agent auto-responds to relevant messages plus @mentions. Use when the goal implies the agent should proactively help with relevant messages.
+- relevance_keywords: list words/phrases that, if present in a message, indicate the agent should process it. Include both obvious keywords and contextual ones. For mentions_only or respond_to_all agents, this can be empty.
 - triggers: if the goal mentions reacting to external events (new tickets, issues, PRs, webhooks, messages in other channels), configure appropriate triggers. Leave empty if the agent only responds to direct messages in its channel.
-- custom_tools: include names of custom tools from the available list that the agent needs. Only include read-only tools unless the user is an admin.
+- custom_tools: CAREFULLY review the available custom tools list above and include ANY tool whose description matches the agent's goal. For example, if the goal involves SEO/search rankings include serpapi-read, if it involves knowledge base include kb-search, if it involves support tickets include zendesk-read, etc. Only include read-only tools unless the user is an admin.
 - write_tools_requested: if the goal would benefit from read-write custom tools, list their names here. These will require admin approval.
 - Always include Read, Glob, Grep for code/content-related agents
 - Include Write, Edit, Bash for agents that modify files or run commands
@@ -199,6 +204,7 @@ IMPORTANT guidelines:
   if (!analysis.relevance_keywords) analysis.relevance_keywords = [];
   if (!analysis.triggers) analysis.triggers = [];
   if (analysis.respond_to_all_messages === undefined) analysis.respond_to_all_messages = false;
+  if (analysis.mentions_only === undefined) analysis.mentions_only = false;
   if (analysis.feasible === undefined) analysis.feasible = true;
   if (!analysis.blockers) analysis.blockers = [];
   if (!analysis.new_tools_needed) analysis.new_tools_needed = [];

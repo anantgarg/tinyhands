@@ -2,6 +2,7 @@ import express from 'express';
 import { config } from './config';
 import { deployWebhookHandler } from './modules/auto-update';
 import { fireTrigger, getActiveTriggersByType } from './modules/triggers';
+import { searchKB, listKBEntries, getCategories } from './modules/knowledge-base';
 import { verifyLinearSignature, verifyZendeskSignature, verifyIntercomSignature } from './utils/webhooks';
 import { logger } from './utils/logger';
 import { v4 as uuid } from 'uuid';
@@ -121,6 +122,85 @@ export function createWebhookServer(): express.Application {
       });
     }
     res.status(200).json({ message: 'OK' });
+  });
+
+  // ── Internal KB API (used by in-container kb-search tool) ──
+
+  app.post('/internal/kb/search', async (req, res) => {
+    const secret = req.headers['x-internal-secret'] as string;
+    if (config.server.internalSecret && secret !== config.server.internalSecret) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const { query: q, agent_id, limit } = req.body;
+    if (!q) {
+      res.status(400).json({ error: 'query is required' });
+      return;
+    }
+
+    try {
+      const results = await searchKB(q, agent_id, limit || 4000);
+      res.json({
+        results: results.map(e => ({
+          id: e.id,
+          title: e.title,
+          summary: e.summary,
+          content: e.content.slice(0, 3000),
+          category: e.category,
+          tags: e.tags,
+        })),
+      });
+    } catch (err: any) {
+      logger.error('Internal KB search failed', { error: err.message });
+      res.status(500).json({ error: 'Search failed' });
+    }
+  });
+
+  app.get('/internal/kb/list', async (req, res) => {
+    const secret = req.headers['x-internal-secret'] as string;
+    if (config.server.internalSecret && secret !== config.server.internalSecret) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const limit = parseInt(req.query.limit as string) || 20;
+    const category = req.query.category as string;
+
+    try {
+      let entries = await listKBEntries(limit);
+      if (category) {
+        entries = entries.filter(e => e.category === category);
+      }
+      res.json({
+        entries: entries.map(e => ({
+          id: e.id,
+          title: e.title,
+          summary: e.summary,
+          category: e.category,
+          tags: e.tags,
+        })),
+      });
+    } catch (err: any) {
+      logger.error('Internal KB list failed', { error: err.message });
+      res.status(500).json({ error: 'List failed' });
+    }
+  });
+
+  app.get('/internal/kb/categories', async (req, res) => {
+    const secret = req.headers['x-internal-secret'] as string;
+    if (config.server.internalSecret && secret !== config.server.internalSecret) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    try {
+      const categories = await getCategories();
+      res.json({ categories });
+    } catch (err: any) {
+      logger.error('Internal KB categories failed', { error: err.message });
+      res.status(500).json({ error: 'Categories failed' });
+    }
   });
 
   return app;
