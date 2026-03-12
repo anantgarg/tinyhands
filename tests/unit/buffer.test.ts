@@ -162,7 +162,7 @@ describe('Slack buffer module', () => {
       );
     });
 
-    it('should fall back to "Using <name>" for unknown tools', async () => {
+    it('should fall back to "Working on it" for unknown tools', async () => {
       setStatusMessageTs('C001', '111.222', 'status-ts-1');
       bufferEvent('C001', '111.222', 'text', 'init');
       bufferEvent('C001', '111.222', 'tool_use', 'custom_tool');
@@ -172,7 +172,7 @@ describe('Slack buffer module', () => {
       expect(mockUpdateMessage).toHaveBeenCalledWith(
         'C001',
         'status-ts-1',
-        ':wrench: Using custom_tool...',
+        ':wrench: Working on it...',
       );
     });
   });

@@ -242,10 +242,16 @@ const TOOL_DISPLAY_NAMES: Record<string, string> = {
   Glob: 'Finding files',
   LSP: 'Analyzing code',
   NotebookEdit: 'Editing a notebook',
+  ToolSearch: 'Looking up tools',
+  Agent: 'Working on a subtask',
+  TodoWrite: 'Planning tasks',
+  TodoRead: 'Checking tasks',
 };
 
 function friendlyToolName(toolName: string): string {
-  return TOOL_DISPLAY_NAMES[toolName] || `Using ${toolName}`;
+  if (TOOL_DISPLAY_NAMES[toolName]) return TOOL_DISPLAY_NAMES[toolName];
+  // Custom tools (e.g. "serpapi-read") — just say "Working on it"
+  return 'Working on it';
 }
 
 function truncate(text: string, maxLen: number): string {
