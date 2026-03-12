@@ -226,7 +226,7 @@ async function writeBackDocx(filePath: string, content: string): Promise<string>
   try {
     const templateBytes = readFileSync(filePath);
     // Replace placeholders in the raw XML of the docx
-    let xmlContent = templateBytes.toString('binary');
+    const xmlContent = templateBytes.toString('binary');
     // docx files are zip archives — for full support, use a docx library
     // Here we write as plain text with .txt extension as safe fallback
     const txtPath = filePath.replace(/\.docx$/, '-filled.txt');
