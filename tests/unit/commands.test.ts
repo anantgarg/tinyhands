@@ -1071,17 +1071,18 @@ describe('Commands Module', () => {
       registerConfirmationActions(app as any);
 
       const ack = vi.fn();
+      const respond = vi.fn();
       const action = { value: 'cancel-update-1' };
       const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
 
-      await app.handlers.action['cancel_update_agent']({ action, ack, body });
+      await app.handlers.action['cancel_update_agent']({ action, ack, body, respond });
 
       expect(ack).toHaveBeenCalled();
       expect(mockExecute).toHaveBeenCalledWith(
         expect.stringContaining('DELETE FROM pending_confirmations'),
         ['cancel-update-1'],
       );
-      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('cancelled'), 'msg-ts');
+      expect(respond).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining('cancelled') }));
     });
 
     it('confirm_new_agent with valid data should create agent', async () => {
@@ -1277,13 +1278,14 @@ describe('Commands Module', () => {
       });
 
       const ack = vi.fn();
+      const respond = vi.fn();
       const action = { value: 'upd-expired' };
       const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
 
-      await app.handlers.action['confirm_update_agent']({ action, ack, body });
+      await app.handlers.action['confirm_update_agent']({ action, ack, body, respond });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('expired'), 'msg-ts');
+      expect(respond).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining('expired') }));
     });
 
     it('confirm_update_agent should reject null rows', async () => {
@@ -1293,13 +1295,14 @@ describe('Commands Module', () => {
       mockQueryOne.mockResolvedValue(null);
 
       const ack = vi.fn();
+      const respond = vi.fn();
       const action = { value: 'nonexistent' };
       const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
 
-      await app.handlers.action['confirm_update_agent']({ action, ack, body });
+      await app.handlers.action['confirm_update_agent']({ action, ack, body, respond });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('expired'), 'msg-ts');
+      expect(respond).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining('expired') }));
     });
 
     it('confirm_update_agent with valid data should update agent', async () => {
@@ -1324,10 +1327,11 @@ describe('Commands Module', () => {
       mockUpdateAgent.mockResolvedValue(undefined);
 
       const ack = vi.fn();
+      const respond = vi.fn();
       const action = { value: 'upd-valid' };
       const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
 
-      await app.handlers.action['confirm_update_agent']({ action, ack, body });
+      await app.handlers.action['confirm_update_agent']({ action, ack, body, respond });
 
       expect(ack).toHaveBeenCalled();
       expect(mockUpdateAgent).toHaveBeenCalledWith(
@@ -1339,6 +1343,7 @@ describe('Commands Module', () => {
         }),
         'U1',
       );
+      expect(respond).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining('updated') }));
     });
 
     it('approve_write_tools should add tools and notify user', async () => {

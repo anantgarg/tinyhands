@@ -2396,7 +2396,7 @@ export function registerConfirmationActions(app: App): void {
     await replyToAction(body, ':x: Agent creation cancelled.');
   });
 
-  app.action('confirm_update_agent', async ({ action, ack, body }) => {
+  app.action('confirm_update_agent', async ({ action, ack, body, respond }) => {
     await ack();
     const confirmId = (action as any).value;
     logger.info('confirm_update_agent: start', { confirmId });
@@ -2406,7 +2406,7 @@ export function registerConfirmationActions(app: App): void {
     );
 
     if (!row || !row.data.agentId || new Date(row.expires_at) < new Date()) {
-      await replyToAction(body, ':x: This confirmation has expired. Please run `/agents` and try again.');
+      await respond({ text: ':x: This confirmation has expired. Please run `/agents` and try again.', replace_original: false });
       return;
     }
 
@@ -2420,7 +2420,7 @@ export function registerConfirmationActions(app: App): void {
       const finalModel = selectedModel || analysis.model;
       const finalMaxTurns = selectedEffort ? (EFFORT_TO_MAX_TURNS[selectedEffort] || 25) : (analysis.max_turns || agent.max_turns || 25);
 
-      await replyToAction(body, ':gear: Updating agent...');
+      await respond({ text: ':gear: Updating agent...', replace_original: false });
 
       const mergedTools = [...analysis.tools, ...(analysis.custom_tools || [])];
       const updates: any = {
@@ -2447,8 +2447,8 @@ export function registerConfirmationActions(app: App): void {
       await updateAgent(agentId!, updates, userId);
       logger.info('confirm_update_agent: DB updated', { agentId });
 
-      // Reply to user first — channel notification is non-critical
-      await replyToAction(body, `✋ *${agent.name}* updated! High five.`);
+      // Reply to user via response_url (reliable, works for 30 min after action)
+      await respond({ text: `✋ *${agent.name}* updated! High five.`, replace_original: false });
 
       // Post update summary to the agent's channel (best-effort)
       const postToChannel = updates.channel_ids?.[0] || agent.channel_ids?.[0] || agent.channel_id;
@@ -2509,14 +2509,14 @@ export function registerConfirmationActions(app: App): void {
 
     } catch (err: any) {
       logger.error('Agent update failed', { error: err.message });
-      await replyToAction(body, `:x: Failed to update agent: ${err.message}`);
+      await respond({ text: `:x: Failed to update agent: ${err.message}`, replace_original: false });
     }
   });
 
-  app.action('cancel_update_agent', async ({ action, ack, body }) => {
+  app.action('cancel_update_agent', async ({ action, ack, respond }) => {
     await ack();
     await execute(`DELETE FROM pending_confirmations WHERE id = $1`, [(action as any).value]);
-    await replyToAction(body, ':x: Agent update cancelled.');
+    await respond({ text: ':x: Agent update cancelled.', replace_original: false });
   });
 
   // ── Model & Effort Selection Actions ──
