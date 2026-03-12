@@ -12,6 +12,28 @@ Think [Claude Code](https://claude.ai/claude-code) or [Devin](https://devin.ai) 
 
 ---
 
+## Deploy
+
+[![Deploy to DigitalOcean](https://img.shields.io/badge/1--Click%20Deploy-DigitalOcean-0080FF?style=for-the-badge&logo=digitalocean&logoColor=white)](https://marketplace.digitalocean.com/apps/tinyjobs)
+
+**One-click:** Creates a pre-configured Droplet with TinyJobs, PostgreSQL, Redis, and Docker. SSH in and run `setup.sh` to connect your Slack workspace.
+
+**Docker Compose** (any server with Docker):
+
+```bash
+git clone https://github.com/anantgarg/tinyjobs.git && cd tinyjobs
+cp .env.example .env   # fill in SLACK_* and ANTHROPIC_API_KEY
+docker compose up -d
+```
+
+**Install script** (Ubuntu/Debian):
+
+```bash
+curl -sSL https://raw.githubusercontent.com/anantgarg/tinyjobs/main/scripts/install.sh | sudo bash
+```
+
+---
+
 ## What is TinyJobs?
 
 TinyJobs turns your Slack workspace into an AI operations center. Each agent gets its own channel, its own persona, its own tools, and its own knowledge. You talk to agents like teammates — they run tasks autonomously using Claude, pull context from connected sources, and learn from feedback.
@@ -164,32 +186,52 @@ DATA LAYER
 
 ### Prerequisites
 
-- Ubuntu 22.04+ (or any Linux VPS) with 8+ GB RAM
+- A server with 8+ GB RAM (Ubuntu 22.04+ recommended)
 - A Slack workspace where you can install apps
 - An Anthropic API key
-- A PostgreSQL database (managed or self-hosted)
 
-### Option A: Install with Claude Code (recommended)
+### Option A: One-Click (DigitalOcean Marketplace)
 
-SSH into your server and run [Claude Code](https://docs.anthropic.com/en/docs/claude-code), then paste this prompt:
+[![Deploy to DigitalOcean](https://img.shields.io/badge/1--Click%20Deploy-DigitalOcean-0080FF?style=for-the-badge&logo=digitalocean&logoColor=white)](https://marketplace.digitalocean.com/apps/tinyjobs)
 
-```
-I need you to install TinyJobs on this server. Do the following:
+Click the button above to create a Droplet with everything pre-installed. Once the Droplet boots, SSH in and run:
 
-1. Install Docker (curl -fsSL https://get.docker.com | sh), Node.js 20 (via nodesource), PM2 (npm install -g pm2), and Redis (apt-get install redis-server, systemctl enable redis-server)
-2. Clone https://github.com/anantgarg/tinyjobs.git to /opt/tinyjobs
-3. Run npm install in /opt/tinyjobs
-4. Build the Docker image: docker build -t tinyjobs-runner:latest ./docker/
-5. Copy .env.example to .env and ask me for: SLACK_BOT_TOKEN, SLACK_APP_TOKEN, SLACK_SIGNING_SECRET, ANTHROPIC_API_KEY, DATABASE_URL, REDIS_URL
-6. Run: npm run build && npx tsx src/db/migrate.ts
-7. Start with: pm2 start ecosystem.config.js && pm2 save && pm2 startup
-
-Before step 5, tell me I need to create a Slack app at api.slack.com/apps with these Bot Token Scopes: channels:manage, channels:read, channels:history, channels:join, chat:write, chat:write.customize, commands, users:read, reactions:read, reactions:write, files:read, im:history, im:write, groups:history. Enable Socket Mode, create slash commands /agents /tools /kb, and subscribe to message.channels, message.im, app_mention, reaction_added, app_home_opened events.
+```bash
+/opt/tinyjobs-setup.sh
 ```
 
-Claude Code will handle the rest — installing dependencies, configuring environment, running migrations, and starting the services.
+The setup wizard walks you through creating a Slack app, entering your API keys, and starting TinyJobs. Takes about 5 minutes.
 
-### Option B: Manual installation
+### Option B: Docker Compose (any server)
+
+Requires Docker with Compose plugin. Includes PostgreSQL and Redis — no external databases needed.
+
+```bash
+git clone https://github.com/anantgarg/tinyjobs.git /opt/tinyjobs
+cd /opt/tinyjobs
+cp .env.example .env
+```
+
+Edit `.env` with your Slack and Anthropic credentials (see [Slack App Setup](#slack-app-setup) below), then:
+
+```bash
+docker compose up -d
+```
+
+This builds and starts everything: TinyJobs, PostgreSQL, Redis, and the agent runner image.
+
+### Option C: Install Script (Ubuntu/Debian)
+
+Installs Docker, clones the repo, and walks you through configuration:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/anantgarg/tinyjobs/main/scripts/install.sh | sudo bash
+```
+
+### Option D: Manual Installation
+
+<details>
+<summary>Click to expand manual setup steps</summary>
 
 #### 1. Install system dependencies
 
@@ -258,14 +300,23 @@ DAILY_BUDGET_USD=50
 MAX_CONCURRENT_WORKERS=3
 ```
 
-#### 6. Run migrations
+#### 6. Run migrations and start
 
 ```bash
 npm run build
 npx tsx src/db/migrate.ts
+pm2 start ecosystem.config.js
+pm2 save && pm2 startup
 ```
 
-#### 7. Create the Slack app
+This starts:
+- **tinyjobs-listener** — Slack event handler and slash command processor
+- **tinyjobs-worker-1/2/3** — Job workers that execute agent runs in Docker
+- **tinyjobs-sync** — Background sync for sources and auto-sync schedules
+
+</details>
+
+### Slack App Setup
 
 1. Go to [api.slack.com/apps](https://api.slack.com/apps) and click **Create New App** > **From scratch**
 2. Enable **Socket Mode** under Settings and generate an App-Level Token (`xapp-...`)
@@ -289,20 +340,7 @@ npx tsx src/db/migrate.ts
    - `app_home_opened`
 7. Install the app to your workspace and copy the Bot Token (`xoxb-...`)
 
-#### 8. Start TinyJobs
-
-```bash
-npm run build
-pm2 start ecosystem.config.js
-pm2 save && pm2 startup
-```
-
-This starts:
-- **tinyjobs-listener** — Slack event handler and slash command processor
-- **tinyjobs-worker-1/2/3** — Job workers that execute agent runs in Docker
-- **tinyjobs-sync** — Background sync for sources and auto-sync schedules
-
-#### 9. Initialize superadmin
+### Initialize Superadmin
 
 The first user to run `/agents` is automatically promoted to superadmin. Superadmins can:
 - Register and configure tool integrations
