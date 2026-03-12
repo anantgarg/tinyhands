@@ -482,11 +482,11 @@ describe('Commands Module', () => {
       expect(allText).toContain('<#C2>');
     });
 
-    it('should display model and permission info', async () => {
+    it('should display model and effort info', async () => {
       const app = createMockApp();
       registerCommands(app as any);
 
-      mockListAgents.mockResolvedValue([makeFakeAgent({ model: 'opus', permission_level: 'elevated' })]);
+      mockListAgents.mockResolvedValue([makeFakeAgent({ model: 'opus', max_turns: 25 })]);
       mockCanModifyAgent.mockResolvedValue(false);
       const ack = vi.fn();
       const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '' };
@@ -495,7 +495,7 @@ describe('Commands Module', () => {
 
       const allText = JSON.stringify(mockPostBlocks.mock.calls[0][1]);
       expect(allText).toContain('opus');
-      expect(allText).toContain('elevated');
+      expect(allText).toContain('high effort');
     });
 
     it('should post blocks to the command channel', async () => {

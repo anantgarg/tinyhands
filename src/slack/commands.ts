@@ -106,7 +106,7 @@ export function registerCommands(app: App): void {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `${statusIcon} *${a.avatar_emoji} ${a.name}*\n${channels} · \`${a.model}\` · \`${a.permission_level}\` · ${a.tools.length} tools · memory ${a.memory_enabled ? 'on' : 'off'}`,
+            text: `${statusIcon} *${a.avatar_emoji} ${a.name}*\n${channels} · ${a.model} · ${maxTurnsToEffort(a.max_turns)} effort · ${a.tools.length} tools · memory ${a.memory_enabled ? 'on' : 'off'}`,
           },
           accessory: {
             type: 'overflow',
