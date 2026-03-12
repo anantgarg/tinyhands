@@ -15,9 +15,22 @@ vi.mock('uuid', () => ({
 
 const mockGetAgentByChannel = vi.fn();
 const mockGetAgentsByChannel = vi.fn();
+const mockCanAccessAgent = vi.fn().mockResolvedValue(true);
+const mockGetDmConversation = vi.fn().mockResolvedValue(null);
+const mockTouchDmConversation = vi.fn();
+const mockCreateDmConversation = vi.fn().mockResolvedValue({ id: 'dm1', user_id: 'U1', agent_id: 'A1', dm_channel_id: 'D1', thread_ts: '1.1', created_at: '', last_active_at: '' });
+const mockGetAccessibleAgents = vi.fn().mockResolvedValue([]);
 vi.mock('../../src/modules/agents', () => ({
   getAgentByChannel: (...args: any[]) => mockGetAgentByChannel(...args),
   getAgentsByChannel: (...args: any[]) => mockGetAgentsByChannel(...args),
+  canAccessAgent: (...args: any[]) => mockCanAccessAgent(...args),
+  getDmConversation: (...args: any[]) => mockGetDmConversation(...args),
+  touchDmConversation: (...args: any[]) => mockTouchDmConversation(...args),
+  createDmConversation: (...args: any[]) => mockCreateDmConversation(...args),
+  getAccessibleAgents: (...args: any[]) => mockGetAccessibleAgents(...args),
+  getAgent: (...args: any[]) => mockGetAgentByChannel(...args), // reuse for simplicity
+  addAgentMember: vi.fn(),
+  removeAgentMember: vi.fn(),
 }));
 
 const mockEnqueueRun = vi.fn();
@@ -167,6 +180,7 @@ function createMockApp() {
       if (!handlers[eventName]) handlers[eventName] = [];
       handlers[eventName].push(handler);
     }),
+    action: vi.fn((_pattern: string | RegExp, _handler: Function) => {}),
     _handlers: handlers,
     _trigger: async (eventName: string, payload: any) => {
       const fns = handlers[eventName] || [];
@@ -204,6 +218,7 @@ function makeAgent(overrides: Record<string, any> = {}) {
     model: 'sonnet',
     memory_enabled: false,
     respond_to_all_messages: false,
+    visibility: 'public',
     relevance_keywords: [],
     ...overrides,
   };
@@ -1030,8 +1045,7 @@ describe('Slack Events -- registerEvents', () => {
       }, 1);
 
       expect(mockInitSuperadmin).toHaveBeenCalledWith('U_ADMIN');
-      // text is lowercased before regex match, so the extracted user ID is lowercase
-      expect(mockAddSuperadmin).toHaveBeenCalledWith('u_new_admin', 'U_ADMIN');
+      expect(mockAddSuperadmin).toHaveBeenCalledWith('U_NEW_ADMIN', 'U_ADMIN');
     });
 
     it('should handle superadmin add errors gracefully', async () => {

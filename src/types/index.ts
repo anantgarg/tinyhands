@@ -6,6 +6,7 @@ export type EffortLevel = 'low' | 'medium' | 'high' | 'max';
 export type SelfEvolutionMode = 'autonomous' | 'approve-first';
 export type AccessRole = 'superadmin' | 'owner' | 'admin' | 'member';
 export type IntegrationAccess = 'read' | 'write' | 'admin';
+export type AgentVisibility = 'public' | 'private';
 
 export interface Agent {
   id: string;
@@ -24,6 +25,7 @@ export interface Agent {
   memory_enabled: boolean;
   respond_to_all_messages: boolean;
   mentions_only: boolean;
+  visibility: AgentVisibility;
   relevance_keywords: string[];
   created_by: string;
   created_at: string;
@@ -265,6 +267,23 @@ export interface Superadmin {
   user_id: string;
   granted_by: string;
   granted_at: string;
+}
+
+export interface AgentMember {
+  agent_id: string;
+  user_id: string;
+  added_by: string;
+  added_at: string;
+}
+
+export interface DmConversation {
+  id: string;
+  user_id: string;
+  agent_id: string;
+  dm_channel_id: string;
+  thread_ts: string;
+  created_at: string;
+  last_active_at: string;
 }
 
 // ── Tool Management Types ──

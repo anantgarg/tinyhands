@@ -1,6 +1,6 @@
 import type { App } from '@slack/bolt';
 import { v4 as uuid } from 'uuid';
-import { createAgent, listAgents, getAgent, getAgentByName, updateAgent } from '../modules/agents';
+import { createAgent, listAgents, getAgent, getAgentByName, updateAgent, getAccessibleAgents, addAgentMembers, getAgentMembers, addAgentMember, removeAgentMember } from '../modules/agents';
 import { initSuperadmin, canModifyAgent, listSuperadmins } from '../modules/access-control';
 import { createChannel, postMessage, postBlocks, getSlackApp, sendDMBlocks, openModal, pushModal } from './index';
 import { analyzeGoal } from '../modules/agents/goal-analyzer';
@@ -79,7 +79,7 @@ export function registerCommands(app: App): void {
     await initSuperadmin(command.user_id);
     const userId = command.user_id;
 
-    const agents = await listAgents();
+    const agents = await getAccessibleAgents(userId);
 
     const blocks: any[] = [
       { type: 'header', text: { type: 'plain_text', text: `:robot_face: Agents (${agents.length})` } },
@@ -94,6 +94,7 @@ export function registerCommands(app: App): void {
       for (const a of agents) {
         const channels = (a.channel_ids?.length > 0 ? a.channel_ids : [a.channel_id]).map((c: string) => `<#${c}>`).join(', ');
         const statusIcon = a.status === 'active' ? ':large_green_circle:' : a.status === 'paused' ? ':double_vertical_bar:' : ':red_circle:';
+        const visibilityIcon = a.visibility === 'private' ? ' :lock:' : '';
 
         const overflowOptions: any[] = [
           { text: { type: 'plain_text', text: ':gear: View Config' }, value: `view_config:${a.id}` },
@@ -106,6 +107,10 @@ export function registerCommands(app: App): void {
           overflowOptions.push({ text: { type: 'plain_text', text: ':arrow_forward: Resume' }, value: `resume:${a.id}` });
         }
 
+        if (a.visibility === 'private' && await canModifyAgent(a.id, userId)) {
+          overflowOptions.push({ text: { type: 'plain_text', text: ':busts_in_silhouette: Members' }, value: `members:${a.id}` });
+        }
+
         if (await canModifyAgent(a.id, userId)) {
           overflowOptions.push({ text: { type: 'plain_text', text: ':wastebasket: Delete' }, value: `delete:${a.id}` });
         }
@@ -114,7 +119,7 @@ export function registerCommands(app: App): void {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `${statusIcon} *${a.avatar_emoji} ${a.name}*\n${channels} · ${a.model} · ${maxTurnsToEffort(a.max_turns)} effort · ${a.tools.length} tools · memory ${a.memory_enabled ? 'on' : 'off'}`,
+            text: `${statusIcon} *${a.avatar_emoji} ${a.name}*${visibilityIcon}\n${channels} · ${a.model} · ${maxTurnsToEffort(a.max_turns)} effort · ${a.tools.length} tools · memory ${a.memory_enabled ? 'on' : 'off'}`,
           },
           accessory: {
             type: 'overflow',
@@ -580,7 +585,7 @@ export function registerInlineActions(app: App): void {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `*Status:* ${agent.status}\n*Model:* ${agent.model}\n*Effort:* ${maxTurnsToEffort(agent.max_turns)}\n*Memory:* ${agent.memory_enabled ? 'on' : 'off'}\n*Channels:* ${channels}\n*Tools:* ${agent.tools.join(', ') || 'none'}\n*Responds to:* ${respondModeLabelFromAgent(agent)}`,
+              text: `*Status:* ${agent.status}\n*Model:* ${agent.model}\n*Effort:* ${maxTurnsToEffort(agent.max_turns)}\n*Memory:* ${agent.memory_enabled ? 'on' : 'off'}\n*Visibility:* ${agent.visibility === 'private' ? ':lock: private' : 'public'}\n*Channels:* ${channels}\n*Tools:* ${agent.tools.join(', ') || 'none'}\n*Responds to:* ${respondModeLabelFromAgent(agent)}`,
             },
           },
           { type: 'divider' },
@@ -660,6 +665,30 @@ export function registerInlineActions(app: App): void {
           if (channelId) await postMessage(channelId, `:arrow_forward: Agent *${agent?.name || agentId}* resumed.`);
         } catch (err: any) {
           if (channelId) await postMessage(channelId, `:x: ${err.message}`);
+        }
+        break;
+      }
+
+      case 'members': {
+        if (!(await canModifyAgent(agentId, userId))) {
+          if (channelId) await postMessage(channelId, ':x: You don\'t have permission to manage members.');
+          return;
+        }
+        const agent = await getAgent(agentId);
+        if (!agent || agent.visibility !== 'private') {
+          if (channelId) await postMessage(channelId, ':x: This agent is not private.');
+          return;
+        }
+        const members = await getAgentMembers(agentId);
+        const memberList = members.length > 0
+          ? members.map(m => `<@${m}>`).join(', ')
+          : '_No members yet_';
+        if (channelId) {
+          await postBlocks(channelId, [
+            { type: 'header', text: { type: 'plain_text', text: `:lock: ${agent.name} — Members` } },
+            { type: 'section', text: { type: 'mrkdwn', text: `*Current members:* ${memberList}` } },
+            { type: 'section', text: { type: 'mrkdwn', text: `_To add members, say \`add member @user\` in the agent's channel.\nTo remove, say \`remove member @user\`._` } },
+          ], `Members: ${agent.name}`);
         }
         break;
       }
@@ -2039,7 +2068,7 @@ async function showNewAgentConfirmation(
   const defaultEffort = maxTurnsToEffort(analysis.max_turns || 25);
   await execute(
     `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
-    [confirmId, JSON.stringify({ analysis, name: agentName, goal, userId, existingChannelIds: selectedChannels, selectedModel: analysis.model, selectedEffort: defaultEffort })],
+    [confirmId, JSON.stringify({ analysis, name: agentName, goal, userId, existingChannelIds: selectedChannels, selectedModel: analysis.model, selectedEffort: defaultEffort, visibility: 'public', memberIds: [] })],
   );
 
   const configSummary = buildConfigSummary(agentName, analysis, goal);
@@ -2050,6 +2079,25 @@ async function showNewAgentConfirmation(
     ...toolWarnings,
     { type: 'divider' },
     ...buildModelAndEffortBlocks(confirmId, analysis.model, defaultEffort),
+    { type: 'divider' },
+    {
+      type: 'section',
+      text: { type: 'mrkdwn', text: '*:lock: Visibility*' },
+    },
+    {
+      type: 'actions',
+      elements: [
+        {
+          type: 'radio_buttons',
+          action_id: `visibility_select:${confirmId}`,
+          initial_option: { text: { type: 'plain_text', text: 'Public — everyone can use' }, value: 'public' },
+          options: [
+            { text: { type: 'plain_text', text: 'Public — everyone can use' }, value: 'public' },
+            { text: { type: 'plain_text', text: 'Private — members only' }, value: 'private' },
+          ],
+        },
+      ],
+    },
     {
       type: 'actions',
       elements: [
@@ -2332,7 +2380,7 @@ export function registerConfirmationActions(app: App): void {
     }
 
     try {
-      const { analysis, name, goal, userId, existingChannelIds, existingChannelId, selectedModel, selectedEffort } = row.data;
+      const { analysis, name, goal, userId, existingChannelIds, existingChannelId, selectedModel, selectedEffort, visibility, memberIds } = row.data;
 
       // Apply user-selected model and effort overrides
       const finalModel = selectedModel || analysis.model;
@@ -2356,21 +2404,29 @@ export function registerConfirmationActions(app: App): void {
         memoryEnabled: analysis.memory_enabled,
         respondToAllMessages: analysis.respond_to_all_messages,
         mentionsOnly: analysis.mentions_only,
+        visibility: visibility || 'public',
         relevanceKeywords: analysis.relevance_keywords,
         createdBy: userId,
         maxTurns: finalMaxTurns,
       });
 
+      // Add members for private agents
+      if (visibility === 'private' && memberIds?.length > 0) {
+        await addAgentMembers(agent.id, memberIds, userId);
+      }
+
       const allTools = [...analysis.tools, ...(analysis.custom_tools || [])];
+      const visibilityLabel = visibility === 'private' ? ':lock: Private' : 'Public';
       const lines = [
         `✋ Meet *${agent.name}*! Deployed by <@${userId}> and ready to get to work. It's small, but it's ready.`,
         '',
         `*Goal:* ${goal.slice(0, 300)}`,
-        `*Model:* ${finalModel} | *Memory:* ${analysis.memory_enabled ? 'on' : 'off'}`,
+        `*Model:* ${finalModel} | *Memory:* ${analysis.memory_enabled ? 'on' : 'off'} | *Visibility:* ${visibilityLabel}`,
         `*Responds to:* ${respondModeLabel(analysis)}`,
         `*Tools:* ${allTools.join(', ')}`,
         analysis.skills.length > 0 ? `*Skills:* ${analysis.skills.join(', ')}` : '',
         analysis.triggers.length > 0 ? `*Triggers:* ${analysis.triggers.map((t: any) => t.description).join(', ')}` : '',
+        visibility === 'private' && memberIds?.length > 0 ? `*Members:* ${memberIds.map((m: string) => `<@${m}>`).join(', ')}` : '',
       ].filter(Boolean);
 
       // Post announcement in first channel
@@ -2600,6 +2656,34 @@ export function registerConfirmationActions(app: App): void {
     await execute(
       `UPDATE pending_confirmations SET data = jsonb_set(data, '{selectedEffort}', $1::jsonb) WHERE id = $2`,
       [JSON.stringify(selectedEffort), confirmId],
+    );
+  });
+
+  // ── Visibility & Members Selection ──
+
+  app.action(/^visibility_select:/, async ({ action, ack }: any) => {
+    await ack();
+    const selectedVisibility = action.selected_option?.value;
+    if (!selectedVisibility) return;
+
+    const confirmId = action.action_id.replace('visibility_select:', '');
+    if (!confirmId) return;
+
+    await execute(
+      `UPDATE pending_confirmations SET data = jsonb_set(data, '{visibility}', $1::jsonb) WHERE id = $2`,
+      [JSON.stringify(selectedVisibility), confirmId],
+    );
+  });
+
+  app.action(/^member_select:/, async ({ action, ack }: any) => {
+    await ack();
+    const selectedUsers = action.selected_users || [];
+    const confirmId = action.action_id.replace('member_select:', '');
+    if (!confirmId) return;
+
+    await execute(
+      `UPDATE pending_confirmations SET data = jsonb_set(data, '{memberIds}', $1::jsonb) WHERE id = $2`,
+      [JSON.stringify(selectedUsers), confirmId],
     );
   });
 

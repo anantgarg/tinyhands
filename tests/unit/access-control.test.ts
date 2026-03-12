@@ -485,18 +485,22 @@ describe('canModifyAgent', () => {
 // ── canSendTask ──
 
 describe('canSendTask', () => {
-  it('should always return true for any user', async () => {
+  it('should return true for public agents', async () => {
+    // canAccessAgent checks agent visibility — public agents are accessible to all
+    mockQueryOne.mockResolvedValueOnce({ id: 'agent_1', visibility: 'public', tools: '[]', relevance_keywords: '[]', channel_ids: ['C1'] });
     const result = await canSendTask('agent_1', 'U_ANYONE');
 
     expect(result).toBe(true);
   });
 
-  it('should return true without making any DB calls', async () => {
-    await canSendTask('agent_1', 'U_MEMBER');
+  it('should return true for private agent when user is a member', async () => {
+    mockQueryOne.mockResolvedValueOnce({ id: 'agent_1', visibility: 'private', tools: '[]', relevance_keywords: '[]', channel_ids: ['C1'] });
+    mockQueryOne.mockResolvedValueOnce(null); // not superadmin
+    mockQueryOne.mockResolvedValueOnce(null); // not agent admin
+    mockQueryOne.mockResolvedValueOnce({ user_id: 'U_MEMBER' }); // is member
+    const result = await canSendTask('agent_1', 'U_MEMBER');
 
-    expect(mockQuery).not.toHaveBeenCalled();
-    expect(mockQueryOne).not.toHaveBeenCalled();
-    expect(mockExecute).not.toHaveBeenCalled();
+    expect(result).toBe(true);
   });
 });
 

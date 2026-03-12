@@ -7,6 +7,12 @@ const mockGetAgent = vi.fn();
 const mockGetAgentByName = vi.fn();
 const mockUpdateAgent = vi.fn();
 const mockCreateAgent = vi.fn();
+// getAccessibleAgents delegates to mockListAgents so existing tests work
+const mockGetAccessibleAgents = vi.fn((...args: any[]) => mockListAgents(...args));
+const mockAddAgentMembers = vi.fn();
+const mockGetAgentMembers = vi.fn().mockResolvedValue([]);
+const mockAddAgentMember = vi.fn();
+const mockRemoveAgentMember = vi.fn();
 
 vi.mock('../../src/modules/agents', () => ({
   createAgent: (...args: any[]) => mockCreateAgent(...args),
@@ -14,6 +20,11 @@ vi.mock('../../src/modules/agents', () => ({
   getAgent: (...args: any[]) => mockGetAgent(...args),
   getAgentByName: (...args: any[]) => mockGetAgentByName(...args),
   updateAgent: (...args: any[]) => mockUpdateAgent(...args),
+  getAccessibleAgents: (...args: any[]) => mockGetAccessibleAgents(...args),
+  addAgentMembers: (...args: any[]) => mockAddAgentMembers(...args),
+  getAgentMembers: (...args: any[]) => mockGetAgentMembers(...args),
+  addAgentMember: (...args: any[]) => mockAddAgentMember(...args),
+  removeAgentMember: (...args: any[]) => mockRemoveAgentMember(...args),
 }));
 
 const mockInitSuperadmin = vi.fn().mockResolvedValue(undefined);
@@ -256,6 +267,7 @@ function makeFakeAgent(overrides: Record<string, any> = {}) {
     permission_level: 'standard',
     memory_enabled: true,
     respond_to_all_messages: false,
+    visibility: 'public',
     relevance_keywords: ['help', 'support'],
     status: 'active',
     created_by: 'user-1',
@@ -3191,10 +3203,10 @@ describe('Commands Module', () => {
       expect(app.view).toHaveBeenCalledTimes(5);
     });
 
-    it('registerConfirmationActions should register 10 action handlers', () => {
+    it('registerConfirmationActions should register action handlers', () => {
       const app = createMockApp();
       registerConfirmationActions(app as any);
-      expect(app.action).toHaveBeenCalledTimes(12);
+      expect(app.action).toHaveBeenCalledTimes(14);
     });
 
     it('all registration functions should be idempotent (safe to call twice)', () => {

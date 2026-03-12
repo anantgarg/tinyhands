@@ -107,8 +107,8 @@ export async function canModifyAgent(agentId: string, userId: string): Promise<b
 }
 
 export async function canSendTask(agentId: string, userId: string): Promise<boolean> {
-  // All workspace members can send tasks
-  return true;
+  const { canAccessAgent } = await import('../agents');
+  return canAccessAgent(agentId, userId);
 }
 
 // ── Role Hierarchy Check ──
