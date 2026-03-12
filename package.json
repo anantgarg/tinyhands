@@ -1,7 +1,7 @@
 {
-  "name": "tinyjobs",
+  "name": "tinyhands",
   "version": "1.0.0",
-  "description": "Slack-native AI agent platform powered by Claude — create autonomous agents that live in your channels",
+  "description": "Extra hands for your Slack workspace — open-source, self-hosted AI agents powered by Claude",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",

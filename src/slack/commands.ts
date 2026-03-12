@@ -1818,7 +1818,7 @@ async function handleNewAgentWhen(goal: string, whenInput: string, userId: strin
   // Combine goal + when into a unified prompt for goal analysis
   const combinedGoal = `${goal}\n\nTRIGGER/SCHEDULE: ${whenInput}`;
 
-  await postMessage(channelId, ':gear: Analyzing your goal and configuring the best agent setup...', threadTs);
+  await postMessage(channelId, ':gear: Adjusting its grip... analyzing your goal and configuring the best setup.', threadTs);
 
   try {
     const analysis = await analyzeGoal(combinedGoal, undefined, userId);
@@ -1854,7 +1854,7 @@ async function handleNewAgentWhen(goal: string, whenInput: string, userId: strin
     await postBlocks(channelId, [
       {
         type: 'section',
-        text: { type: 'mrkdwn', text: `:white_check_mark: Agent *${agentName}* configured!\n\nWhere should this agent live?` },
+        text: { type: 'mrkdwn', text: `✋ *${agentName}* is equipped and ready!\n\nWhere should this hand live?` },
       },
       {
         type: 'actions',
@@ -1901,8 +1901,8 @@ async function handleInfeasibleRequest(
   // Inform the requesting user
   await postMessage(channelId,
     `:clipboard: *Feature request queued!*\n\n` +
-    `The agent you described requires capabilities that aren't available yet:\n${blockerList}\n\n` +
-    `I've notified the team — we'll let you know once it's ready to be created.`,
+    `This hand needs equipment that isn't available yet:\n${blockerList}\n\n` +
+    `I've nudged the admin — we'll let you know once it's ready to be created.`,
     threadTs,
   );
 
@@ -1996,7 +1996,7 @@ async function showNewAgentConfirmation(
   const confirmId = uuid();
   const channelLabel = selectedChannels?.length
     ? selectedChannels.map(c => `<#${c}>`).join(', ')
-    : `#tinyjobs-${agentName}` + ' (new)';
+    : `#tinyhands-${agentName}` + ' (new)';
 
   await execute(
     `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
@@ -2331,7 +2331,7 @@ export function registerConfirmationActions(app: App): void {
 
       const allTools = [...analysis.tools, ...(analysis.custom_tools || [])];
       const lines = [
-        `:white_check_mark: Agent *${agent.name}* is live! Created by <@${userId}>`,
+        `✋ Meet *${agent.name}*! Deployed by <@${userId}> and ready to get to work.`,
         '',
         `*Goal:* ${goal.slice(0, 300)}`,
         `*Model:* ${analysis.model} | *Permissions:* ${analysis.permission_level} | *Memory:* ${analysis.memory_enabled ? 'on' : 'off'}`,
@@ -2568,7 +2568,7 @@ export function registerConfirmationActions(app: App): void {
 
       // Notify the original requester
       await postMessage(requestedInChannel,
-        `:tada: <@${requestedBy}> Your agent *${agent.name}* has been created! Head over to <#${agentChannelId}> to start using it.`
+        `✋ <@${requestedBy}> High five! *${agent.name}* has been created and is waiting in <#${agentChannelId}>. Let's get to work.`
       );
 
       // Confirm to the owner

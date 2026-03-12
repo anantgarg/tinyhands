@@ -135,8 +135,8 @@ describe('Auto-Update Module', () => {
       expect(calls).not.toContainEqual(expect.stringContaining('npm install'));
       expect(calls).toContainEqual('npm run build');
       expect(calls).toContainEqual('npm run migrate');
-      expect(calls).toContainEqual(expect.stringContaining('pm2 restart tinyjobs-worker'));
-      expect(calls).toContainEqual('pm2 restart tinyjobs-listener');
+      expect(calls).toContainEqual(expect.stringContaining('pm2 restart tinyhands-worker'));
+      expect(calls).toContainEqual('pm2 restart tinyhands-listener');
     });
 
     it('should run npm install when package.json is modified', async () => {
@@ -272,8 +272,8 @@ describe('Auto-Update Module', () => {
       expect(result.success).toBe(true);
 
       const calls = mockExecSync.mock.calls.map((c: any[]) => c[0]);
-      const workerIdx = calls.findIndex((c: string) => c.includes('tinyjobs-worker'));
-      const listenerIdx = calls.findIndex((c: string) => c.includes('tinyjobs-listener'));
+      const workerIdx = calls.findIndex((c: string) => c.includes('tinyhands-worker'));
+      const listenerIdx = calls.findIndex((c: string) => c.includes('tinyhands-listener'));
       expect(workerIdx).toBeLessThan(listenerIdx);
     });
 
@@ -400,7 +400,7 @@ describe('Auto-Update Module', () => {
 
       const summary = formatDeploySummary(result);
 
-      expect(summary).toContain('Deploy failed');
+      expect(summary).toContain('Grip slipped');
       expect(summary).toContain('def5678');
       expect(summary).toContain('Dependencies updated');
       expect(summary).toContain('npm install failed: EACCES');

@@ -168,11 +168,11 @@ export function registerEvents(app: App): void {
             {
               type: 'context',
               elements: [
-                { type: 'mrkdwn', text: `:hourglass_flowing_sand: Thinking...` },
+                { type: 'mrkdwn', text: `:hourglass_flowing_sand: Consulting the handbook...` },
               ],
             },
           ],
-          `${agent.name} is thinking...`,
+          `${agent.name} is adjusting its grip...`,
           threadTs,
           agent.name,
           agent.avatar_emoji,

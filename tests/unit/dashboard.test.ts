@@ -269,10 +269,10 @@ describe('buildDashboardBlocks', () => {
     expect(blocks.length).toBeGreaterThan(0);
   });
 
-  it('should include a header block with "TinyJobs Dashboard"', async () => {
+  it('should include a header block with "Tiny Hands Dashboard"', async () => {
     const blocks = await buildDashboardBlocks();
     const header = blocks.find(
-      (b) => b.type === 'header' && b.text?.text === 'TinyJobs Dashboard',
+      (b) => b.type === 'header' && b.text?.text === '✋ Tiny Hands Dashboard',
     );
     expect(header).toBeDefined();
   });

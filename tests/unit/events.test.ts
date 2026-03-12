@@ -581,7 +581,7 @@ describe('Slack Events -- registerEvents', () => {
         expect.arrayContaining([
           expect.objectContaining({ type: 'context' }),
         ]),
-        'deploy-bot is thinking...',
+        'deploy-bot is adjusting its grip...',
         event.ts,
         'deploy-bot',
         ':rocket:',
@@ -699,10 +699,10 @@ describe('Slack Events -- registerEvents', () => {
 
       expect(mockPostBlocks).toHaveBeenCalledTimes(2);
       expect(mockPostBlocks).toHaveBeenCalledWith(
-        'C_AGENT', expect.any(Array), 'bot-alpha is thinking...', expect.any(String), 'bot-alpha', ':a:'
+        'C_AGENT', expect.any(Array), 'bot-alpha is adjusting its grip...', expect.any(String), 'bot-alpha', ':a:'
       );
       expect(mockPostBlocks).toHaveBeenCalledWith(
-        'C_AGENT', expect.any(Array), 'bot-beta is thinking...', expect.any(String), 'bot-beta', ':b:'
+        'C_AGENT', expect.any(Array), 'bot-beta is adjusting its grip...', expect.any(String), 'bot-beta', ':b:'
       );
     });
   });

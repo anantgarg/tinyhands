@@ -88,8 +88,8 @@ export async function handleDeploy(payload: any): Promise<DeployResult> {
     // Restart workers/sync first, then listener last — otherwise the listener restart
     // kills this process before the other restarts can execute
     logger.info('Deploy: restarting PM2');
-    execSync('pm2 restart tinyjobs-worker-1 tinyjobs-worker-2 tinyjobs-worker-3 tinyjobs-sync tinyjobs-scheduler', { cwd: process.cwd(), timeout: 30000 });
-    execSync('pm2 restart tinyjobs-listener', { cwd: process.cwd(), timeout: 30000 });
+    execSync('pm2 restart tinyhands-worker-1 tinyhands-worker-2 tinyhands-worker-3 tinyhands-sync tinyhands-scheduler', { cwd: process.cwd(), timeout: 30000 });
+    execSync('pm2 restart tinyhands-listener', { cwd: process.cwd(), timeout: 30000 });
 
     const restartTime = Date.now() - startTime;
 
@@ -166,7 +166,7 @@ export function readLocalVersion(): string {
 
 export function fetchRemoteVersion(branch: string): Promise<string> {
   return new Promise((resolve, reject) => {
-    const url = `https://raw.githubusercontent.com/anantgarg/tinyjobs/${branch}/VERSION`;
+    const url = `https://raw.githubusercontent.com/anantgarg/tinyhands/${branch}/VERSION`;
     https.get(url, (res) => {
       let data = '';
       res.on('data', (chunk: Buffer) => data += chunk);
@@ -212,7 +212,7 @@ export async function checkForUpdates(): Promise<void> {
 // ── Deploy Summary for Slack ──
 
 export function formatDeploySummary(result: DeployResult): string {
-  const status = result.success ? ':white_check_mark: Deploy successful' : ':x: Deploy failed';
+  const status = result.success ? ':white_check_mark: Deploy successful' : ':open_hands: Oops. Grip slipped on this deploy';
 
   let summary = `${status}\n`;
   summary += `Commit: \`${result.commitHash}\`\n`;

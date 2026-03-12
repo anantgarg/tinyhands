@@ -243,7 +243,7 @@ describe('Slack module', () => {
     it('should create a channel with sanitized name', async () => {
       const channelId = await createChannel('My Project');
       expect(mockSlackClient.conversations.create).toHaveBeenCalledWith({
-        name: 'tinyjobs-my-project',
+        name: 'tinyhands-my-project',
         is_private: false,
       });
       expect(channelId).toBe('C123');

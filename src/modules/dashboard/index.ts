@@ -12,7 +12,7 @@ export async function buildDashboardBlocks(): Promise<Record<string, any>[]> {
   // Header
   blocks.push({
     type: 'header',
-    text: { type: 'plain_text', text: 'TinyJobs Dashboard' },
+    text: { type: 'plain_text', text: '✋ Tiny Hands Dashboard' },
   });
 
   blocks.push({ type: 'divider' });

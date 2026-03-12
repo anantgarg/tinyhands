@@ -8,13 +8,13 @@ import { logger } from './utils/logger';
 import { postMessage } from './slack';
 import { checkForUpdates } from './modules/auto-update';
 
-const TINYJOBS_CHANNEL = process.env.TINYJOBS_CHANNEL_ID || 'tinyjobs';
+const TINYHANDS_CHANNEL = process.env.TINYHANDS_CHANNEL_ID || process.env.TINYJOBS_CHANNEL_ID || 'tinyhands';
 
 const SYNC_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
 const ALERT_CHECK_INTERVAL_MS = 60 * 1000; // 1 minute
 
 async function main(): Promise<void> {
-  logger.info('Starting TinyJobs sync process...');
+  logger.info('Starting Tiny Hands sync process...');
 
   // Initialize database
   await initDb();
@@ -71,10 +71,10 @@ async function main(): Promise<void> {
           threshold: alert.threshold,
           message: alert.message,
         });
-        // Post alert to #tinyjobs Slack channel
+        // Post alert to #tinyhands Slack channel
         try {
           await postMessage(
-            TINYJOBS_CHANNEL,
+            TINYHANDS_CHANNEL,
             `:rotating_light: *Alert: ${alert.condition}*\n${alert.message}\nThreshold: ${alert.threshold} | Value: ${typeof alert.value === 'number' ? alert.value.toFixed(4) : alert.value}`
           );
         } catch (slackErr: any) {
@@ -94,8 +94,8 @@ async function main(): Promise<void> {
     if (time === config.observability.dailyDigestTime) {
       const digest = await generateDailyDigest();
       logger.info('Daily digest generated', { digest: digest.slice(0, 200) });
-      // Post digest to #tinyjobs Slack channel
-      postMessage(TINYJOBS_CHANNEL, digest).catch((err: any) => {
+      // Post digest to #tinyhands Slack channel
+      postMessage(TINYHANDS_CHANNEL, digest).catch((err: any) => {
         logger.error('Failed to post daily digest to Slack', { error: err.message });
       });
     }

@@ -5,7 +5,7 @@ import { logger } from './utils/logger';
 import { ensureBotInAllAgentChannels } from './modules/agents';
 
 async function main(): Promise<void> {
-  logger.info('Starting TinyJobs...');
+  logger.info('Starting Tiny Hands...');
 
   // Initialize database
   await initDb();
@@ -24,10 +24,10 @@ async function main(): Promise<void> {
   // Start webhook server (Express)
   startWebhookServer();
 
-  logger.info('TinyJobs listener ready');
+  logger.info('Tiny Hands listener ready');
 }
 
 main().catch(err => {
-  logger.error('Failed to start TinyJobs', { error: err.message });
+  logger.error('Failed to start Tiny Hands', { error: err.message });
   process.exit(1);
 });

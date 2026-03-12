@@ -188,7 +188,7 @@ interface GitHubFile {
 async function githubApi(path: string, token: string): Promise<ApiResponse> {
   return httpsGet('api.github.com', path, {
     'Authorization': `Bearer ${token}`,
-    'User-Agent': 'TinyJobs-KB-Sync',
+    'User-Agent': 'TinyHands-KB-Sync',
     'X-GitHub-Api-Version': '2022-11-28',
   });
 }
@@ -197,7 +197,7 @@ async function githubRaw(url: string, token: string): Promise<string> {
   const parsed = new URL(url);
   const res = await httpsGetRaw(parsed.hostname, parsed.pathname + parsed.search, {
     'Authorization': `Bearer ${token}`,
-    'User-Agent': 'TinyJobs-KB-Sync',
+    'User-Agent': 'TinyHands-KB-Sync',
   });
   if (res.status >= 400) throw new Error(`GitHub raw fetch failed (${res.status}): ${url}`);
   return res.data;

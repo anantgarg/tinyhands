@@ -8,15 +8,15 @@ BLUE='\033[0;34m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-INSTALL_DIR="/opt/tinyjobs"
-REPO_URL="https://github.com/anantgarg/tinyjobs.git"
+INSTALL_DIR="/opt/tinyhands"
+REPO_URL="https://github.com/anantgarg/tinyhands.git"
 
 echo -e "${BLUE}"
-echo '╔╦╗┬┌┐┌┬ ┬    ╦┌─┐┌┐ ┌─┐'
-echo ' ║ │││││ │    ║│ │├┴┐└─┐'
-echo ' ╩ ┴┘└┘ ┴   ╚╝└─┘└─┘└─┘'
+echo '╔╦╗┬┌┐┌┬ ┬  ╦ ╦┌─┐┌┐┌┌┬┐┌─┐'
+echo ' ║ │││││ │  ╠═╣├─┤│││ ││└─┐'
+echo ' ╩ ┴┘└┘ ┴  ╩ ╩┴ ┴┘└┘─┴┘└─┘'
 echo -e "${NC}"
-echo -e "${BOLD}TinyJobs Installer${NC}"
+echo -e "${BOLD}✋ Tiny Hands Installer${NC}"
 echo ""
 
 # ── Pre-flight checks ──
@@ -51,10 +51,10 @@ if ! docker compose version &>/dev/null; then
   exit 1
 fi
 
-# ── Clone or update TinyJobs ──
+# ── Clone or update Tiny Hands ──
 
 if [ ! -d "$INSTALL_DIR" ]; then
-  echo -e "${BLUE}Cloning TinyJobs to ${INSTALL_DIR}...${NC}"
+  echo -e "${BLUE}Cloning Tiny Hands to ${INSTALL_DIR}...${NC}"
   git clone "$REPO_URL" "$INSTALL_DIR"
 else
   echo -e "${YELLOW}${INSTALL_DIR} already exists. Pulling latest...${NC}"
@@ -76,10 +76,10 @@ if [ -f .env ]; then
   if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     echo "Keeping existing .env"
     echo ""
-    echo -e "${BLUE}Starting TinyJobs...${NC}"
+    echo -e "${BLUE}Starting Tiny Hands...${NC}"
     docker compose up -d --build
     echo ""
-    echo -e "${GREEN}TinyJobs is running!${NC}"
+    echo -e "${GREEN}Tiny Hands is running!${NC}"
     echo "  Health check: curl http://localhost:${PORT:-3000}/health"
     echo "  Logs:         cd ${INSTALL_DIR} && docker compose logs -f"
     echo "  Stop:         cd ${INSTALL_DIR} && docker compose down"
@@ -138,15 +138,15 @@ echo -e "${GREEN}.env created${NC}"
 # ── Start services ──
 
 echo ""
-echo -e "${BLUE}Building and starting TinyJobs (this may take a few minutes)...${NC}"
+echo -e "${BLUE}Building and starting Tiny Hands (this may take a few minutes)...${NC}"
 docker compose up -d --build
 
 echo ""
-echo -e "${GREEN}${BOLD}TinyJobs is running!${NC}"
+echo -e "${GREEN}${BOLD}Tiny Hands is running!${NC}"
 echo ""
 echo "  Health check: curl http://localhost:${PORT:-3000}/health"
-echo "  View logs:    cd ${INSTALL_DIR} && docker compose logs -f tinyjobs"
+echo "  View logs:    cd ${INSTALL_DIR} && docker compose logs -f tinyhands"
 echo "  Stop:         cd ${INSTALL_DIR} && docker compose down"
 echo "  Update:       cd ${INSTALL_DIR} && git pull && docker compose up -d --build"
 echo ""
-echo -e "${YELLOW}Next step: Run /agents in Slack to initialize yourself as superadmin.${NC}"
+echo -e "${YELLOW}Next step: Run /agents in Slack to initialize yourself as superadmin. High five! ✋${NC}"

@@ -196,7 +196,7 @@ export async function generateDailyDigest(): Promise<string> {
   const tokens = parseInt(stats?.tokens || '0', 10);
   const cost = parseFloat(stats?.cost || '0');
 
-  let digest = `*TinyJobs Daily Digest — ${yesterday}*\n\n`;
+  let digest = `✋ *Tiny Hands Daily Digest — ${yesterday}*\n\n`;
   digest += `Runs: *${runCount}* | Tokens: *${tokens.toLocaleString()}* | Cost: *$${cost.toFixed(2)}*\n`;
 
   if (topAgent) digest += `Top agent: *${topAgent.name}* (${topAgent.runs} runs)\n`;

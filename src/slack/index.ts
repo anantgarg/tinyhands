@@ -97,7 +97,7 @@ export async function deleteMessage(channelId: string, ts: string): Promise<void
 
 export async function createChannel(name: string): Promise<string> {
   const client = getSlackApp().client;
-  const baseName = `tinyjobs-${name.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`.slice(0, 80);
+  const baseName = `tinyhands-${name.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`.slice(0, 80);
 
   // Try the base name first, then add a suffix if taken
   for (let attempt = 0; attempt < 5; attempt++) {

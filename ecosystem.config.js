@@ -7,42 +7,42 @@ const envVars = { ...envConfig.parsed, NODE_ENV: 'production' };
 module.exports = {
   apps: [
     {
-      name: 'tinyjobs-listener',
+      name: 'tinyhands-listener',
       script: 'dist/index.js',
       env: envVars,
       restart_delay: 1000,
       max_restarts: 10,
     },
     {
-      name: 'tinyjobs-worker-1',
+      name: 'tinyhands-worker-1',
       script: 'dist/worker.js',
       env: { ...envVars, WORKER_ID: '1' },
       restart_delay: 1000,
       max_restarts: 10,
     },
     {
-      name: 'tinyjobs-worker-2',
+      name: 'tinyhands-worker-2',
       script: 'dist/worker.js',
       env: { ...envVars, WORKER_ID: '2' },
       restart_delay: 1000,
       max_restarts: 10,
     },
     {
-      name: 'tinyjobs-worker-3',
+      name: 'tinyhands-worker-3',
       script: 'dist/worker.js',
       env: { ...envVars, WORKER_ID: '3' },
       restart_delay: 1000,
       max_restarts: 10,
     },
     {
-      name: 'tinyjobs-sync',
+      name: 'tinyhands-sync',
       script: 'dist/sync.js',
       env: envVars,
       restart_delay: 1000,
       max_restarts: 10,
     },
     {
-      name: 'tinyjobs-scheduler',
+      name: 'tinyhands-scheduler',
       script: 'dist/scheduler.js',
       env: envVars,
       restart_delay: 1000,

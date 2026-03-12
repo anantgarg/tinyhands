@@ -7,7 +7,7 @@ import { CronExpressionParser } from 'cron-parser';
 const SCHEDULER_INTERVAL_MS = 60 * 1000; // Check every 60 seconds
 
 async function main(): Promise<void> {
-  logger.info('Starting TinyJobs scheduler process...');
+  logger.info('Starting Tiny Hands scheduler process...');
 
   await initDb();
   initSlackClient();
