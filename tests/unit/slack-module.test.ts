@@ -199,6 +199,7 @@ describe('Slack module', () => {
         channel: 'C001',
         ts: '111.222',
         text: 'Updated text',
+        blocks: [],
       });
     });
   });

@@ -89,7 +89,7 @@ export function bufferEvent(
     case 'done':
       // Done event: flush any pending, then handle completion
       flushBuffer(key);
-      handleDoneEvent(buffer, markdownToSlack(content));
+      handleDoneEvent(key, buffer, markdownToSlack(content));
       return;
     case 'error':
       text = `:x: Dropped the ball — ${content}`;
@@ -155,7 +155,7 @@ async function flushBuffer(key: string): Promise<void> {
   }
 }
 
-async function handleDoneEvent(buffer: ChannelBuffer, finalOutput: string): Promise<void> {
+async function handleDoneEvent(key: string, buffer: ChannelBuffer, finalOutput: string): Promise<void> {
   try {
     // Delete the "Thinking..." status message and post a fresh one with username/icon
     if (buffer.statusMessageTs) {
@@ -193,7 +193,6 @@ async function handleDoneEvent(buffer: ChannelBuffer, finalOutput: string): Prom
   }
 
   // Cleanup buffer
-  const key = `${buffer.channelId}:${buffer.threadTs}`;
   buffers.delete(key);
 }
 

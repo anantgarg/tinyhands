@@ -83,6 +83,7 @@ export async function updateMessage(
     channel: channelId,
     ts,
     text,
+    blocks: [],
   });
 }
 
