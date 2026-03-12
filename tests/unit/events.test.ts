@@ -272,13 +272,13 @@ describe('Slack Events -- registerEvents', () => {
   // ── Registration ──
 
   describe('registration', () => {
-    it('should register message, file_shared, DM message, and app_home_opened events', () => {
+    it('should register message, file_shared, and app_home_opened events', () => {
       registerEvents(mockApp as any);
 
       const messageCalls = mockApp.event.mock.calls.filter(
         (c: any[]) => c[0] === 'message'
       );
-      expect(messageCalls.length).toBe(2);
+      expect(messageCalls.length).toBe(1);
       expect(mockApp.event).toHaveBeenCalledWith('file_shared', expect.any(Function));
       expect(mockApp.event).toHaveBeenCalledWith('app_home_opened', expect.any(Function));
     });
@@ -983,12 +983,11 @@ describe('Slack Events -- registerEvents', () => {
 
   // ── DM Events (Superadmin) ──
 
-  describe('DM message event (second message handler)', () => {
+  describe('DM message event (integrated in main handler)', () => {
     it('should initialize superadmin on DM', async () => {
       registerEvents(mockApp as any);
 
-      // The second 'message' handler is the DM handler
-      await mockApp._triggerNth('message', {
+      await mockApp._trigger('message', {
         event: {
           channel: 'D_DM_CHAN',
           channel_type: 'im',
@@ -996,53 +995,23 @@ describe('Slack Events -- registerEvents', () => {
           text: 'hello',
           ts: '1700000000.100',
         },
-      }, 1);
+      });
 
       expect(mockInitSuperadmin).toHaveBeenCalledWith('U_DM_USER');
-    });
-
-    it('should skip DM handler for non-im channel types', async () => {
-      registerEvents(mockApp as any);
-
-      await mockApp._triggerNth('message', {
-        event: {
-          channel: 'C_PUBLIC',
-          channel_type: 'channel',
-          user: 'U_USER',
-          text: 'hello',
-        },
-      }, 1);
-
-      expect(mockInitSuperadmin).not.toHaveBeenCalled();
-    });
-
-    it('should skip DM handler for bot messages', async () => {
-      registerEvents(mockApp as any);
-
-      await mockApp._triggerNth('message', {
-        event: {
-          channel: 'D_DM',
-          channel_type: 'im',
-          user: 'U_USER',
-          bot_id: 'B_BOT',
-          text: 'hello',
-        },
-      }, 1);
-
-      expect(mockInitSuperadmin).not.toHaveBeenCalled();
     });
 
     it('should handle "add @user as superadmin" command in DMs', async () => {
       registerEvents(mockApp as any);
 
-      await mockApp._triggerNth('message', {
+      await mockApp._trigger('message', {
         event: {
           channel: 'D_DM_CHAN',
           channel_type: 'im',
           user: 'U_ADMIN',
           text: 'add <@U_NEW_ADMIN> as superadmin',
+          ts: '1700000000.100',
         },
-      }, 1);
+      });
 
       expect(mockInitSuperadmin).toHaveBeenCalledWith('U_ADMIN');
       expect(mockAddSuperadmin).toHaveBeenCalledWith('U_NEW_ADMIN', 'U_ADMIN');
@@ -1053,14 +1022,15 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
 
-      await mockApp._triggerNth('message', {
+      await mockApp._trigger('message', {
         event: {
           channel: 'D_DM_CHAN',
           channel_type: 'im',
           user: 'U_USER',
           text: 'add <@U_SOMEONE> as superadmin',
+          ts: '1700000000.100',
         },
-      }, 1);
+      });
 
       expect(mockPostMessage).toHaveBeenCalledWith('D_DM_CHAN', expect.stringContaining('Not authorized'));
     });
@@ -1068,14 +1038,15 @@ describe('Slack Events -- registerEvents', () => {
     it('should ignore DM text that does not match superadmin pattern', async () => {
       registerEvents(mockApp as any);
 
-      await mockApp._triggerNth('message', {
+      await mockApp._trigger('message', {
         event: {
           channel: 'D_DM_CHAN',
           channel_type: 'im',
           user: 'U_USER',
           text: 'just a normal DM',
+          ts: '1700000000.100',
         },
-      }, 1);
+      });
 
       expect(mockInitSuperadmin).toHaveBeenCalled();
       expect(mockAddSuperadmin).not.toHaveBeenCalled();

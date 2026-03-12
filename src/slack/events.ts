@@ -214,10 +214,114 @@ export function registerEvents(app: App): void {
       return;
     }
 
-    // If this was a DM thread reply that didn't match any conversation or agent, let the user know
-    if (msg.thread_ts && msg.channel_type === 'im') {
-      logger.info('DM thread reply not handled by any flow', { threadTs: msg.thread_ts, channelId, userId });
-      await postMessage(channelId, `This conversation has expired or was already completed. Please use \`/agents\` to start a new update.`, msg.thread_ts);
+    // ── DM handling (superadmin commands + agent routing) ──
+    if (msg.channel_type === 'im') {
+      await initSuperadmin(userId);
+
+      // Handle superadmin commands via DM
+      const lower = text.toLowerCase();
+      if (lower.startsWith('add ') && lower.includes('as superadmin')) {
+        const { addSuperadmin } = await import('../modules/access-control');
+        const match = text.match(/add\s+<@(\w+)>\s+as\s+superadmin/i);
+        if (match) {
+          try {
+            await addSuperadmin(match[1], userId);
+            await postMessage(channelId, `:white_check_mark: <@${match[1]}> added as superadmin`);
+          } catch (err: any) {
+            await postMessage(channelId, `:x: ${err.message}`);
+          }
+          return;
+        }
+      }
+
+      // Thread reply: route to existing DM conversation
+      if (msg.thread_ts) {
+        const dmConv = await getDmConversation(channelId, msg.thread_ts);
+        if (dmConv) {
+          const { getAgent } = await import('../modules/agents');
+          const agent = await getAgent(dmConv.agent_id);
+          if (agent && agent.status === 'active') {
+            await touchDmConversation(channelId, msg.thread_ts);
+            await routeDmToAgent(agent, text, userId, channelId, msg.thread_ts);
+            return;
+          }
+        }
+        // Expired DM thread
+        logger.info('DM thread reply not handled by any flow', { threadTs: msg.thread_ts, channelId, userId });
+        await postMessage(channelId, `This conversation has expired or was already completed. Please use \`/agents\` to start a new update.`, msg.thread_ts);
+        return;
+      }
+
+      // New DM message: smart-route to an agent
+      try {
+        const accessible = await getAccessibleAgents(userId);
+        const activeAgents = accessible.filter(a => a.status === 'active');
+
+        if (activeAgents.length === 0) {
+          await postMessage(channelId, `No agents available. Use \`/new-agent\` to create one.`);
+          return;
+        }
+
+        if (activeAgents.length === 1) {
+          const agent = activeAgents[0];
+          const statusTs = await postBlocks(
+            channelId,
+            [{ type: 'context', elements: [{ type: 'mrkdwn', text: `${agent.avatar_emoji} *${agent.name}* is on it...` }] }],
+            `${agent.name} is on it...`,
+          );
+          const replyThreadTs = statusTs || msg.ts;
+          await createDmConversation(userId, agent.id, channelId, replyThreadTs);
+          await routeDmToAgent(agent, text, userId, channelId, replyThreadTs);
+          return;
+        }
+
+        // Multiple agents: run relevance check
+        const relevanceResults = await Promise.all(
+          activeAgents.map(async (agent) => {
+            try {
+              const isRelevant = await checkMessageRelevance(
+                text, agent.relevance_keywords, agent.system_prompt, agent.respond_to_all_messages
+              );
+              return { agent, relevant: isRelevant };
+            } catch {
+              return { agent, relevant: false };
+            }
+          })
+        );
+
+        const matches = relevanceResults.filter(r => r.relevant);
+
+        if (matches.length === 1) {
+          const agent = matches[0].agent;
+          const statusTs = await postBlocks(
+            channelId,
+            [{ type: 'context', elements: [{ type: 'mrkdwn', text: `${agent.avatar_emoji} *${agent.name}* is on it...` }] }],
+            `${agent.name} is on it...`,
+          );
+          const replyThreadTs = statusTs || msg.ts;
+          await createDmConversation(userId, agent.id, channelId, replyThreadTs);
+          await routeDmToAgent(agent, text, userId, channelId, replyThreadTs);
+          return;
+        }
+
+        // Zero or multiple matches — show picker
+        const agentsToShow = matches.length > 1 ? matches.map(m => m.agent) : activeAgents.slice(0, 10);
+        const buttons = agentsToShow.map(a => ({
+          type: 'button',
+          text: { type: 'plain_text', text: `${a.avatar_emoji} ${a.name}`.slice(0, 75) },
+          action_id: `dm_pick_agent:${a.id}`,
+          value: JSON.stringify({ agentId: a.id, originalText: text.slice(0, 2000), dmChannelId: channelId }),
+        }));
+
+        await postBlocks(channelId, [
+          { type: 'section', text: { type: 'mrkdwn', text: '*Which agent should handle this?*' } },
+          { type: 'actions', elements: buttons },
+        ], 'Pick an agent');
+
+      } catch (err: any) {
+        logger.error('DM agent routing failed', { error: err.message, userId });
+        await postMessage(channelId, `:x: Something went wrong. Try again or use \`/agents\`.`);
+      }
       return;
     }
 
@@ -256,126 +360,7 @@ export function registerEvents(app: App): void {
     }
   });
 
-  // ── DM Events (Superadmin + Agent DM) ──
-  app.event('message' as any, async ({ event }: any) => {
-    const msg = event;
-    if (msg.channel_type !== 'im' || msg.bot_id) return;
-
-    const userId = msg.user;
-    const dmChannelId = msg.channel;
-    const text = (msg.text || '').trim();
-    const threadTs = msg.thread_ts || msg.ts;
-
-    // First DM initializes superadmin
-    await initSuperadmin(userId);
-
-    // Handle superadmin commands via DM
-    const lower = text.toLowerCase();
-    if (lower.startsWith('add ') && lower.includes('as superadmin')) {
-      const { addSuperadmin } = await import('../modules/access-control');
-      const match = text.match(/add\s+<@(\w+)>\s+as\s+superadmin/i);
-      if (match) {
-        try {
-          await addSuperadmin(match[1], userId);
-          await postMessage(dmChannelId, `:white_check_mark: <@${match[1]}> added as superadmin`);
-        } catch (err: any) {
-          await postMessage(dmChannelId, `:x: ${err.message}`);
-        }
-        return;
-      }
-    }
-
-    // ── DM-to-Agent routing ──
-
-    // Thread reply: check if there's an existing DM conversation
-    if (msg.thread_ts) {
-      const dmConv = await getDmConversation(dmChannelId, msg.thread_ts);
-      if (dmConv) {
-        const { getAgent } = await import('../modules/agents');
-        const agent = await getAgent(dmConv.agent_id);
-        if (agent && agent.status === 'active') {
-          await touchDmConversation(dmChannelId, msg.thread_ts);
-          await routeDmToAgent(agent, text, userId, dmChannelId, msg.thread_ts);
-          return;
-        }
-      }
-      // Thread reply to non-DM-conversation handled below (existing expired message)
-      return;
-    }
-
-    // New DM message: smart-route to an agent
-    try {
-      const accessible = await getAccessibleAgents(userId);
-      const activeAgents = accessible.filter(a => a.status === 'active');
-
-      if (activeAgents.length === 0) {
-        await postMessage(dmChannelId, `No agents available. Use \`/new-agent\` to create one.`);
-        return;
-      }
-
-      // If only one agent, route directly
-      if (activeAgents.length === 1) {
-        const agent = activeAgents[0];
-        const statusTs = await postBlocks(
-          dmChannelId,
-          [{ type: 'context', elements: [{ type: 'mrkdwn', text: `${agent.avatar_emoji} *${agent.name}* is on it...` }] }],
-          `${agent.name} is on it...`,
-        );
-        const replyThreadTs = statusTs || msg.ts;
-        await createDmConversation(userId, agent.id, dmChannelId, replyThreadTs);
-        await routeDmToAgent(agent, text, userId, dmChannelId, replyThreadTs);
-        return;
-      }
-
-      // Multiple agents: run relevance check to find the best match
-      const relevanceResults = await Promise.all(
-        activeAgents.map(async (agent) => {
-          try {
-            const isRelevant = await checkMessageRelevance(
-              text, agent.relevance_keywords, agent.system_prompt, agent.respond_to_all_messages
-            );
-            return { agent, relevant: isRelevant };
-          } catch {
-            return { agent, relevant: false };
-          }
-        })
-      );
-
-      const matches = relevanceResults.filter(r => r.relevant);
-
-      if (matches.length === 1) {
-        // Exactly one match — route directly
-        const agent = matches[0].agent;
-        const statusTs = await postBlocks(
-          dmChannelId,
-          [{ type: 'context', elements: [{ type: 'mrkdwn', text: `${agent.avatar_emoji} *${agent.name}* is on it...` }] }],
-          `${agent.name} is on it...`,
-        );
-        const replyThreadTs = statusTs || msg.ts;
-        await createDmConversation(userId, agent.id, dmChannelId, replyThreadTs);
-        await routeDmToAgent(agent, text, userId, dmChannelId, replyThreadTs);
-        return;
-      }
-
-      // Zero or multiple matches — show picker
-      const agentsToShow = matches.length > 1 ? matches.map(m => m.agent) : activeAgents.slice(0, 10);
-      const buttons = agentsToShow.map(a => ({
-        type: 'button',
-        text: { type: 'plain_text', text: `${a.avatar_emoji} ${a.name}`.slice(0, 75) },
-        action_id: `dm_pick_agent:${a.id}`,
-        value: JSON.stringify({ agentId: a.id, originalText: text.slice(0, 2000), dmChannelId }),
-      }));
-
-      await postBlocks(dmChannelId, [
-        { type: 'section', text: { type: 'mrkdwn', text: '*Which agent should handle this?*' } },
-        { type: 'actions', elements: buttons },
-      ], 'Pick an agent');
-
-    } catch (err: any) {
-      logger.error('DM agent routing failed', { error: err.message, userId });
-      await postMessage(dmChannelId, `:x: Something went wrong. Try again or use \`/agents\`.`);
-    }
-  });
+  // (DM handling is consolidated into the main message handler above)
 
   // ── DM Agent Picker ──
   app.action(/^dm_pick_agent:/, async ({ action, ack, body }: any) => {
