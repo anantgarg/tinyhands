@@ -432,9 +432,6 @@ Run `/agents` to see all agents. Use the overflow menu on any agent to:
 
 ## FAQ
 
-**Q: Is this... a political thing? You know, the hands?**
-**A:** Only if your politics involves Docker-isolated runtimes and BullMQ job queues. We just liked the 16-bit pixel art. Our hands might be tiny, but our throughput is massive. If the name makes you giggle, that's just a free branding bonus. ✋
-
 **Q: Why "Tiny" Hands?**
 **A:** Big hands are clumsy. They break CSS, they accidentally delete production databases, and they cost $200k in consulting fees. Tiny hands are for precision. They are nimble enough to slide into your Slack threads and get work done without making a mess.
 
