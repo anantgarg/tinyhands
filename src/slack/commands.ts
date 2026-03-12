@@ -2447,22 +2447,28 @@ export function registerConfirmationActions(app: App): void {
       await updateAgent(agentId!, updates, userId);
       logger.info('confirm_update_agent: DB updated', { agentId });
 
-      // Post success message immediately — don't block on non-critical operations
+      // Reply to user first — channel notification is non-critical
+      await replyToAction(body, `✋ *${agent.name}* updated! High five.`);
+
+      // Post update summary to the agent's channel (best-effort)
       const postToChannel = updates.channel_ids?.[0] || agent.channel_ids?.[0] || agent.channel_id;
       const channelChangeNote = updates.channel_ids
         ? `\n*Channels:* ${updates.channel_ids.map((c: string) => `<#${c}>`).join(', ')}`
         : '';
 
       const allUpdateTools = [...analysis.tools, ...(analysis.custom_tools || [])];
-      await postMessage(postToChannel,
-        `:arrows_counterclockwise: Agent *${agent.name}* updated by <@${userId}>\n\n` +
-        `*Model:* ${analysis.model} | *Permissions:* ${analysis.permission_level} | *Memory:* ${analysis.memory_enabled ? 'on' : 'off'}\n` +
-        `*Responds to:* ${analysis.respond_to_all_messages ? 'all messages' : 'relevant messages + @mentions'}\n` +
-        `*Tools:* ${allUpdateTools.join(', ')}` +
-        channelChangeNote + '\n' +
-        `_${analysis.summary}_`
-      );
-      await replyToAction(body, `✋ *${agent.name}* updated! High five.`);
+      try {
+        await postMessage(postToChannel,
+          `:arrows_counterclockwise: Agent *${agent.name}* updated by <@${userId}>\n\n` +
+          `*Model:* ${analysis.model} | *Permissions:* ${analysis.permission_level} | *Memory:* ${analysis.memory_enabled ? 'on' : 'off'}\n` +
+          `*Responds to:* ${analysis.respond_to_all_messages ? 'all messages' : 'relevant messages + @mentions'}\n` +
+          `*Tools:* ${allUpdateTools.join(', ')}` +
+          channelChangeNote + '\n' +
+          `_${analysis.summary}_`
+        );
+      } catch (err: any) {
+        logger.warn('Failed to post update summary to agent channel', { agentId, channel: postToChannel, error: err.message });
+      }
       logger.info('confirm_update_agent: done', { agentId });
 
       // Fire-and-forget: skills, triggers, and admin notifications

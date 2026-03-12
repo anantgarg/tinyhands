@@ -205,6 +205,18 @@ export function setMainMessageTs(channelId: string, threadTs: string, ts: string
   }
 }
 
+export async function cleanupStatusMessage(channelId: string, threadTs: string, agentId?: string): Promise<void> {
+  const key = agentId ? `${channelId}:${threadTs}:${agentId}` : `${channelId}:${threadTs}`;
+  const buffer = buffers.get(key);
+  const statusTs = buffer?.statusMessageTs || pendingStatusMessages.get(key);
+  if (statusTs) {
+    await deleteMessage(channelId, statusTs).catch((err) => {
+      logger.warn('Failed to delete status message during silent cleanup', { error: String(err) });
+    });
+  }
+  cleanupBuffer(channelId, threadTs, agentId);
+}
+
 export function cleanupBuffer(channelId: string, threadTs: string, agentId?: string): void {
   const key = agentId ? `${channelId}:${threadTs}:${agentId}` : `${channelId}:${threadTs}`;
   const buffer = buffers.get(key);

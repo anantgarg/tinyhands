@@ -10,7 +10,7 @@ import { getDisallowedTools, getDockerSecurityConfig } from '../permissions';
 import { getAgentSkills } from '../skills';
 import { listCustomTools } from '../tools';
 import { getToolExecutionScript, getMcpConfigs, getCodeArtifacts, recordToolRun } from '../self-authoring';
-import { bufferEvent } from '../../slack/buffer';
+import { bufferEvent, cleanupStatusMessage } from '../../slack/buffer';
 import { config } from '../../config';
 import { estimateCost, getModelId } from '../../utils/costs';
 import { logger, logRunEvent } from '../../utils/logger';
@@ -381,6 +381,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
     await recordTokenUsage(outputData.inputTokens + outputData.outputTokens);
 
     const status: RunStatus = exitCode === 0 ? 'completed' : 'failed';
+    const agentProducedOutput = exitCode === 0 && outputData.output.trim().length > 0;
     const output = exitCode === 0
       ? outputData.output.trim() || 'Task completed successfully'
       : `Task failed with exit code ${exitCode}: ${outputData.output}`;
@@ -405,18 +406,23 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
       }
     }
 
-    // Stream done event to Slack
+    // Stream done event to Slack (only if the agent actually produced output)
     if (data.channelId) {
-      bufferEvent(
-        data.channelId,
-        data.threadTs,
-        'done',
-        output,
-        agent.name,
-        agent.avatar_emoji,
-        false,
-        data.agentId,
-      );
+      if (agentProducedOutput) {
+        bufferEvent(
+          data.channelId,
+          data.threadTs,
+          'done',
+          output,
+          agent.name,
+          agent.avatar_emoji,
+          false,
+          data.agentId,
+        );
+      } else {
+        // Agent chose not to respond — silently clean up status message
+        cleanupStatusMessage(data.channelId, data.threadTs, data.agentId);
+      }
     }
 
     logRunEvent({

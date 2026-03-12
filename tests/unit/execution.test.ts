@@ -68,9 +68,11 @@ vi.mock('../../src/modules/self-authoring', () => ({
 
 const mockBufferEvent = vi.fn();
 const mockSetStatusMessageTs = vi.fn();
+const mockCleanupStatusMessage = vi.fn();
 vi.mock('../../src/slack/buffer', () => ({
   bufferEvent: (...args: any[]) => mockBufferEvent(...args),
   setStatusMessageTs: (...args: any[]) => mockSetStatusMessageTs(...args),
+  cleanupStatusMessage: (...args: any[]) => mockCleanupStatusMessage(...args),
 }));
 
 vi.mock('../../src/config', () => ({
@@ -615,6 +617,12 @@ describe('Execution Module – executeAgentRun', () => {
     const result = await executeAgentRun(job);
 
     expect(result).toBe('Task completed successfully');
+    // Should silently clean up instead of posting to Slack
+    expect(mockCleanupStatusMessage).toHaveBeenCalled();
+    expect(mockBufferEvent).not.toHaveBeenCalledWith(
+      expect.anything(), expect.anything(), 'done', expect.anything(),
+      expect.anything(), expect.anything(), expect.anything(), expect.anything(),
+    );
   });
 
   it('should report failure when exit code is non-zero', async () => {
