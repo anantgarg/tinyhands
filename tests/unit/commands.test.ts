@@ -1075,14 +1075,17 @@ describe('Commands Module', () => {
       const action = { value: 'cancel-update-1' };
       const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
 
+      // Return row with channelId/threadTs so it uses postMessage
+      mockQueryOne.mockResolvedValueOnce({ data: { channelId: 'C1', threadTs: 'thread-ts-1' } });
+
       await app.handlers.action['cancel_update_agent']({ action, ack, body, respond });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockExecute).toHaveBeenCalledWith(
+      expect(mockQueryOne).toHaveBeenCalledWith(
         expect.stringContaining('DELETE FROM pending_confirmations'),
         ['cancel-update-1'],
       );
-      expect(respond).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining('cancelled') }));
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('cancelled'), 'thread-ts-1');
     });
 
     it('confirm_new_agent with valid data should create agent', async () => {

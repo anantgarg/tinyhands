@@ -2255,7 +2255,7 @@ async function showUpdateAgentConfirmation(
   const defaultEffort = maxTurnsToEffort(analysis.max_turns || agent.max_turns || 25);
   await execute(
     `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
-    [confirmId, JSON.stringify({ analysis, name: agent.name, goal: newGoal, userId, agentId, newChannelIds, selectedModel: analysis.model, selectedEffort: defaultEffort })],
+    [confirmId, JSON.stringify({ analysis, name: agent.name, goal: newGoal, userId, agentId, newChannelIds, channelId, threadTs, selectedModel: analysis.model, selectedEffort: defaultEffort })],
   );
 
   const configSummary = buildConfigSummary(agent.name, analysis, newGoal, agent);
@@ -2420,6 +2420,9 @@ export function registerConfirmationActions(app: App): void {
       return;
     }
 
+    const confirmChannelId = row.data.channelId as string | undefined;
+    const confirmThreadTs = row.data.threadTs as string | undefined;
+
     try {
       const { analysis, agentId, userId, newChannelIds, newChannelId, selectedModel, selectedEffort } = row.data;
       logger.info('confirm_update_agent: fetching agent', { agentId });
@@ -2430,7 +2433,12 @@ export function registerConfirmationActions(app: App): void {
       const finalModel = selectedModel || analysis.model;
       const finalMaxTurns = selectedEffort ? (EFFORT_TO_MAX_TURNS[selectedEffort] || 25) : (analysis.max_turns || agent.max_turns || 25);
 
-      await respond({ text: ':gear: Updating agent...', replace_original: false });
+      // Post to thread (not ephemeral to main channel)
+      if (confirmChannelId && confirmThreadTs) {
+        await postMessage(confirmChannelId, ':gear: Updating agent...', confirmThreadTs);
+      } else {
+        await respond({ text: ':gear: Updating agent...', replace_original: false });
+      }
 
       const mergedTools = [...analysis.tools, ...(analysis.custom_tools || [])];
       const updates: any = {
@@ -2457,8 +2465,12 @@ export function registerConfirmationActions(app: App): void {
       await updateAgent(agentId!, updates, userId);
       logger.info('confirm_update_agent: DB updated', { agentId });
 
-      // Reply to user via response_url (reliable, works for 30 min after action)
-      await respond({ text: `✋ *${agent.name}* updated! High five.`, replace_original: false });
+      // Reply in thread (or fallback to respond)
+      if (confirmChannelId && confirmThreadTs) {
+        await postMessage(confirmChannelId, `✋ *${agent.name}* updated! High five.`, confirmThreadTs);
+      } else {
+        await respond({ text: `✋ *${agent.name}* updated! High five.`, replace_original: false });
+      }
 
       // Post update summary to the agent's channel (best-effort)
       const postToChannel = updates.channel_ids?.[0] || agent.channel_ids?.[0] || agent.channel_id;
@@ -2519,14 +2531,22 @@ export function registerConfirmationActions(app: App): void {
 
     } catch (err: any) {
       logger.error('Agent update failed', { error: err.message });
-      await respond({ text: `:x: Failed to update agent: ${err.message}`, replace_original: false });
+      if (confirmChannelId && confirmThreadTs) {
+        await postMessage(confirmChannelId, `:x: Failed to update agent: ${err.message}`, confirmThreadTs);
+      } else {
+        await respond({ text: `:x: Failed to update agent: ${err.message}`, replace_original: false });
+      }
     }
   });
 
   app.action('cancel_update_agent', async ({ action, ack, respond }) => {
     await ack();
-    await execute(`DELETE FROM pending_confirmations WHERE id = $1`, [(action as any).value]);
-    await respond({ text: ':x: Agent update cancelled.', replace_original: false });
+    const cancelRow = await queryOne<{ data: any }>(`DELETE FROM pending_confirmations WHERE id = $1 RETURNING data`, [(action as any).value]);
+    if (cancelRow?.data?.channelId && cancelRow?.data?.threadTs) {
+      await postMessage(cancelRow.data.channelId, ':x: Agent update cancelled.', cancelRow.data.threadTs);
+    } else {
+      await respond({ text: ':x: Agent update cancelled.', replace_original: false });
+    }
   });
 
   // ── Model & Effort Selection Actions ──
