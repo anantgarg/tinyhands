@@ -55,6 +55,11 @@ describe('markdownToSlack', () => {
     expect(markdownToSlack('<p>paragraph</p>')).toBe('paragraph');
   });
 
+  it('should convert literal \\n to actual newlines', () => {
+    expect(markdownToSlack('line one\\nline two')).toBe('line one\nline two');
+    expect(markdownToSlack('• item 1\\n• item 2')).toBe('• item 1\n• item 2');
+  });
+
   it('should handle mixed content', () => {
     const input = '## Summary\n\n**Key finding**: the [report](https://example.com) shows ~~old~~ results.\n\n- Item A\n- Item B';
     const result = markdownToSlack(input);

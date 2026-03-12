@@ -6,6 +6,9 @@ export function markdownToSlack(text: string): string {
 
   let result = text;
 
+  // Convert literal \n sequences to actual newlines (can occur in agent output)
+  result = result.replace(/\\n/g, '\n');
+
   // Convert headers: ## Header → *Header*
   result = result.replace(/^#{1,6}\s+(.+)$/gm, '*$1*');
 
