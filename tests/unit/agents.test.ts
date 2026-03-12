@@ -58,7 +58,6 @@ describe('Agent Management', () => {
       expect(agent.channel_id).toBe('C123');
       expect(agent.channel_ids).toEqual(['C123']);
       expect(agent.model).toBe('sonnet');
-      expect(agent.permission_level).toBe('standard');
       expect(agent.status).toBe('active');
       expect(agent.memory_enabled).toBe(false);
       expect(agent.respond_to_all_messages).toBe(false);
@@ -76,7 +75,6 @@ describe('Agent Management', () => {
         systemPrompt: 'Custom prompt',
         tools: ['Read', 'Glob'],
         model: 'opus',
-        permissionLevel: 'full',
         memoryEnabled: true,
         respondToAllMessages: true,
         relevanceKeywords: ['deploy', 'release'],
@@ -85,7 +83,6 @@ describe('Agent Management', () => {
 
       expect(agent.channel_ids).toEqual(['C456', 'C789']);
       expect(agent.model).toBe('opus');
-      expect(agent.permission_level).toBe('full');
       expect(agent.memory_enabled).toBe(true);
       expect(agent.respond_to_all_messages).toBe(true);
       expect(agent.relevance_keywords).toEqual(['deploy', 'release']);

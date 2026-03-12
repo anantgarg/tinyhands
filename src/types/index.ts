@@ -1,7 +1,6 @@
 // ── Agent Types ──
 
 export type AgentStatus = 'active' | 'paused' | 'error' | 'archived';
-export type PermissionLevel = 'read-only' | 'standard' | 'full';
 export type ModelAlias = 'opus' | 'sonnet' | 'haiku';
 export type EffortLevel = 'low' | 'medium' | 'high' | 'max';
 export type SelfEvolutionMode = 'autonomous' | 'approve-first';
@@ -23,7 +22,6 @@ export interface Agent {
   self_evolution_mode: SelfEvolutionMode;
   max_turns: number;
   memory_enabled: boolean;
-  permission_level: PermissionLevel;
   respond_to_all_messages: boolean;
   relevance_keywords: string[];
   created_by: string;

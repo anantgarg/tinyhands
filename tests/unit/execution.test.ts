@@ -50,11 +50,9 @@ vi.mock('../../src/modules/sources/memory', () => ({
   storeMemories: (...args: any[]) => mockStoreMemories(...args),
 }));
 
-const mockGetDisallowedTools = vi.fn().mockReturnValue([]);
-const mockGetDockerSecurityConfig = vi.fn().mockReturnValue({ networkMode: 'none' });
 vi.mock('../../src/modules/permissions', () => ({
-  getDisallowedTools: (...args: any[]) => mockGetDisallowedTools(...args),
-  getDockerSecurityConfig: (...args: any[]) => mockGetDockerSecurityConfig(...args),
+  isActionAllowed: vi.fn(),
+  validateIntegrationAccess: vi.fn(),
 }));
 
 vi.mock('../../src/modules/skills', () => ({ getAgentSkills: vi.fn().mockResolvedValue([]) }));
@@ -161,7 +159,6 @@ function makeAgent(overrides: Record<string, any> = {}) {
     system_prompt: 'You are a test agent.',
     model: 'sonnet' as const,
     max_turns: 5,
-    permission_level: 'standard',
     tools: [],
     memory_enabled: false,
     streaming_detail: false,
@@ -541,8 +538,6 @@ describe('Execution Module – executeAgentRun', () => {
     mockCheckRateLimit.mockResolvedValue({ allowed: true });
     mockCheckRequestRate.mockResolvedValue(true);
     mockRetrieveContext.mockResolvedValue([]);
-    mockGetDisallowedTools.mockReturnValue([]);
-    mockGetDockerSecurityConfig.mockReturnValue({ networkMode: 'none' });
     mockRemoveContainer.mockResolvedValue(undefined);
   });
 
@@ -990,8 +985,7 @@ describe('Execution Module – executeAgentRun', () => {
     expect(mockGetModelId).toHaveBeenCalledWith('opus');
   });
 
-  it('should pass security config network mode to container', async () => {
-    mockGetDockerSecurityConfig.mockReturnValue({ networkMode: 'bridge' });
+  it('should always pass networkAllowlist with wildcard to container', async () => {
     const container = { id: 'container-1' };
     mockCreateAgentContainer.mockResolvedValue(container);
     mockFollowContainerOutput.mockResolvedValue({
@@ -1004,22 +998,6 @@ describe('Execution Module – executeAgentRun', () => {
 
     const containerCall = mockCreateAgentContainer.mock.calls[0][0];
     expect(containerCall.networkAllowlist).toEqual(['*']);
-  });
-
-  it('should pass undefined networkAllowlist when networkMode is not bridge', async () => {
-    mockGetDockerSecurityConfig.mockReturnValue({ networkMode: 'none' });
-    const container = { id: 'container-1' };
-    mockCreateAgentContainer.mockResolvedValue(container);
-    mockFollowContainerOutput.mockResolvedValue({
-      exitCode: 0,
-      allLogs: 'TINYHANDS_OUTPUT:{"output":"ok","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
-    });
-
-    const job = makeFakeJob(makeJobData());
-    await executeAgentRun(job);
-
-    const containerCall = mockCreateAgentContainer.mock.calls[0][0];
-    expect(containerCall.networkAllowlist).toBeUndefined();
   });
 });
 

@@ -65,7 +65,7 @@ async function buildAgentFleetSection(): Promise<Record<string, any>[]> {
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `${agent.avatar_emoji} *${agent.name}* — <#${agent.channel_id}> — ${agent.status} — ${agent.permission_level} — ${agent.model}`,
+        text: `${agent.avatar_emoji} *${agent.name}* — <#${agent.channel_id}> — ${agent.status} — ${agent.model}`,
       },
     });
   }

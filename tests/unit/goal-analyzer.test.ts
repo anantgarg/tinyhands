@@ -47,7 +47,6 @@ function makeGoalAnalysisJson(overrides: Partial<GoalAnalysis> = {}): GoalAnalys
     custom_tools: [],
     skills: [],
     model: 'sonnet',
-    permission_level: 'standard',
     memory_enabled: false,
     triggers: [],
     relevance_keywords: ['test', 'help'],
@@ -94,7 +93,6 @@ describe('Goal Analyzer', () => {
       expect(result.system_prompt).toBe('You are a test agent.');
       expect(result.tools).toEqual(['Read', 'Glob', 'Grep']);
       expect(result.model).toBe('sonnet');
-      expect(result.permission_level).toBe('standard');
       expect(result.feasible).toBe(true);
       expect(result.blockers).toEqual([]);
       expect(result.relevance_keywords).toEqual(['test', 'help']);
@@ -148,28 +146,6 @@ describe('Goal Analyzer', () => {
 
       expect(result.new_tools_needed).toEqual([]);
       expect(result.new_skills_needed).toEqual([]);
-    });
-
-    it('should cap permission_level to standard for non-admin users', async () => {
-      mockIsSuperadmin.mockResolvedValue(false);
-      mockAnthropicJsonResponse({
-        permission_level: 'full',
-      });
-
-      const result = await analyzeGoal('Build a bot', undefined, 'U_NON_ADMIN');
-
-      expect(result.permission_level).toBe('standard');
-    });
-
-    it('should allow full permission_level for admin users', async () => {
-      mockIsSuperadmin.mockResolvedValue(true);
-      mockAnthropicJsonResponse({
-        permission_level: 'full',
-      });
-
-      const result = await analyzeGoal('Build a bot', undefined, 'U_ADMIN');
-
-      expect(result.permission_level).toBe('full');
     });
 
     it('should preserve new_tools_needed for admin users', async () => {

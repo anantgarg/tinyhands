@@ -572,7 +572,7 @@ export function registerInlineActions(app: App): void {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `*Status:* ${agent.status}\n*Model:* \`${agent.model}\`\n*Permissions:* \`${agent.permission_level}\`\n*Memory:* ${agent.memory_enabled ? 'on' : 'off'}\n*Channels:* ${channels}\n*Tools:* ${agent.tools.join(', ') || 'none'}\n*Responds to:* ${agent.respond_to_all_messages ? 'all messages' : 'relevant messages + @mentions'}`,
+              text: `*Status:* ${agent.status}\n*Model:* ${agent.model}\n*Effort:* ${maxTurnsToEffort(agent.max_turns)}\n*Memory:* ${agent.memory_enabled ? 'on' : 'off'}\n*Channels:* ${channels}\n*Tools:* ${agent.tools.join(', ') || 'none'}\n*Responds to:* ${agent.respond_to_all_messages ? 'all messages' : 'relevant messages + @mentions'}`,
             },
           },
           { type: 'divider' },
@@ -610,7 +610,7 @@ export function registerInlineActions(app: App): void {
         if (ts) {
           // Post config details as a thread reply — creates a visible thread
           await postMessage(channelId,
-            `Current config: *${agent.model}* model | *${agent.permission_level}* perms | ${agent.tools.length} tools | memory ${agent.memory_enabled ? 'on' : 'off'} | channels: ${channelLabels}\n\n` +
+            `Current config: *${agent.model}* model | ${maxTurnsToEffort(agent.max_turns)} effort | ${agent.tools.length} tools | memory ${agent.memory_enabled ? 'on' : 'off'} | channels: ${channelLabels}\n\n` +
             `_What would you like to change? You can say things like:_\n` +
             `• _"update the goal to handle X differently"_\n` +
             `• _"add #new-channel" or "replace #old-channel with #new-channel"_\n` +
@@ -1071,7 +1071,7 @@ export function registerInlineActions(app: App): void {
 
     // Post config details as a deeper thread reply — makes the thread clearly visible
     await postMessage(channelId,
-      `Current config: *${agent.model}* model | *${agent.permission_level}* perms | ${agent.tools.length} tools | memory ${agent.memory_enabled ? 'on' : 'off'} | channels: ${channelLabels}\n\n` +
+      `Current config: *${agent.model}* model | ${maxTurnsToEffort(agent.max_turns)} effort | ${agent.tools.length} tools | memory ${agent.memory_enabled ? 'on' : 'off'} | channels: ${channelLabels}\n\n` +
       `_What would you like to change? You can say things like:_\n` +
       `• _"update the goal to handle X differently"_\n` +
       `• _"add #new-channel" or "replace #old-channel with #new-channel"_\n` +
@@ -1959,7 +1959,7 @@ async function handleInfeasibleRequest(
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*Suggested agent name:* \`${analysis.agent_name}\`\n*Model:* ${analysis.model} | *Permissions:* ${analysis.permission_level}\n*Summary:* ${analysis.summary}`,
+          text: `*Suggested agent name:* \`${analysis.agent_name}\`\n*Model:* ${analysis.model}\n*Summary:* ${analysis.summary}`,
         },
       },
     ];
@@ -2077,7 +2077,6 @@ async function handleUpdateRequest(agentId: string, userMessage: string, userId:
 - Model: ${agent.model}
 - Channels: ${channelLabels}
 - Memory: ${agent.memory_enabled ? 'on' : 'off'}
-- Permissions: ${agent.permission_level}
 
 Respond with ONLY valid JSON:
 {
@@ -2111,7 +2110,7 @@ Rules:
     logger.info('Update intent classified', { agentId, intent: intent.intent, channelAction: intent.channel_action });
 
     if (intent.intent === 'info_query') {
-      await postMessage(channelId, intent.info_response || `*${agent.name}* config:\n• Model: ${agent.model}\n• Channels: ${channelLabels}\n• Permissions: ${agent.permission_level}\n• Memory: ${agent.memory_enabled ? 'on' : 'off'}\n• Tools: ${agent.tools.join(', ')}`, threadTs);
+      await postMessage(channelId, intent.info_response || `*${agent.name}* config:\n• Model: ${agent.model}\n• Effort: ${maxTurnsToEffort(agent.max_turns)}\n• Channels: ${channelLabels}\n• Memory: ${agent.memory_enabled ? 'on' : 'off'}\n• Tools: ${agent.tools.join(', ')}`, threadTs);
       // Re-insert so the user can ask more questions or make changes
       await execute(
         `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
@@ -2341,7 +2340,6 @@ export function registerConfirmationActions(app: App): void {
         systemPrompt: analysis.system_prompt,
         tools: agentTools,
         model: finalModel,
-        permissionLevel: analysis.permission_level,
         memoryEnabled: analysis.memory_enabled,
         respondToAllMessages: analysis.respond_to_all_messages,
         relevanceKeywords: analysis.relevance_keywords,
@@ -2354,7 +2352,7 @@ export function registerConfirmationActions(app: App): void {
         `✋ Meet *${agent.name}*! Deployed by <@${userId}> and ready to get to work. It's small, but it's ready.`,
         '',
         `*Goal:* ${goal.slice(0, 300)}`,
-        `*Model:* ${finalModel} | *Permissions:* ${analysis.permission_level} | *Memory:* ${analysis.memory_enabled ? 'on' : 'off'}`,
+        `*Model:* ${finalModel} | *Memory:* ${analysis.memory_enabled ? 'on' : 'off'}`,
         `*Responds to:* ${analysis.respond_to_all_messages ? 'all messages' : 'relevant messages + @mentions'}`,
         `*Tools:* ${allTools.join(', ')}`,
         analysis.skills.length > 0 ? `*Skills:* ${analysis.skills.join(', ')}` : '',
@@ -2455,7 +2453,6 @@ export function registerConfirmationActions(app: App): void {
         tools: mergedTools,
         model: finalModel,
         max_turns: finalMaxTurns,
-        permission_level: analysis.permission_level,
         memory_enabled: analysis.memory_enabled,
         respond_to_all_messages: analysis.respond_to_all_messages,
         relevance_keywords: analysis.relevance_keywords,
@@ -2491,7 +2488,7 @@ export function registerConfirmationActions(app: App): void {
       try {
         await postMessage(postToChannel,
           `:arrows_counterclockwise: Agent *${agent.name}* updated by <@${userId}>\n\n` +
-          `*Model:* ${analysis.model} | *Permissions:* ${analysis.permission_level} | *Memory:* ${analysis.memory_enabled ? 'on' : 'off'}\n` +
+          `*Model:* ${analysis.model} | *Memory:* ${analysis.memory_enabled ? 'on' : 'off'}\n` +
           `*Responds to:* ${analysis.respond_to_all_messages ? 'all messages' : 'relevant messages + @mentions'}\n` +
           `*Tools:* ${allUpdateTools.join(', ')}` +
           channelChangeNote + '\n' +
@@ -2634,7 +2631,6 @@ export function registerConfirmationActions(app: App): void {
         systemPrompt: freshAnalysis.system_prompt,
         tools: retryTools,
         model: freshAnalysis.model,
-        permissionLevel: freshAnalysis.permission_level,
         memoryEnabled: freshAnalysis.memory_enabled,
         respondToAllMessages: freshAnalysis.respond_to_all_messages,
         relevanceKeywords: freshAnalysis.relevance_keywords,
@@ -2935,8 +2931,7 @@ function buildConfigSummary(name: string, analysis: any, goal: string, existingA
   lines.push(`*Goal:* ${displayGoal.slice(0, 300)}${displayGoal.length > 300 ? '...' : ''}`);
   lines.push('');
   lines.push(`*Name:* ${name}`);
-  lines.push(`*Model:* \`${analysis.model}\``);
-  lines.push(`*Permissions:* \`${analysis.permission_level}\``);
+  lines.push(`*Model:* ${analysis.model}`);
   lines.push(`*Memory:* ${analysis.memory_enabled ? 'enabled' : 'disabled'}`);
   const allConfigTools = [...analysis.tools, ...(analysis.custom_tools || [])];
   lines.push(`*Tools:* ${allConfigTools.join(', ')}`);
@@ -2975,7 +2970,6 @@ function buildConfigSummary(name: string, analysis: any, goal: string, existingA
   if (existingAgent) {
     const changes: string[] = [];
     if (existingAgent.model !== analysis.model) changes.push(`model: ${existingAgent.model} → ${analysis.model}`);
-    if (existingAgent.permission_level !== analysis.permission_level) changes.push(`permissions: ${existingAgent.permission_level} → ${analysis.permission_level}`);
     if (JSON.stringify(existingAgent.tools.sort()) !== JSON.stringify(analysis.tools.sort())) changes.push('tools changed');
     if (existingAgent.memory_enabled !== analysis.memory_enabled) changes.push(`memory: ${analysis.memory_enabled ? 'enabled' : 'disabled'}`);
     if (changes.length > 0) {

@@ -19,10 +19,6 @@ export async function createTeamRun(
   const agent = await getAgent(leadAgentId);
   if (!agent) throw new Error(`Agent ${leadAgentId} not found`);
 
-  if (agent.permission_level !== 'full') {
-    throw new Error('Agent teams require full permission level');
-  }
-
   const id = uuid();
   const teamRun: TeamRun = {
     id,

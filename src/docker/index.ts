@@ -2,7 +2,6 @@ import Dockerode from 'dockerode';
 import fs from 'fs';
 import { PassThrough } from 'stream';
 import { config } from '../config';
-import { getDockerSecurityConfig } from '../modules/permissions';
 import type { Agent } from '../types';
 import { logger } from '../utils/logger';
 
@@ -48,9 +47,6 @@ export async function createAgentContainer(cfg: ContainerConfig): Promise<Docker
     fs.chmodSync(cfg.workingDir, 0o777);
   }
 
-  // Apply security config based on permission level
-  const securityConfig = getDockerSecurityConfig(cfg.agent.permission_level);
-
   const container = await docker.createContainer({
     Image: image,
     Env: envList,
@@ -61,19 +57,16 @@ export async function createAgentContainer(cfg: ContainerConfig): Promise<Docker
         `${sourcesCacheDir}:/sources:ro`,
         `${memoryDir}:/memory:ro`,
       ],
-      Memory: securityConfig.memoryLimit,
-      NanoCpus: securityConfig.cpuLimit * 1e9,
-      NetworkMode: securityConfig.networkMode,
-      ReadonlyRootfs: securityConfig.readOnlyRootfs,
-      Tmpfs: securityConfig.readOnlyRootfs ? { '/tmp': 'rw,nosuid,size=1024m', '/home/agent': 'rw,nosuid,size=128m,uid=999,gid=999' } : undefined,
-      SecurityOpt: securityConfig.noNewPrivileges ? ['no-new-privileges:true'] : [],
-      CapDrop: securityConfig.dropCapabilities,
+      Memory: 4 * 1024 * 1024 * 1024, // 4GB
+      NanoCpus: 1e9, // 1 CPU
+      NetworkMode: 'bridge',
+      SecurityOpt: ['no-new-privileges:true'],
+      CapDrop: ['ALL'],
       AutoRemove: false,
     },
     Labels: {
       'tinyhands.agent_id': cfg.agent.id,
       'tinyhands.trace_id': cfg.traceId,
-      'tinyhands.permission_level': cfg.agent.permission_level,
     },
   });
 

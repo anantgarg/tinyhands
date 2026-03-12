@@ -6,7 +6,7 @@ import { createAgentContainer, startContainer, waitForContainer, removeContainer
 import { getAgent } from '../agents';
 import { retrieveContext } from '../sources';
 import { retrieveMemories, storeMemories } from '../sources/memory';
-import { getDisallowedTools, getDockerSecurityConfig } from '../permissions';
+// Permissions module only handles integration access now (per-tool)
 import { getAgentSkills } from '../skills';
 import { listCustomTools } from '../tools';
 import { getToolExecutionScript, getMcpConfigs, getCodeArtifacts, recordToolRun } from '../self-authoring';
@@ -199,9 +199,8 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
     ? `<user_message>\n${data.input}\n</user_message>\n${contextBlock}`
     : `<user_message>\n${data.input}\n</user_message>`;
 
-  // Get permission config
-  const disallowedTools = getDisallowedTools(agent.permission_level);
-  const securityConfig = getDockerSecurityConfig(agent.permission_level);
+  // All agents use the same standard security config — access control is per-tool
+  const disallowedTools: string[] = [];
 
   // Collect agent's skills and custom tools for injection
   let skillsConfig = '[]';
@@ -292,7 +291,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
         CODE_ARTIFACTS_CONFIG: codeArtifactsConfig,
         MEMORY_ENABLED: agent.memory_enabled ? '1' : '0',
       },
-      networkAllowlist: securityConfig.networkMode === 'bridge' ? ['*'] : undefined,
+      networkAllowlist: ['*'],
     });
 
     // followContainerOutput attaches before starting for real-time streaming

@@ -51,7 +51,6 @@ describe('Teams Module', () => {
       mockGetAgent.mockResolvedValueOnce({
         id: 'agent-1',
         name: 'lead-agent',
-        permission_level: 'full',
       });
 
       const teamRun = await createTeamRun('agent-1', 'run-1');
@@ -74,7 +73,6 @@ describe('Teams Module', () => {
     it('should create a team run with custom concurrency and depth', async () => {
       mockGetAgent.mockResolvedValueOnce({
         id: 'agent-1',
-        permission_level: 'full',
       });
 
       const teamRun = await createTeamRun('agent-1', 'run-1', 5, 4);
@@ -90,30 +88,9 @@ describe('Teams Module', () => {
         .rejects.toThrow('Agent missing-agent not found');
     });
 
-    it('should throw if agent does not have full permission level', async () => {
-      mockGetAgent.mockResolvedValueOnce({
-        id: 'agent-1',
-        permission_level: 'standard',
-      });
-
-      await expect(createTeamRun('agent-1', 'run-1'))
-        .rejects.toThrow('Agent teams require full permission level');
-    });
-
-    it('should throw for read_only permission level', async () => {
-      mockGetAgent.mockResolvedValueOnce({
-        id: 'agent-1',
-        permission_level: 'read_only',
-      });
-
-      await expect(createTeamRun('agent-1', 'run-1'))
-        .rejects.toThrow('Agent teams require full permission level');
-    });
-
     it('should use default max_concurrent when 0 is passed', async () => {
       mockGetAgent.mockResolvedValueOnce({
         id: 'agent-1',
-        permission_level: 'full',
       });
 
       // 0 is falsy, so || will use default
@@ -124,7 +101,6 @@ describe('Teams Module', () => {
     it('should use default max_depth when 0 is passed', async () => {
       mockGetAgent.mockResolvedValueOnce({
         id: 'agent-1',
-        permission_level: 'full',
       });
 
       const teamRun = await createTeamRun('agent-1', 'run-1', undefined, 0);
@@ -205,13 +181,11 @@ describe('Teams Module', () => {
       mockGetAgent.mockResolvedValueOnce(overrides.subAgent ?? {
         id: 'agent-2',
         name: 'sub-agent',
-        permission_level: 'standard',
       });
       // getAgent for lead agent
       mockGetAgent.mockResolvedValueOnce(overrides.leadAgent ?? {
         id: 'lead-1',
         name: 'lead-agent',
-        permission_level: 'full',
       });
     }
 
@@ -296,9 +270,9 @@ describe('Teams Module', () => {
       // active count
       mockQueryOne.mockResolvedValueOnce({ count: '0' });
       // getAgent for sub-agent
-      mockGetAgent.mockResolvedValueOnce({ id: 'agent-2', permission_level: 'standard' });
+      mockGetAgent.mockResolvedValueOnce({ id: 'agent-2' });
       // getAgent for lead
-      mockGetAgent.mockResolvedValueOnce({ id: 'lead-1', permission_level: 'full' });
+      mockGetAgent.mockResolvedValueOnce({ id: 'lead-1' });
 
       const subRun = await spawnSubAgent('team-1', 'agent-2', 'task', 2);
       expect(subRun.depth).toBe(2);
@@ -331,8 +305,8 @@ describe('Teams Module', () => {
       mockQuery.mockResolvedValueOnce([]);
       // active count = 2, below max of 3
       mockQueryOne.mockResolvedValueOnce({ count: '2' });
-      mockGetAgent.mockResolvedValueOnce({ id: 'agent-2', permission_level: 'standard' });
-      mockGetAgent.mockResolvedValueOnce({ id: 'lead-1', permission_level: 'full' });
+      mockGetAgent.mockResolvedValueOnce({ id: 'agent-2' });
+      mockGetAgent.mockResolvedValueOnce({ id: 'lead-1' });
 
       const subRun = await spawnSubAgent('team-1', 'agent-2', 'task');
       expect(subRun).toBeDefined();
@@ -365,7 +339,7 @@ describe('Teams Module', () => {
       });
       mockQuery.mockResolvedValueOnce([]);
       mockQueryOne.mockResolvedValueOnce({ count: '0' });
-      mockGetAgent.mockResolvedValueOnce({ id: 'agent-2', permission_level: 'standard' });
+      mockGetAgent.mockResolvedValueOnce({ id: 'agent-2' });
       // lead agent not found
       mockGetAgent.mockResolvedValueOnce(null);
 

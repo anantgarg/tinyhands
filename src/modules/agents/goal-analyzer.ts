@@ -11,7 +11,6 @@ export interface GoalAnalysis {
   custom_tools: string[];
   skills: string[];
   model: 'opus' | 'sonnet' | 'haiku';
-  permission_level: 'read-only' | 'standard' | 'full';
   memory_enabled: boolean;
   triggers: Array<{
     type: 'slack_channel' | 'linear' | 'zendesk' | 'intercom' | 'webhook' | 'schedule';
@@ -72,7 +71,7 @@ export async function analyzeGoal(goal: string, existingPrompt?: string, request
 - The agent can ONLY use existing tools listed above. Do NOT propose new_tools_needed or new_skills_needed.
 - For custom_tools, ONLY include read-only tools. If the goal requires read-write tools, list them in "write_tools_requested" — an admin will need to approve them.
 - If the goal requires capabilities that don't exist in available tools, set "feasible" to false and list what's missing in "blockers". The user will be able to submit a feature request.
-- permission_level must be "read-only" or "standard" (not "full").`;
+`;
 
   const apiPromise = client.messages.create({
     model: 'claude-opus-4-6',
@@ -98,7 +97,6 @@ Return ONLY valid JSON matching this schema:
   "custom_tools": ["list", "of", "required", "custom", "tool", "names"],
   "skills": ["list", "of", "required", "skill", "names", "from", "available", "ones"],
   "model": "sonnet|opus|haiku",
-  "permission_level": "read-only|standard|full",
   "memory_enabled": true/false,
   "triggers": [
     {
@@ -172,10 +170,6 @@ IMPORTANT guidelines:
     // Clear new_tools_needed — users can't create tools
     analysis.new_tools_needed = [];
     analysis.new_skills_needed = [];
-    // Cap permission level
-    if (analysis.permission_level === 'full') {
-      analysis.permission_level = 'standard';
-    }
   } else {
     // Admin: allow both read-only and read-write
     analysis.custom_tools = analysis.custom_tools.filter(t =>

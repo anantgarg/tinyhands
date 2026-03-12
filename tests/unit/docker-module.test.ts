@@ -70,17 +70,6 @@ vi.mock('../../src/config', () => ({
   },
 }));
 
-vi.mock('../../src/modules/permissions', () => ({
-  getDockerSecurityConfig: vi.fn().mockReturnValue({
-    networkMode: 'bridge',
-    readOnlyRootfs: false,
-    noNewPrivileges: true,
-    dropCapabilities: ['ALL'],
-    memoryLimit: 4294967296,
-    cpuLimit: 1,
-  }),
-}));
-
 vi.mock('../../src/utils/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
@@ -115,7 +104,6 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
     self_evolution_mode: 'approve-first',
     max_turns: 10,
     memory_enabled: false,
-    permission_level: 'standard',
     respond_to_all_messages: false,
     relevance_keywords: [],
     created_by: 'U001',
@@ -239,48 +227,20 @@ describe('Docker Module', () => {
       expect(binds).toContain('/tmp/tinyhands-memory/agent-1:/memory:ro');
     });
 
-    it('should apply security config from permissions module', async () => {
+    it('should apply standard security config', async () => {
       await createAgentContainer(makeContainerConfig());
 
       const hostConfig = mockCreateContainer.mock.calls[0][0].HostConfig;
-      expect(hostConfig.Memory).toBe(4294967296);
+      expect(hostConfig.Memory).toBe(4 * 1024 * 1024 * 1024);
       expect(hostConfig.NanoCpus).toBe(1e9);
       expect(hostConfig.NetworkMode).toBe('bridge');
-      expect(hostConfig.ReadonlyRootfs).toBe(false);
       expect(hostConfig.SecurityOpt).toEqual(['no-new-privileges:true']);
       expect(hostConfig.CapDrop).toEqual(['ALL']);
     });
 
-    it('should set Tmpfs when readOnlyRootfs is true', async () => {
-      const { getDockerSecurityConfig } = await import('../../src/modules/permissions');
-      (getDockerSecurityConfig as any).mockReturnValueOnce({
-        networkMode: 'none',
-        readOnlyRootfs: true,
-        noNewPrivileges: true,
-        dropCapabilities: ['ALL'],
-        memoryLimit: 4294967296,
-        cpuLimit: 1,
-      });
-
-      await createAgentContainer(makeContainerConfig());
-
-      const hostConfig = mockCreateContainer.mock.calls[0][0].HostConfig;
-      expect(hostConfig.ReadonlyRootfs).toBe(true);
-      expect(hostConfig.Tmpfs).toBeDefined();
-      expect(hostConfig.Tmpfs['/tmp']).toContain('rw');
-      expect(hostConfig.Tmpfs['/home/agent']).toContain('rw');
-    });
-
-    it('should not set Tmpfs when readOnlyRootfs is false', async () => {
-      await createAgentContainer(makeContainerConfig());
-
-      const hostConfig = mockCreateContainer.mock.calls[0][0].HostConfig;
-      expect(hostConfig.Tmpfs).toBeUndefined();
-    });
-
-    it('should set labels for agent_id, trace_id, and permission_level', async () => {
+    it('should set labels for agent_id and trace_id', async () => {
       const cfg = makeContainerConfig({
-        agent: makeAgent({ id: 'agent-42', permission_level: 'full' }),
+        agent: makeAgent({ id: 'agent-42' }),
         traceId: 'trace-xyz',
       });
       await createAgentContainer(cfg);
@@ -288,7 +248,6 @@ describe('Docker Module', () => {
       const labels = mockCreateContainer.mock.calls[0][0].Labels;
       expect(labels['tinyhands.agent_id']).toBe('agent-42');
       expect(labels['tinyhands.trace_id']).toBe('trace-xyz');
-      expect(labels['tinyhands.permission_level']).toBe('full');
     });
 
     it('should set AutoRemove to false', async () => {
@@ -330,22 +289,6 @@ describe('Docker Module', () => {
       await expect(createAgentContainer(makeContainerConfig())).rejects.toThrow('image not found');
     });
 
-    it('should not set SecurityOpt when noNewPrivileges is false', async () => {
-      const { getDockerSecurityConfig } = await import('../../src/modules/permissions');
-      (getDockerSecurityConfig as any).mockReturnValueOnce({
-        networkMode: 'bridge',
-        readOnlyRootfs: false,
-        noNewPrivileges: false,
-        dropCapabilities: [],
-        memoryLimit: 4294967296,
-        cpuLimit: 2,
-      });
-
-      await createAgentContainer(makeContainerConfig());
-
-      const hostConfig = mockCreateContainer.mock.calls[0][0].HostConfig;
-      expect(hostConfig.SecurityOpt).toEqual([]);
-    });
   });
 
   // ────────────────────────────────────────────
