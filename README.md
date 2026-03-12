@@ -14,10 +14,6 @@ Think [Claude Code](https://claude.ai/claude-code) or [Devin](https://devin.ai) 
 
 ## Deploy
 
-[![Deploy to DigitalOcean](https://img.shields.io/badge/1--Click%20Deploy-DigitalOcean-0080FF?style=for-the-badge&logo=digitalocean&logoColor=white)](https://marketplace.digitalocean.com/apps/tinyjobs)
-
-**One-click:** Creates a pre-configured Droplet with TinyJobs, PostgreSQL, Redis, and Docker. SSH in and run `setup.sh` to connect your Slack workspace.
-
 **Docker Compose** (any server with Docker):
 
 ```bash
@@ -26,7 +22,7 @@ cp .env.example .env   # fill in SLACK_* and ANTHROPIC_API_KEY
 docker compose up -d
 ```
 
-**Install script** (Ubuntu/Debian):
+**Install script** (Ubuntu/Debian — installs Docker, configures everything interactively):
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/anantgarg/tinyjobs/main/scripts/install.sh | sudo bash
@@ -190,19 +186,7 @@ DATA LAYER
 - A Slack workspace where you can install apps
 - An Anthropic API key
 
-### Option A: One-Click (DigitalOcean Marketplace)
-
-[![Deploy to DigitalOcean](https://img.shields.io/badge/1--Click%20Deploy-DigitalOcean-0080FF?style=for-the-badge&logo=digitalocean&logoColor=white)](https://marketplace.digitalocean.com/apps/tinyjobs)
-
-Click the button above to create a Droplet with everything pre-installed. Once the Droplet boots, SSH in and run:
-
-```bash
-/opt/tinyjobs-setup.sh
-```
-
-The setup wizard walks you through creating a Slack app, entering your API keys, and starting TinyJobs. Takes about 5 minutes.
-
-### Option B: Docker Compose (any server)
+### Option A: Docker Compose (any server)
 
 Requires Docker with Compose plugin. Includes PostgreSQL and Redis — no external databases needed.
 
@@ -220,7 +204,7 @@ docker compose up -d
 
 This builds and starts everything: TinyJobs, PostgreSQL, Redis, and the agent runner image.
 
-### Option C: Install Script (Ubuntu/Debian)
+### Option B: Install Script (Ubuntu/Debian)
 
 Installs Docker, clones the repo, and walks you through configuration:
 
@@ -228,7 +212,7 @@ Installs Docker, clones the repo, and walks you through configuration:
 curl -sSL https://raw.githubusercontent.com/anantgarg/tinyjobs/main/scripts/install.sh | sudo bash
 ```
 
-### Option D: Manual Installation
+### Option C: Manual Installation
 
 <details>
 <summary>Click to expand manual setup steps</summary>
