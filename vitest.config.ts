@@ -7,7 +7,9 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       include: ['src/**/*.ts'],
-      exclude: ['src/index.ts', 'src/worker.ts', 'src/sync.ts'],
+      exclude: ['src/index.ts', 'src/worker.ts', 'src/sync.ts', 'src/types/**', 'src/db/migrate.ts'],
+      reporter: ['text', 'text-summary', 'json', 'json-summary', 'lcov'],
+      reportsDirectory: './coverage',
     },
   },
   resolve: {
