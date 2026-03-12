@@ -84,7 +84,12 @@ export function registerEvents(app: App): void {
           return;
         }
       } catch (err: any) {
-        logger.error('handleConversationReply threw', { threadTs: msg.thread_ts, error: err.message });
+        logger.error('handleConversationReply threw', { threadTs: msg.thread_ts, error: err.message, stack: err.stack });
+        // Tell the user something went wrong instead of silently dropping
+        try {
+          await postMessage(channelId, `:x: Something went wrong processing your reply. Please try again.`, msg.thread_ts);
+        } catch { /* best effort */ }
+        return;
       }
       logger.info('Thread reply — continuing to agent check', { threadTs: msg.thread_ts, channelId });
     }
@@ -192,6 +197,13 @@ export function registerEvents(app: App): void {
           model: modelOverride || agent.model,
         });
       }
+      return;
+    }
+
+    // If this was a DM thread reply that didn't match any conversation or agent, let the user know
+    if (msg.thread_ts && msg.channel_type === 'im') {
+      logger.info('DM thread reply not handled by any flow', { threadTs: msg.thread_ts, channelId, userId });
+      await postMessage(channelId, `This conversation has expired or was already completed. Please use \`/agents\` to start a new update.`, msg.thread_ts);
       return;
     }
 

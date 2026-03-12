@@ -440,14 +440,20 @@ describe('Slack Events -- registerEvents', () => {
       expect(mockGetAgentsByChannel).toHaveBeenCalled();
     });
 
-    it('should continue to agent check when handleConversationReply throws', async () => {
+    it('should post error message and return when handleConversationReply throws', async () => {
       mockHandleConversationReply.mockRejectedValue(new Error('db error'));
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ thread_ts: '1700000000.000001' });
       await mockApp._trigger('message', { event, client: {} });
 
-      expect(mockGetAgentsByChannel).toHaveBeenCalled();
+      // Should NOT continue to agent check — instead post error and return
+      expect(mockGetAgentsByChannel).not.toHaveBeenCalled();
+      expect(mockPostMessage).toHaveBeenCalledWith(
+        'C_AGENT',
+        expect.stringContaining('Something went wrong'),
+        '1700000000.000001',
+      );
     });
 
     it('should not call handleConversationReply for non-thread messages', async () => {

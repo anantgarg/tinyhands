@@ -1744,6 +1744,7 @@ export async function handleConversationReply(
   threadTs: string,
   text: string,
 ): Promise<boolean> {
+  logger.info('handleConversationReply lookup', { threadTs, userId, channelId });
   const row = await queryOne<{ id: string; data: any }>(
     `SELECT id, data FROM pending_confirmations
      WHERE data->>'type' = 'conversation'
@@ -1755,12 +1756,16 @@ export async function handleConversationReply(
     [threadTs, userId],
   );
 
-  if (!row) return false;
+  if (!row) {
+    logger.info('handleConversationReply — no matching row', { threadTs, userId });
+    return false;
+  }
 
   const conv = row.data;
   const input = text.trim();
   if (!input) return false;
 
+  logger.info('handleConversationReply — found row', { step: conv.step, flow: conv.flow, agentId: conv.agentId });
   await execute(`DELETE FROM pending_confirmations WHERE id = $1`, [row.id]);
 
   if (conv.step === 'awaiting_update_request') {
@@ -2154,6 +2159,11 @@ Rules:
       } catch (err: any) {
         await postMessage(channelId, `:x: Failed to update channels: ${err.message}`, threadTs);
       }
+      // Re-insert so the user can make more changes in the same thread
+      await execute(
+        `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
+        [uuid(), JSON.stringify({ type: 'conversation', step: 'awaiting_update_request', flow: 'update_agent', agentId, userId, channelId, threadTs })],
+      );
       return;
     }
 
