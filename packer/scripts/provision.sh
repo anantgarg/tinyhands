@@ -3,7 +3,7 @@ set -euo pipefail
 
 export DEBIAN_FRONTEND=noninteractive
 
-echo "=== TinyJobs: Provisioning image ==="
+echo "=== Tiny Hands: Provisioning image ==="
 
 # ── System updates ──
 apt-get update
@@ -24,14 +24,14 @@ ufw allow ssh
 ufw allow 3000/tcp
 ufw --force enable
 
-# ── Clone TinyJobs ──
-git clone https://github.com/anantgarg/tinyjobs.git /opt/tinyjobs
-cd /opt/tinyjobs
+# ── Clone Tiny Hands ──
+git clone https://github.com/anantgarg/tinyhands.git /opt/tinyhands
+cd /opt/tinyhands
 
 # ── Pre-build Docker images (so first boot is fast) ──
 echo "=== Building Docker images (this takes a few minutes) ==="
-docker compose build tinyjobs
-docker build -t tinyjobs-runner:latest ./docker/
+docker compose build tinyhands
+docker build -t tinyhands-runner:latest ./docker/
 
 # Pre-pull remaining images
 docker pull postgres:16-alpine
@@ -39,16 +39,16 @@ docker pull redis:7-alpine
 docker pull docker:24-cli
 
 # ── Create systemd service ──
-cat > /etc/systemd/system/tinyjobs.service <<'EOF'
+cat > /etc/systemd/system/tinyhands.service <<'EOF'
 [Unit]
-Description=TinyJobs - Slack AI Agent Platform
+Description=Tiny Hands - Slack AI Agent Platform
 After=docker.service
 Requires=docker.service
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-WorkingDirectory=/opt/tinyjobs
+WorkingDirectory=/opt/tinyhands
 ExecStart=/usr/bin/docker compose up -d
 ExecStop=/usr/bin/docker compose down
 TimeoutStartSec=300
@@ -63,6 +63,6 @@ EOF
 chmod -x /etc/update-motd.d/* 2>/dev/null || true
 
 # ── Create first-boot flag ──
-touch /opt/tinyjobs/.needs-setup
+touch /opt/tinyhands/.needs-setup
 
 echo "=== Provisioning complete ==="

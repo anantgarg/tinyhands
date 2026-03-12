@@ -8,7 +8,7 @@ import { logger } from './utils/logger';
 import { postMessage } from './slack';
 import { checkForUpdates } from './modules/auto-update';
 
-const TINYHANDS_CHANNEL = process.env.TINYHANDS_CHANNEL_ID || process.env.TINYJOBS_CHANNEL_ID || 'tinyhands';
+const TINYHANDS_CHANNEL = process.env.TINYHANDS_CHANNEL_ID || 'tinyhands';
 
 const SYNC_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
 const ALERT_CHECK_INTERVAL_MS = 60 * 1000; // 1 minute
@@ -35,7 +35,7 @@ async function main(): Promise<void> {
           // Fetch and re-index based on source type
           if (source.source_type === 'github') {
             const { pullLatest, readRepoFiles } = await import('./modules/sources/github');
-            const repoDir = `/tmp/tinyjobs-sources-cache/${source.agent_id}/${source.id}`;
+            const repoDir = `/tmp/tinyhands-sources-cache/${source.agent_id}/${source.id}`;
             await pullLatest(repoDir);
             const files = readRepoFiles(repoDir);
             await ingestContent(source.id, source.agent_id, files);

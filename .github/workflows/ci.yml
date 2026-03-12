@@ -126,4 +126,4 @@ jobs:
     needs: lint-and-typecheck
     steps:
       - uses: actions/checkout@v4
-      - run: docker build -t tinyjobs-agent:test ./docker
+      - run: docker build -t tinyhands-agent:test ./docker

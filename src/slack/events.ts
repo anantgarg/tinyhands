@@ -168,7 +168,7 @@ export function registerEvents(app: App): void {
             {
               type: 'context',
               elements: [
-                { type: 'mrkdwn', text: `:hourglass_flowing_sand: Consulting the handbook...` },
+                { type: 'mrkdwn', text: `✋ On it...` },
               ],
             },
           ],
@@ -297,7 +297,7 @@ async function handleAgentChannelCommand(
         threadTs,
       );
       // Trigger initial clone in background
-      const repoDir = `/tmp/tinyjobs-sources-cache/${agent.id}/${source.id}`;
+      const repoDir = `/tmp/tinyhands-sources-cache/${agent.id}/${source.id}`;
       try {
         cloneRepo(parsed.owner, parsed.repo, repoDir, parsed.branch);
       } catch (err: any) {

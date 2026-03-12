@@ -109,7 +109,7 @@ describe('Slack buffer module', () => {
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C001',
-        ':x: Something failed',
+        ':x: Dropped the ball — Something failed',
         '111.222',
         undefined,
         undefined,

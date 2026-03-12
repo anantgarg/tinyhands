@@ -92,7 +92,7 @@ ${userRestrictions}
 
 Return ONLY valid JSON matching this schema:
 {
-  "agent_name": "short-kebab-case-name (max 20 chars, descriptive)",
+  "agent_name": "Short Human Name (max 30 chars, natural title case like 'Sales Helper' or 'Bug Triager')",
   "system_prompt": "A comprehensive system prompt. This is the MOST IMPORTANT part. It must clearly define:\n1. WHO the agent is (role, personality)\n2. WHAT it does (specific tasks, responsibilities)\n3. HOW it behaves (tone, format, decision-making rules)\n4. WHEN it should respond vs stay silent\n5. Its tools and how to use them\n6. Output format preferences (use Slack mrkdwn: *bold*, _italic_, \`code\`, bullet lists with •)\n7. Constraints and limitations\nThe prompt should be detailed enough that the agent knows exactly what to do without further guidance.",
   "tools": ["list", "of", "required", "builtin", "tools"],
   "custom_tools": ["list", "of", "required", "custom", "tool", "names"],

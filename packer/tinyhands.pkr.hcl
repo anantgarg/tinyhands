@@ -12,19 +12,19 @@ variable "do_api_token" {
   sensitive = true
 }
 
-variable "tinyjobs_version" {
+variable "tinyhands_version" {
   type    = string
   default = "latest"
 }
 
-source "digitalocean" "tinyjobs" {
+source "digitalocean" "tinyhands" {
   api_token    = var.do_api_token
   image        = "ubuntu-22-04-x64"
   region       = "nyc3"
   size         = "s-4vcpu-8gb"
   ssh_username = "root"
 
-  snapshot_name = "tinyjobs-${var.tinyjobs_version}-{{timestamp}}"
+  snapshot_name = "tinyhands-${var.tinyhands_version}-{{timestamp}}"
   snapshot_regions = [
     "nyc1", "nyc3", "sfo3", "ams3", "sgp1",
     "lon1", "fra1", "blr1", "tor1", "syd1"
@@ -32,29 +32,29 @@ source "digitalocean" "tinyjobs" {
 }
 
 build {
-  sources = ["source.digitalocean.tinyjobs"]
+  sources = ["source.digitalocean.tinyhands"]
 
-  # Install system dependencies and TinyJobs
+  # Install system dependencies and Tiny Hands
   provisioner "shell" {
     script = "scripts/provision.sh"
   }
 
   # MOTD welcome message
   provisioner "file" {
-    source      = "files/99-tinyjobs-welcome"
-    destination = "/etc/update-motd.d/99-tinyjobs-welcome"
+    source      = "files/99-tinyhands-welcome"
+    destination = "/etc/update-motd.d/99-tinyhands-welcome"
   }
 
   # Interactive setup script
   provisioner "file" {
-    source      = "files/tinyjobs-first-login.sh"
-    destination = "/opt/tinyjobs-setup.sh"
+    source      = "files/tinyhands-first-login.sh"
+    destination = "/opt/tinyhands-setup.sh"
   }
 
   provisioner "shell" {
     inline = [
-      "chmod +x /etc/update-motd.d/99-tinyjobs-welcome",
-      "chmod +x /opt/tinyjobs-setup.sh"
+      "chmod +x /etc/update-motd.d/99-tinyhands-welcome",
+      "chmod +x /opt/tinyhands-setup.sh"
     ]
   }
 

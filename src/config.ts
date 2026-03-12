@@ -17,7 +17,7 @@ export const config = {
     serviceAccountKeyPath: process.env.GOOGLE_SERVICE_ACCOUNT_KEY_PATH || '',
   },
   database: {
-    url: process.env.DATABASE_URL || 'postgresql://localhost:5432/tinyjobs',
+    url: process.env.DATABASE_URL || 'postgresql://localhost:5432/tinyhands',
   },
   redis: {
     url: process.env.REDIS_URL || 'redis://localhost:6379',
@@ -37,7 +37,7 @@ export const config = {
     branch: process.env.AUTO_UPDATE_BRANCH || 'main',
   },
   docker: {
-    baseImage: process.env.DOCKER_BASE_IMAGE || 'tinyjobs-runner:latest',
+    baseImage: process.env.DOCKER_BASE_IMAGE || 'tinyhands-runner:latest',
     defaultCpu: parseInt(process.env.DEFAULT_CONTAINER_CPU || '1', 10),
     defaultMemory: parseInt(process.env.DEFAULT_CONTAINER_MEMORY || '2147483648', 10),
     defaultJobTimeoutMs: parseInt(process.env.DEFAULT_JOB_TIMEOUT_MS || '600000', 10),

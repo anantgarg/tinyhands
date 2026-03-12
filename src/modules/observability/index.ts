@@ -8,8 +8,8 @@ import { logger } from '../../utils/logger';
 // ── Alert Rules ──
 
 const DEFAULT_ALERT_RULES: AlertRule[] = [
-  { condition: 'error_rate', threshold: 0.10, action: 'Alert to #tinyjobs with recent errors' },
-  { condition: 'single_run_cost', threshold: 5.0, action: 'Warning to agent channel + #tinyjobs' },
+  { condition: 'error_rate', threshold: 0.10, action: 'Alert to #tinyhands with recent errors' },
+  { condition: 'single_run_cost', threshold: 5.0, action: 'Warning to agent channel + #tinyhands' },
   { condition: 'daily_spend', threshold: config.observability.dailyBudgetUsd, action: 'Pause non-critical triggers. Alert.' },
   { condition: 'queue_depth', threshold: 50, action: 'Alert. Suggest scaling workers.' },
   { condition: 'run_duration', threshold: 600000, action: 'Alert to channel. Job not killed.' },

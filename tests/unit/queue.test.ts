@@ -268,11 +268,11 @@ describe('Queue Module', () => {
       await recordTokenUsage(500);
 
       expect(mockRedisIncrby).toHaveBeenCalledWith(
-        expect.stringContaining('tinyjobs:rate_limiter:tpm:'),
+        expect.stringContaining('tinyhands:rate_limiter:tpm:'),
         500,
       );
       expect(mockRedisExpire).toHaveBeenCalledWith(
-        expect.stringContaining('tinyjobs:rate_limiter:tpm:'),
+        expect.stringContaining('tinyhands:rate_limiter:tpm:'),
         120,
       );
     });
@@ -282,7 +282,7 @@ describe('Queue Module', () => {
 
       await recordTokenUsage(300);
 
-      expect(mockRedisDecrby).toHaveBeenCalledWith('tinyjobs:inflight_tokens', 300);
+      expect(mockRedisDecrby).toHaveBeenCalledWith('tinyhands:inflight_tokens', 300);
     });
 
     it('resets inflight to 0 when remaining goes negative', async () => {
@@ -290,7 +290,7 @@ describe('Queue Module', () => {
 
       await recordTokenUsage(100);
 
-      expect(mockRedisSet).toHaveBeenCalledWith('tinyjobs:inflight_tokens', '0');
+      expect(mockRedisSet).toHaveBeenCalledWith('tinyhands:inflight_tokens', '0');
     });
 
     it('does not reset inflight when remaining is positive', async () => {
@@ -298,7 +298,7 @@ describe('Queue Module', () => {
 
       await recordTokenUsage(100);
 
-      expect(mockRedisSet).not.toHaveBeenCalledWith('tinyjobs:inflight_tokens', '0');
+      expect(mockRedisSet).not.toHaveBeenCalledWith('tinyhands:inflight_tokens', '0');
     });
 
     it('does not reset inflight when remaining is null', async () => {
@@ -306,7 +306,7 @@ describe('Queue Module', () => {
 
       await recordTokenUsage(100);
 
-      expect(mockRedisSet).not.toHaveBeenCalledWith('tinyjobs:inflight_tokens', '0');
+      expect(mockRedisSet).not.toHaveBeenCalledWith('tinyhands:inflight_tokens', '0');
     });
   });
 
@@ -317,8 +317,8 @@ describe('Queue Module', () => {
     it('increments inflight key and sets TTL', async () => {
       await estimateInflightUsage(2000);
 
-      expect(mockRedisIncrby).toHaveBeenCalledWith('tinyjobs:inflight_tokens', 2000);
-      expect(mockRedisExpire).toHaveBeenCalledWith('tinyjobs:inflight_tokens', 300);
+      expect(mockRedisIncrby).toHaveBeenCalledWith('tinyhands:inflight_tokens', 2000);
+      expect(mockRedisExpire).toHaveBeenCalledWith('tinyhands:inflight_tokens', 300);
     });
   });
 
@@ -333,10 +333,10 @@ describe('Queue Module', () => {
 
       expect(result).toBe(true);
       expect(mockRedisIncr).toHaveBeenCalledWith(
-        expect.stringContaining('tinyjobs:rate_limiter:rpm:'),
+        expect.stringContaining('tinyhands:rate_limiter:rpm:'),
       );
       expect(mockRedisExpire).toHaveBeenCalledWith(
-        expect.stringContaining('tinyjobs:rate_limiter:rpm:'),
+        expect.stringContaining('tinyhands:rate_limiter:rpm:'),
         120,
       );
     });
@@ -366,7 +366,7 @@ describe('Queue Module', () => {
       await handleRateLimitResponse(30);
 
       expect(mockRedisSet).toHaveBeenCalledWith(
-        'tinyjobs:rate_limited',
+        'tinyhands:rate_limited',
         '1',
         'EX',
         30,
@@ -377,7 +377,7 @@ describe('Queue Module', () => {
       await handleRateLimitResponse(120);
 
       expect(mockRedisSet).toHaveBeenCalledWith(
-        'tinyjobs:rate_limited',
+        'tinyhands:rate_limited',
         '1',
         'EX',
         120,
@@ -462,7 +462,7 @@ describe('Queue Module', () => {
 
       expect(result).toBe(false);
       expect(mockRedisSet).toHaveBeenCalledWith(
-        'tinyjobs:dedup:event-123',
+        'tinyhands:dedup:event-123',
         '1',
         'EX',
         300,
@@ -484,7 +484,7 @@ describe('Queue Module', () => {
       await isDuplicateEvent('webhook:my-agent:req-456');
 
       expect(mockRedisSet).toHaveBeenCalledWith(
-        'tinyjobs:dedup:webhook:my-agent:req-456',
+        'tinyhands:dedup:webhook:my-agent:req-456',
         '1',
         'EX',
         300,

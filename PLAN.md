@@ -1,4 +1,4 @@
-# TinyJobs — Implementation Plan
+# Tiny Hands — Implementation Plan
 
 **Slack-based command center for Claude Code agents**
 19 Modules · v3.0
@@ -7,7 +7,7 @@
 
 ## Overview
 
-TinyJobs is a Slack-based command center where each agent lives in its own channel with a persistent persona. Agents connect to live data sources, fire on external events, and propose edits to their own instructions based on feedback. The execution engine is Claude Code CLI — agents are autonomous, not scripted. TinyJobs provides context, tools, triggers, and a Slack interface. Claude decides everything else.
+Tiny Hands is a Slack-based command center where each agent lives in its own channel with a persistent persona. Agents connect to live data sources, fire on external events, and propose edits to their own instructions based on feedback. The execution engine is Claude Code CLI — agents are autonomous, not scripted. Tiny Hands provides context, tools, triggers, and a Slack interface. Claude decides everything else.
 
 **Architecture:** Single VPS. All components — Node.js (PM2), Redis, Docker, SQLite — coexist on one machine. No Kubernetes, no managed databases, no multi-server orchestration.
 
@@ -36,7 +36,7 @@ TinyJobs is a Slack-based command center where each agent lives in its own chann
 
 - [ ] Set up BullMQ job queue backed by Redis with three priority queues (high/normal/low)
 - [ ] Implement worker processes (default: 3) that consume queue and spawn Docker containers
-- [ ] Build Docker base image (`tinyjobs-runner`) with Node.js + Claude Agent SDK + CLI tools
+- [ ] Build Docker base image (`tinyhands-runner`) with Node.js + Claude Agent SDK + CLI tools
 - [ ] Configure ephemeral Docker containers per run: filesystem isolation, network restrictions, secret injection
 - [ ] Stream SDK events to Slack (1.5s buffer to respect Slack rate limits)
 - [ ] Implement job timeout (default 10 min), retry policy, and dead letter queue
@@ -176,7 +176,7 @@ TinyJobs is a Slack-based command center where each agent lives in its own chann
 - [ ] Normalize event payload into task prompt
 - [ ] Deduplication: idempotency key + 5-min Redis cache window
 - [ ] Slack triggers: reply in-thread. Webhook triggers: post in agent channel with source link.
-- [ ] Trigger storm protection: auto-pause at 100+ events/min, alert to #tinyjobs
+- [ ] Trigger storm protection: auto-pause at 100+ events/min, alert to #tinyhands
 
 **Acceptance Criteria:**
 - Slack trigger fires agent run within 2 seconds of message
@@ -271,7 +271,7 @@ TinyJobs is a Slack-based command center where each agent lives in its own chann
 - [ ] Verify signature with `GITHUB_WEBHOOK_SECRET`
 - [ ] `git pull` → `npm install` if package.json changed → Docker rebuild if Dockerfile changed → `pm2 reload`
 - [ ] In-flight jobs complete before workers restart (BullMQ graceful shutdown)
-- [ ] Post deploy summary to #tinyjobs: commit hash, changed files, restart time
+- [ ] Post deploy summary to #tinyhands: commit hash, changed files, restart time
 
 **Acceptance Criteria:**
 - Push to main triggers deploy within 30 seconds

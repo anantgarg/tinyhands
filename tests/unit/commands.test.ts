@@ -351,7 +351,7 @@ describe('Commands Module', () => {
 
       const blocksArg = mockPostBlocks.mock.calls[0][1];
       const allText = JSON.stringify(blocksArg);
-      expect(allText).toContain('No agents created yet');
+      expect(allText).toContain('empty-handed');
     });
 
     it('should render agent entries with overflow menus', async () => {
@@ -535,7 +535,7 @@ describe('Commands Module', () => {
           expect.objectContaining({
             type: 'section',
             text: expect.objectContaining({
-              text: expect.stringContaining('create a new agent'),
+              text: expect.stringContaining('build a new hand'),
             }),
           }),
         ]),
@@ -1194,6 +1194,9 @@ describe('Commands Module', () => {
       const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
 
       await app.handlers.action['confirm_new_agent']({ action, ack, body });
+
+      // Skills and triggers run as fire-and-forget — flush microtask queue
+      await new Promise(r => setTimeout(r, 10));
 
       expect(mockAttachSkillToAgent).toHaveBeenCalledTimes(2);
       expect(mockAttachSkillToAgent).toHaveBeenCalledWith('agent-sk', 'linear', 'read', 'U1');
@@ -3183,7 +3186,7 @@ describe('Commands Module', () => {
     it('registerConfirmationActions should register 10 action handlers', () => {
       const app = createMockApp();
       registerConfirmationActions(app as any);
-      expect(app.action).toHaveBeenCalledTimes(10);
+      expect(app.action).toHaveBeenCalledTimes(12);
     });
 
     it('all registration functions should be idempotent (safe to call twice)', () => {

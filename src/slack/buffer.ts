@@ -92,7 +92,7 @@ export function bufferEvent(
       handleDoneEvent(buffer, markdownToSlack(content));
       return;
     case 'error':
-      text = `:x: ${content}`;
+      text = `:x: Dropped the ball — ${content}`;
       break;
     default:
       text = content;

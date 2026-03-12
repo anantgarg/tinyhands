@@ -19,7 +19,7 @@ export function getRedisConnection(): IORedis {
 
 // ── Queues ──
 
-const QUEUE_NAME = 'tinyjobs-runs';
+const QUEUE_NAME = 'tinyhands-runs';
 
 let queue: Queue<JobData>;
 
@@ -70,8 +70,8 @@ export async function enqueueRun(
 // Tracks TPM and RPM against Anthropic API tier limits.
 // Pre-flight check before dispatch, in-flight estimation, backpressure at 90%.
 
-const RATE_LIMITER_KEY = 'tinyjobs:rate_limiter';
-const INFLIGHT_KEY = 'tinyjobs:inflight_tokens';
+const RATE_LIMITER_KEY = 'tinyhands:rate_limiter';
+const INFLIGHT_KEY = 'tinyhands:inflight_tokens';
 
 export async function checkRateLimit(): Promise<{ allowed: boolean; usage: number }> {
   const redis = getRedisConnection();
@@ -132,13 +132,13 @@ export async function checkRequestRate(): Promise<boolean> {
 export async function handleRateLimitResponse(retryAfterSec: number): Promise<void> {
   const redis = getRedisConnection();
   // Mark rate limit hit — workers check this before dispatch
-  await redis.set('tinyjobs:rate_limited', '1', 'EX', retryAfterSec);
+  await redis.set('tinyhands:rate_limited', '1', 'EX', retryAfterSec);
   logger.warn('Anthropic 429 recorded', { retryAfter: retryAfterSec });
 }
 
 export async function isRateLimited(): Promise<boolean> {
   const redis = getRedisConnection();
-  const limited = await redis.get('tinyjobs:rate_limited');
+  const limited = await redis.get('tinyhands:rate_limited');
   return limited === '1';
 }
 
@@ -150,7 +150,7 @@ export async function getQueueDepth(): Promise<number> {
 
 // ── Trigger Dedup ──
 
-const DEDUP_PREFIX = 'tinyjobs:dedup:';
+const DEDUP_PREFIX = 'tinyhands:dedup:';
 const DEDUP_WINDOW_SECONDS = 300; // 5 minutes
 
 export async function isDuplicateEvent(idempotencyKey: string): Promise<boolean> {

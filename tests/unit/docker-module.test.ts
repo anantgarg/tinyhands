@@ -65,7 +65,7 @@ vi.mock('fs', () => ({
 
 vi.mock('../../src/config', () => ({
   config: {
-    docker: { baseImage: 'tinyjobs-runner:latest', defaultCpu: 1, defaultMemory: 2048 },
+    docker: { baseImage: 'tinyhands-runner:latest', defaultCpu: 1, defaultMemory: 2048 },
     anthropic: { apiKey: 'test-key' },
   },
 }));
@@ -129,7 +129,7 @@ function makeContainerConfig(overrides: Partial<ContainerConfig> = {}): Containe
   return {
     agent: makeAgent(),
     traceId: 'trace-123',
-    workingDir: '/tmp/tinyjobs-workspaces/agent-1',
+    workingDir: '/tmp/tinyhands-workspaces/agent-1',
     envVars: {
       SYSTEM_PROMPT: 'You are a test agent',
       TASK_PROMPT: 'Do something',
@@ -169,7 +169,7 @@ describe('Docker Module', () => {
 
       expect(mockCreateContainer).toHaveBeenCalledTimes(1);
       const createOpts = mockCreateContainer.mock.calls[0][0];
-      expect(createOpts.Image).toBe('tinyjobs-runner:latest');
+      expect(createOpts.Image).toBe('tinyhands-runner:latest');
     });
 
     it('should use agent.docker_image when specified', async () => {
@@ -189,7 +189,7 @@ describe('Docker Module', () => {
       await createAgentContainer(cfg);
 
       const createOpts = mockCreateContainer.mock.calls[0][0];
-      expect(createOpts.Image).toBe('tinyjobs-runner:latest');
+      expect(createOpts.Image).toBe('tinyhands-runner:latest');
     });
 
     it('should include standard env vars (API key, agent ID, trace ID)', async () => {
@@ -234,9 +234,9 @@ describe('Docker Module', () => {
       await createAgentContainer(cfg);
 
       const binds: string[] = mockCreateContainer.mock.calls[0][0].HostConfig.Binds;
-      expect(binds).toContain('/tmp/tinyjobs-workspaces/agent-1:/workspace:rw');
-      expect(binds).toContain('/tmp/tinyjobs-sources-cache/agent-1:/sources:ro');
-      expect(binds).toContain('/tmp/tinyjobs-memory/agent-1:/memory:ro');
+      expect(binds).toContain('/tmp/tinyhands-workspaces/agent-1:/workspace:rw');
+      expect(binds).toContain('/tmp/tinyhands-sources-cache/agent-1:/sources:ro');
+      expect(binds).toContain('/tmp/tinyhands-memory/agent-1:/memory:ro');
     });
 
     it('should apply security config from permissions module', async () => {
@@ -286,9 +286,9 @@ describe('Docker Module', () => {
       await createAgentContainer(cfg);
 
       const labels = mockCreateContainer.mock.calls[0][0].Labels;
-      expect(labels['tinyjobs.agent_id']).toBe('agent-42');
-      expect(labels['tinyjobs.trace_id']).toBe('trace-xyz');
-      expect(labels['tinyjobs.permission_level']).toBe('full');
+      expect(labels['tinyhands.agent_id']).toBe('agent-42');
+      expect(labels['tinyhands.trace_id']).toBe('trace-xyz');
+      expect(labels['tinyhands.permission_level']).toBe('full');
     });
 
     it('should set AutoRemove to false', async () => {
@@ -302,9 +302,9 @@ describe('Docker Module', () => {
       const cfg = makeContainerConfig();
       await createAgentContainer(cfg);
 
-      expect(fs.mkdirSync).toHaveBeenCalledWith('/tmp/tinyjobs-workspaces/agent-1', { recursive: true });
-      expect(fs.mkdirSync).toHaveBeenCalledWith('/tmp/tinyjobs-sources-cache/agent-1', { recursive: true });
-      expect(fs.mkdirSync).toHaveBeenCalledWith('/tmp/tinyjobs-memory/agent-1', { recursive: true });
+      expect(fs.mkdirSync).toHaveBeenCalledWith('/tmp/tinyhands-workspaces/agent-1', { recursive: true });
+      expect(fs.mkdirSync).toHaveBeenCalledWith('/tmp/tinyhands-sources-cache/agent-1', { recursive: true });
+      expect(fs.mkdirSync).toHaveBeenCalledWith('/tmp/tinyhands-memory/agent-1', { recursive: true });
     });
 
     it('should attempt chown on workspace dir and fall back to chmod on failure', async () => {
@@ -314,8 +314,8 @@ describe('Docker Module', () => {
 
       await createAgentContainer(makeContainerConfig());
 
-      expect(fs.chownSync).toHaveBeenCalledWith('/tmp/tinyjobs-workspaces/agent-1', 999, 999);
-      expect(fs.chmodSync).toHaveBeenCalledWith('/tmp/tinyjobs-workspaces/agent-1', 0o777);
+      expect(fs.chownSync).toHaveBeenCalledWith('/tmp/tinyhands-workspaces/agent-1', 999, 999);
+      expect(fs.chmodSync).toHaveBeenCalledWith('/tmp/tinyhands-workspaces/agent-1', 0o777);
     });
 
     it('should return the created container', async () => {

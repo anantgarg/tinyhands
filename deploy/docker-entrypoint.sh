@@ -11,7 +11,7 @@ set -e
              DAILY_DIGEST_TIME DAILY_BUDGET_USD \
              DOCKER_BASE_IMAGE DEFAULT_CONTAINER_CPU DEFAULT_CONTAINER_MEMORY \
              DEFAULT_JOB_TIMEOUT_MS MAX_CONCURRENT_WORKERS \
-             GOOGLE_SERVICE_ACCOUNT_KEY_PATH TINYJOBS_CHANNEL_ID \
+             GOOGLE_SERVICE_ACCOUNT_KEY_PATH TINYHANDS_CHANNEL_ID \
              AUTO_UPDATE_ENABLED AUTO_UPDATE_INTERVAL \
              LINEAR_WEBHOOK_SECRET ZENDESK_WEBHOOK_SECRET INTERCOM_WEBHOOK_SECRET; do
     if [ -n "${!var:-}" ]; then
@@ -24,5 +24,5 @@ set -e
 echo "Running database migrations..."
 node dist/db/migrate.js
 
-echo "Starting TinyJobs..."
+echo "Starting Tiny Hands..."
 exec "$@"

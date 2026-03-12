@@ -80,7 +80,7 @@ export function registerCommands(app: App): void {
     if (agents.length === 0) {
       blocks.push({
         type: 'section',
-        text: { type: 'mrkdwn', text: '_No agents created yet. Click the button below to create your first one._' },
+        text: { type: 'mrkdwn', text: '_I\'m currently empty-handed, which is a bit embarrassing. Click below to build your first teammate._' },
       });
     } else {
       for (const a of agents) {
@@ -458,7 +458,7 @@ async function startNewAgentFlow(userId: string, channelId: string): Promise<voi
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: ':robot_face: *Let\'s create a new agent!*',
+        text: '✋ *Let\'s build a new hand!*',
       },
     },
   ], 'New agent');
@@ -596,19 +596,28 @@ export function registerInlineActions(app: App): void {
         const currentChannels = agent.channel_ids?.length > 0 ? agent.channel_ids : [agent.channel_id];
         const channelLabels = currentChannels.map((c: string) => `<#${c}>`).join(', ');
 
+        // Post brief parent message at channel level
         const ts = await postBlocks(channelId, [
           {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `Selected *${agent.avatar_emoji} ${agent.name}*\n\n` +
-                `Current config: *${agent.model}* model | *${agent.permission_level}* perms | ${agent.tools.length} tools | memory ${agent.memory_enabled ? 'on' : 'off'} | channels: ${channelLabels}\n\n` +
-                `_What would you like to change? Reply in this thread._`,
+              text: `:arrows_counterclockwise: Updating *${agent.avatar_emoji} ${agent.name}* — see thread`,
             },
           },
         ], `Update ${agent.name}`);
 
         if (ts) {
+          // Post config details as a thread reply — creates a visible thread
+          await postMessage(channelId,
+            `Current config: *${agent.model}* model | *${agent.permission_level}* perms | ${agent.tools.length} tools | memory ${agent.memory_enabled ? 'on' : 'off'} | channels: ${channelLabels}\n\n` +
+            `_What would you like to change? You can say things like:_\n` +
+            `• _"update the goal to handle X differently"_\n` +
+            `• _"add #new-channel" or "replace #old-channel with #new-channel"_\n` +
+            `• _"change the model to opus"_\n` +
+            `• _Or describe a problem you're seeing_`,
+            ts,
+          );
           await execute(
             `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
             [uuid(), JSON.stringify({
@@ -1054,8 +1063,14 @@ export function registerInlineActions(app: App): void {
     const currentChannels = agent.channel_ids?.length > 0 ? agent.channel_ids : [agent.channel_id];
     const channelLabels = currentChannels.map((c: string) => `<#${c}>`).join(', ');
 
+    // Post brief selection at channel level as thread reply
     await postMessage(channelId,
-      `Selected *${agent.avatar_emoji} ${agent.name}*\n\n` +
+      `Selected *${agent.avatar_emoji} ${agent.name}*`,
+      threadTs,
+    );
+
+    // Post config details as a deeper thread reply — makes the thread clearly visible
+    await postMessage(channelId,
       `Current config: *${agent.model}* model | *${agent.permission_level}* perms | ${agent.tools.length} tools | memory ${agent.memory_enabled ? 'on' : 'off'} | channels: ${channelLabels}\n\n` +
       `_What would you like to change? You can say things like:_\n` +
       `• _"update the goal to handle X differently"_\n` +
@@ -1818,7 +1833,7 @@ async function handleNewAgentWhen(goal: string, whenInput: string, userId: strin
   // Combine goal + when into a unified prompt for goal analysis
   const combinedGoal = `${goal}\n\nTRIGGER/SCHEDULE: ${whenInput}`;
 
-  await postMessage(channelId, ':gear: Adjusting its grip... analyzing your goal and configuring the best setup.', threadTs);
+  await postMessage(channelId, ':gear: Flexing tiny fingers... analyzing your goal and configuring the best setup.', threadTs);
 
   try {
     const analysis = await analyzeGoal(combinedGoal, undefined, userId);
@@ -1998,9 +2013,10 @@ async function showNewAgentConfirmation(
     ? selectedChannels.map(c => `<#${c}>`).join(', ')
     : `#tinyhands-${agentName}` + ' (new)';
 
+  const defaultEffort = maxTurnsToEffort(analysis.max_turns || 25);
   await execute(
     `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
-    [confirmId, JSON.stringify({ analysis, name: agentName, goal, userId, existingChannelIds: selectedChannels })],
+    [confirmId, JSON.stringify({ analysis, name: agentName, goal, userId, existingChannelIds: selectedChannels, selectedModel: analysis.model, selectedEffort: defaultEffort })],
   );
 
   const configSummary = buildConfigSummary(agentName, analysis, goal);
@@ -2008,12 +2024,13 @@ async function showNewAgentConfirmation(
     { type: 'header', text: { type: 'plain_text', text: `New Agent: ${agentName}` } },
     { type: 'section', text: { type: 'mrkdwn', text: `*Channels:* ${channelLabel}\n${configSummary}` } },
     { type: 'divider' },
+    ...buildModelAndEffortBlocks(confirmId, analysis.model, defaultEffort),
     {
       type: 'actions',
       elements: [
         {
           type: 'button',
-          text: { type: 'plain_text', text: ':white_check_mark: Confirm & Create' },
+          text: { type: 'plain_text', text: '✋ Confirm & Create' },
           style: 'primary',
           action_id: 'confirm_new_agent',
           value: confirmId,
@@ -2225,9 +2242,10 @@ async function showUpdateAgentConfirmation(
     ? `\n*Channels:* ${currentChannels.map(c => `<#${c}>`).join(', ')} → ${newChannelIds!.map(c => `<#${c}>`).join(', ')}`
     : '';
 
+  const defaultEffort = maxTurnsToEffort(analysis.max_turns || agent.max_turns || 25);
   await execute(
     `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
-    [confirmId, JSON.stringify({ analysis, name: agent.name, goal: newGoal, userId, agentId, newChannelIds })],
+    [confirmId, JSON.stringify({ analysis, name: agent.name, goal: newGoal, userId, agentId, newChannelIds, selectedModel: analysis.model, selectedEffort: defaultEffort })],
   );
 
   const configSummary = buildConfigSummary(agent.name, analysis, newGoal, agent);
@@ -2235,12 +2253,13 @@ async function showUpdateAgentConfirmation(
     { type: 'header', text: { type: 'plain_text', text: `Update: ${agent.name}` } },
     { type: 'section', text: { type: 'mrkdwn', text: `${channelNote}${channelNote ? '\n' : ''}${configSummary}` } },
     { type: 'divider' },
+    ...buildModelAndEffortBlocks(confirmId, analysis.model, defaultEffort),
     {
       type: 'actions',
       elements: [
         {
           type: 'button',
-          text: { type: 'plain_text', text: ':white_check_mark: Confirm & Update' },
+          text: { type: 'plain_text', text: '✋ Confirm & Update' },
           style: 'primary',
           action_id: 'confirm_update_agent',
           value: confirmId,
@@ -2282,7 +2301,11 @@ export function registerConfirmationActions(app: App): void {
     }
 
     try {
-      const { analysis, name, goal, userId, existingChannelIds, existingChannelId } = row.data;
+      const { analysis, name, goal, userId, existingChannelIds, existingChannelId, selectedModel, selectedEffort } = row.data;
+
+      // Apply user-selected model and effort overrides
+      const finalModel = selectedModel || analysis.model;
+      const finalMaxTurns = selectedEffort ? (EFFORT_TO_MAX_TURNS[selectedEffort] || 25) : (analysis.max_turns || 25);
 
       await replyToAction(body, ':gear: Creating agent...');
 
@@ -2298,43 +2321,21 @@ export function registerConfirmationActions(app: App): void {
         channelIds,
         systemPrompt: analysis.system_prompt,
         tools: agentTools,
-        model: analysis.model,
+        model: finalModel,
         permissionLevel: analysis.permission_level,
         memoryEnabled: analysis.memory_enabled,
         respondToAllMessages: analysis.respond_to_all_messages,
         relevanceKeywords: analysis.relevance_keywords,
         createdBy: userId,
+        maxTurns: finalMaxTurns,
       });
-
-      for (const skillName of analysis.skills) {
-        try { await attachSkillToAgent(agent.id, skillName, 'read', userId); }
-        catch (err: any) { logger.warn('Skill attach failed', { skillName, error: err.message }); }
-      }
-
-      for (const trigger of analysis.triggers) {
-        try {
-          // Auto-detect timezone for schedule triggers
-          if (trigger.type === 'schedule' && trigger.config?.timezone === 'auto') {
-            try {
-              const userInfo = await getSlackApp().client.users.info({ user: userId });
-              trigger.config.timezone = userInfo.user?.tz || 'UTC';
-            } catch { trigger.config.timezone = 'UTC'; }
-          }
-          await createTrigger({
-            agentId: agent.id,
-            triggerType: trigger.type,
-            config: { ...trigger.config, description: trigger.description },
-            createdBy: userId,
-          });
-        } catch (err: any) { logger.warn('Trigger creation failed', { trigger: trigger.type, error: err.message }); }
-      }
 
       const allTools = [...analysis.tools, ...(analysis.custom_tools || [])];
       const lines = [
-        `✋ Meet *${agent.name}*! Deployed by <@${userId}> and ready to get to work.`,
+        `✋ Meet *${agent.name}*! Deployed by <@${userId}> and ready to get to work. It's small, but it's ready.`,
         '',
         `*Goal:* ${goal.slice(0, 300)}`,
-        `*Model:* ${analysis.model} | *Permissions:* ${analysis.permission_level} | *Memory:* ${analysis.memory_enabled ? 'on' : 'off'}`,
+        `*Model:* ${finalModel} | *Permissions:* ${analysis.permission_level} | *Memory:* ${analysis.memory_enabled ? 'on' : 'off'}`,
         `*Responds to:* ${analysis.respond_to_all_messages ? 'all messages' : 'relevant messages + @mentions'}`,
         `*Tools:* ${allTools.join(', ')}`,
         analysis.skills.length > 0 ? `*Skills:* ${analysis.skills.join(', ')}` : '',
@@ -2344,17 +2345,44 @@ export function registerConfirmationActions(app: App): void {
       // Post announcement in first channel
       await postMessage(channelIds[0], lines.join('\n'));
       const channelLabels = channelIds.map((c: string) => `<#${c}>`).join(', ');
-      await replyToAction(body, `:white_check_mark: Agent *${agent.name}* created! Channels: ${channelLabels}`);
+      await replyToAction(body, `✋ *${agent.name}* is live! Channels: ${channelLabels}`);
 
-      // If write tools were requested, notify admin for approval
-      if (analysis.write_tools_requested?.length > 0) {
-        await notifyAdminWriteToolRequest(agent.id, agent.name, analysis.write_tools_requested, userId);
-      }
+      // Fire-and-forget: skills, triggers, and admin notifications
+      // These are non-critical and should not block the user-facing confirmation
+      (async () => {
+        try {
+          for (const skillName of analysis.skills) {
+            try { await attachSkillToAgent(agent.id, skillName, 'read', userId); }
+            catch (err: any) { logger.warn('Skill attach failed', { skillName, error: err.message }); }
+          }
 
-      // If new tools were needed (admin-only creation), notify admin
-      if (analysis.new_tools_needed?.length > 0) {
-        await notifyAdminNewToolRequest(agent.id, agent.name, analysis.new_tools_needed, goal, userId);
-      }
+          for (const trigger of analysis.triggers) {
+            try {
+              if (trigger.type === 'schedule' && trigger.config?.timezone === 'auto') {
+                try {
+                  const userInfo = await getSlackApp().client.users.info({ user: userId });
+                  trigger.config.timezone = userInfo.user?.tz || 'UTC';
+                } catch { trigger.config.timezone = 'UTC'; }
+              }
+              await createTrigger({
+                agentId: agent.id,
+                triggerType: trigger.type,
+                config: { ...trigger.config, description: trigger.description },
+                createdBy: userId,
+              });
+            } catch (err: any) { logger.warn('Trigger creation failed', { trigger: trigger.type, error: err.message }); }
+          }
+
+          if (analysis.write_tools_requested?.length > 0) {
+            await notifyAdminWriteToolRequest(agent.id, agent.name, analysis.write_tools_requested, userId);
+          }
+          if (analysis.new_tools_needed?.length > 0) {
+            await notifyAdminNewToolRequest(agent.id, agent.name, analysis.new_tools_needed, goal, userId);
+          }
+        } catch (err: any) {
+          logger.error('Post-creation background tasks failed', { agentId: agent.id, error: err.message });
+        }
+      })();
 
     } catch (err: any) {
       logger.error('Agent creation failed', { error: err.message });
@@ -2382,15 +2410,15 @@ export function registerConfirmationActions(app: App): void {
       return;
     }
 
-    // Wrap in a 60s timeout to prevent infinite hangs
-    const timeout = (ms: number) => new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Update timed out after 60s')), ms));
-
     try {
-      await Promise.race([timeout(60000), (async () => {
-      const { analysis, agentId, userId, newChannelIds, newChannelId } = row.data;
+      const { analysis, agentId, userId, newChannelIds, newChannelId, selectedModel, selectedEffort } = row.data;
       logger.info('confirm_update_agent: fetching agent', { agentId });
       const agent = await getAgent(agentId!);
       if (!agent) throw new Error('Agent not found');
+
+      // Apply user-selected model and effort overrides
+      const finalModel = selectedModel || analysis.model;
+      const finalMaxTurns = selectedEffort ? (EFFORT_TO_MAX_TURNS[selectedEffort] || 25) : (analysis.max_turns || agent.max_turns || 25);
 
       await replyToAction(body, ':gear: Updating agent...');
 
@@ -2398,7 +2426,8 @@ export function registerConfirmationActions(app: App): void {
       const updates: any = {
         system_prompt: analysis.system_prompt,
         tools: mergedTools,
-        model: analysis.model,
+        model: finalModel,
+        max_turns: finalMaxTurns,
         permission_level: analysis.permission_level,
         memory_enabled: analysis.memory_enabled,
         respond_to_all_messages: analysis.respond_to_all_messages,
@@ -2418,31 +2447,8 @@ export function registerConfirmationActions(app: App): void {
       await updateAgent(agentId!, updates, userId);
       logger.info('confirm_update_agent: DB updated', { agentId });
 
-      for (const skillName of (analysis.skills || [])) {
-        try { await attachSkillToAgent(agentId!, skillName, 'read', userId); } catch { /* may exist */ }
-      }
-
-      for (const trigger of (analysis.triggers || [])) {
-        try {
-          // Auto-detect timezone for schedule triggers
-          if (trigger.type === 'schedule' && trigger.config?.timezone === 'auto') {
-            try {
-              const userInfo = await getSlackApp().client.users.info({ user: userId });
-              trigger.config.timezone = userInfo.user?.tz || 'UTC';
-            } catch { trigger.config.timezone = 'UTC'; }
-          }
-          await createTrigger({
-            agentId: agentId!,
-            triggerType: trigger.type,
-            config: { ...trigger.config, description: trigger.description },
-            createdBy: userId,
-          });
-        } catch (err: any) { logger.warn('Trigger creation failed during update', { error: err.message }); }
-      }
-
-      logger.info('confirm_update_agent: posting success', { agentId });
-      const updatedAgent = await getAgent(agentId!);
-      const postToChannel = updatedAgent?.channel_ids?.[0] || updatedAgent?.channel_id || agent.channel_id;
+      // Post success message immediately — don't block on non-critical operations
+      const postToChannel = updates.channel_ids?.[0] || agent.channel_ids?.[0] || agent.channel_id;
       const channelChangeNote = updates.channel_ids
         ? `\n*Channels:* ${updates.channel_ids.map((c: string) => `<#${c}>`).join(', ')}`
         : '';
@@ -2456,19 +2462,44 @@ export function registerConfirmationActions(app: App): void {
         channelChangeNote + '\n' +
         `_${analysis.summary}_`
       );
-      await replyToAction(body, `:white_check_mark: Agent *${agent.name}* updated!`);
+      await replyToAction(body, `✋ *${agent.name}* updated! High five.`);
       logger.info('confirm_update_agent: done', { agentId });
 
-      // If write tools were requested, notify admin for approval
-      if (analysis.write_tools_requested?.length > 0) {
-        await notifyAdminWriteToolRequest(agentId!, agent.name, analysis.write_tools_requested, userId);
-      }
+      // Fire-and-forget: skills, triggers, and admin notifications
+      // These are non-critical and should not block the user-facing confirmation
+      (async () => {
+        try {
+          for (const skillName of (analysis.skills || [])) {
+            try { await attachSkillToAgent(agentId!, skillName, 'read', userId); } catch { /* may exist */ }
+          }
 
-      // If new tools were needed, notify admin
-      if (analysis.new_tools_needed?.length > 0) {
-        await notifyAdminNewToolRequest(agentId!, agent.name, analysis.new_tools_needed, row.data.goal || '', userId);
-      }
-      })()]); // Close Promise.race
+          for (const trigger of (analysis.triggers || [])) {
+            try {
+              if (trigger.type === 'schedule' && trigger.config?.timezone === 'auto') {
+                try {
+                  const userInfo = await getSlackApp().client.users.info({ user: userId });
+                  trigger.config.timezone = userInfo.user?.tz || 'UTC';
+                } catch { trigger.config.timezone = 'UTC'; }
+              }
+              await createTrigger({
+                agentId: agentId!,
+                triggerType: trigger.type,
+                config: { ...trigger.config, description: trigger.description },
+                createdBy: userId,
+              });
+            } catch (err: any) { logger.warn('Trigger creation failed during update', { error: err.message }); }
+          }
+
+          if (analysis.write_tools_requested?.length > 0) {
+            await notifyAdminWriteToolRequest(agentId!, agent.name, analysis.write_tools_requested, userId);
+          }
+          if (analysis.new_tools_needed?.length > 0) {
+            await notifyAdminNewToolRequest(agentId!, agent.name, analysis.new_tools_needed, row.data.goal || '', userId);
+          }
+        } catch (err: any) {
+          logger.error('Post-update background tasks failed', { agentId, error: err.message });
+        }
+      })();
 
     } catch (err: any) {
       logger.error('Agent update failed', { error: err.message });
@@ -2480,6 +2511,39 @@ export function registerConfirmationActions(app: App): void {
     await ack();
     await execute(`DELETE FROM pending_confirmations WHERE id = $1`, [(action as any).value]);
     await replyToAction(body, ':x: Agent update cancelled.');
+  });
+
+  // ── Model & Effort Selection Actions ──
+
+  app.action('select_agent_model', async ({ action, ack, body }) => {
+    await ack();
+    const selectedModel = (action as any).selected_option?.value;
+    if (!selectedModel) return;
+
+    // Extract confirmId from the block_id (format: model_effort_{confirmId})
+    const blockId = (action as any).block_id || '';
+    const confirmId = blockId.replace('model_effort_', '');
+    if (!confirmId) return;
+
+    await execute(
+      `UPDATE pending_confirmations SET data = jsonb_set(data, '{selectedModel}', $1::jsonb) WHERE id = $2`,
+      [JSON.stringify(selectedModel), confirmId],
+    );
+  });
+
+  app.action('select_agent_effort', async ({ action, ack, body }) => {
+    await ack();
+    const selectedEffort = (action as any).selected_option?.value;
+    if (!selectedEffort) return;
+
+    const blockId = (action as any).block_id || '';
+    const confirmId = blockId.replace('model_effort_', '');
+    if (!confirmId) return;
+
+    await execute(
+      `UPDATE pending_confirmations SET data = jsonb_set(data, '{selectedEffort}', $1::jsonb) WHERE id = $2`,
+      [JSON.stringify(selectedEffort), confirmId],
+    );
   });
 
   // ── Feature Request Queue Actions ──
@@ -2708,6 +2772,66 @@ export function registerConfirmationActions(app: App): void {
       ],
     });
   });
+}
+
+// ── Effort Level Mapping ──
+
+const EFFORT_TO_MAX_TURNS: Record<string, number> = {
+  low: 5,
+  medium: 15,
+  high: 25,
+  max: 50,
+};
+
+const MAX_TURNS_TO_EFFORT: Record<number, string> = {
+  5: 'low',
+  15: 'medium',
+  25: 'high',
+  50: 'max',
+};
+
+function maxTurnsToEffort(maxTurns: number): string {
+  if (maxTurns <= 5) return 'low';
+  if (maxTurns <= 15) return 'medium';
+  if (maxTurns <= 25) return 'high';
+  return 'max';
+}
+
+function buildModelAndEffortBlocks(confirmId: string, selectedModel: string, selectedEffort: string): any[] {
+  const models = [
+    { text: { type: 'plain_text' as const, text: 'Haiku — fast, simple tasks' }, value: 'haiku' },
+    { text: { type: 'plain_text' as const, text: 'Sonnet — balanced (default)' }, value: 'sonnet' },
+    { text: { type: 'plain_text' as const, text: 'Opus — complex reasoning' }, value: 'opus' },
+  ];
+  const efforts = [
+    { text: { type: 'plain_text' as const, text: 'Low — quick responses (5 turns)' }, value: 'low' },
+    { text: { type: 'plain_text' as const, text: 'Medium — balanced (15 turns)' }, value: 'medium' },
+    { text: { type: 'plain_text' as const, text: 'High — thorough (25 turns)' }, value: 'high' },
+    { text: { type: 'plain_text' as const, text: 'Max — maximum depth (50 turns)' }, value: 'max' },
+  ];
+
+  return [
+    {
+      type: 'actions',
+      block_id: `model_effort_${confirmId}`,
+      elements: [
+        {
+          type: 'static_select',
+          action_id: 'select_agent_model',
+          placeholder: { type: 'plain_text', text: 'Model' },
+          initial_option: models.find(m => m.value === selectedModel) || models[1],
+          options: models,
+        },
+        {
+          type: 'static_select',
+          action_id: 'select_agent_effort',
+          placeholder: { type: 'plain_text', text: 'Effort' },
+          initial_option: efforts.find(e => e.value === selectedEffort) || efforts[2],
+          options: efforts,
+        },
+      ],
+    },
+  ];
 }
 
 // ── Helpers ──

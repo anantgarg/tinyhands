@@ -266,9 +266,9 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
   }
 
   // Ensure workspace directory exists
-  const workingDir = `/tmp/tinyjobs-workspaces/${agent.id}`;
-  const sourcesCacheDir = `/tmp/tinyjobs-sources-cache/${agent.id}`;
-  const memoryDir = `/tmp/tinyjobs-memory/${agent.id}`;
+  const workingDir = `/tmp/tinyhands-workspaces/${agent.id}`;
+  const sourcesCacheDir = `/tmp/tinyhands-sources-cache/${agent.id}`;
+  const memoryDir = `/tmp/tinyhands-memory/${agent.id}`;
 
   try {
     // Create Docker container with full security config applied
@@ -333,7 +333,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
             lastStreamEventType = 'text';
           }
         } catch {
-          // Not JSON or parse error — ignore (could be TINYJOBS_OUTPUT or stderr)
+          // Not JSON or parse error — ignore (could be TINYHANDS_OUTPUT or stderr)
         }
       },
       timeoutMs,
@@ -346,8 +346,8 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
       logger.info('Container logs', { traceId: data.traceId, logsLength: allLogs.length, logsTail: allLogs.slice(-500) });
       await removeContainer(container);
 
-      // Parse TINYJOBS_OUTPUT from logs
-      const jsonMatch = allLogs.match(/TINYJOBS_OUTPUT:({.*})/s);
+      // Parse TINYHANDS_OUTPUT from logs
+      const jsonMatch = allLogs.match(/TINYHANDS_OUTPUT:({.*})/s);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[1]);
         outputData = {
@@ -363,7 +363,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
         if (resultMatch) {
           outputData.output = resultMatch[1];
         } else {
-          logger.warn('No TINYJOBS_OUTPUT found in logs', { traceId: data.traceId, logsTail: allLogs.slice(-500) });
+          logger.warn('No TINYHANDS_OUTPUT found in logs', { traceId: data.traceId, logsTail: allLogs.slice(-500) });
           outputData.inputTokens = contextTokens + Math.ceil(taskPrompt.length / 4);
           outputData.outputTokens = Math.ceil(allLogs.length / 4);
           outputData.output = allLogs.slice(-2000);
@@ -531,7 +531,7 @@ Focus on: user preferences, corrections, entities mentioned, procedures learned.
 
 export function createWorker(): Worker<JobData> {
   const worker = new Worker<JobData>(
-    'tinyjobs-runs',
+    'tinyhands-runs',
     async (job) => {
       return executeAgentRun(job);
     },

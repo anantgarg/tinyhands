@@ -3,13 +3,13 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: tinyjobs
-      POSTGRES_USER: tinyjobs
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tinyjobs_default_change_me}
+      POSTGRES_DB: tinyhands
+      POSTGRES_USER: tinyhands
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tinyhands_default_change_me}
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U tinyjobs"]
+      test: ["CMD-SHELL", "pg_isready -U tinyhands"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -31,9 +31,9 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./docker:/build:ro
-    command: sh -c "docker build -t tinyjobs-runner:latest /build"
+    command: sh -c "docker build -t tinyhands-runner:latest /build"
 
-  tinyjobs:
+  tinyhands:
     build: .
     restart: unless-stopped
     depends_on:
@@ -44,7 +44,7 @@ services:
       runner-build:
         condition: service_completed_successfully
     environment:
-      DATABASE_URL: postgresql://tinyjobs:${POSTGRES_PASSWORD:-tinyjobs_default_change_me}@postgres:5432/tinyjobs
+      DATABASE_URL: postgresql://tinyhands:${POSTGRES_PASSWORD:-tinyhands_default_change_me}@postgres:5432/tinyhands
       REDIS_URL: redis://redis:6379
       NODE_ENV: production
     env_file:

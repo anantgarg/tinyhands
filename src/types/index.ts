@@ -3,6 +3,7 @@
 export type AgentStatus = 'active' | 'paused' | 'error' | 'archived';
 export type PermissionLevel = 'read-only' | 'standard' | 'full';
 export type ModelAlias = 'opus' | 'sonnet' | 'haiku';
+export type EffortLevel = 'low' | 'medium' | 'high' | 'max';
 export type SelfEvolutionMode = 'autonomous' | 'approve-first';
 export type AccessRole = 'superadmin' | 'owner' | 'admin' | 'member';
 export type IntegrationAccess = 'read' | 'write' | 'admin';

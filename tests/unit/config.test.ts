@@ -36,14 +36,14 @@ describe('config', () => {
     expect(config.slack.botToken).toBe('');
     expect(config.anthropic.tpmLimit).toBe(80000);
     expect(config.anthropic.rpmLimit).toBe(1000);
-    expect(config.database.url).toBe('postgresql://localhost:5432/tinyjobs');
+    expect(config.database.url).toBe('postgresql://localhost:5432/tinyhands');
     expect(config.redis.url).toBe('redis://localhost:6379');
     expect(config.server.port).toBe(3000);
     expect(config.server.nodeEnv).toBe('development');
     expect(config.observability.logLevel).toBe('info');
     expect(config.observability.dailyDigestTime).toBe('09:00');
     expect(config.observability.dailyBudgetUsd).toBe(50);
-    expect(config.docker.baseImage).toBe('tinyjobs-runner:latest');
+    expect(config.docker.baseImage).toBe('tinyhands-runner:latest');
     expect(config.docker.defaultCpu).toBe(1);
     expect(config.docker.defaultMemory).toBe(2147483648);
     expect(config.docker.defaultJobTimeoutMs).toBe(600000);

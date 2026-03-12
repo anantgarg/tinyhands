@@ -3,7 +3,7 @@ import { Queue, Worker } from 'bullmq';
 import IORedis from 'ioredis';
 
 const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
-const TEST_QUEUE_NAME = 'tinyjobs-integration-test';
+const TEST_QUEUE_NAME = 'tinyhands-integration-test';
 
 let connection: IORedis;
 

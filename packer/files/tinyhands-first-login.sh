@@ -8,25 +8,25 @@ BLUE='\033[0;34m'
 BOLD='\033[1m'
 NC='\033[0m'
 
-INSTALL_DIR="/opt/tinyjobs"
+INSTALL_DIR="/opt/tinyhands"
 
 echo -e "${BLUE}"
-echo '╔╦╗┬┌┐┌┬ ┬    ╦┌─┐┌┐ ┌─┐'
-echo ' ║ │││││ │    ║│ │├┴┐└─┐'
-echo ' ╩ ┴┘└┘ ┴   ╚╝└─┘└─┘└─┘'
+echo '╔╦╗┬┌┐┌┬ ┬  ╦ ╦┌─┐┌┐┌┌┬┐┌─┐'
+echo ' ║ │││││ │  ╠═╣├─┤│││ ││└─┐'
+echo ' ╩ ┴┘└┘ ┴  ╩ ╩┴ ┴┘└┘─┴┘└─┘'
 echo -e "${NC}"
-echo -e "${BOLD}TinyJobs Setup${NC}"
+echo -e "${BOLD}Tiny Hands Setup${NC}"
 echo ""
 
 if [ ! -f "$INSTALL_DIR/.needs-setup" ]; then
-  echo -e "${GREEN}TinyJobs is already configured.${NC}"
+  echo -e "${GREEN}Tiny Hands is already configured.${NC}"
   echo ""
   echo "  Status:   cd ${INSTALL_DIR} && docker compose ps"
-  echo "  Logs:     cd ${INSTALL_DIR} && docker compose logs -f tinyjobs"
+  echo "  Logs:     cd ${INSTALL_DIR} && docker compose logs -f tinyhands"
   echo "  Restart:  cd ${INSTALL_DIR} && docker compose restart"
   echo ""
   echo "To reconfigure, delete .env and run this script again:"
-  echo "  rm ${INSTALL_DIR}/.env && /opt/tinyjobs-setup.sh"
+  echo "  rm ${INSTALL_DIR}/.env && /opt/tinyhands-setup.sh"
   exit 0
 fi
 
@@ -110,24 +110,24 @@ EOF
 
 # ── Step 4: Update and start ──
 
-echo -e "${BLUE}Pulling latest TinyJobs...${NC}"
+echo -e "${BLUE}Pulling latest Tiny Hands...${NC}"
 cd "${INSTALL_DIR}"
 git pull origin main 2>/dev/null || true
 
-echo -e "${BLUE}Starting TinyJobs (this may take a minute)...${NC}"
+echo -e "${BLUE}Starting Tiny Hands (this may take a minute)...${NC}"
 docker compose up -d --build
 
 # Enable systemd service for auto-start on reboot
-systemctl enable tinyjobs
+systemctl enable tinyhands
 
 # Remove first-boot flag
 rm -f "${INSTALL_DIR}/.needs-setup"
 
 echo ""
-echo -e "${GREEN}${BOLD}TinyJobs is running!${NC}"
+echo -e "${GREEN}${BOLD}Tiny Hands is running!${NC}"
 echo ""
 echo "  Health check: curl http://localhost:3000/health"
-echo "  View logs:    cd ${INSTALL_DIR} && docker compose logs -f tinyjobs"
+echo "  View logs:    cd ${INSTALL_DIR} && docker compose logs -f tinyhands"
 echo "  Stop:         cd ${INSTALL_DIR} && docker compose down"
 echo "  Restart:      cd ${INSTALL_DIR} && docker compose restart"
 echo ""

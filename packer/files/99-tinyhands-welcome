@@ -1,0 +1,43 @@
+#!/bin/bash
+
+cat <<'MOTD'
+*********************************************************************
+
+  ╔╦╗┬┌┐┌┬ ┬  ╦ ╦┌─┐┌┐┌┌┬┐┌─┐
+   ║ │││││ │  ╠═╣├─┤│││ ││└─┐
+   ╩ ┴┘└┘ ┴  ╩ ╩┴ ┴┘└┘─┴┘└─┘
+
+  Slack-native AI Agent Platform powered by Claude
+
+*********************************************************************
+MOTD
+
+if [ -f /opt/tinyhands/.needs-setup ]; then
+  cat <<'SETUP'
+
+  To complete setup, run:
+
+    /opt/tinyhands-setup.sh
+
+  This will guide you through:
+    1. Creating your Slack app
+    2. Entering your API keys
+    3. Starting Tiny Hands
+
+SETUP
+else
+  cat <<'RUNNING'
+
+  Tiny Hands is running.
+
+  Useful commands:
+    Status:   cd /opt/tinyhands && docker compose ps
+    Logs:     cd /opt/tinyhands && docker compose logs -f tinyhands
+    Restart:  cd /opt/tinyhands && docker compose restart
+    Update:   cd /opt/tinyhands && git pull && docker compose up -d --build
+
+RUNNING
+fi
+
+echo "  Docs: https://github.com/anantgarg/tinyhands"
+echo ""

@@ -213,8 +213,8 @@ async function sandboxTest(
         Tmpfs: { '/tmp': 'rw,noexec,nosuid,size=16m' },
       },
       Labels: {
-        'tinyjobs.sandbox': 'true',
-        'tinyjobs.sandbox_language': language,
+        'tinyhands.sandbox': 'true',
+        'tinyhands.sandbox_language': language,
       },
     });
 

@@ -42,7 +42,7 @@ jobs:
       - run: npx vitest run --config vitest.integration.config.ts
         env:
           REDIS_URL: redis://localhost:6379
-      - run: docker build -t tinyjobs-agent:smoke ./docker
+      - run: docker build -t tinyhands-agent:smoke ./docker
       - name: Upload coverage report
         if: always()
         uses: actions/upload-artifact@v4

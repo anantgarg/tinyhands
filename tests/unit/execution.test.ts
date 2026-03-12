@@ -173,7 +173,7 @@ function makeFakeJob(data: JobData, id: string = 'job-1'): Job<JobData> {
   return {
     id,
     data,
-    name: 'tinyjobs-runs',
+    name: 'tinyhands-runs',
   } as unknown as Job<JobData>;
 }
 
@@ -571,7 +571,7 @@ describe('Execution Module – executeAgentRun', () => {
     mockCreateAgentContainer.mockResolvedValue(container);
     mockFollowContainerOutput.mockResolvedValue({
       exitCode: 0,
-      allLogs: 'TINYJOBS_OUTPUT:{"output":"Hello!","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0.001}',
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"Hello!","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0.001}',
     });
 
     const job = makeFakeJob(makeJobData());
@@ -589,12 +589,12 @@ describe('Execution Module – executeAgentRun', () => {
     expect(runningUpdate).toBeDefined();
   });
 
-  it('should parse TINYJOBS_OUTPUT and return output', async () => {
+  it('should parse TINYHANDS_OUTPUT and return output', async () => {
     const container = { id: 'container-1' };
     mockCreateAgentContainer.mockResolvedValue(container);
     mockFollowContainerOutput.mockResolvedValue({
       exitCode: 0,
-      allLogs: 'TINYJOBS_OUTPUT:{"output":"Result text","input_tokens":100,"output_tokens":50,"tool_calls_count":2,"cost_usd":0.005}',
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"Result text","input_tokens":100,"output_tokens":50,"tool_calls_count":2,"cost_usd":0.005}',
     });
 
     const job = makeFakeJob(makeJobData());
@@ -608,7 +608,7 @@ describe('Execution Module – executeAgentRun', () => {
     mockCreateAgentContainer.mockResolvedValue(container);
     mockFollowContainerOutput.mockResolvedValue({
       exitCode: 0,
-      allLogs: 'TINYJOBS_OUTPUT:{"output":"","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
     });
 
     const job = makeFakeJob(makeJobData());
@@ -622,7 +622,7 @@ describe('Execution Module – executeAgentRun', () => {
     mockCreateAgentContainer.mockResolvedValue(container);
     mockFollowContainerOutput.mockResolvedValue({
       exitCode: 1,
-      allLogs: 'TINYJOBS_OUTPUT:{"output":"Error occurred","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"Error occurred","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
     });
 
     const job = makeFakeJob(makeJobData());
@@ -632,7 +632,7 @@ describe('Execution Module – executeAgentRun', () => {
     expect(result).toContain('Error occurred');
   });
 
-  it('should handle missing TINYJOBS_OUTPUT with stream-json fallback', async () => {
+  it('should handle missing TINYHANDS_OUTPUT with stream-json fallback', async () => {
     const container = { id: 'container-1' };
     mockCreateAgentContainer.mockResolvedValue(container);
     mockFollowContainerOutput.mockResolvedValue({
@@ -665,7 +665,7 @@ describe('Execution Module – executeAgentRun', () => {
     mockCreateAgentContainer.mockResolvedValue(container);
     mockFollowContainerOutput.mockResolvedValue({
       exitCode: 0,
-      allLogs: 'TINYJOBS_OUTPUT:{"output":"ok","input_tokens":100,"output_tokens":50,"tool_calls_count":0,"cost_usd":0.005}',
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"ok","input_tokens":100,"output_tokens":50,"tool_calls_count":0,"cost_usd":0.005}',
     });
 
     const job = makeFakeJob(makeJobData());
@@ -679,7 +679,7 @@ describe('Execution Module – executeAgentRun', () => {
     mockCreateAgentContainer.mockResolvedValue(container);
     mockFollowContainerOutput.mockResolvedValue({
       exitCode: 0,
-      allLogs: 'TINYJOBS_OUTPUT:{"output":"ok","input_tokens":100,"output_tokens":50,"tool_calls_count":0,"cost_usd":0}',
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"ok","input_tokens":100,"output_tokens":50,"tool_calls_count":0,"cost_usd":0}',
     });
 
     const job = makeFakeJob(makeJobData());
@@ -696,7 +696,7 @@ describe('Execution Module – executeAgentRun', () => {
     mockCreateAgentContainer.mockResolvedValue(container);
     mockFollowContainerOutput.mockResolvedValue({
       exitCode: 0,
-      allLogs: 'TINYJOBS_OUTPUT:{"output":"done","input_tokens":50,"output_tokens":20,"tool_calls_count":0,"cost_usd":0}',
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"done","input_tokens":50,"output_tokens":20,"tool_calls_count":0,"cost_usd":0}',
     });
 
     const job = makeFakeJob(makeJobData());
@@ -717,7 +717,7 @@ describe('Execution Module – executeAgentRun', () => {
     mockCreateAgentContainer.mockResolvedValue(container);
     mockFollowContainerOutput.mockResolvedValue({
       exitCode: 0,
-      allLogs: 'TINYJOBS_OUTPUT:{"output":"done","input_tokens":50,"output_tokens":20,"tool_calls_count":0,"cost_usd":0}',
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"done","input_tokens":50,"output_tokens":20,"tool_calls_count":0,"cost_usd":0}',
     });
 
     const job = makeFakeJob(makeJobData());
@@ -735,7 +735,7 @@ describe('Execution Module – executeAgentRun', () => {
     mockCreateAgentContainer.mockResolvedValue(container);
     mockFollowContainerOutput.mockResolvedValue({
       exitCode: 0,
-      allLogs: 'TINYJOBS_OUTPUT:{"output":"done","input_tokens":50,"output_tokens":20,"tool_calls_count":0,"cost_usd":0}',
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"done","input_tokens":50,"output_tokens":20,"tool_calls_count":0,"cost_usd":0}',
     });
 
     const job = makeFakeJob(makeJobData());
@@ -750,7 +750,7 @@ describe('Execution Module – executeAgentRun', () => {
     mockCreateAgentContainer.mockResolvedValue(container);
     mockFollowContainerOutput.mockResolvedValue({
       exitCode: 0,
-      allLogs: 'TINYJOBS_OUTPUT:{"output":"done","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"done","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
     });
 
     const job = makeFakeJob(makeJobData());
@@ -764,7 +764,7 @@ describe('Execution Module – executeAgentRun', () => {
     mockCreateAgentContainer.mockResolvedValue(container);
     mockFollowContainerOutput.mockResolvedValue({
       exitCode: 0,
-      allLogs: 'TINYJOBS_OUTPUT:{"output":"done","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"done","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
     });
 
     const job = makeFakeJob(makeJobData());
@@ -783,7 +783,7 @@ describe('Execution Module – executeAgentRun', () => {
     mockCreateAgentContainer.mockResolvedValue(container);
     mockFollowContainerOutput.mockResolvedValue({
       exitCode: 0,
-      allLogs: 'TINYJOBS_OUTPUT:{"output":"ok","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"ok","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
     });
 
     const job = makeFakeJob(makeJobData({ statusMessageTs: '123.456' }));
@@ -851,7 +851,7 @@ describe('Execution Module – executeAgentRun', () => {
     mockCreateAgentContainer.mockResolvedValue(container);
     mockFollowContainerOutput.mockResolvedValue({
       exitCode: 0,
-      allLogs: 'TINYJOBS_OUTPUT:{"output":"done","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"done","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
     });
 
     const job = makeFakeJob(makeJobData({ channelId: '' }));
@@ -865,7 +865,7 @@ describe('Execution Module – executeAgentRun', () => {
     mockCreateAgentContainer.mockResolvedValue(container);
     mockFollowContainerOutput.mockResolvedValue({
       exitCode: 0,
-      allLogs: 'TINYJOBS_OUTPUT:{"output":"ok","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"ok","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
     });
 
     const job = makeFakeJob(makeJobData());
@@ -883,7 +883,7 @@ describe('Execution Module – executeAgentRun', () => {
     mockCreateAgentContainer.mockResolvedValue(container);
     mockFollowContainerOutput.mockResolvedValue({
       exitCode: 0,
-      allLogs: 'TINYJOBS_OUTPUT:{"output":"ok","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"ok","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
     });
 
     const job = makeFakeJob(makeJobData());
@@ -898,7 +898,7 @@ describe('Execution Module – executeAgentRun', () => {
     mockCreateAgentContainer.mockResolvedValue(container);
     mockFollowContainerOutput.mockResolvedValue({
       exitCode: 0,
-      allLogs: 'TINYJOBS_OUTPUT:{"output":"ok","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"ok","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
     });
 
     const job = makeFakeJob(makeJobData());
@@ -917,7 +917,7 @@ describe('Execution Module – executeAgentRun', () => {
     mockCreateAgentContainer.mockResolvedValue(container);
     mockFollowContainerOutput.mockResolvedValue({
       exitCode: 0,
-      allLogs: 'TINYJOBS_OUTPUT:{invalid json!',
+      allLogs: 'TINYHANDS_OUTPUT:{invalid json!',
     });
 
     // The JSON.parse in the try block will fail, going to catch
@@ -932,7 +932,7 @@ describe('Execution Module – executeAgentRun', () => {
     mockCreateAgentContainer.mockResolvedValue(container);
     mockFollowContainerOutput.mockResolvedValue({
       exitCode: 0,
-      allLogs: 'TINYJOBS_OUTPUT:{"output":"ok","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"ok","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
     });
 
     const job = makeFakeJob(makeJobData({ modelOverride: 'opus' }));
@@ -948,7 +948,7 @@ describe('Execution Module – executeAgentRun', () => {
     mockCreateAgentContainer.mockResolvedValue(container);
     mockFollowContainerOutput.mockResolvedValue({
       exitCode: 0,
-      allLogs: 'TINYJOBS_OUTPUT:{"output":"ok","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"ok","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
     });
 
     const job = makeFakeJob(makeJobData());
@@ -964,7 +964,7 @@ describe('Execution Module – executeAgentRun', () => {
     mockCreateAgentContainer.mockResolvedValue(container);
     mockFollowContainerOutput.mockResolvedValue({
       exitCode: 0,
-      allLogs: 'TINYJOBS_OUTPUT:{"output":"ok","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"ok","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
     });
 
     const job = makeFakeJob(makeJobData());

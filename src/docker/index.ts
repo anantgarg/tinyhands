@@ -35,8 +35,8 @@ export async function createAgentContainer(cfg: ContainerConfig): Promise<Docker
   ];
 
   // Ensure directories exist
-  const sourcesCacheDir = `/tmp/tinyjobs-sources-cache/${cfg.agent.id}`;
-  const memoryDir = `/tmp/tinyjobs-memory/${cfg.agent.id}`;
+  const sourcesCacheDir = `/tmp/tinyhands-sources-cache/${cfg.agent.id}`;
+  const memoryDir = `/tmp/tinyhands-memory/${cfg.agent.id}`;
   for (const dir of [cfg.workingDir, sourcesCacheDir, memoryDir]) {
     fs.mkdirSync(dir, { recursive: true });
   }
@@ -71,9 +71,9 @@ export async function createAgentContainer(cfg: ContainerConfig): Promise<Docker
       AutoRemove: false,
     },
     Labels: {
-      'tinyjobs.agent_id': cfg.agent.id,
-      'tinyjobs.trace_id': cfg.traceId,
-      'tinyjobs.permission_level': cfg.agent.permission_level,
+      'tinyhands.agent_id': cfg.agent.id,
+      'tinyhands.trace_id': cfg.traceId,
+      'tinyhands.permission_level': cfg.agent.permission_level,
     },
   });
 
@@ -239,6 +239,6 @@ export async function buildBaseImage(): Promise<void> {
 export async function listAgentContainers(): Promise<Dockerode.ContainerInfo[]> {
   return docker.listContainers({
     all: true,
-    filters: { label: ['tinyjobs.agent_id'] },
+    filters: { label: ['tinyhands.agent_id'] },
   });
 }

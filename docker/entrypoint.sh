@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# ── TinyJobs Agent Container Entrypoint ──
+# ── Tiny Hands Agent Container Entrypoint ──
 # All tools, MCP configs, and code artifacts are injected from DB — zero filesystem dependency
 
 mkdir -p /tmp/tools /workspace/artifacts 2>/dev/null || mkdir -p /tmp/tools /tmp/workspace/artifacts
@@ -182,12 +182,12 @@ if [ -n "$RESULT_LINE" ]; then
   COST_USD=$(echo "$RESULT_LINE" | jq -r '.total_cost_usd // 0')
   NUM_TURNS=$(echo "$RESULT_LINE" | jq -r '.num_turns // 0')
   cat <<EOJSON
-TINYJOBS_OUTPUT:{"output":$(echo "$RESULT_TEXT" | head -c 10000 | jq -Rs .),"input_tokens":$INPUT_TOKENS,"output_tokens":$OUTPUT_TOKENS,"tool_calls_count":$NUM_TURNS,"duration_ms":$DURATION_MS,"cost_usd":$COST_USD}
+TINYHANDS_OUTPUT:{"output":$(echo "$RESULT_TEXT" | head -c 10000 | jq -Rs .),"input_tokens":$INPUT_TOKENS,"output_tokens":$OUTPUT_TOKENS,"tool_calls_count":$NUM_TURNS,"duration_ms":$DURATION_MS,"cost_usd":$COST_USD}
 EOJSON
 else
   # Fallback: no result event found, extract any text content
   FALLBACK_OUTPUT=$(grep '"type":"content_block_stop"' "$OUTPUT_FILE" 2>/dev/null | tail -1 || true)
   cat <<EOJSON
-TINYJOBS_OUTPUT:{"output":"Agent completed but no structured result captured","input_tokens":0,"output_tokens":0,"tool_calls_count":0,"duration_ms":$DURATION_MS}
+TINYHANDS_OUTPUT:{"output":"Agent completed but no structured result captured","input_tokens":0,"output_tokens":0,"tool_calls_count":0,"duration_ms":$DURATION_MS}
 EOJSON
 fi

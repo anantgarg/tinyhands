@@ -22,7 +22,7 @@ vi.mock('../../src/db/migrate', () => ({
 vi.mock('../../src/config', () => ({
   config: {
     database: {
-      url: 'postgresql://localhost:5432/tinyjobs_test',
+      url: 'postgresql://localhost:5432/tinyhands_test',
     },
   },
 }));
@@ -350,7 +350,7 @@ describe('DB Module', () => {
       expect(Pool).toHaveBeenCalledTimes(1);
       expect(Pool).toHaveBeenCalledWith(
         expect.objectContaining({
-          connectionString: 'postgresql://localhost:5432/tinyjobs_test',
+          connectionString: 'postgresql://localhost:5432/tinyhands_test',
           max: 20,
           idleTimeoutMillis: 30000,
           connectionTimeoutMillis: 5000,
@@ -393,13 +393,13 @@ describe('DB Module', () => {
 
       await dbModule.closeDb();
       // Restore
-      (config as any).database.url = 'postgresql://localhost:5432/tinyjobs_test';
+      (config as any).database.url = 'postgresql://localhost:5432/tinyhands_test';
     });
 
     it('should not enable SSL when sslmode is absent', async () => {
       vi.resetModules();
       vi.clearAllMocks();
-      (config as any).database.url = 'postgresql://localhost:5432/tinyjobs_test';
+      (config as any).database.url = 'postgresql://localhost:5432/tinyhands_test';
       const dbModule = await import('../../src/db/index');
 
       await dbModule.initDb();
@@ -426,7 +426,7 @@ describe('DB Module', () => {
       expect(poolCall.ssl).toEqual({ rejectUnauthorized: false });
 
       await dbModule.closeDb();
-      (config as any).database.url = 'postgresql://localhost:5432/tinyjobs_test';
+      (config as any).database.url = 'postgresql://localhost:5432/tinyhands_test';
     });
   });
 

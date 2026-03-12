@@ -14,7 +14,7 @@ vi.mock('../../src/config', () => ({
       webhookSecret: 'test-webhook-secret',
     },
     docker: {
-      baseImage: 'tinyjobs-runner:latest',
+      baseImage: 'tinyhands-runner:latest',
     },
   },
 }));

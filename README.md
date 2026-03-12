@@ -1,9 +1,3 @@
-```
-╔╦╗┬┌┐┌┬ ┬  ╦ ╦┌─┐┌┐┌┌┬┐┌─┐
- ║ │││││ │  ╠═╣├─┤│││ ││└─┐
- ╩ ┴┘└┘ ┴  ╩ ╩┴ ┴┘└┘─┴┘└─┘
-```
-
 # ✋ Tiny Hands
 
 **Extra hands for your Slack workspace. Open-source, self-hosted, 16-bit.**
