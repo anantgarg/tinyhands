@@ -167,8 +167,9 @@ async function handleDoneEvent(key: string, buffer: ChannelBuffer, finalOutput: 
       logger.info('No status message to delete', { channelId: buffer.channelId, threadTs: buffer.threadTs });
     }
 
-    // Split long outputs into multiple messages (Slack limit ~3000 chars per message)
-    const chunks = splitMessage(finalOutput, 3000);
+    // Split long outputs into multiple messages (Slack text field supports ~40k chars,
+    // but we cap at 15000 to stay safe and keep messages readable)
+    const chunks = splitMessage(finalOutput, 15000);
 
     for (const chunk of chunks) {
       await postMessage(

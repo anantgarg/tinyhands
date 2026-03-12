@@ -225,14 +225,16 @@ describe('Slack buffer module', () => {
       );
     });
 
-    it('should truncate final output to 3000 characters', async () => {
-      const longOutput = 'x'.repeat(5000);
+    it('should split final output exceeding 15000 characters into multiple messages', async () => {
+      const longOutput = 'x'.repeat(20000);
       bufferEvent('C001', '111.222', 'done', longOutput);
 
       await vi.runAllTimersAsync();
 
-      const postedText = mockPostMessage.mock.calls[0][1];
-      expect(postedText.length).toBeLessThanOrEqual(3000);
+      // Should be split into 2 messages
+      expect(mockPostMessage.mock.calls.length).toBe(2);
+      expect(mockPostMessage.mock.calls[0][1].length).toBeLessThanOrEqual(15000);
+      expect(mockPostMessage.mock.calls[1][1].length).toBeLessThanOrEqual(15000);
     });
 
     it('should flush pending buffered events before handling done', async () => {
