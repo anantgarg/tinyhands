@@ -1,7 +1,7 @@
 {
   "name": "tinyjobs",
   "version": "1.0.0",
-  "description": "Slack-based command center for Claude Code agents",
+  "description": "Slack-native AI agent platform powered by Claude — create autonomous agents that live in your channels",
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
@@ -17,9 +17,16 @@
   },
   "keywords": [
     "slack",
+    "slack-bot",
     "ai-agents",
     "claude",
+    "anthropic",
+    "llm",
     "automation",
+    "ai-assistant",
+    "chatbot",
+    "customer-support",
+    "knowledge-base",
     "bullmq",
     "docker"
   ],

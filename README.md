@@ -1,17 +1,14 @@
 ```
- _____ _             _       _
-|_   _(_)_ __  _   _| | ___ | |__  ___
-  | | | | '_ \| | | | |/ _ \| '_ \/ __|
-  | | | | | | | |_| | | (_) | |_) \__ \
-  |_| |_|_| |_|\__, |_|\___/|_.__/|___/
-               |___/
+╔╦╗┬┌┐┌┬ ┬    ╦┌─┐┌┐ ┌─┐
+ ║ │││││ │    ║│ │├┴┐└─┐
+ ╩ ┴┘└┘ ┴   ╚╝└─┘└─┘└─┘
 ```
 
 # TinyJobs
 
 **Slack-native AI agent platform powered by Claude.**
 
-Create autonomous AI agents that live in Slack channels, connect to your tools and data, and get work done — all managed through slash commands and interactive modals. No dashboards, no web UIs. Just Slack.
+Think [Claude Code](https://claude.ai/claude-code) or [Devin](https://devin.ai) — but built natively for Slack teams. Create autonomous AI agents that live in your channels, connect to your tools and data, and get work done through conversation. No dashboards, no web UIs. Just Slack.
 
 ---
 
@@ -23,11 +20,45 @@ TinyJobs turns your Slack workspace into an AI operations center. Each agent get
 
 ---
 
+## Use Cases by Team
+
+### Customer Support
+- **Ticket triage agent** — Automatically categorize and route incoming Zendesk tickets by priority and topic
+- **Help desk assistant** — Answer customer questions by searching your help center, internal docs, and past tickets
+- **Escalation monitor** — Watch for tickets approaching SLA deadlines and alert the right team
+
+### Sales
+- **Lead enrichment agent** — When a contact form submission arrives, research the company and enrich the lead with firmographic data
+- **Deal intelligence** — Summarize HubSpot deal activity, flag stalled deals, and prep account briefs before meetings
+- **Competitive intel** — Monitor competitor websites and docs for changes, summarize weekly
+
+### Engineering
+- **PR reviewer** — Analyze pull requests on GitHub, flag potential issues, suggest improvements
+- **Incident responder** — When an alert fires, gather context from logs, recent deploys, and related issues
+- **Docs keeper** — Monitor code changes and flag when documentation is out of date
+
+### Product
+- **Feature request tracker** — Aggregate and categorize feature requests from Zendesk, Intercom, and Slack into themes
+- **Release notes writer** — Pull merged PRs and Linear issues to draft release notes each sprint
+- **User research assistant** — Search across customer conversations and tickets to find patterns
+
+### Operations & HR
+- **Onboarding buddy** — Answer new hire questions from your internal wiki, HR docs, and company policies
+- **Procurement assistant** — Look up vendor information, compare quotes, and prep approval requests
+- **Reporting agent** — Generate weekly metrics reports from PostHog, Zendesk, or HubSpot data
+
+### Marketing
+- **Content researcher** — Research topics by pulling from your knowledge base, competitor sites, and industry data
+- **SEO monitor** — Track your docs and blog content, suggest optimization opportunities
+- **Social listener** — Summarize brand mentions and competitor activity
+
+---
+
 ## Features
 
 ### Agent Management
 - Run `/agents` to open the interactive agent dashboard — create, update, pause, resume, and delete agents all from one place
-- Click **+ New Agent** and describe what you want in plain English — TinyJobs picks the right model, tools, and settings
+- Click **+ New Agent** — a guided 2-step flow asks _what_ the agent should do and _when_ it should run
 - Use the overflow menu on any agent to update its goal, channels, or config
 - Each agent gets a dedicated Slack channel with a custom avatar emoji and persona
 
@@ -41,7 +72,7 @@ Register and manage third-party tool integrations entirely from Slack via `/tool
 | **PostHog** | Query events, get persons, list feature flags & insights | — (read-only) |
 | **HubSpot** | Search contacts/deals/companies, list pipelines | Create/update contacts/deals/companies, add notes/tasks |
 
-- Superadmins register tools by entering API credentials in Slack modals
+- Superadmins register tools by entering API credentials in Slack
 - Any user can create agents with **read-only** tools
 - **Write tools** require superadmin approval — a DM is sent to all admins when requested
 
@@ -57,7 +88,7 @@ Manage a shared knowledge base via `/kb`:
 | **HubSpot KB** | Import knowledge base articles from HubSpot CMS |
 | **Linear Docs** | Import project documents and optionally issues from Linear |
 
-- **API Keys** managed per provider from Slack — guided setup instructions for each
+- **Step-by-step setup** — Adding a source walks you through API key configuration and source settings in a guided thread
 - **Auto-sync** with configurable intervals (default 24h)
 - **Flush & Re-sync** to start fresh
 - Full-text search via PostgreSQL `tsvector` + GIN indexes
@@ -134,12 +165,33 @@ DATA LAYER
 ### Prerequisites
 
 - Ubuntu 22.04+ (or any Linux VPS) with 8+ GB RAM
-- Docker CE 24+
-- Node.js 20+
-- Redis 7+
-- PostgreSQL 15+ (managed or self-hosted)
+- A Slack workspace where you can install apps
+- An Anthropic API key
+- A PostgreSQL database (managed or self-hosted)
 
-### 1. Install system dependencies
+### Option A: Install with Claude Code (recommended)
+
+SSH into your server and run [Claude Code](https://docs.anthropic.com/en/docs/claude-code), then paste this prompt:
+
+```
+I need you to install TinyJobs on this server. Do the following:
+
+1. Install Docker (curl -fsSL https://get.docker.com | sh), Node.js 20 (via nodesource), PM2 (npm install -g pm2), and Redis (apt-get install redis-server, systemctl enable redis-server)
+2. Clone https://github.com/anantgarg/tinyjobs.git to /opt/tinyjobs
+3. Run npm install in /opt/tinyjobs
+4. Build the Docker image: docker build -t tinyjobs-runner:latest ./docker/
+5. Copy .env.example to .env and ask me for: SLACK_BOT_TOKEN, SLACK_APP_TOKEN, SLACK_SIGNING_SECRET, ANTHROPIC_API_KEY, DATABASE_URL, REDIS_URL
+6. Run: npm run build && npx tsx src/db/migrate.ts
+7. Start with: pm2 start ecosystem.config.js && pm2 save && pm2 startup
+
+Before step 5, tell me I need to create a Slack app at api.slack.com/apps with these Bot Token Scopes: channels:manage, channels:read, channels:history, channels:join, chat:write, chat:write.customize, commands, users:read, reactions:read, reactions:write, files:read, im:history, im:write, groups:history. Enable Socket Mode, create slash commands /agents /tools /kb, and subscribe to message.channels, message.im, app_mention, reaction_added, app_home_opened events.
+```
+
+Claude Code will handle the rest — installing dependencies, configuring environment, running migrations, and starting the services.
+
+### Option B: Manual installation
+
+#### 1. Install system dependencies
 
 ```bash
 # Docker
@@ -157,7 +209,7 @@ apt-get install -y redis-server
 systemctl enable redis-server
 ```
 
-### 2. Clone and install
+#### 2. Clone and install
 
 ```bash
 git clone https://github.com/anantgarg/tinyjobs.git /opt/tinyjobs
@@ -165,13 +217,13 @@ cd /opt/tinyjobs
 npm install
 ```
 
-### 3. Build the Docker base image
+#### 3. Build the Docker base image
 
 ```bash
 docker build -t tinyjobs-runner:latest ./docker/
 ```
 
-### 4. Set up PostgreSQL
+#### 4. Set up PostgreSQL
 
 Create a database and note the connection string:
 
@@ -181,7 +233,7 @@ Create a database and note the connection string:
 # postgresql://user:password@host:25060/tinyjobs?sslmode=require
 ```
 
-### 5. Configure environment
+#### 5. Configure environment
 
 ```bash
 cp .env.example .env
@@ -206,14 +258,14 @@ DAILY_BUDGET_USD=50
 MAX_CONCURRENT_WORKERS=3
 ```
 
-### 6. Run migrations
+#### 6. Run migrations
 
 ```bash
 npm run build
 npx tsx src/db/migrate.ts
 ```
 
-### 7. Create the Slack app
+#### 7. Create the Slack app
 
 1. Go to [api.slack.com/apps](https://api.slack.com/apps) and click **Create New App** > **From scratch**
 2. Enable **Socket Mode** under Settings and generate an App-Level Token (`xapp-...`)
@@ -224,6 +276,7 @@ npx tsx src/db/migrate.ts
    - `users:read`
    - `reactions:read`, `reactions:write`
    - `files:read`
+   - `groups:history` (for private channel support)
    - `im:history`, `im:write` (for superadmin DM commands)
 4. Under **Slash Commands**, create:
    - `/agents` — Manage AI agents
@@ -236,7 +289,7 @@ npx tsx src/db/migrate.ts
    - `app_home_opened`
 7. Install the app to your workspace and copy the Bot Token (`xoxb-...`)
 
-### 8. Start TinyJobs
+#### 8. Start TinyJobs
 
 ```bash
 npm run build
@@ -249,7 +302,7 @@ This starts:
 - **tinyjobs-worker-1/2/3** — Job workers that execute agent runs in Docker
 - **tinyjobs-sync** — Background sync for sources and auto-sync schedules
 
-### 9. Initialize superadmin
+#### 9. Initialize superadmin
 
 The first user to run `/agents` is automatically promoted to superadmin. Superadmins can:
 - Register and configure tool integrations
@@ -264,25 +317,28 @@ The first user to run `/agents` is automatically promoted to superadmin. Superad
 ### Creating an Agent
 
 1. Run `/agents` and click **+ New Agent**
-2. Describe what you want the agent to do in plain English (e.g., "A customer support agent that can look up Zendesk tickets and answer questions from our help docs")
-3. TinyJobs analyzes your goal and suggests a name, model, tools, and system prompt
-4. Confirm, and a new Slack channel is created for your agent
-5. Message the agent in its channel — it responds autonomously
+2. **Step 1:** Describe what you want the agent to achieve (e.g., "Enrich incoming leads with company data from their email domain")
+3. **Step 2:** Choose when it should run — every message, when @mentioned, when relevant, or on a schedule
+4. Pick a channel for the agent to live in (or create a new one)
+5. Confirm — TinyJobs auto-configures the name, model, tools, and system prompt
+6. Message the agent in its channel — it responds autonomously
 
 ### Connecting Tool Integrations
 
 1. Run `/tools` to see available integrations
 2. Click **Register** on an integration (e.g., Zendesk)
-3. Enter your API credentials in the modal
+3. Enter your API credentials
 4. The tool is now available for agents to use
 
 ### Setting Up the Knowledge Base
 
 1. Run `/kb` to open the KB dashboard
-2. Click **API Keys** to configure provider credentials (e.g., Firecrawl for website scraping, GitHub token for repo access)
-3. Click **Add Source** to connect a data source
-4. Use the overflow menu (**...**) on a source to **Sync Now**, **Flush & Re-sync**, or toggle **Auto-sync**
-5. Agents automatically search the KB for relevant context during runs
+2. Click **Add Source** — a guided thread walks you through:
+   - Selecting the source type (Google Drive, GitHub, Website, etc.)
+   - Entering API keys (if not already configured — with step-by-step instructions)
+   - Configuring source-specific settings (folder ID, repo name, URL, etc.)
+3. The source syncs automatically — use the overflow menu to re-sync or toggle auto-sync
+4. Agents automatically search the KB for relevant context during runs
 
 ### Managing Agents
 
