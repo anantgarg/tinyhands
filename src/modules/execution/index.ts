@@ -144,12 +144,12 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
       setStatusMessageTs(data.channelId, data.threadTs, data.statusMessageTs, data.agentId);
     }
 
-    // Use tool_use event type so the status update is never suppressed (even for Haiku)
+    // Status updates should never be suppressed — only raw thinking content should be
     bufferEvent(
       data.channelId,
       data.threadTs,
-      'tool_use',
-      'Thinking',
+      'thinking',
+      'Thinking...',
       agent.name,
       agent.avatar_emoji,
       false,
@@ -329,7 +329,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
           // Track text output start — never suppress this, even for Haiku
           if (event.type === 'content_block_start' && event.content_block?.type === 'text') {
             if (data.channelId) {
-              bufferEvent(data.channelId, data.threadTs, 'tool_use', 'Writing response', agent.name, agent.avatar_emoji, false, data.agentId);
+              bufferEvent(data.channelId, data.threadTs, 'thinking', 'Writing response...', agent.name, agent.avatar_emoji, false, data.agentId);
             }
             lastStreamEventType = 'text';
           }

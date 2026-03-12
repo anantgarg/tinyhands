@@ -778,9 +778,9 @@ describe('Execution Module – executeAgentRun', () => {
     const job = makeFakeJob(makeJobData());
     await executeAgentRun(job);
 
-    // Should have buffered initial status update (tool_use type for 'Thinking') and 'done' events
-    const statusCalls = mockBufferEvent.mock.calls.filter((c: any[]) => c[2] === 'tool_use' && c[3] === 'Thinking');
-    expect(statusCalls.length).toBeGreaterThanOrEqual(1);
+    // Should have buffered initial 'thinking' status and 'done' events
+    const thinkingCalls = mockBufferEvent.mock.calls.filter((c: any[]) => c[2] === 'thinking');
+    expect(thinkingCalls.length).toBeGreaterThanOrEqual(1);
 
     const doneCalls = mockBufferEvent.mock.calls.filter((c: any[]) => c[2] === 'done');
     expect(doneCalls.length).toBe(1);
@@ -912,12 +912,10 @@ describe('Execution Module – executeAgentRun', () => {
     const job = makeFakeJob(makeJobData());
     await executeAgentRun(job);
 
-    // When model is haiku, suppressThinking should be true
-    // Check that bufferEvent was called with suppressThinking = true for thinking
+    // Initial thinking status should never be suppressed (even for haiku)
     const thinkingCall = mockBufferEvent.mock.calls.find((c: any[]) => c[2] === 'thinking');
-    if (thinkingCall) {
-      expect(thinkingCall[6]).toBe(true); // suppressThinking param
-    }
+    expect(thinkingCall).toBeDefined();
+    expect(thinkingCall![6]).toBe(false); // suppressThinking = false for status updates
   });
 
   it('should handle log parse errors gracefully', async () => {
