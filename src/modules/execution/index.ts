@@ -306,10 +306,38 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
       container,
       (line) => {
         // Parse JSONL events from Claude's stream-json output for live status updates
+        // Claude Code emits two formats depending on flags:
+        //   Without --include-partial-messages: complete "assistant"/"user" messages per turn
+        //   With --include-partial-messages: granular "content_block_start" stream events
+        // We handle both so status updates work either way.
         try {
           const event = JSON.parse(line);
 
-          // Track tool use for live "Using tool X..." updates — always update for each tool
+          // ── Format 1: Complete assistant messages (default stream-json) ──
+          if (event.type === 'assistant' && event.message?.content) {
+            const contentBlocks = event.message.content as any[];
+            for (const block of contentBlocks) {
+              if (block.type === 'tool_use') {
+                const toolName = block.name || 'tool';
+                if (data.channelId) {
+                  bufferEvent(data.channelId, data.threadTs, 'tool_use', toolName, agent.name, agent.avatar_emoji, false, data.agentId);
+                }
+                lastStreamEventType = 'tool_use';
+              } else if (block.type === 'thinking' && lastStreamEventType !== 'thinking') {
+                if (data.channelId) {
+                  bufferEvent(data.channelId, data.threadTs, 'thinking', 'Thinking...', agent.name, agent.avatar_emoji, suppressThinking, data.agentId);
+                }
+                lastStreamEventType = 'thinking';
+              } else if (block.type === 'text') {
+                if (data.channelId) {
+                  bufferEvent(data.channelId, data.threadTs, 'thinking', 'Writing response...', agent.name, agent.avatar_emoji, false, data.agentId);
+                }
+                lastStreamEventType = 'text';
+              }
+            }
+          }
+
+          // ── Format 2: Granular stream events (with --include-partial-messages) ──
           if (event.type === 'content_block_start' && event.content_block?.type === 'tool_use') {
             const toolName = event.content_block.name || 'tool';
             if (data.channelId) {
@@ -317,16 +345,12 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
             }
             lastStreamEventType = 'tool_use';
           }
-
-          // Track thinking for live "Thinking..." updates
           if (event.type === 'content_block_start' && event.content_block?.type === 'thinking') {
             if (data.channelId && lastStreamEventType !== 'thinking') {
               bufferEvent(data.channelId, data.threadTs, 'thinking', 'Thinking...', agent.name, agent.avatar_emoji, suppressThinking, data.agentId);
             }
             lastStreamEventType = 'thinking';
           }
-
-          // Track text output start — never suppress this, even for Haiku
           if (event.type === 'content_block_start' && event.content_block?.type === 'text') {
             if (data.channelId) {
               bufferEvent(data.channelId, data.threadTs, 'thinking', 'Writing response...', agent.name, agent.avatar_emoji, false, data.agentId);
@@ -411,9 +435,22 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
       }
     }
 
-    // Stream done event to Slack (only if the agent actually produced output)
+    // Stream done/error event to Slack
     if (data.channelId) {
-      if (agentProducedOutput) {
+      if (exitCode !== 0) {
+        // Container failed — report the error to the user
+        cleanupStatusMessage(data.channelId, data.threadTs, data.agentId);
+        bufferEvent(
+          data.channelId,
+          data.threadTs,
+          'error',
+          outputData.output || `Task failed with exit code ${exitCode}`,
+          agent.name,
+          agent.avatar_emoji,
+          false,
+          data.agentId,
+        );
+      } else if (agentProducedOutput) {
         bufferEvent(
           data.channelId,
           data.threadTs,
@@ -455,8 +492,9 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
       completed_at: new Date().toISOString(),
     });
 
-    // Stream error to Slack
+    // Clean up status message and stream error to Slack
     if (data.channelId) {
+      cleanupStatusMessage(data.channelId, data.threadTs, data.agentId);
       bufferEvent(
         data.channelId,
         data.threadTs,

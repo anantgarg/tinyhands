@@ -1720,6 +1720,11 @@ export function registerToolAndKBModals(app: App): void {
           await registerHubSpotTools(userId, { access_token: config.access_token });
           break;
         }
+        case 'serpapi': {
+          const { registerSerpApiTools } = await import('../modules/tools/serpapi');
+          await registerSerpApiTools(userId, { api_key: config.api_key });
+          break;
+        }
         default:
           throw new Error(`Unknown integration: ${integrationId}`);
       }

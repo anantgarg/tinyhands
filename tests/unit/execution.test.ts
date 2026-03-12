@@ -638,6 +638,12 @@ describe('Execution Module – executeAgentRun', () => {
 
     expect(result).toContain('Task failed with exit code 1');
     expect(result).toContain('Error occurred');
+
+    // Should clean up status message and post error to Slack
+    expect(mockCleanupStatusMessage).toHaveBeenCalledWith('C123', '1700000000.000000', 'agent-1');
+    const errorCalls = mockBufferEvent.mock.calls.filter((c: any[]) => c[2] === 'error');
+    expect(errorCalls.length).toBe(1);
+    expect(errorCalls[0][3]).toContain('Error occurred');
   });
 
   it('should handle missing TINYHANDS_OUTPUT with stream-json fallback', async () => {
@@ -786,6 +792,36 @@ describe('Execution Module – executeAgentRun', () => {
     expect(doneCalls.length).toBe(1);
   });
 
+  it('should detect tool_use from complete assistant messages in stream-json', async () => {
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    // Mock followContainerOutput to invoke the streaming callback with assistant messages
+    mockFollowContainerOutput.mockImplementation(async (_container: any, callback: (line: string) => void, _timeout: number) => {
+      // Simulate Claude Code stream-json complete assistant messages
+      callback(JSON.stringify({ type: 'assistant', message: { content: [{ type: 'thinking', thinking: 'Let me think...' }] } }));
+      callback(JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'toolu_1', name: 'WebSearch', input: { query: 'test' } }] } }));
+      callback(JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'toolu_2', name: 'Bash', input: { command: 'ls' } }] } }));
+      callback(JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'Here is the result...' }] } }));
+      return {
+        exitCode: 0,
+        allLogs: 'TINYHANDS_OUTPUT:{"output":"Result","input_tokens":100,"output_tokens":50,"tool_calls_count":2,"cost_usd":0.005}',
+      };
+    });
+
+    const job = makeFakeJob(makeJobData());
+    await executeAgentRun(job);
+
+    // Should have detected tool_use events from assistant messages
+    const toolUseCalls = mockBufferEvent.mock.calls.filter((c: any[]) => c[2] === 'tool_use');
+    expect(toolUseCalls.length).toBe(2);
+    expect(toolUseCalls[0][3]).toBe('WebSearch');
+    expect(toolUseCalls[1][3]).toBe('Bash');
+
+    // Should have detected text → "Writing response..."
+    const writingCalls = mockBufferEvent.mock.calls.filter((c: any[]) => c[2] === 'thinking' && c[3] === 'Writing response...');
+    expect(writingCalls.length).toBe(1);
+  });
+
   it('should set status message TS when provided in job data', async () => {
     const container = { id: 'container-1' };
     mockCreateAgentContainer.mockResolvedValue(container);
@@ -830,24 +866,30 @@ describe('Execution Module – executeAgentRun', () => {
     expect(failedUpdate).toBeDefined();
   });
 
-  it('should buffer error event to Slack on failure', async () => {
+  it('should clean up status message and buffer error event to Slack on failure', async () => {
     mockCreateAgentContainer.mockRejectedValue(new Error('Crash'));
 
     const job = makeFakeJob(makeJobData());
 
     await expect(executeAgentRun(job)).rejects.toThrow('Crash');
 
+    // Should clean up the "Thinking..." status message before posting error
+    expect(mockCleanupStatusMessage).toHaveBeenCalledWith('C123', '1700000000.000000', 'agent-1');
+
     const errorCalls = mockBufferEvent.mock.calls.filter((c: any[]) => c[2] === 'error');
     expect(errorCalls.length).toBe(1);
     expect(errorCalls[0][3]).toBe('Crash');
   });
 
-  it('should buffer timeout-specific error message on timeout', async () => {
+  it('should clean up status message and buffer timeout-specific error on timeout', async () => {
     mockCreateAgentContainer.mockRejectedValue(new Error('Container timed out after 60s'));
 
     const job = makeFakeJob(makeJobData());
 
     await expect(executeAgentRun(job)).rejects.toThrow();
+
+    // Should clean up the "Thinking..." status message
+    expect(mockCleanupStatusMessage).toHaveBeenCalledWith('C123', '1700000000.000000', 'agent-1');
 
     const errorCalls = mockBufferEvent.mock.calls.filter((c: any[]) => c[2] === 'error');
     expect(errorCalls.length).toBe(1);
