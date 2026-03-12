@@ -54,6 +54,14 @@ const TOOL_INTEGRATIONS: ToolIntegration[] = [
     tools: ['hubspot-read', 'hubspot-write'],
     requiredConfigKeys: ['access_token'],
   },
+  {
+    id: 'serpapi',
+    label: 'SerpAPI',
+    icon: ':mag:',
+    description: 'SERP rankings across Google, Bing, Yahoo.',
+    tools: ['serpapi-read'],
+    requiredConfigKeys: ['api_key'],
+  },
 ];
 
 export function registerCommands(app: App): void {
@@ -1898,11 +1906,19 @@ async function handleInfeasibleRequest(
     threadTs,
   );
 
+  // Detect unconfigured tool blockers
+  const unconfiguredToolNames: string[] = [];
+  for (const blocker of analysis.blockers) {
+    const match = blocker.match(/^Tool '(.+)' is registered but not configured by admin\.$/);
+    if (match) unconfiguredToolNames.push(match[1]);
+  }
+
   // DM the owner (first superadmin)
   const superadmins = await listSuperadmins();
   if (superadmins.length > 0) {
     const ownerId = superadmins[0].user_id;
-    await sendDMBlocks(ownerId, [
+
+    const dmBlocks: any[] = [
       {
         type: 'header',
         text: { type: 'plain_text', text: ':inbox_tray: New Feature Request' },
@@ -1921,6 +1937,31 @@ async function handleInfeasibleRequest(
           text: `*Suggested agent name:* \`${analysis.agent_name}\`\n*Model:* ${analysis.model} | *Permissions:* ${analysis.permission_level}\n*Summary:* ${analysis.summary}`,
         },
       },
+    ];
+
+    // Add unconfigured tool section with configure buttons
+    if (unconfiguredToolNames.length > 0) {
+      dmBlocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `:wrench: *Tools needing configuration:* ${unconfiguredToolNames.map(t => `\`${t}\``).join(', ')}\nConfigure the tools first, then click "Retry Creation".`,
+        },
+      });
+      for (const toolName of unconfiguredToolNames) {
+        dmBlocks.push({
+          type: 'actions',
+          elements: [{
+            type: 'button',
+            text: { type: 'plain_text', text: `:gear: Configure ${toolName}`.slice(0, 75) },
+            action_id: 'configure_unconfigured_tool',
+            value: JSON.stringify({ toolName, requestId }),
+          }],
+        });
+      }
+    }
+
+    dmBlocks.push(
       { type: 'divider' },
       {
         type: 'actions',
@@ -1940,7 +1981,9 @@ async function handleInfeasibleRequest(
           },
         ],
       },
-    ], `Feature request from <@${userId}>: ${goal.slice(0, 100)}`);
+    );
+
+    await sendDMBlocks(ownerId, dmBlocks, `Feature request from <@${userId}>: ${goal.slice(0, 100)}`);
   }
 
   logger.info('Infeasible agent request queued', { requestId, userId, blockers: analysis.blockers });
@@ -2270,6 +2313,13 @@ export function registerConfirmationActions(app: App): void {
 
       for (const trigger of analysis.triggers) {
         try {
+          // Auto-detect timezone for schedule triggers
+          if (trigger.type === 'schedule' && trigger.config?.timezone === 'auto') {
+            try {
+              const userInfo = await getSlackApp().client.users.info({ user: userId });
+              trigger.config.timezone = userInfo.user?.tz || 'UTC';
+            } catch { trigger.config.timezone = 'UTC'; }
+          }
           await createTrigger({
             agentId: agent.id,
             triggerType: trigger.type,
@@ -2374,6 +2424,13 @@ export function registerConfirmationActions(app: App): void {
 
       for (const trigger of (analysis.triggers || [])) {
         try {
+          // Auto-detect timezone for schedule triggers
+          if (trigger.type === 'schedule' && trigger.config?.timezone === 'auto') {
+            try {
+              const userInfo = await getSlackApp().client.users.info({ user: userId });
+              trigger.config.timezone = userInfo.user?.tz || 'UTC';
+            } catch { trigger.config.timezone = 'UTC'; }
+          }
           await createTrigger({
             agentId: agentId!,
             triggerType: trigger.type,
@@ -2482,6 +2539,13 @@ export function registerConfirmationActions(app: App): void {
 
       for (const trigger of freshAnalysis.triggers) {
         try {
+          // Auto-detect timezone for schedule triggers
+          if (trigger.type === 'schedule' && trigger.config?.timezone === 'auto') {
+            try {
+              const userInfo = await getSlackApp().client.users.info({ user: requestedBy });
+              trigger.config.timezone = userInfo.user?.tz || 'UTC';
+            } catch { trigger.config.timezone = 'UTC'; }
+          }
           await createTrigger({
             agentId: agent.id,
             triggerType: trigger.type,
@@ -2577,6 +2641,72 @@ export function registerConfirmationActions(app: App): void {
     await ack();
     const requestId = (action as any).value;
     await replyToAction(body, ':white_check_mark: Acknowledged. The tool(s) will need to be created by an admin via code.');
+  });
+
+  // ── Unconfigured Tool Configuration Action ──
+
+  app.action('configure_unconfigured_tool', async ({ action, ack, body }) => {
+    await ack();
+    const triggerId = (body as any).trigger_id;
+    if (!triggerId) return;
+
+    let parsed: { toolName: string; requestId: string };
+    try {
+      parsed = JSON.parse((action as any).value);
+    } catch {
+      return;
+    }
+
+    const { getCustomTool } = await import('../modules/tools');
+    const tool = await getCustomTool(parsed.toolName);
+    if (!tool) {
+      await replyToAction(body, `:x: Tool \`${parsed.toolName}\` not found.`);
+      return;
+    }
+
+    const existingConfig = JSON.parse(tool.config_json || '{}');
+    const configKeys = Object.keys(existingConfig);
+
+    const existingBlocks: any[] = configKeys.length > 0
+      ? [{
+          type: 'section', block_id: 'existing_config',
+          text: {
+            type: 'mrkdwn',
+            text: '*Current config:*\n' + configKeys.map(k => {
+              const v = String(existingConfig[k]);
+              const masked = v.length > 6 ? v.slice(0, 3) + '***' + v.slice(-3) : '***';
+              return `• \`${k}\` = \`${masked}\``;
+            }).join('\n'),
+          },
+        }]
+      : [{ type: 'section', text: { type: 'mrkdwn', text: '_No config set yet_' } }];
+
+    await openModal(triggerId, {
+      type: 'modal',
+      callback_id: 'tool_config_modal',
+      private_metadata: parsed.toolName,
+      title: { type: 'plain_text', text: `Configure ${parsed.toolName}`.slice(0, 24) },
+      submit: { type: 'plain_text', text: 'Save' },
+      blocks: [
+        ...existingBlocks,
+        { type: 'divider' },
+        {
+          type: 'input', block_id: 'config_key', optional: true,
+          label: { type: 'plain_text', text: 'Config Key' },
+          element: { type: 'plain_text_input', action_id: 'key_input', placeholder: { type: 'plain_text', text: 'e.g. api_key' } },
+        },
+        {
+          type: 'input', block_id: 'config_value', optional: true,
+          label: { type: 'plain_text', text: 'Config Value' },
+          element: { type: 'plain_text_input', action_id: 'value_input', placeholder: { type: 'plain_text', text: 'e.g. your-api-key' } },
+        },
+        {
+          type: 'input', block_id: 'remove_key', optional: true,
+          label: { type: 'plain_text', text: 'Remove Key (leave blank to skip)' },
+          element: { type: 'plain_text_input', action_id: 'remove_input', placeholder: { type: 'plain_text', text: 'e.g. old_key' } },
+        },
+      ],
+    });
   });
 }
 

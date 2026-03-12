@@ -14,7 +14,7 @@ export interface GoalAnalysis {
   permission_level: 'read-only' | 'standard' | 'full';
   memory_enabled: boolean;
   triggers: Array<{
-    type: 'slack_channel' | 'linear' | 'zendesk' | 'intercom' | 'webhook';
+    type: 'slack_channel' | 'linear' | 'zendesk' | 'intercom' | 'webhook' | 'schedule';
     description: string;
     config: Record<string, any>;
   }>;
@@ -40,14 +40,21 @@ export async function analyzeGoal(goal: string, existingPrompt?: string, request
   const readOnlyTools = await listUserAvailableTools();
   const writeTools = await listWriteTools();
 
+  const isToolConfigured = (t: { config_json: string }): boolean => {
+    const cfg = JSON.parse(t.config_json || '{}');
+    return Object.keys(cfg).length > 0;
+  };
+
   const readOnlyToolList = readOnlyTools.map(t => {
     const schema = JSON.parse(t.schema_json || '{}');
-    return `${t.name} (read-only): ${schema.description || 'Custom tool'}`;
+    const configStatus = isToolConfigured(t) ? '' : ' (NOT CONFIGURED)';
+    return `${t.name} (read-only)${configStatus}: ${schema.description || 'Custom tool'}`;
   });
 
   const writeToolList = writeTools.map(t => {
     const schema = JSON.parse(t.schema_json || '{}');
-    return `${t.name} (read-write): ${schema.description || 'Custom tool'}`;
+    const configStatus = isToolConfigured(t) ? '' : ' (NOT CONFIGURED)';
+    return `${t.name} (read-write)${configStatus}: ${schema.description || 'Custom tool'}`;
   });
 
   const skillList = [
@@ -77,8 +84,10 @@ ${customToolsSection}
 Available MCP/prompt skills:
 ${skillList.join('\n')}
 
-Available trigger types: slack_channel, linear, zendesk, intercom, webhook
-NOTE: Schedule-based triggers (cron, hourly, daily, weekly, fortnightly, monthly, time-based) are NOT yet available. If the user requests a schedule-based trigger, set "feasible" to false and add "Schedule-based triggers (e.g. daily, hourly, weekly) are not yet supported" to "blockers".
+Available trigger types: slack_channel, linear, zendesk, intercom, webhook, schedule
+Schedule trigger config: { "cron": "0 9 * * *", "timezone": "auto", "description": "Daily at 9am" }
+Common cron patterns: hourly "0 * * * *", daily "0 9 * * *", weekly Mon "0 9 * * 1"
+When timezone is "auto", system detects from Slack.
 ${userRestrictions}
 
 Return ONLY valid JSON matching this schema:
@@ -93,7 +102,7 @@ Return ONLY valid JSON matching this schema:
   "memory_enabled": true/false,
   "triggers": [
     {
-      "type": "slack_channel|linear|zendesk|intercom|webhook",
+      "type": "slack_channel|linear|zendesk|intercom|webhook|schedule",
       "description": "human-readable description of when this triggers",
       "config": {"events": ["..."], "description": "..."}
     }
@@ -177,6 +186,20 @@ IMPORTANT guidelines:
   // Validate write_tools_requested
   if (!analysis.write_tools_requested) analysis.write_tools_requested = [];
   analysis.write_tools_requested = analysis.write_tools_requested.filter(t => validWriteNames.has(t));
+
+  // Check for unconfigured tools
+  const allUsedTools = [...(analysis.custom_tools || []), ...(analysis.write_tools_requested || [])];
+  const allAvailableTools = [...readOnlyTools, ...writeTools];
+  const unconfiguredTools = allUsedTools.filter(toolName => {
+    const tool = allAvailableTools.find(t => t.name === toolName);
+    return tool && !isToolConfigured(tool);
+  });
+  if (unconfiguredTools.length > 0) {
+    analysis.feasible = false;
+    for (const toolName of unconfiguredTools) {
+      analysis.blockers.push(`Tool '${toolName}' is registered but not configured by admin.`);
+    }
+  }
 
   // Ensure defaults
   if (!analysis.relevance_keywords) analysis.relevance_keywords = [];

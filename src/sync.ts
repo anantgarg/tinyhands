@@ -6,6 +6,7 @@ import { initSlackClient } from './slack';
 import { config } from './config';
 import { logger } from './utils/logger';
 import { postMessage } from './slack';
+import { checkForUpdates } from './modules/auto-update';
 
 const TINYJOBS_CHANNEL = process.env.TINYJOBS_CHANNEL_ID || 'tinyjobs';
 
@@ -99,6 +100,18 @@ async function main(): Promise<void> {
       });
     }
   }, 60000);
+
+  // Auto-update check (pull-based deployment)
+  if (config.autoUpdate.enabled) {
+    setInterval(async () => {
+      try {
+        await checkForUpdates();
+      } catch (err: any) {
+        logger.error('Auto-update check failed', { error: err.message });
+      }
+    }, config.autoUpdate.intervalMs);
+    logger.info('Auto-update enabled', { interval: config.autoUpdate.intervalMs, branch: config.autoUpdate.branch });
+  }
 
   logger.info('Sync process ready');
 

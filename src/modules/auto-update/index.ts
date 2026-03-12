@@ -1,4 +1,7 @@
 import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+import https from 'https';
 import { execSync } from 'child_process';
 import type { Request, Response } from 'express';
 import { config } from '../../config';
@@ -52,8 +55,9 @@ export async function handleDeploy(payload: any): Promise<DeployResult> {
     logger.info('Deploy: pulling latest code', { commitHash });
     execSync('git pull origin main', { cwd: process.cwd(), timeout: 30000 });
 
-    // 2. npm install if package.json changed
-    if (packageJsonChanged) {
+    // 2. npm install if package.json changed or pull-based (no changedFiles info)
+    const isPullBased = changedFiles.length === 0;
+    if (packageJsonChanged || isPullBased) {
       logger.info('Deploy: installing dependencies');
       execSync('npm install --production', { cwd: process.cwd(), timeout: 120000 });
     }
@@ -84,7 +88,7 @@ export async function handleDeploy(payload: any): Promise<DeployResult> {
     // Restart workers/sync first, then listener last — otherwise the listener restart
     // kills this process before the other restarts can execute
     logger.info('Deploy: restarting PM2');
-    execSync('pm2 restart tinyjobs-worker-1 tinyjobs-worker-2 tinyjobs-worker-3 tinyjobs-sync', { cwd: process.cwd(), timeout: 30000 });
+    execSync('pm2 restart tinyjobs-worker-1 tinyjobs-worker-2 tinyjobs-worker-3 tinyjobs-sync tinyjobs-scheduler', { cwd: process.cwd(), timeout: 30000 });
     execSync('pm2 restart tinyjobs-listener', { cwd: process.cwd(), timeout: 30000 });
 
     const restartTime = Date.now() - startTime;
@@ -148,6 +152,61 @@ export function deployWebhookHandler(req: Request, res: Response): void {
   handleDeploy(req.body).catch(err => {
     logger.error('Deploy handler error', { error: err.message });
   });
+}
+
+// ── Pull-Based Auto-Update ──
+
+export function readLocalVersion(): string {
+  try {
+    return fs.readFileSync(path.join(process.cwd(), 'VERSION'), 'utf-8').trim();
+  } catch {
+    return '0.0.0';
+  }
+}
+
+export function fetchRemoteVersion(branch: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const url = `https://raw.githubusercontent.com/anantgarg/tinyjobs/${branch}/VERSION`;
+    https.get(url, (res) => {
+      let data = '';
+      res.on('data', (chunk: Buffer) => data += chunk);
+      res.on('end', () => {
+        if (res.statusCode === 200) {
+          resolve(data.trim());
+        } else {
+          reject(new Error(`Failed to fetch remote VERSION: HTTP ${res.statusCode}`));
+        }
+      });
+    }).on('error', reject);
+  });
+}
+
+export function compareVersions(local: string, remote: string): number {
+  const localParts = local.split('.').map(Number);
+  const remoteParts = remote.split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    const l = localParts[i] || 0;
+    const r = remoteParts[i] || 0;
+    if (r > l) return 1;
+    if (r < l) return -1;
+  }
+  return 0;
+}
+
+export async function checkForUpdates(): Promise<void> {
+  if (!config.autoUpdate.enabled) return;
+
+  try {
+    const localVersion = readLocalVersion();
+    const remoteVersion = await fetchRemoteVersion(config.autoUpdate.branch);
+
+    if (compareVersions(localVersion, remoteVersion) > 0) {
+      logger.info('Auto-update: new version available', { local: localVersion, remote: remoteVersion });
+      await handleDeploy({ after: 'auto-update', commits: [] });
+    }
+  } catch (err: any) {
+    logger.error('Auto-update check failed', { error: err.message });
+  }
 }
 
 // ── Deploy Summary for Slack ──

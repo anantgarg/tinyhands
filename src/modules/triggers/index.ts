@@ -155,9 +155,33 @@ function normalizeEventPayload(triggerType: TriggerType, payload: Record<string,
     case 'webhook':
       return `Webhook event received:\n\n${JSON.stringify(payload, null, 2)}`;
 
+    case 'schedule':
+      return `Scheduled execution triggered at ${payload.firedAt || new Date().toISOString()}`;
+
     default:
       return JSON.stringify(payload);
   }
+}
+
+// ── Schedule Trigger Helpers ──
+
+export async function getScheduledTriggersDue(): Promise<Trigger[]> {
+  return query<Trigger>(
+    `SELECT * FROM triggers WHERE trigger_type = 'schedule' AND status = 'active'`,
+    []
+  );
+}
+
+export async function updateTriggerLastFired(triggerId: string): Promise<void> {
+  await execute('UPDATE triggers SET last_fired_at = NOW() WHERE id = $1', [triggerId]);
+}
+
+export async function getTriggerLastFiredAt(triggerId: string): Promise<Date | null> {
+  const row = await queryOne<{ last_fired_at: string | null }>(
+    'SELECT last_fired_at FROM triggers WHERE id = $1',
+    [triggerId]
+  );
+  return row?.last_fired_at ? new Date(row.last_fired_at) : null;
 }
 
 // ── Trigger Storm Detection ──

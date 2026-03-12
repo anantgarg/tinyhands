@@ -3180,10 +3180,10 @@ describe('Commands Module', () => {
       expect(app.view).toHaveBeenCalledTimes(5);
     });
 
-    it('registerConfirmationActions should register 9 action handlers', () => {
+    it('registerConfirmationActions should register 10 action handlers', () => {
       const app = createMockApp();
       registerConfirmationActions(app as any);
-      expect(app.action).toHaveBeenCalledTimes(9);
+      expect(app.action).toHaveBeenCalledTimes(10);
     });
 
     it('all registration functions should be idempotent (safe to call twice)', () => {

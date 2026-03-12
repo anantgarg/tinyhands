@@ -41,5 +41,12 @@ module.exports = {
       restart_delay: 1000,
       max_restarts: 10,
     },
+    {
+      name: 'tinyjobs-scheduler',
+      script: 'dist/scheduler.js',
+      env: envVars,
+      restart_delay: 1000,
+      max_restarts: 10,
+    },
   ],
 };

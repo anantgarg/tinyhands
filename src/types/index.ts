@@ -179,7 +179,7 @@ export interface KBApiKey {
 
 // ── Trigger Types ──
 
-export type TriggerType = 'slack_channel' | 'linear' | 'zendesk' | 'intercom' | 'webhook';
+export type TriggerType = 'slack_channel' | 'linear' | 'zendesk' | 'intercom' | 'webhook' | 'schedule';
 export type TriggerStatus = 'active' | 'paused';
 
 export interface Trigger {

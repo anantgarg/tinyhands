@@ -31,6 +31,11 @@ export const config = {
     dailyDigestTime: process.env.DAILY_DIGEST_TIME || '09:00',
     dailyBudgetUsd: parseFloat(process.env.DAILY_BUDGET_USD || '50'),
   },
+  autoUpdate: {
+    enabled: process.env.AUTO_UPDATE_ENABLED === 'true',
+    intervalMs: parseInt(process.env.AUTO_UPDATE_INTERVAL || '300000', 10),
+    branch: process.env.AUTO_UPDATE_BRANCH || 'main',
+  },
   docker: {
     baseImage: process.env.DOCKER_BASE_IMAGE || 'tinyjobs-runner:latest',
     defaultCpu: parseInt(process.env.DEFAULT_CONTAINER_CPU || '1', 10),
