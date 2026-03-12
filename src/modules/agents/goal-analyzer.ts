@@ -238,9 +238,12 @@ export async function checkMessageRelevance(
   // If agent should respond to all messages, always relevant
   if (respondToAll) return true;
 
-  // If message is short and looks like a direct question/command, it's relevant
   const trimmed = message.trim();
-  if (trimmed.length < 10) return false; // Too short to be meaningful
+  if (trimmed.length < 3) return false; // Too short to be meaningful
+
+  // Domain/URL-like messages are always relevant (e.g., "google.com", "https://example.org")
+  const domainPattern = /(?:https?:\/\/)?(?:[\w-]+\.)+[a-z]{2,}/i;
+  if (domainPattern.test(trimmed)) return true;
 
   // Check keyword match (case-insensitive)
   const lowerMessage = trimmed.toLowerCase();

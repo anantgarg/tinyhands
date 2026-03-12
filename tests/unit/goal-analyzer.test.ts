@@ -410,23 +410,31 @@ describe('Goal Analyzer', () => {
 
     // ── Short messages ──
 
-    it('should return false for messages shorter than 10 chars', async () => {
+    it('should return false for messages shorter than 3 chars', async () => {
       const result = await checkMessageRelevance('hi', ['hi'], samplePrompt, false);
       expect(result).toBe(false);
     });
 
-    it('should return false for 9-char message', async () => {
-      const result = await checkMessageRelevance('123456789', ['1234'], samplePrompt, false);
-      expect(result).toBe(false);
-    });
-
     it('should return false for whitespace-padded short message', async () => {
-      const result = await checkMessageRelevance('   hi   ', [], samplePrompt, false);
+      const result = await checkMessageRelevance('  a ', [], samplePrompt, false);
       expect(result).toBe(false);
     });
 
     it('should not call LLM for short messages', async () => {
-      await checkMessageRelevance('short', [], samplePrompt, false);
+      await checkMessageRelevance('ab', [], samplePrompt, false);
+      expect(mockCreate).not.toHaveBeenCalled();
+    });
+
+    // ── Domain/URL detection ──
+
+    it('should return true for domain-like messages', async () => {
+      expect(await checkMessageRelevance('google.com', [], samplePrompt, false)).toBe(true);
+      expect(await checkMessageRelevance('ibm.com', [], samplePrompt, false)).toBe(true);
+      expect(await checkMessageRelevance('https://example.org', [], samplePrompt, false)).toBe(true);
+    });
+
+    it('should not call LLM for domain-like messages', async () => {
+      await checkMessageRelevance('google.com', [], samplePrompt, false);
       expect(mockCreate).not.toHaveBeenCalled();
     });
 
