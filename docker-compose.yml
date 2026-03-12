@@ -1,0 +1,59 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: tinyjobs
+      POSTGRES_USER: tinyjobs
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tinyjobs_default_change_me}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tinyjobs"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Build the agent runner image on the host Docker daemon (one-time)
+  runner-build:
+    image: docker:24-cli
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./docker:/build:ro
+    command: sh -c "docker build -t tinyjobs-runner:latest /build"
+
+  tinyjobs:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      runner-build:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgresql://tinyjobs:${POSTGRES_PASSWORD:-tinyjobs_default_change_me}@postgres:5432/tinyjobs
+      REDIS_URL: redis://redis:6379
+      NODE_ENV: production
+    env_file:
+      - .env
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - "${PORT:-3000}:3000"
+
+volumes:
+  pgdata:
+  redisdata:

@@ -16,7 +16,7 @@ echo '╔╦╗┬┌┐┌┬ ┬  ╦ ╦┌─┐┌┐┌┌┬┐┌─┐'
 echo ' ║ │││││ │  ╠═╣├─┤│││ ││└─┐'
 echo ' ╩ ┴┘└┘ ┴  ╩ ╩┴ ┴┘└┘─┴┘└─┘'
 echo -e "${NC}"
-echo -e "${BOLD}✋ Tiny Hands Installer${NC}"
+echo -e "${BOLD}Tiny Hands Installer${NC}"
 echo ""
 
 # ── Pre-flight checks ──
@@ -149,4 +149,4 @@ echo "  View logs:    cd ${INSTALL_DIR} && docker compose logs -f tinyhands"
 echo "  Stop:         cd ${INSTALL_DIR} && docker compose down"
 echo "  Update:       cd ${INSTALL_DIR} && git pull && docker compose up -d --build"
 echo ""
-echo -e "${YELLOW}Next step: Run /agents in Slack to initialize yourself as superadmin. High five! ✋${NC}"
+echo -e "${YELLOW}Next step: Run /agents in Slack to initialize yourself as superadmin.${NC}"
