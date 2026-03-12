@@ -2025,9 +2025,11 @@ async function showNewAgentConfirmation(
   );
 
   const configSummary = buildConfigSummary(agentName, analysis, goal);
+  const toolWarnings = buildToolWarningBlocks(analysis);
   await postBlocks(channelId, [
     { type: 'header', text: { type: 'plain_text', text: `New Agent: ${agentName}` } },
     { type: 'section', text: { type: 'mrkdwn', text: `*Channels:* ${channelLabel}\n${configSummary}` } },
+    ...toolWarnings,
     { type: 'divider' },
     ...buildModelAndEffortBlocks(confirmId, analysis.model, defaultEffort),
     {
@@ -2259,9 +2261,11 @@ async function showUpdateAgentConfirmation(
   );
 
   const configSummary = buildConfigSummary(agent.name, analysis, newGoal, agent);
+  const toolWarnings = buildToolWarningBlocks(analysis);
   await postBlocks(channelId, [
     { type: 'header', text: { type: 'plain_text', text: `Update: ${agent.name}` } },
     { type: 'section', text: { type: 'mrkdwn', text: `${channelNote}${channelNote ? '\n' : ''}${configSummary}` } },
+    ...toolWarnings,
     { type: 'divider' },
     ...buildModelAndEffortBlocks(confirmId, analysis.model, defaultEffort),
     {
@@ -2871,6 +2875,53 @@ function buildModelAndEffortBlocks(confirmId: string, selectedModel: string, sel
 }
 
 // ── Helpers ──
+
+function buildToolWarningBlocks(analysis: any): any[] {
+  const blocks: any[] = [];
+
+  if (analysis.new_tools_needed?.length > 0) {
+    const toolList = analysis.new_tools_needed
+      .map((t: any) => `• \`${t.name}\` — ${t.description}`)
+      .join('\n');
+    blocks.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `:warning: *New tools needed (admin setup required):*\n${toolList}\n_The system prompt references these tools but they don't exist yet. The agent will work without them but won't have these capabilities until they're registered via \`/tools\`._`,
+      },
+    });
+  }
+
+  if (analysis.new_skills_needed?.length > 0) {
+    const skillList = analysis.new_skills_needed
+      .map((s: any) => `• \`${s.name}\` — ${s.description}`)
+      .join('\n');
+    blocks.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `:warning: *New skills needed:*\n${skillList}`,
+      },
+    });
+  }
+
+  const unconfiguredTools = (analysis.blockers || [])
+    .map((b: string) => b.match(/^Tool '(.+)' is registered but not configured/))
+    .filter(Boolean)
+    .map((m: RegExpMatchArray) => m[1]);
+
+  if (unconfiguredTools.length > 0) {
+    blocks.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `:key: *Tools need API keys:* ${unconfiguredTools.map((t: string) => `\`${t}\``).join(', ')}\n_These tools are registered but not configured. Add API keys via \`/tools\` before they'll work._`,
+      },
+    });
+  }
+
+  return blocks;
+}
 
 function buildConfigSummary(name: string, analysis: any, goal: string, existingAgent?: any): string {
   const lines: string[] = [];
