@@ -167,16 +167,18 @@ async function handleDoneEvent(key: string, buffer: ChannelBuffer, finalOutput: 
       logger.info('No status message to delete', { channelId: buffer.channelId, threadTs: buffer.threadTs });
     }
 
-    // No text prefix needed — chat:write.customize shows agent name/emoji as the bot identity
-    const fullOutput = finalOutput.slice(0, 3000);
+    // Split long outputs into multiple messages (Slack limit ~3000 chars per message)
+    const chunks = splitMessage(finalOutput, 3000);
 
-    await postMessage(
-      buffer.channelId,
-      fullOutput,
-      buffer.threadTs,
-      buffer.username,
-      buffer.iconEmoji
-    );
+    for (const chunk of chunks) {
+      await postMessage(
+        buffer.channelId,
+        chunk,
+        buffer.threadTs,
+        buffer.username,
+        buffer.iconEmoji
+      );
+    }
   } catch (err: any) {
     logger.warn('Failed to post done event', { error: err.message });
     try {
@@ -255,7 +257,32 @@ function friendlyToolName(toolName: string): string {
   return 'Working on it';
 }
 
-function truncate(text: string, maxLen: number): string {
-  if (text.length <= maxLen) return text;
-  return text.slice(0, maxLen - 3) + '...';
+function splitMessage(text: string, maxLen: number): string[] {
+  if (text.length <= maxLen) return [text];
+
+  const chunks: string[] = [];
+  let remaining = text;
+
+  while (remaining.length > 0) {
+    if (remaining.length <= maxLen) {
+      chunks.push(remaining);
+      break;
+    }
+
+    // Try to split at a newline near the limit
+    let splitAt = remaining.lastIndexOf('\n', maxLen);
+    if (splitAt < maxLen * 0.5) {
+      // No good newline break — split at a space
+      splitAt = remaining.lastIndexOf(' ', maxLen);
+    }
+    if (splitAt < maxLen * 0.3) {
+      // No good break point — hard split
+      splitAt = maxLen;
+    }
+
+    chunks.push(remaining.slice(0, splitAt));
+    remaining = remaining.slice(splitAt).replace(/^\n/, '');
+  }
+
+  return chunks;
 }
