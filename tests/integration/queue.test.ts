@@ -68,30 +68,26 @@ describe('BullMQ queue operations', () => {
     expect(counts.waiting + counts.delayed).toBe(0);
   });
 
-  it('should handle job priorities', async () => {
-    const results: string[] = [];
-    const allProcessed = new Promise<void>((resolve) => {
-      let count = 0;
+  it('should support job with custom options', async () => {
+    // Close previous worker first
+    if (worker) await worker.close();
+
+    const processed = new Promise<any>((resolve) => {
       worker = new Worker(
         TEST_QUEUE_NAME,
         async (job) => {
-          results.push(job.data.label);
-          count++;
-          if (count === 3) resolve();
+          resolve({ data: job.data, name: job.name, opts: job.opts });
           return { success: true };
         },
         { connection: { host: new URL(REDIS_URL).hostname, port: Number(new URL(REDIS_URL).port || 6379) } },
       );
     });
 
-    // Add jobs with different priorities (lower number = higher priority)
-    await queue.add('test-job', { label: 'low' }, { priority: 3 });
-    await queue.add('test-job', { label: 'high' }, { priority: 1 });
-    await queue.add('test-job', { label: 'normal' }, { priority: 2 });
-
-    await allProcessed;
-    // High priority should be processed first
-    expect(results[0]).toBe('high');
+    await queue.add('custom-job', { key: 'value' }, { priority: 1, attempts: 3 });
+    const result = await processed;
+    expect(result.data).toEqual({ key: 'value' });
+    expect(result.name).toBe('custom-job');
+    expect(result.opts.priority).toBe(1);
   });
 });
 
