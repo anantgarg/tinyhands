@@ -144,14 +144,15 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
       setStatusMessageTs(data.channelId, data.threadTs, data.statusMessageTs, data.agentId);
     }
 
+    // Use tool_use event type so the status update is never suppressed (even for Haiku)
     bufferEvent(
       data.channelId,
       data.threadTs,
-      'thinking',
-      'Thinking...',
+      'tool_use',
+      'Thinking',
       agent.name,
       agent.avatar_emoji,
-      suppressThinking,
+      false,
       data.agentId,
     );
   }
@@ -325,10 +326,10 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
             lastStreamEventType = 'thinking';
           }
 
-          // Track text output start
+          // Track text output start — never suppress this, even for Haiku
           if (event.type === 'content_block_start' && event.content_block?.type === 'text') {
             if (data.channelId) {
-              bufferEvent(data.channelId, data.threadTs, 'thinking', 'Writing response...', agent.name, agent.avatar_emoji, suppressThinking, data.agentId);
+              bufferEvent(data.channelId, data.threadTs, 'tool_use', 'Writing response', agent.name, agent.avatar_emoji, false, data.agentId);
             }
             lastStreamEventType = 'text';
           }
@@ -381,9 +382,13 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
     await recordTokenUsage(outputData.inputTokens + outputData.outputTokens);
 
     const status: RunStatus = exitCode === 0 ? 'completed' : 'failed';
-    const agentProducedOutput = exitCode === 0 && outputData.output.trim().length > 0;
+    const trimmedOutput = outputData.output.trim();
+    // Claude Code CLI returns "(No output)" when the model has nothing to say — treat as empty
+    const EMPTY_OUTPUT_PATTERNS = ['(No output)', 'No output', 'Agent completed but no structured result captured'];
+    const isEmptyOutput = trimmedOutput.length === 0 || EMPTY_OUTPUT_PATTERNS.includes(trimmedOutput);
+    const agentProducedOutput = exitCode === 0 && !isEmptyOutput;
     const output = exitCode === 0
-      ? outputData.output.trim() || 'Task completed successfully'
+      ? trimmedOutput || 'Task completed successfully'
       : `Task failed with exit code ${exitCode}: ${outputData.output}`;
 
     await updateRunRecord(runRecord.id, {

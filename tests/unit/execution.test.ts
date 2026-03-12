@@ -778,9 +778,9 @@ describe('Execution Module – executeAgentRun', () => {
     const job = makeFakeJob(makeJobData());
     await executeAgentRun(job);
 
-    // Should have buffered 'thinking' and 'done' events
-    const thinkingCalls = mockBufferEvent.mock.calls.filter((c: any[]) => c[2] === 'thinking');
-    expect(thinkingCalls.length).toBeGreaterThanOrEqual(1);
+    // Should have buffered initial status update (tool_use type for 'Thinking') and 'done' events
+    const statusCalls = mockBufferEvent.mock.calls.filter((c: any[]) => c[2] === 'tool_use' && c[3] === 'Thinking');
+    expect(statusCalls.length).toBeGreaterThanOrEqual(1);
 
     const doneCalls = mockBufferEvent.mock.calls.filter((c: any[]) => c[2] === 'done');
     expect(doneCalls.length).toBe(1);
