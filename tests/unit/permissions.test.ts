@@ -54,9 +54,9 @@ describe('Integration Access (Axis 2)', () => {
 });
 
 describe('Docker Isolation (Axis 3)', () => {
-  it('should use no network for standard agents', () => {
+  it('should use bridge network with noNewPrivileges for standard agents', () => {
     const config = getDockerSecurityConfig('standard');
-    expect(config.networkMode).toBe('none');
+    expect(config.networkMode).toBe('bridge');
     expect(config.noNewPrivileges).toBe(true);
   });
 

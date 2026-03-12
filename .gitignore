@@ -6,4 +6,5 @@ dist/
 *.db-wal
 *.db-shm
 logs/
+coverage/
 .DS_Store

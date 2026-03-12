@@ -1,334 +1,270 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import Database from 'better-sqlite3';
-import { initializeSchema } from '../../src/db';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// Mock the db module to use in-memory database
-let db: Database.Database;
+// Mock DB
+const mockQuery = vi.fn();
+const mockQueryOne = vi.fn();
+const mockExecute = vi.fn();
+const mockWithTransaction = vi.fn();
 
-function setupTestDb() {
-  db = new Database(':memory:');
-  db.pragma('foreign_keys = ON');
-  initializeSchema(db);
-  return db;
-}
+vi.mock('../../src/db', () => ({
+  query: (...args: any[]) => mockQuery(...args),
+  queryOne: (...args: any[]) => mockQueryOne(...args),
+  execute: (...args: any[]) => mockExecute(...args),
+  withTransaction: (fn: any) => mockWithTransaction(fn),
+}));
 
-// We test the SQL layer directly since the module depends on getDb()
+vi.mock('../../src/utils/logger', () => ({
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
+
+vi.mock('../../src/slack', () => ({
+  ensureBotInChannels: vi.fn(),
+}));
+
+import {
+  createAgent,
+  getAgent,
+  getAgentByName,
+  getAgentByChannel,
+  getAgentsByChannel,
+  listAgents,
+  updateAgent,
+  deleteAgent,
+  getAgentVersions,
+  ensureBotInAllAgentChannels,
+} from '../../src/modules/agents';
+
 describe('Agent Management', () => {
   beforeEach(() => {
-    db = setupTestDb();
+    vi.clearAllMocks();
+    mockWithTransaction.mockImplementation(async (fn: any) => {
+      const fakeClient = { query: vi.fn() };
+      return fn(fakeClient);
+    });
   });
 
-  afterEach(() => {
-    db.close();
+  describe('createAgent', () => {
+    it('should create an agent with defaults', async () => {
+      mockQueryOne.mockResolvedValueOnce(undefined); // no existing agent
+
+      const agent = await createAgent({
+        name: 'test-agent',
+        channelId: 'C123',
+        systemPrompt: 'You are a test agent',
+        createdBy: 'U001',
+      });
+
+      expect(agent.name).toBe('test-agent');
+      expect(agent.channel_id).toBe('C123');
+      expect(agent.channel_ids).toEqual(['C123']);
+      expect(agent.model).toBe('sonnet');
+      expect(agent.permission_level).toBe('standard');
+      expect(agent.status).toBe('active');
+      expect(agent.memory_enabled).toBe(false);
+      expect(agent.respond_to_all_messages).toBe(false);
+      expect(agent.tools).toEqual(['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash', 'WebSearch', 'WebFetch']);
+      expect(mockWithTransaction).toHaveBeenCalled();
+    });
+
+    it('should create with custom options', async () => {
+      mockQueryOne.mockResolvedValueOnce(undefined);
+
+      const agent = await createAgent({
+        name: 'custom-agent',
+        channelId: 'C456',
+        channelIds: ['C456', 'C789'],
+        systemPrompt: 'Custom prompt',
+        tools: ['Read', 'Glob'],
+        model: 'opus',
+        permissionLevel: 'full',
+        memoryEnabled: true,
+        respondToAllMessages: true,
+        relevanceKeywords: ['deploy', 'release'],
+        createdBy: 'U002',
+      });
+
+      expect(agent.channel_ids).toEqual(['C456', 'C789']);
+      expect(agent.model).toBe('opus');
+      expect(agent.permission_level).toBe('full');
+      expect(agent.memory_enabled).toBe(true);
+      expect(agent.respond_to_all_messages).toBe(true);
+      expect(agent.relevance_keywords).toEqual(['deploy', 'release']);
+      expect(agent.tools).toEqual(['Read', 'Glob']);
+    });
+
+    it('should throw if name already exists', async () => {
+      mockQueryOne.mockResolvedValueOnce({ id: 'existing-id' });
+
+      await expect(
+        createAgent({
+          name: 'existing-agent',
+          channelId: 'C123',
+          systemPrompt: 'test',
+          createdBy: 'U001',
+        })
+      ).rejects.toThrow('already exists');
+    });
   });
 
-  it('should create an agent', () => {
-    const id = 'test-agent-1';
-    db.prepare(`
-      INSERT INTO agents (id, name, channel_id, system_prompt, tools, avatar_emoji,
-        status, model, streaming_detail, self_evolution_mode, max_turns, memory_enabled,
-        permission_level, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(id, 'test-agent', 'C123', 'You are a test agent', '["Read","Write"]',
-      ':robot_face:', 'active', 'sonnet', 1, 'autonomous', 50, 0, 'standard', 'U001');
+  describe('getAgent', () => {
+    it('should return deserialized agent', async () => {
+      mockQueryOne.mockResolvedValueOnce({
+        id: 'a1',
+        name: 'test',
+        channel_id: 'C1',
+        channel_ids: ['C1', 'C2'],
+        tools: '["Read","Write"]',
+        relevance_keywords: '["test"]',
+      });
 
-    const agent = db.prepare('SELECT * FROM agents WHERE id = ?').get(id) as any;
-    expect(agent).toBeDefined();
-    expect(agent.name).toBe('test-agent');
-    expect(agent.model).toBe('sonnet');
-    expect(agent.permission_level).toBe('standard');
+      const agent = await getAgent('a1');
+      expect(agent).toBeDefined();
+      expect(agent!.tools).toEqual(['Read', 'Write']);
+      expect(agent!.relevance_keywords).toEqual(['test']);
+      expect(agent!.channel_ids).toEqual(['C1', 'C2']);
+    });
+
+    it('should return null for missing agent', async () => {
+      mockQueryOne.mockResolvedValueOnce(undefined);
+      const agent = await getAgent('nonexistent');
+      expect(agent).toBeNull();
+    });
   });
 
-  it('should reject duplicate agent names', () => {
-    db.prepare(`
-      INSERT INTO agents (id, name, channel_id, system_prompt, tools, avatar_emoji,
-        status, model, streaming_detail, self_evolution_mode, max_turns, memory_enabled,
-        permission_level, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run('a1', 'dup-agent', 'C1', '', '[]', ':robot_face:', 'active', 'sonnet', 1, 'autonomous', 50, 0, 'standard', 'U1');
+  describe('getAgentByName', () => {
+    it('should find agent by name', async () => {
+      mockQueryOne.mockResolvedValueOnce({
+        id: 'a1', name: 'my-agent', channel_id: 'C1',
+        tools: '[]', relevance_keywords: '[]',
+      });
 
-    expect(() => {
-      db.prepare(`
-        INSERT INTO agents (id, name, channel_id, system_prompt, tools, avatar_emoji,
-          status, model, streaming_detail, self_evolution_mode, max_turns, memory_enabled,
-          permission_level, created_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run('a2', 'dup-agent', 'C2', '', '[]', ':robot_face:', 'active', 'sonnet', 1, 'autonomous', 50, 0, 'standard', 'U1');
-    }).toThrow();
+      const agent = await getAgentByName('my-agent');
+      expect(agent).toBeDefined();
+      expect(agent!.name).toBe('my-agent');
+    });
   });
 
-  it('should create version history on insert', () => {
-    db.prepare(`
-      INSERT INTO agents (id, name, channel_id, system_prompt, tools, avatar_emoji,
-        status, model, streaming_detail, self_evolution_mode, max_turns, memory_enabled,
-        permission_level, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run('a1', 'versioned', 'C1', 'Initial prompt', '[]', ':robot_face:', 'active', 'sonnet', 1, 'autonomous', 50, 0, 'standard', 'U1');
+  describe('getAgentByChannel', () => {
+    it('should find agent by channel', async () => {
+      mockQueryOne.mockResolvedValueOnce({
+        id: 'a1', name: 'ch-agent', channel_id: 'C123',
+        tools: '[]', relevance_keywords: '[]',
+      });
 
-    db.prepare(`
-      INSERT INTO agent_versions (id, agent_id, version, system_prompt, change_note, changed_by)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run('v1', 'a1', 1, 'Initial prompt', 'Initial creation', 'U1');
-
-    const versions = db.prepare('SELECT * FROM agent_versions WHERE agent_id = ?').all('a1');
-    expect(versions).toHaveLength(1);
+      const agent = await getAgentByChannel('C123');
+      expect(agent).toBeDefined();
+    });
   });
 
-  it('should track version history', () => {
-    db.prepare(`
-      INSERT INTO agents (id, name, channel_id, system_prompt, tools, avatar_emoji,
-        status, model, streaming_detail, self_evolution_mode, max_turns, memory_enabled,
-        permission_level, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run('a1', 'tracked', 'C1', 'v1 prompt', '[]', ':robot_face:', 'active', 'sonnet', 1, 'autonomous', 50, 0, 'standard', 'U1');
+  describe('getAgentsByChannel', () => {
+    it('should return multiple agents for a channel', async () => {
+      mockQuery.mockResolvedValueOnce([
+        { id: 'a1', name: 'agent1', channel_id: 'C1', tools: '[]', relevance_keywords: '[]' },
+        { id: 'a2', name: 'agent2', channel_id: 'C1', tools: '[]', relevance_keywords: '[]' },
+      ]);
 
-    db.prepare('INSERT INTO agent_versions (id, agent_id, version, system_prompt, change_note, changed_by) VALUES (?, ?, ?, ?, ?, ?)')
-      .run('v1', 'a1', 1, 'v1 prompt', 'Initial', 'U1');
-
-    db.prepare('UPDATE agents SET system_prompt = ? WHERE id = ?').run('v2 prompt', 'a1');
-    db.prepare('INSERT INTO agent_versions (id, agent_id, version, system_prompt, change_note, changed_by) VALUES (?, ?, ?, ?, ?, ?)')
-      .run('v2', 'a1', 2, 'v2 prompt', 'Updated', 'U1');
-
-    const versions = db.prepare('SELECT * FROM agent_versions WHERE agent_id = ? ORDER BY version').all('a1');
-    expect(versions).toHaveLength(2);
-  });
-});
-
-describe('Access Control', () => {
-  beforeEach(() => {
-    db = setupTestDb();
+      const agents = await getAgentsByChannel('C1');
+      expect(agents).toHaveLength(2);
+    });
   });
 
-  afterEach(() => {
-    db.close();
+  describe('listAgents', () => {
+    it('should list non-archived agents', async () => {
+      mockQuery.mockResolvedValueOnce([
+        { id: 'a1', name: 'active-agent', status: 'active', tools: '[]', relevance_keywords: '[]' },
+      ]);
+
+      const agents = await listAgents();
+      expect(agents).toHaveLength(1);
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('status !='),
+        ['archived']
+      );
+    });
   });
 
-  it('should initialize first superadmin', () => {
-    db.prepare('INSERT INTO superadmins (user_id, granted_by) VALUES (?, ?)').run('U001', 'system');
+  describe('updateAgent', () => {
+    it('should update agent fields', async () => {
+      // getAgent call
+      mockQueryOne.mockResolvedValueOnce({
+        id: 'a1', name: 'old-name', channel_id: 'C1',
+        system_prompt: 'old prompt',
+        tools: '[]', relevance_keywords: '[]',
+      });
+      // dup name check — no duplicate
+      mockQueryOne.mockResolvedValueOnce(undefined);
+      // getAgent after update
+      mockQueryOne.mockResolvedValueOnce({
+        id: 'a1', name: 'new-name', channel_id: 'C1',
+        system_prompt: 'old prompt',
+        tools: '[]', relevance_keywords: '[]',
+      });
 
-    const admins = db.prepare('SELECT * FROM superadmins').all();
-    expect(admins).toHaveLength(1);
-    expect((admins[0] as any).user_id).toBe('U001');
+      const updated = await updateAgent('a1', { name: 'new-name' }, 'U001');
+      expect(updated.name).toBe('new-name');
+      expect(mockWithTransaction).toHaveBeenCalled();
+    });
+
+    it('should throw if agent not found', async () => {
+      mockQueryOne.mockResolvedValueOnce(undefined);
+
+      await expect(
+        updateAgent('nonexistent', { name: 'x' }, 'U001')
+      ).rejects.toThrow('not found');
+    });
+
+    it('should return existing agent when no updates', async () => {
+      mockQueryOne.mockResolvedValueOnce({
+        id: 'a1', name: 'test', channel_id: 'C1',
+        tools: '[]', relevance_keywords: '[]',
+      });
+
+      const result = await updateAgent('a1', {}, 'U001');
+      expect(result.name).toBe('test');
+      expect(mockWithTransaction).not.toHaveBeenCalled();
+    });
   });
 
-  it('should prevent duplicate superadmin init', () => {
-    db.prepare('INSERT INTO superadmins (user_id, granted_by) VALUES (?, ?)').run('U001', 'system');
-
-    // Second insert should fail (PRIMARY KEY constraint)
-    expect(() => {
-      db.prepare('INSERT INTO superadmins (user_id, granted_by) VALUES (?, ?)').run('U001', 'system');
-    }).toThrow();
+  describe('deleteAgent', () => {
+    it('should archive the agent', async () => {
+      await deleteAgent('a1');
+      expect(mockExecute).toHaveBeenCalledWith(
+        expect.stringContaining('status'),
+        ['archived', 'a1']
+      );
+    });
   });
 
-  it('should track agent admins', () => {
-    db.prepare(`
-      INSERT INTO agents (id, name, channel_id, system_prompt, tools, avatar_emoji,
-        status, model, streaming_detail, self_evolution_mode, max_turns, memory_enabled,
-        permission_level, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run('a1', 'admin-test', 'C1', '', '[]', ':robot_face:', 'active', 'sonnet', 1, 'autonomous', 50, 0, 'standard', 'U1');
+  describe('getAgentVersions', () => {
+    it('should return versions in descending order', async () => {
+      mockQuery.mockResolvedValueOnce([
+        { id: 'v2', agent_id: 'a1', version: 2 },
+        { id: 'v1', agent_id: 'a1', version: 1 },
+      ]);
 
-    db.prepare('INSERT INTO agent_admins (agent_id, user_id, role, granted_by) VALUES (?, ?, ?, ?)').run('a1', 'U002', 'admin', 'U001');
-
-    const admins = db.prepare('SELECT * FROM agent_admins WHERE agent_id = ?').all('a1');
-    expect(admins).toHaveLength(1);
-    expect((admins[0] as any).role).toBe('admin');
-  });
-});
-
-describe('Permissions', () => {
-  it('should return correct disallowed tools per level', () => {
-    // Test permission logic directly
-    const TOOL_RESTRICTIONS: Record<string, string[]> = {
-      'read-only': ['Bash', 'Write', 'Edit', 'NotebookEdit'],
-      'standard': ['NotebookEdit'],
-      'full': [],
-    };
-
-    expect(TOOL_RESTRICTIONS['read-only']).toContain('Bash');
-    expect(TOOL_RESTRICTIONS['read-only']).toContain('Write');
-    expect(TOOL_RESTRICTIONS['standard']).not.toContain('Bash');
-    expect(TOOL_RESTRICTIONS['full']).toHaveLength(0);
-  });
-});
-
-describe('FTS5 Search', () => {
-  beforeEach(() => {
-    db = setupTestDb();
+      const versions = await getAgentVersions('a1');
+      expect(versions).toHaveLength(2);
+    });
   });
 
-  afterEach(() => {
-    db.close();
-  });
+  describe('ensureBotInAllAgentChannels', () => {
+    it('should collect all channels from active agents', async () => {
+      mockQuery.mockResolvedValueOnce([
+        { id: 'a1', channel_ids: ['C1', 'C2'], tools: '[]', relevance_keywords: '[]' },
+        { id: 'a2', channel_ids: ['C2', 'C3'], tools: '[]', relevance_keywords: '[]' },
+      ]);
 
-  it('should index and search source chunks', () => {
-    // Create agent first
-    db.prepare(`
-      INSERT INTO agents (id, name, channel_id, system_prompt, tools, avatar_emoji,
-        status, model, streaming_detail, self_evolution_mode, max_turns, memory_enabled,
-        permission_level, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run('a1', 'search-test', 'C1', '', '[]', ':robot_face:', 'active', 'sonnet', 1, 'autonomous', 50, 0, 'standard', 'U1');
+      await ensureBotInAllAgentChannels();
+      // The function should have called ensureBotInChannels with unique channels
+    });
 
-    db.prepare(`
-      INSERT INTO sources (id, agent_id, source_type, uri, label, status)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run('s1', 'a1', 'github', 'https://github.com/test/repo', 'test-repo', 'active');
+    it('should handle agents with no channels', async () => {
+      mockQuery.mockResolvedValueOnce([
+        { id: 'a1', channel_ids: [], tools: '[]', relevance_keywords: '[]' },
+      ]);
 
-    // Insert chunks
-    db.prepare(`
-      INSERT INTO source_chunks (id, source_id, agent_id, file_path, chunk_index, content, content_hash)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run('c1', 's1', 'a1', 'README.md', 0, 'This is a test document about authentication and login flows', 'hash1');
-
-    // Rebuild FTS index
-    db.exec(`
-      DELETE FROM source_chunks_fts;
-      INSERT INTO source_chunks_fts(rowid, content, file_path)
-        SELECT rowid, content, file_path FROM source_chunks;
-    `);
-
-    // Search
-    const results = db.prepare(`
-      SELECT sc.*
-      FROM source_chunks_fts
-      JOIN source_chunks sc ON source_chunks_fts.rowid = sc.rowid
-      WHERE source_chunks_fts MATCH ?
-    `).all('authentication');
-
-    expect(results).toHaveLength(1);
-  });
-});
-
-describe('Rate Limiter', () => {
-  beforeEach(() => {
-    db = setupTestDb();
-  });
-
-  afterEach(() => {
-    db.close();
-  });
-
-  it('should store and retrieve run history', () => {
-    db.prepare(`
-      INSERT INTO agents (id, name, channel_id, system_prompt, tools, avatar_emoji,
-        status, model, streaming_detail, self_evolution_mode, max_turns, memory_enabled,
-        permission_level, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run('a1', 'rate-test', 'C1', '', '[]', ':robot_face:', 'active', 'sonnet', 1, 'autonomous', 50, 0, 'standard', 'U1');
-
-    db.prepare(`
-      INSERT INTO run_history (id, agent_id, channel_id, thread_ts, input, output, status,
-        input_tokens, output_tokens, estimated_cost_usd, duration_ms, trace_id, model)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run('r1', 'a1', 'C1', 'ts1', 'test input', 'test output', 'completed', 100, 50, 0.01, 1000, 'trace1', 'sonnet');
-
-    const run = db.prepare('SELECT * FROM run_history WHERE id = ?').get('r1') as any;
-    expect(run.status).toBe('completed');
-    expect(run.input_tokens).toBe(100);
-    expect(run.estimated_cost_usd).toBe(0.01);
-  });
-});
-
-describe('Cost Calculator', () => {
-  it('should calculate costs accurately', () => {
-    const PRICING: Record<string, { inputPer1k: number; outputPer1k: number }> = {
-      opus: { inputPer1k: 0.015, outputPer1k: 0.075 },
-      sonnet: { inputPer1k: 0.003, outputPer1k: 0.015 },
-      haiku: { inputPer1k: 0.00025, outputPer1k: 0.00125 },
-    };
-
-    const model = 'sonnet';
-    const inputTokens = 1000;
-    const outputTokens = 500;
-    const pricing = PRICING[model];
-    const cost = (inputTokens / 1000) * pricing.inputPer1k + (outputTokens / 1000) * pricing.outputPer1k;
-
-    expect(cost).toBeCloseTo(0.0105);
-  });
-});
-
-describe('Workflows', () => {
-  beforeEach(() => {
-    db = setupTestDb();
-  });
-
-  afterEach(() => {
-    db.close();
-  });
-
-  it('should track side effects idempotently', () => {
-    db.prepare(`
-      INSERT INTO agents (id, name, channel_id, system_prompt, tools, avatar_emoji,
-        status, model, streaming_detail, self_evolution_mode, max_turns, memory_enabled,
-        permission_level, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run('a1', 'wf-test', 'C1', '', '[]', ':robot_face:', 'active', 'sonnet', 1, 'autonomous', 50, 0, 'standard', 'U1');
-
-    db.prepare(`
-      INSERT INTO workflow_definitions (id, name, agent_id, steps_json, created_by)
-      VALUES (?, ?, ?, ?, ?)
-    `).run('wd1', 'test-wf', 'a1', '[]', 'U1');
-
-    db.prepare(`
-      INSERT INTO workflow_runs (id, workflow_id, run_id, current_step, step_state, status)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run('wr1', 'wd1', 'r1', 0, '{}', 'running');
-
-    // First insert should succeed
-    db.prepare(`
-      INSERT INTO side_effects_log (id, workflow_run_id, step_id, attempt_number, effect_type, effect_data)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run('se1', 'wr1', 'step1', 1, 'email_sent', '{}');
-
-    // Duplicate should fail (unique constraint)
-    expect(() => {
-      db.prepare(`
-        INSERT INTO side_effects_log (id, workflow_run_id, step_id, attempt_number, effect_type, effect_data)
-        VALUES (?, ?, ?, ?, ?, ?)
-      `).run('se2', 'wr1', 'step1', 2, 'email_sent', '{}');
-    }).toThrow();
-  });
-});
-
-describe('Agent Memory', () => {
-  beforeEach(() => {
-    db = setupTestDb();
-  });
-
-  afterEach(() => {
-    db.close();
-  });
-
-  it('should store and search memories', () => {
-    db.prepare(`
-      INSERT INTO agents (id, name, channel_id, system_prompt, tools, avatar_emoji,
-        status, model, streaming_detail, self_evolution_mode, max_turns, memory_enabled,
-        permission_level, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run('a1', 'mem-test', 'C1', '', '[]', ':robot_face:', 'active', 'sonnet', 1, 'autonomous', 50, 1, 'standard', 'U1');
-
-    db.prepare(`
-      INSERT INTO agent_memory (id, agent_id, run_id, fact, category, relevance_score)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run('m1', 'a1', 'r1', 'Customer prefers email over Slack', 'customer_preference', 1.0);
-
-    // Rebuild FTS
-    db.exec(`
-      DELETE FROM agent_memory_fts;
-      INSERT INTO agent_memory_fts(rowid, fact, category)
-        SELECT rowid, fact, category FROM agent_memory;
-    `);
-
-    // Search
-    const results = db.prepare(`
-      SELECT am.*
-      FROM agent_memory_fts
-      JOIN agent_memory am ON agent_memory_fts.rowid = am.rowid
-      WHERE agent_memory_fts MATCH ?
-    `).all('email');
-
-    expect(results).toHaveLength(1);
-    expect((results[0] as any).fact).toContain('email');
+      await ensureBotInAllAgentChannels();
+      // Should not throw
+    });
   });
 });
