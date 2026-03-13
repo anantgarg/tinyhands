@@ -206,16 +206,34 @@ async function githubRaw(url: string, token: string): Promise<string> {
 /** Recursively list files in a GitHub directory */
 async function listGitHubDir(repo: string, dirPath: string, branch: string, token: string): Promise<GitHubFile[]> {
   const ref = branch ? `?ref=${encodeURIComponent(branch)}` : '';
-  const res = await githubApi(`/repos/${repo}/contents/${dirPath}${ref}`, token);
-  if (res.status >= 400 || !Array.isArray(res.data)) return [];
+  const apiPath = `/repos/${repo}/contents/${dirPath}${ref}`;
+  const res = await githubApi(apiPath, token);
+  if (res.status >= 400) {
+    logger.warn('GitHub API error listing directory', { repo, dirPath, status: res.status, response: JSON.stringify(res.data).slice(0, 300) });
+    if (res.status === 401 || res.status === 403) {
+      throw new Error(`GitHub API auth failed (${res.status}) for ${repo} — check that the token is valid and has repo access`);
+    }
+    if (res.status === 404) {
+      throw new Error(`GitHub path not found: ${repo}/${dirPath} (branch: ${branch}) — check repo name and paths`);
+    }
+    throw new Error(`GitHub API error (${res.status}) listing ${repo}/${dirPath}`);
+  }
+  if (!Array.isArray(res.data)) {
+    logger.warn('GitHub API returned non-array for directory listing', { repo, dirPath, dataType: typeof res.data });
+    return [];
+  }
 
   const files: GitHubFile[] = [];
   for (const item of res.data) {
     if (item.type === 'file') {
       files.push(item);
     } else if (item.type === 'dir') {
-      const subFiles = await listGitHubDir(repo, item.path, branch, token);
-      files.push(...subFiles);
+      try {
+        const subFiles = await listGitHubDir(repo, item.path, branch, token);
+        files.push(...subFiles);
+      } catch (err: any) {
+        logger.warn('Failed to list GitHub subdirectory', { repo, subDir: item.path, error: err.message });
+      }
     }
   }
   return files;
@@ -236,9 +254,10 @@ async function detectMintlify(
       try {
         const raw = await githubRaw(res.data.download_url, token);
         const config = JSON.parse(raw);
+        logger.info('Mintlify config loaded', { repo, configPath: `${base}${configName}`, topKeys: Object.keys(config).join(', ') });
         return { isMintlify: true, config, configPath: `${base}${configName}` };
-      } catch {
-        // Not valid JSON, skip
+      } catch (err: any) {
+        logger.warn('Mintlify config found but failed to parse', { repo, configName, error: err.message });
       }
     }
   }
@@ -256,8 +275,10 @@ function extractMintlifyPages(nav: any): string[] {
       } else if (item && typeof item === 'object') {
         // Group: { group: "Name", pages: [...] }
         if (Array.isArray(item.pages)) walk(item.pages);
-        // Tab navigation: { tab: "Name", pages: [...] }
+        // Tab navigation: { tab: "Name", pages: [...] } or { tab: "Name", groups: [...] }
         if (Array.isArray(item.groups)) walk(item.groups);
+        // Anchors or other nested items with children
+        if (Array.isArray(item.items)) walk(item.items);
       }
     }
   }
@@ -271,10 +292,28 @@ function extractMintlifyPages(nav: any): string[] {
       for (const tab of nav.tabs) {
         if (Array.isArray(tab.pages)) walk(tab.pages);
         if (Array.isArray(tab.groups)) walk(tab.groups);
+        if (Array.isArray(tab.items)) walk(tab.items);
       }
     }
   }
   return pages;
+}
+
+/** Extract navigation from Mintlify config (handles multiple config formats) */
+function getMintlifyNavigation(config: any): any {
+  // Standard: config.navigation (array of groups)
+  if (config.navigation) return config.navigation;
+
+  // Newer format: top-level tabs array containing groups/pages
+  if (Array.isArray(config.tabs)) return { tabs: config.tabs };
+
+  // Some configs use sidebar directly
+  if (config.sidebar) return config.sidebar;
+
+  // Try anchors as navigation source
+  if (config.anchors) return config.anchors;
+
+  return null;
 }
 
 /** Extract category from Mintlify navigation for a given page path */
@@ -320,6 +359,19 @@ async function syncGitHub(source: KBSource, config: Record<string, string>): Pro
   const contentType = config.content_type || 'docs'; // docs | mintlify | source_code
 
   if (!repo) throw new Error('Repository (repo) is required');
+  if (!token) throw new Error('GitHub token is not configured. Set up GitHub API keys first.');
+
+  // Validate token + repo access before proceeding
+  const repoCheck = await githubApi(`/repos/${repo}`, token);
+  if (repoCheck.status === 401 || repoCheck.status === 403) {
+    throw new Error(`GitHub token is invalid or lacks access to ${repo} (${repoCheck.status})`);
+  }
+  if (repoCheck.status === 404) {
+    throw new Error(`GitHub repository "${repo}" not found — check the repo name (format: owner/repo)`);
+  }
+  if (repoCheck.status >= 400) {
+    throw new Error(`GitHub API error (${repoCheck.status}) checking repo ${repo}: ${JSON.stringify(repoCheck.data).slice(0, 200)}`);
+  }
 
   let count = 0;
 
@@ -329,9 +381,12 @@ async function syncGitHub(source: KBSource, config: Record<string, string>): Pro
     const mintlify = await detectMintlify(repo, basePath, branch, token);
 
     if (mintlify.isMintlify && mintlify.config) {
-      logger.info('Mintlify docs detected', { repo, configPath: mintlify.configPath });
-      const nav = mintlify.config.navigation;
-      const pageRefs = extractMintlifyPages(nav);
+      logger.info('Mintlify docs detected', { repo, configPath: mintlify.configPath, configKeys: Object.keys(mintlify.config).join(', ') });
+      const nav = getMintlifyNavigation(mintlify.config);
+      if (!nav) {
+        logger.warn('Mintlify config found but no navigation structure detected', { repo, configKeys: Object.keys(mintlify.config).join(', ') });
+      }
+      const pageRefs = nav ? extractMintlifyPages(nav) : [];
       logger.info('Mintlify pages extracted', { repo, pageCount: pageRefs.length });
 
       if (pageRefs.length === 0) {
@@ -396,13 +451,20 @@ async function syncGitHub(source: KBSource, config: Record<string, string>): Pro
     const codeExtensions = ['.ts', '.js', '.py', '.go', '.rs', '.java', '.rb', '.sh'];
     const allowedExts = contentType === 'source_code' ? codeExtensions : docExtensions;
 
+    logger.info('GitHub directory listing result', { repo, dirPath, totalFiles: files.length, allowedExts: allowedExts.join(', ') });
+
+    let skippedExt = 0;
+    let skippedSize = 0;
+    let skippedNoUrl = 0;
+    let failed = 0;
+
     for (const file of files) {
       const ext = '.' + file.path.split('.').pop()?.toLowerCase();
-      if (!allowedExts.includes(ext)) continue;
-      if (file.size > 500000) continue; // Skip files > 500KB
+      if (!allowedExts.includes(ext)) { skippedExt++; continue; }
+      if (file.size > 500000) { skippedSize++; continue; }
 
       try {
-        if (!file.download_url) continue;
+        if (!file.download_url) { skippedNoUrl++; continue; }
         const content = await githubRaw(file.download_url, token);
         const { frontmatter, body } = parseFrontmatter(content);
         const cleanBody = ext === '.mdx' ? stripJsx(body) : body;
@@ -421,9 +483,22 @@ async function syncGitHub(source: KBSource, config: Record<string, string>): Pro
         });
         count++;
       } catch (err: any) {
+        failed++;
         logger.warn('Failed to sync GitHub file', { repo, path: file.path, error: err.message });
       }
     }
+
+    if (count === 0 && files.length > 0) {
+      logger.warn('GitHub sync found files but created 0 entries', {
+        repo, dirPath, totalFiles: files.length,
+        skippedExt, skippedSize, skippedNoUrl, failed,
+        sampleFiles: files.slice(0, 5).map(f => f.path),
+      });
+    }
+  }
+
+  if (count === 0) {
+    logger.warn('GitHub sync completed with 0 entries', { repo, branch, paths: paths.join(', '), contentType });
   }
 
   return count;

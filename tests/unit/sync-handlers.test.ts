@@ -260,6 +260,9 @@ describe('KB Source Sync Handlers', () => {
   // GitHub sync handler
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
+  // Repo validation check response (added for all GitHub tests that provide a valid repo)
+  const githubRepoOk = { status: 200, body: JSON.stringify({ id: 1, full_name: 'owner/repo' }) };
+
   describe('syncGitHub', () => {
     it('should require a repo in config', async () => {
       setupProviderCredentials('github', { token: 'ghp_test' });
@@ -275,10 +278,9 @@ describe('KB Source Sync Handlers', () => {
     it('should check for Mintlify config files (docs.json, mint.json)', async () => {
       setupProviderCredentials('github', { token: 'ghp_test' });
 
-      // First request: check docs.json - not found (404)
-      // Second request: check mint.json - not found (404)
-      // Third request: list directory files - empty
+      // Repo check, then check docs.json (404), mint.json (404), list directory files - empty
       setupHttpsMock([
+        githubRepoOk,
         { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
         { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
         { status: 200, body: JSON.stringify([]) },
@@ -301,11 +303,12 @@ describe('KB Source Sync Handlers', () => {
       const mintlifyConfig = { name: 'Test Docs', navigation: [] };
 
       setupHttpsMock([
-        // First request: check docs.json - found with empty navigation
+        githubRepoOk,
+        // check docs.json - found with empty navigation
         { status: 200, body: JSON.stringify({ download_url: 'https://raw.githubusercontent.com/docs.json' }) },
-        // Second request: raw docs.json content
+        // raw docs.json content
         { status: 200, body: JSON.stringify(mintlifyConfig) },
-        // Third request: standard sync - list directory files
+        // standard sync - list directory files
         {
           status: 200,
           body: JSON.stringify([
@@ -336,11 +339,12 @@ describe('KB Source Sync Handlers', () => {
       const mintlifyConfig = { name: 'Test Docs' };
 
       setupHttpsMock([
-        // First request: check docs.json - found with no navigation
+        githubRepoOk,
+        // check docs.json - found with no navigation
         { status: 200, body: JSON.stringify({ download_url: 'https://raw.githubusercontent.com/docs.json' }) },
-        // Second request: raw docs.json content
+        // raw docs.json content
         { status: 200, body: JSON.stringify(mintlifyConfig) },
-        // Third request: standard sync - list directory files
+        // standard sync - list directory files
         { status: 200, body: JSON.stringify([]) },
       ]);
 
@@ -359,6 +363,7 @@ describe('KB Source Sync Handlers', () => {
 
       // Mintlify not detected, listing files in directory
       setupHttpsMock([
+        githubRepoOk,
         { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
         { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
         {
@@ -387,6 +392,7 @@ describe('KB Source Sync Handlers', () => {
       setupProviderCredentials('github', { token: 'ghp_test' });
 
       setupHttpsMock([
+        githubRepoOk,
         { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
         { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
         {
@@ -419,8 +425,9 @@ describe('KB Source Sync Handlers', () => {
 
       // For source_code content type, the Mintlify check is skipped entirely
       // (condition is contentType === 'mintlify' || contentType === 'docs')
-      // So the first request is listing directory files directly
+      // So after repo check, the first request is listing directory files directly
       setupHttpsMock([
+        githubRepoOk,
         {
           status: 200,
           body: JSON.stringify([
@@ -448,6 +455,7 @@ describe('KB Source Sync Handlers', () => {
       setupProviderCredentials('github', { token: 'ghp_test' });
 
       setupHttpsMock([
+        githubRepoOk,
         { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
         { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
         {
@@ -473,6 +481,7 @@ describe('KB Source Sync Handlers', () => {
       const mdContent = '---\ntitle: My Page\ndescription: A page about things\n---\n# Content\nHello world';
 
       setupHttpsMock([
+        githubRepoOk,
         { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
         { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
         {
@@ -501,6 +510,7 @@ describe('KB Source Sync Handlers', () => {
       setupProviderCredentials('github', { token: 'ghp_test' });
 
       setupHttpsMock([
+        githubRepoOk,
         { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
         { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
         // First path: docs/
@@ -529,6 +539,7 @@ describe('KB Source Sync Handlers', () => {
       setupProviderCredentials('github', { token: 'ghp_test' });
 
       setupHttpsMock([
+        githubRepoOk,
         { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
         { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
         {
