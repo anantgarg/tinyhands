@@ -272,7 +272,7 @@ export function registerCommands(app: App): void {
 
     // Default: show KB dashboard (admin gets full view with sources)
     if (!isAdmin) {
-      await respond({ response_type: 'ephemeral', text: 'Usage: `/kb search <query>` or `/kb add`' });
+      await respond({ response_type: 'in_channel', text: 'Usage: `/kb search <query>` or `/kb add`' });
       return;
     }
 
@@ -368,28 +368,6 @@ export function registerCommands(app: App): void {
       }
     }
 
-    // ── Recent Entries ──
-    if (entries.length > 0) {
-      blocks.push({ type: 'divider' });
-      blocks.push({ type: 'section', text: { type: 'mrkdwn', text: ':white_check_mark: *Recent Entries*' } });
-
-      for (const e of entries.slice(0, 5)) {
-        const tagStr = e.tags.length > 0 ? ` · ${e.tags.slice(0, 3).join(', ')}` : '';
-        blocks.push({
-          type: 'section',
-          text: { type: 'mrkdwn', text: `*${e.title}* (${e.category}${tagStr})\n${e.summary.slice(0, 150)}` },
-          accessory: {
-            type: 'overflow',
-            action_id: 'kb_entry_overflow',
-            options: [
-              { text: { type: 'plain_text', text: ':eyes: View' }, value: `view:${e.id}` },
-              { text: { type: 'plain_text', text: ':wastebasket: Delete' }, value: `delete:${e.id}` },
-            ],
-          },
-        });
-      }
-    }
-
     blocks.push({ type: 'divider' });
     blocks.push({
       type: 'actions',
@@ -402,7 +380,7 @@ export function registerCommands(app: App): void {
       ],
     });
 
-    await respond({ response_type: 'ephemeral', blocks, text: 'Knowledge Base' });
+    await respond({ response_type: 'in_channel', blocks, text: 'Knowledge Base' });
   });
 }
 
@@ -846,6 +824,7 @@ export function registerInlineActions(app: App): void {
       const userId = body.user.id;
       const channelId = body.channel?.id || body.container?.channel_id;
       const threadTs = body.message?.thread_ts || body.message?.ts;
+      const triggerId = body.trigger_id;
       if (!channelId || !threadTs) return;
 
       // Clean up the type-selection state
@@ -854,7 +833,7 @@ export function registerInlineActions(app: App): void {
         [threadTs, userId],
       );
 
-      await handleSourceTypeSelected(connector.type, userId, channelId, threadTs);
+      await handleSourceTypeSelected(connector.type, userId, channelId, threadTs, triggerId);
     });
   }
 
@@ -912,9 +891,10 @@ export function registerInlineActions(app: App): void {
       const userId = body.user.id;
       const channelId = body.channel?.id || body.container?.channel_id;
       const threadTs = body.message?.thread_ts || body.message?.ts;
+      const triggerId = body.trigger_id;
       if (!channelId || !threadTs) return;
 
-      await startApiKeySetup(provider, userId, channelId, threadTs);
+      await startApiKeySetup(provider, userId, channelId, threadTs, triggerId);
     });
   }
 
@@ -1662,6 +1642,105 @@ export function registerToolAndKBModals(app: App): void {
   // API Keys view (close-only, no submission needed)
   app.view('kb_api_keys_view', async ({ ack }) => {
     await ack();
+  });
+
+  // Source API key modal (from thread-based source flow)
+  app.view('kb_source_api_key_modal', async ({ ack, body, view }) => {
+    await ack();
+    const meta = JSON.parse(view.private_metadata);
+    const { sourceType, provider, userId, channelId, threadTs } = meta;
+    const vals = view.state.values;
+
+    try {
+      const { getConnector } = await import('../modules/kb-sources/connectors');
+      const { setApiKey } = await import('../modules/kb-sources');
+      const connector = getConnector(sourceType);
+
+      const config: Record<string, string> = {};
+      for (const key of connector.requiredKeys) {
+        const val = vals[`src_apikey_${key}`]?.[`src_apikey_input_${key}`]?.value?.trim();
+        if (val) config[key] = val;
+      }
+
+      const missing = connector.requiredKeys.filter((k: string) => !config[k]);
+      if (missing.length > 0) {
+        await sendDMBlocks(userId, [
+          { type: 'section', text: { type: 'mrkdwn', text: `:warning: Missing: ${missing.join(', ')}. Please try again.` } },
+        ], 'Missing API keys');
+        return;
+      }
+
+      await setApiKey(provider, config, userId);
+
+      await postMessage(channelId, `:white_check_mark: *${provider}* API keys saved! Now configure the source details below.`, threadTs);
+
+      await askForSourceDetails(connector, sourceType, userId, channelId, threadTs);
+    } catch (err: any) {
+      await sendDMBlocks(userId, [
+        { type: 'section', text: { type: 'mrkdwn', text: `:x: Failed to save API keys: ${err.message}` } },
+      ], 'API key save failed');
+    }
+  });
+
+  // Source details modal (name + config fields)
+  app.view('kb_source_details_modal', async ({ ack, body, view }) => {
+    await ack();
+    const meta = JSON.parse(view.private_metadata);
+    const { sourceType, userId, channelId, threadTs } = meta;
+    const vals = view.state.values;
+
+    try {
+      const { getConnector } = await import('../modules/kb-sources/connectors');
+      const { createSource, startSync } = await import('../modules/kb-sources');
+      const connector = getConnector(sourceType);
+
+      const sourceName = vals['src_detail_name']?.['src_detail_input_name']?.value?.trim();
+      if (!sourceName) {
+        await sendDMBlocks(userId, [
+          { type: 'section', text: { type: 'mrkdwn', text: ':warning: Source name is required.' } },
+        ], 'Missing source name');
+        return;
+      }
+
+      const config: Record<string, string> = {};
+      for (const field of connector.configFields) {
+        let val: string | undefined;
+        if (field.key === 'content_type') {
+          val = vals[`src_detail_${field.key}`]?.[`src_detail_input_${field.key}`]?.selected_option?.value;
+        } else {
+          val = vals[`src_detail_${field.key}`]?.[`src_detail_input_${field.key}`]?.value?.trim();
+        }
+        if (val) config[field.key] = val;
+      }
+
+      const source = await createSource({
+        name: sourceName,
+        sourceType: sourceType as any,
+        config,
+        createdBy: userId,
+      });
+
+      let msg = `:white_check_mark: Source *${sourceName}* created!\n`
+        + `• Type: ${connector.icon} ${connector.label}\n`
+        + `• Status: \`${source.status}\`\n`;
+
+      if (Object.keys(config).length > 0) {
+        msg += `• Config: ${Object.entries(config).map(([k, v]) => `${k}=\`${v}\``).join(', ')}\n`;
+      }
+
+      if (source.status === 'active') {
+        try {
+          await startSync(source.id);
+          msg += '\n:arrows_counterclockwise: Sync started in background!';
+        } catch (syncErr: any) {
+          msg += `\n:warning: Sync failed to start: ${syncErr.message}`;
+        }
+      }
+
+      await postMessage(channelId, msg, threadTs);
+    } catch (err: any) {
+      await postMessage(channelId, `:x: Failed to create source: ${err.message}`, threadTs);
+    }
   });
 
   // ── Register Tool Integration Modal ──
@@ -3126,7 +3205,7 @@ async function notifyAdminNewToolRequest(
 // ── Thread-based Source & API Key Flows ──
 
 async function handleSourceTypeSelected(
-  sourceType: string, userId: string, channelId: string, threadTs: string,
+  sourceType: string, userId: string, channelId: string, threadTs: string, triggerId?: string,
 ): Promise<void> {
   const { getConnector } = await import('../modules/kb-sources/connectors');
   const { isProviderConfigured } = await import('../modules/kb-sources');
@@ -3135,8 +3214,38 @@ async function handleSourceTypeSelected(
   const providerReady = await isProviderConfigured(connector.provider);
 
   if (!providerReady) {
-    // Need API keys first — show setup steps and ask for keys
-    const keyFields = connector.requiredKeys.map(k =>
+    if (triggerId) {
+      const blocks: any[] = [
+        { type: 'section', text: { type: 'mrkdwn', text: `*How to get your ${connector.provider} credentials:*\n${connector.setupSteps.join('\n')}` } },
+        { type: 'divider' },
+      ];
+
+      for (const key of connector.requiredKeys) {
+        blocks.push({
+          type: 'input',
+          block_id: `src_apikey_${key}`,
+          label: { type: 'plain_text', text: key.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) },
+          element: {
+            type: 'plain_text_input',
+            action_id: `src_apikey_input_${key}`,
+            placeholder: { type: 'plain_text', text: `Enter your ${key.replace(/_/g, ' ')}` },
+          },
+        });
+      }
+
+      await openModal(triggerId, {
+        type: 'modal',
+        callback_id: 'kb_source_api_key_modal',
+        private_metadata: JSON.stringify({ sourceType, provider: connector.provider, userId, channelId, threadTs }),
+        title: { type: 'plain_text', text: `Setup ${connector.provider}`.slice(0, 24) },
+        submit: { type: 'plain_text', text: 'Save' },
+        blocks,
+      });
+      return;
+    }
+
+    // Fallback: thread-based flow when triggerId is not available
+    const keyFields = connector.requiredKeys.map((k: string) =>
       `\`${k}\`: your_value_here`
     ).join('\n');
 
@@ -3163,13 +3272,75 @@ async function handleSourceTypeSelected(
     );
   } else {
     // API keys ready — ask for source name and config
-    await askForSourceDetails(connector, sourceType, userId, channelId, threadTs);
+    await askForSourceDetails(connector, sourceType, userId, channelId, threadTs, triggerId);
   }
 }
 
 async function askForSourceDetails(
-  connector: any, sourceType: string, userId: string, channelId: string, threadTs: string,
+  connector: any, sourceType: string, userId: string, channelId: string, threadTs: string, triggerId?: string,
 ): Promise<void> {
+  if (triggerId) {
+    const blocks: any[] = [];
+
+    // Name field
+    blocks.push({
+      type: 'input',
+      block_id: 'src_detail_name',
+      label: { type: 'plain_text', text: 'Source Name' },
+      element: {
+        type: 'plain_text_input',
+        action_id: 'src_detail_input_name',
+        placeholder: { type: 'plain_text', text: `e.g. ${connector.label} Docs` },
+      },
+    });
+
+    // Config fields
+    for (const field of connector.configFields) {
+      // For content_type field, use a dropdown
+      if (field.key === 'content_type') {
+        blocks.push({
+          type: 'input',
+          block_id: `src_detail_${field.key}`,
+          optional: true,
+          label: { type: 'plain_text', text: field.label },
+          element: {
+            type: 'static_select',
+            action_id: `src_detail_input_${field.key}`,
+            placeholder: { type: 'plain_text', text: 'Select content type' },
+            options: [
+              { text: { type: 'plain_text', text: 'Documentation (auto-detect Mintlify)' }, value: 'docs' },
+              { text: { type: 'plain_text', text: 'Mintlify docs' }, value: 'mintlify' },
+              { text: { type: 'plain_text', text: 'Source code' }, value: 'source_code' },
+            ],
+          },
+        });
+      } else {
+        blocks.push({
+          type: 'input',
+          block_id: `src_detail_${field.key}`,
+          optional: field.optional !== false,
+          label: { type: 'plain_text', text: field.label },
+          element: {
+            type: 'plain_text_input',
+            action_id: `src_detail_input_${field.key}`,
+            placeholder: { type: 'plain_text', text: field.placeholder },
+          },
+        });
+      }
+    }
+
+    await openModal(triggerId, {
+      type: 'modal',
+      callback_id: 'kb_source_details_modal',
+      private_metadata: JSON.stringify({ sourceType, userId, channelId, threadTs }),
+      title: { type: 'plain_text', text: `Add ${connector.label}`.slice(0, 24) },
+      submit: { type: 'plain_text', text: 'Create' },
+      blocks,
+    });
+    return;
+  }
+
+  // Fallback: thread-based flow when triggerId is not available
   const requiredFields = connector.configFields.filter((f: any) => !f.optional);
   const optionalFields = connector.configFields.filter((f: any) => f.optional);
 
@@ -3348,7 +3519,7 @@ async function handleSourceDetails(
 }
 
 async function startApiKeySetup(
-  provider: string, userId: string, channelId: string, threadTs: string,
+  provider: string, userId: string, channelId: string, threadTs: string, triggerId?: string,
 ): Promise<void> {
   const { getApiKey } = await import('../modules/kb-sources');
   const { CONNECTORS } = await import('../modules/kb-sources/connectors');
@@ -3356,6 +3527,40 @@ async function startApiKeySetup(
   const connector = Object.values(CONNECTORS).find((c: any) => c.provider === provider);
   if (!connector) return;
 
+  if (triggerId) {
+    const existingKey = await getApiKey(provider as any);
+    const existingConfig = existingKey ? JSON.parse(existingKey.config_json) : {};
+
+    const blocks: any[] = [
+      { type: 'section', text: { type: 'mrkdwn', text: `*How to get your credentials:*\n${connector.setupSteps.join('\n')}` } },
+      { type: 'divider' },
+    ];
+
+    for (const key of connector.requiredKeys) {
+      blocks.push({
+        type: 'input',
+        block_id: `apikey_${key}`,
+        label: { type: 'plain_text', text: key.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) },
+        element: {
+          type: 'plain_text_input',
+          action_id: `apikey_input_${key}`,
+          placeholder: { type: 'plain_text', text: existingConfig[key] ? '(keep current or enter new value)' : `Enter your ${key.replace(/_/g, ' ')}` },
+        },
+      });
+    }
+
+    await openModal(triggerId, {
+      type: 'modal',
+      callback_id: 'kb_api_key_save_modal',
+      private_metadata: JSON.stringify({ provider, requiredKeys: connector.requiredKeys }),
+      title: { type: 'plain_text', text: `Setup ${provider}`.slice(0, 24) },
+      submit: { type: 'plain_text', text: 'Save' },
+      blocks,
+    });
+    return;
+  }
+
+  // Fallback: thread-based flow when triggerId is not available
   const existingKey = await getApiKey(provider as any);
   const existingConfig = existingKey ? JSON.parse(existingKey.config_json) : {};
 

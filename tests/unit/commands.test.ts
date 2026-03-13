@@ -857,7 +857,7 @@ describe('Commands Module', () => {
 
       await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
-      expect(mockRespond).toHaveBeenCalledWith({ response_type: 'ephemeral', text: expect.stringContaining('Usage') });
+      expect(mockRespond).toHaveBeenCalledWith({ response_type: 'in_channel', text: expect.stringContaining('Usage') });
     });
 
     it('/kb default for admin should show full dashboard with sources section', async () => {
@@ -875,7 +875,7 @@ describe('Commands Module', () => {
       await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
       expect(mockRespond).toHaveBeenCalledWith({
-        response_type: 'ephemeral',
+        response_type: 'in_channel',
         blocks: expect.arrayContaining([
           expect.objectContaining({
             type: 'header',
@@ -934,7 +934,7 @@ describe('Commands Module', () => {
       expect(allText).toContain('approve:pend-1');
     });
 
-    it('/kb dashboard should show recent entries', async () => {
+    it('/kb dashboard should not include recent entries section', async () => {
       const app = createMockApp();
       registerCommands(app as any);
 
@@ -951,8 +951,7 @@ describe('Commands Module', () => {
       await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
       const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
-      expect(allText).toContain('API Guide');
-      expect(allText).toContain('Recent Entries');
+      expect(allText).not.toContain('Recent Entries');
     });
 
     it('/kb dashboard should include Add Source and API Keys buttons', async () => {
@@ -1733,6 +1732,8 @@ describe('Commands Module', () => {
       expect(app.view).toHaveBeenCalledWith('kb_source_config_modal', expect.any(Function));
       expect(app.view).toHaveBeenCalledWith('kb_api_key_save_modal', expect.any(Function));
       expect(app.view).toHaveBeenCalledWith('kb_api_keys_view', expect.any(Function));
+      expect(app.view).toHaveBeenCalledWith('kb_source_api_key_modal', expect.any(Function));
+      expect(app.view).toHaveBeenCalledWith('kb_source_details_modal', expect.any(Function));
       expect(app.view).toHaveBeenCalledWith('register_tool_modal', expect.any(Function));
     });
 
@@ -3160,6 +3161,232 @@ describe('Commands Module', () => {
         ]),
         expect.any(String),
       );
+    });
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // kb_source_api_key_modal
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  describe('kb_source_api_key_modal', () => {
+    it('should save API keys and post confirmation', async () => {
+      const app = createMockApp();
+      registerToolAndKBModals(app as any);
+
+      mockSetApiKey.mockResolvedValue(undefined);
+      mockIsProviderConfigured.mockResolvedValue(true);
+      const ack = vi.fn();
+      const body = { user: { id: 'U1' } };
+      const view = {
+        private_metadata: JSON.stringify({
+          sourceType: 'google_drive',
+          provider: 'google',
+          userId: 'U1',
+          channelId: 'C1',
+          threadTs: 'ts-1',
+        }),
+        state: {
+          values: {
+            src_apikey_service_account_json: { src_apikey_input_service_account_json: { value: '{"key":"val"}' } },
+          },
+        },
+      };
+
+      await app.handlers.view['kb_source_api_key_modal']({ ack, body, view });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockSetApiKey).toHaveBeenCalledWith('google', expect.objectContaining({ service_account_json: '{"key":"val"}' }), 'U1');
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('API keys saved'), 'ts-1');
+    });
+
+    it('should show warning when keys are missing', async () => {
+      const app = createMockApp();
+      registerToolAndKBModals(app as any);
+
+      const ack = vi.fn();
+      const body = { user: { id: 'U1' } };
+      const view = {
+        private_metadata: JSON.stringify({
+          sourceType: 'google_drive',
+          provider: 'google',
+          userId: 'U1',
+          channelId: 'C1',
+          threadTs: 'ts-1',
+        }),
+        state: {
+          values: {
+            src_apikey_service_account_json: { src_apikey_input_service_account_json: { value: '' } },
+          },
+        },
+      };
+
+      await app.handlers.view['kb_source_api_key_modal']({ ack, body, view });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockSendDMBlocks).toHaveBeenCalledWith(
+        'U1',
+        expect.arrayContaining([
+          expect.objectContaining({ text: expect.objectContaining({ text: expect.stringContaining('Missing') }) }),
+        ]),
+        expect.any(String),
+      );
+    });
+
+    it('should handle save error', async () => {
+      const app = createMockApp();
+      registerToolAndKBModals(app as any);
+
+      mockSetApiKey.mockRejectedValue(new Error('Invalid credentials'));
+
+      const ack = vi.fn();
+      const body = { user: { id: 'U1' } };
+      const view = {
+        private_metadata: JSON.stringify({
+          sourceType: 'google_drive',
+          provider: 'google',
+          userId: 'U1',
+          channelId: 'C1',
+          threadTs: 'ts-1',
+        }),
+        state: {
+          values: {
+            src_apikey_service_account_json: { src_apikey_input_service_account_json: { value: '{"key":"val"}' } },
+          },
+        },
+      };
+
+      await app.handlers.view['kb_source_api_key_modal']({ ack, body, view });
+
+      expect(mockSendDMBlocks).toHaveBeenCalledWith(
+        'U1',
+        expect.arrayContaining([
+          expect.objectContaining({ text: expect.objectContaining({ text: expect.stringContaining('Failed to save API keys') }) }),
+        ]),
+        expect.any(String),
+      );
+    });
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // kb_source_details_modal
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  describe('kb_source_details_modal', () => {
+    it('should create source and post confirmation', async () => {
+      const app = createMockApp();
+      registerToolAndKBModals(app as any);
+
+      mockCreateSource.mockResolvedValue({ id: 'src-new', status: 'needs_setup' });
+      const ack = vi.fn();
+      const body = { user: { id: 'U1' } };
+      const view = {
+        private_metadata: JSON.stringify({
+          sourceType: 'google_drive',
+          userId: 'U1',
+          channelId: 'C1',
+          threadTs: 'ts-1',
+        }),
+        state: {
+          values: {
+            src_detail_name: { src_detail_input_name: { value: 'My Drive Source' } },
+            src_detail_folder_id: { src_detail_input_folder_id: { value: 'folder-123' } },
+          },
+        },
+      };
+
+      await app.handlers.view['kb_source_details_modal']({ ack, body, view });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockCreateSource).toHaveBeenCalledWith(expect.objectContaining({
+        name: 'My Drive Source',
+        sourceType: 'google_drive',
+      }));
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('My Drive Source'), 'ts-1');
+    });
+
+    it('should show warning when source name is missing', async () => {
+      const app = createMockApp();
+      registerToolAndKBModals(app as any);
+
+      const ack = vi.fn();
+      const body = { user: { id: 'U1' } };
+      const view = {
+        private_metadata: JSON.stringify({
+          sourceType: 'google_drive',
+          userId: 'U1',
+          channelId: 'C1',
+          threadTs: 'ts-1',
+        }),
+        state: {
+          values: {
+            src_detail_name: { src_detail_input_name: { value: '' } },
+          },
+        },
+      };
+
+      await app.handlers.view['kb_source_details_modal']({ ack, body, view });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockSendDMBlocks).toHaveBeenCalledWith(
+        'U1',
+        expect.arrayContaining([
+          expect.objectContaining({ text: expect.objectContaining({ text: expect.stringContaining('Source name is required') }) }),
+        ]),
+        expect.any(String),
+      );
+    });
+
+    it('should start sync when source status is active', async () => {
+      const app = createMockApp();
+      registerToolAndKBModals(app as any);
+
+      mockCreateSource.mockResolvedValue({ id: 'src-active', status: 'active' });
+      const ack = vi.fn();
+      const body = { user: { id: 'U1' } };
+      const view = {
+        private_metadata: JSON.stringify({
+          sourceType: 'google_drive',
+          userId: 'U1',
+          channelId: 'C1',
+          threadTs: 'ts-1',
+        }),
+        state: {
+          values: {
+            src_detail_name: { src_detail_input_name: { value: 'Active Source' } },
+            src_detail_folder_id: { src_detail_input_folder_id: { value: 'folder-123' } },
+          },
+        },
+      };
+
+      await app.handlers.view['kb_source_details_modal']({ ack, body, view });
+
+      expect(mockStartSync).toHaveBeenCalledWith('src-active');
+    });
+
+    it('should handle creation error', async () => {
+      const app = createMockApp();
+      registerToolAndKBModals(app as any);
+
+      mockCreateSource.mockRejectedValue(new Error('DB error'));
+      const ack = vi.fn();
+      const body = { user: { id: 'U1' } };
+      const view = {
+        private_metadata: JSON.stringify({
+          sourceType: 'google_drive',
+          userId: 'U1',
+          channelId: 'C1',
+          threadTs: 'ts-1',
+        }),
+        state: {
+          values: {
+            src_detail_name: { src_detail_input_name: { value: 'Bad Source' } },
+          },
+        },
+      };
+
+      await app.handlers.view['kb_source_details_modal']({ ack, body, view });
+
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('Failed to create source'), 'ts-1');
     });
   });
 

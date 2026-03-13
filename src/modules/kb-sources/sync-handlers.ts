@@ -332,53 +332,60 @@ async function syncGitHub(source: KBSource, config: Record<string, string>): Pro
       logger.info('Mintlify docs detected', { repo, configPath: mintlify.configPath });
       const nav = mintlify.config.navigation;
       const pageRefs = extractMintlifyPages(nav);
-      const docsBase = basePath ? basePath.replace(/\/$/, '') + '/' : '';
+      logger.info('Mintlify pages extracted', { repo, pageCount: pageRefs.length });
 
-      for (const pageRef of pageRefs) {
-        try {
-          // Try .mdx first, then .md
-          let content: string | null = null;
-          let filePath = '';
-          for (const ext of ['.mdx', '.md', '']) {
-            const tryPath = `${docsBase}${pageRef}${ext}`;
-            const ref = `?ref=${encodeURIComponent(branch)}`;
-            const res = await githubApi(`/repos/${repo}/contents/${tryPath}${ref}`, token);
-            if (res.status < 400 && res.data?.download_url) {
-              content = await githubRaw(res.data.download_url, token);
-              filePath = tryPath;
-              break;
+      if (pageRefs.length === 0) {
+        logger.info('Mintlify navigation empty, falling back to standard sync', { repo });
+        // Fall through to standard GitHub sync below
+      } else {
+        const docsBase = basePath ? basePath.replace(/\/$/, '') + '/' : '';
+
+        for (const pageRef of pageRefs) {
+          try {
+            // Try .mdx first, then .md
+            let content: string | null = null;
+            let filePath = '';
+            for (const ext of ['.mdx', '.md', '']) {
+              const tryPath = `${docsBase}${pageRef}${ext}`;
+              const ref = `?ref=${encodeURIComponent(branch)}`;
+              const res = await githubApi(`/repos/${repo}/contents/${tryPath}${ref}`, token);
+              if (res.status < 400 && res.data?.download_url) {
+                content = await githubRaw(res.data.download_url, token);
+                filePath = tryPath;
+                break;
+              }
             }
+
+            if (!content) {
+              logger.debug('Mintlify page not found, skipping', { repo, pageRef });
+              continue;
+            }
+
+            const { frontmatter, body } = parseFrontmatter(content);
+            const cleanBody = stripJsx(body);
+            const title = frontmatter.title || frontmatter.sidebarTitle || pageRef.split('/').pop() || pageRef;
+            const description = frontmatter.description || '';
+            const category = getMintlifyCategory(nav, pageRef);
+
+            await createKBEntry({
+              title,
+              summary: description || cleanBody.slice(0, 200),
+              content: cleanBody,
+              category,
+              tags: [repo, 'mintlify', ...(frontmatter.tags ? frontmatter.tags.split(',').map((t: string) => t.trim()) : [])],
+              accessScope: 'all',
+              sourceType: 'github',
+              approved: true,
+              kbSourceId: source.id,
+            });
+            count++;
+          } catch (err: any) {
+            logger.warn('Failed to sync Mintlify page', { repo, pageRef, error: err.message });
           }
-
-          if (!content) {
-            logger.debug('Mintlify page not found, skipping', { repo, pageRef });
-            continue;
-          }
-
-          const { frontmatter, body } = parseFrontmatter(content);
-          const cleanBody = stripJsx(body);
-          const title = frontmatter.title || frontmatter.sidebarTitle || pageRef.split('/').pop() || pageRef;
-          const description = frontmatter.description || '';
-          const category = getMintlifyCategory(nav, pageRef);
-
-          await createKBEntry({
-            title,
-            summary: description || cleanBody.slice(0, 200),
-            content: cleanBody,
-            category,
-            tags: [repo, 'mintlify', ...(frontmatter.tags ? frontmatter.tags.split(',').map((t: string) => t.trim()) : [])],
-            accessScope: 'all',
-            sourceType: 'github',
-            approved: true,
-            kbSourceId: source.id,
-          });
-          count++;
-        } catch (err: any) {
-          logger.warn('Failed to sync Mintlify page', { repo, pageRef, error: err.message });
         }
-      }
 
-      return count;
+        return count;
+      }
     }
   }
 

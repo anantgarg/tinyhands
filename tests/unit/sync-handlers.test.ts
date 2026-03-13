@@ -294,6 +294,66 @@ describe('KB Source Sync Handlers', () => {
       expect(mockUpdateSource).toHaveBeenCalledWith('src-1', expect.objectContaining({ status: 'active' }));
     });
 
+    it('should fall back to standard sync when Mintlify navigation is empty', async () => {
+      setupProviderCredentials('github', { token: 'ghp_test' });
+
+      // Mintlify config detected but with empty navigation
+      const mintlifyConfig = { name: 'Test Docs', navigation: [] };
+
+      setupHttpsMock([
+        // First request: check docs.json - found with empty navigation
+        { status: 200, body: JSON.stringify({ download_url: 'https://raw.githubusercontent.com/docs.json' }) },
+        // Second request: raw docs.json content
+        { status: 200, body: JSON.stringify(mintlifyConfig) },
+        // Third request: standard sync - list directory files
+        {
+          status: 200,
+          body: JSON.stringify([
+            { path: 'docs/page.md', type: 'file', download_url: 'https://raw.githubusercontent.com/page.md', size: 100 },
+          ]),
+        },
+        // Fourth request: fetch file content
+        { status: 200, body: '# Fallback Doc\nContent from standard sync' },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'github',
+        config_json: JSON.stringify({ repo: 'owner/repo', branch: 'main', content_type: 'docs' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(1);
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+        sourceType: 'github',
+        category: 'docs',
+      }));
+    });
+
+    it('should fall back to standard sync when Mintlify navigation is undefined', async () => {
+      setupProviderCredentials('github', { token: 'ghp_test' });
+
+      // Mintlify config detected but without navigation field
+      const mintlifyConfig = { name: 'Test Docs' };
+
+      setupHttpsMock([
+        // First request: check docs.json - found with no navigation
+        { status: 200, body: JSON.stringify({ download_url: 'https://raw.githubusercontent.com/docs.json' }) },
+        // Second request: raw docs.json content
+        { status: 200, body: JSON.stringify(mintlifyConfig) },
+        // Third request: standard sync - list directory files
+        { status: 200, body: JSON.stringify([]) },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'github',
+        config_json: JSON.stringify({ repo: 'owner/repo', branch: 'main', content_type: 'docs' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(0);
+      expect(mockUpdateSource).toHaveBeenCalledWith('src-1', expect.objectContaining({ status: 'active' }));
+    });
+
     it('should skip files larger than 500KB', async () => {
       setupProviderCredentials('github', { token: 'ghp_test' });
 
