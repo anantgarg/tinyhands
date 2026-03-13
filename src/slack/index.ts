@@ -141,6 +141,21 @@ export async function postBlocks(
   return result.ts;
 }
 
+export async function postEphemeral(
+  channelId: string,
+  userId: string,
+  blocks: any[],
+  text: string,
+): Promise<void> {
+  const client = getSlackApp().client;
+  await client.chat.postEphemeral({
+    channel: channelId,
+    user: userId,
+    blocks,
+    text,
+  });
+}
+
 export async function openModal(triggerId: string, view: any): Promise<void> {
   const client = getSlackApp().client;
   await client.views.open({

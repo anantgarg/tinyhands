@@ -46,6 +46,7 @@ const mockOpenModal = vi.fn().mockResolvedValue(undefined);
 const mockPushModal = vi.fn().mockResolvedValue(undefined);
 const mockSendDMBlocks = vi.fn().mockResolvedValue(undefined);
 const mockGetSlackApp = vi.fn();
+const mockRespond = vi.fn().mockResolvedValue(undefined);
 
 vi.mock('../../src/slack/index', () => ({
   createChannel: (...args: any[]) => mockCreateChannel(...args),
@@ -343,12 +344,12 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '' };
 
-      await app.handlers.command['/agents']({ command, ack });
+      await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
       expect(ack).toHaveBeenCalled();
       expect(mockInitSuperadmin).toHaveBeenCalledWith('U123');
       expect(mockListAgents).toHaveBeenCalled();
-      expect(mockPostBlocks).toHaveBeenCalled();
+      expect(mockRespond).toHaveBeenCalled();
     });
 
     it('should show empty state when no agents exist', async () => {
@@ -359,9 +360,9 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '' };
 
-      await app.handlers.command['/agents']({ command, ack });
+      await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
-      const blocksArg = mockPostBlocks.mock.calls[0][1];
+      const blocksArg = mockRespond.mock.calls[0][0].blocks;
       const allText = JSON.stringify(blocksArg);
       expect(allText).toContain('empty-handed');
     });
@@ -376,9 +377,9 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '' };
 
-      await app.handlers.command['/agents']({ command, ack });
+      await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
-      const blocksArg = mockPostBlocks.mock.calls[0][1];
+      const blocksArg = mockRespond.mock.calls[0][0].blocks;
       const allText = JSON.stringify(blocksArg);
       expect(allText).toContain('Test Agent');
       expect(allText).toContain('agent_overflow');
@@ -393,9 +394,9 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '' };
 
-      await app.handlers.command['/agents']({ command, ack });
+      await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
-      const allText = JSON.stringify(mockPostBlocks.mock.calls[0][1]);
+      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
       expect(allText).toContain('delete:agent-1');
     });
 
@@ -408,9 +409,9 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '' };
 
-      await app.handlers.command['/agents']({ command, ack });
+      await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
-      const allText = JSON.stringify(mockPostBlocks.mock.calls[0][1]);
+      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
       expect(allText).not.toContain('delete:agent-1');
     });
 
@@ -422,9 +423,9 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '' };
 
-      await app.handlers.command['/agents']({ command, ack });
+      await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
-      const allText = JSON.stringify(mockPostBlocks.mock.calls[0][1]);
+      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
       expect(allText).toContain('pause:agent-1');
     });
 
@@ -436,9 +437,9 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '' };
 
-      await app.handlers.command['/agents']({ command, ack });
+      await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
-      const allText = JSON.stringify(mockPostBlocks.mock.calls[0][1]);
+      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
       expect(allText).toContain('resume:agent-1');
     });
 
@@ -450,9 +451,9 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '' };
 
-      await app.handlers.command['/agents']({ command, ack });
+      await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
-      const allText = JSON.stringify(mockPostBlocks.mock.calls[0][1]);
+      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
       expect(allText).toContain('agents_new_agent');
       expect(allText).toContain('New Agent');
     });
@@ -469,9 +470,9 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '' };
 
-      await app.handlers.command['/agents']({ command, ack });
+      await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
-      const allText = JSON.stringify(mockPostBlocks.mock.calls[0][1]);
+      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
       expect(allText).toContain('Bot A');
       expect(allText).toContain('Bot B');
       expect(allText).toContain('large_green_circle');
@@ -487,9 +488,9 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '' };
 
-      await app.handlers.command['/agents']({ command, ack });
+      await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
-      const allText = JSON.stringify(mockPostBlocks.mock.calls[0][1]);
+      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
       expect(allText).toContain('<#C1>');
       expect(allText).toContain('<#C2>');
     });
@@ -503,9 +504,9 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '' };
 
-      await app.handlers.command['/agents']({ command, ack });
+      await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
-      const allText = JSON.stringify(mockPostBlocks.mock.calls[0][1]);
+      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
       expect(allText).toContain('opus');
       expect(allText).toContain('high effort');
     });
@@ -518,9 +519,9 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const command = { user_id: 'U123', channel_id: 'C_TARGET', text: '' };
 
-      await app.handlers.command['/agents']({ command, ack });
+      await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
-      expect(mockPostBlocks).toHaveBeenCalledWith('C_TARGET', expect.any(Array), 'Agents');
+      expect(mockRespond).toHaveBeenCalledWith({ response_type: 'ephemeral', blocks: expect.any(Array), text: 'Agents' });
     });
   });
 
@@ -675,10 +676,10 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const command = { user_id: 'U_REGULAR', channel_id: 'C_CHAN', text: '' };
 
-      await app.handlers.command['/tools']({ command, ack });
+      await app.handlers.command['/tools']({ command, ack, respond: mockRespond });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockPostMessage).toHaveBeenCalledWith('C_CHAN', expect.stringContaining('Only admins'));
+      expect(mockRespond).toHaveBeenCalledWith({ response_type: 'ephemeral', text: expect.stringContaining('Only admins') });
     });
 
     it('should show empty state when no tools or integrations exist', async () => {
@@ -690,10 +691,10 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const command = { user_id: 'U_ADMIN', channel_id: 'C_CHAN', text: '' };
 
-      await app.handlers.command['/tools']({ command, ack });
+      await app.handlers.command['/tools']({ command, ack, respond: mockRespond });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockPostBlocks).toHaveBeenCalledWith('C_CHAN', expect.any(Array), 'Tools');
+      expect(mockRespond).toHaveBeenCalledWith({ response_type: 'ephemeral', blocks: expect.any(Array), text: 'Tools' });
     });
 
     it('should list registered tools with overflow menus', async () => {
@@ -714,9 +715,9 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const command = { user_id: 'U_ADMIN', channel_id: 'C_CHAN', text: '' };
 
-      await app.handlers.command['/tools']({ command, ack });
+      await app.handlers.command['/tools']({ command, ack, respond: mockRespond });
 
-      const allText = JSON.stringify(mockPostBlocks.mock.calls[0][1]);
+      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
       expect(allText).toContain('zendesk-read');
       expect(allText).toContain('tool_overflow');
       expect(allText).toContain('large_green_circle');
@@ -741,9 +742,9 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const command = { user_id: 'U_ADMIN', channel_id: 'C_CHAN', text: '' };
 
-      await app.handlers.command['/tools']({ command, ack });
+      await app.handlers.command['/tools']({ command, ack, respond: mockRespond });
 
-      const allText = JSON.stringify(mockPostBlocks.mock.calls[0][1]);
+      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
       expect(allText).toContain('approve:my-tool');
       expect(allText).toContain('yellow_circle');
     });
@@ -757,9 +758,9 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const command = { user_id: 'U_ADMIN', channel_id: 'C_CHAN', text: '' };
 
-      await app.handlers.command['/tools']({ command, ack });
+      await app.handlers.command['/tools']({ command, ack, respond: mockRespond });
 
-      const allText = JSON.stringify(mockPostBlocks.mock.calls[0][1]);
+      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
       expect(allText).toContain('Available Integrations');
       expect(allText).toContain('register_tool_integration');
     });
@@ -781,7 +782,7 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const command = { user_id: 'U123', channel_id: 'C_CHAN', text: 'search test query', trigger_id: 'trig-1' };
 
-      await app.handlers.command['/kb']({ command, ack });
+      await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
       expect(ack).toHaveBeenCalled();
       expect(mockSearchKB).toHaveBeenCalledWith('test query');
@@ -794,9 +795,9 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const command = { user_id: 'U123', channel_id: 'C_CHAN', text: 'search   ', trigger_id: 'trig-1' };
 
-      await app.handlers.command['/kb']({ command, ack });
+      await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
-      expect(mockPostMessage).toHaveBeenCalledWith('C_CHAN', expect.stringContaining('Usage'));
+      expect(mockRespond).toHaveBeenCalledWith({ response_type: 'ephemeral', text: expect.stringContaining('Usage') });
     });
 
     it('/kb search with no results should show no-results message', async () => {
@@ -807,9 +808,9 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const command = { user_id: 'U123', channel_id: 'C_CHAN', text: 'search unicorns', trigger_id: 'trig-1' };
 
-      await app.handlers.command['/kb']({ command, ack });
+      await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
-      expect(mockPostMessage).toHaveBeenCalledWith('C_CHAN', expect.stringContaining('No KB entries'));
+      expect(mockRespond).toHaveBeenCalledWith({ response_type: 'ephemeral', text: expect.stringContaining('No KB entries') });
     });
 
     it('/kb search results should include admin overflow menus when user is admin', async () => {
@@ -824,9 +825,9 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const command = { user_id: 'U123', channel_id: 'C_CHAN', text: 'search test', trigger_id: 'trig-1' };
 
-      await app.handlers.command['/kb']({ command, ack });
+      await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
-      const allText = JSON.stringify(mockPostBlocks.mock.calls[0][1]);
+      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
       expect(allText).toContain('kb_entry_overflow');
     });
 
@@ -837,7 +838,7 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const command = { user_id: 'U123', channel_id: 'C_CHAN', text: 'add', trigger_id: 'trig-1' };
 
-      await app.handlers.command['/kb']({ command, ack });
+      await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
       expect(ack).toHaveBeenCalled();
       expect(mockOpenModal).toHaveBeenCalledWith(
@@ -854,9 +855,9 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '', trigger_id: 'trig-1' };
 
-      await app.handlers.command['/kb']({ command, ack });
+      await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
-      expect(mockPostMessage).toHaveBeenCalledWith('C_CHAN', expect.stringContaining('Usage'));
+      expect(mockRespond).toHaveBeenCalledWith({ response_type: 'ephemeral', text: expect.stringContaining('Usage') });
     });
 
     it('/kb default for admin should show full dashboard with sources section', async () => {
@@ -871,18 +872,18 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '', trigger_id: 'trig-1' };
 
-      await app.handlers.command['/kb']({ command, ack });
+      await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
-      expect(mockPostBlocks).toHaveBeenCalledWith(
-        'C_CHAN',
-        expect.arrayContaining([
+      expect(mockRespond).toHaveBeenCalledWith({
+        response_type: 'ephemeral',
+        blocks: expect.arrayContaining([
           expect.objectContaining({
             type: 'header',
             text: expect.objectContaining({ text: expect.stringContaining('Knowledge Base') }),
           }),
         ]),
-        'Knowledge Base',
-      );
+        text: 'Knowledge Base',
+      });
     });
 
     it('/kb dashboard should show connected sources', async () => {
@@ -903,9 +904,9 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '', trigger_id: 'trig-1' };
 
-      await app.handlers.command['/kb']({ command, ack });
+      await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
-      const allText = JSON.stringify(mockPostBlocks.mock.calls[0][1]);
+      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
       expect(allText).toContain('Google Drive Docs');
       expect(allText).toContain('kb_source_overflow');
       expect(allText).toContain('42 entries');
@@ -925,9 +926,9 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '', trigger_id: 'trig-1' };
 
-      await app.handlers.command['/kb']({ command, ack });
+      await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
-      const allText = JSON.stringify(mockPostBlocks.mock.calls[0][1]);
+      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
       expect(allText).toContain('Pending Doc');
       expect(allText).toContain('Pending Approval');
       expect(allText).toContain('approve:pend-1');
@@ -947,9 +948,9 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '', trigger_id: 'trig-1' };
 
-      await app.handlers.command['/kb']({ command, ack });
+      await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
-      const allText = JSON.stringify(mockPostBlocks.mock.calls[0][1]);
+      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
       expect(allText).toContain('API Guide');
       expect(allText).toContain('Recent Entries');
     });
@@ -966,9 +967,9 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '', trigger_id: 'trig-1' };
 
-      await app.handlers.command['/kb']({ command, ack });
+      await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
-      const allText = JSON.stringify(mockPostBlocks.mock.calls[0][1]);
+      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
       expect(allText).toContain('kb_add_source');
       expect(allText).toContain('kb_manage_api_keys');
       expect(allText).toContain('kb_add_entry_btn');

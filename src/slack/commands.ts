@@ -17,7 +17,7 @@ const TOOL_INTEGRATIONS = getToolIntegrations();
 
 export function registerCommands(app: App): void {
   // /agents — Consolidated interactive agent management
-  app.command('/agents', async ({ command, ack }) => {
+  app.command('/agents', async ({ command, ack, respond }) => {
     await ack();
     await initSuperadmin(command.user_id);
     const userId = command.user_id;
@@ -86,7 +86,7 @@ export function registerCommands(app: App): void {
       ],
     });
 
-    await postBlocks(command.channel_id, blocks, 'Agents');
+    await respond({ response_type: 'ephemeral', blocks, text: 'Agents' });
   });
 
   // /new-agent — Alias, starts new agent flow directly
@@ -103,13 +103,13 @@ export function registerCommands(app: App): void {
   });
 
   // /tools — Interactive admin tool management
-  app.command('/tools', async ({ command, ack }) => {
+  app.command('/tools', async ({ command, ack, respond }) => {
     await ack();
     const userId = command.user_id;
 
     const { isSuperadmin } = await import('../modules/access-control');
     if (!(await isSuperadmin(userId))) {
-      await postMessage(command.channel_id, ':lock: Only admins can manage tools. Use `/agents` to create agents with existing tools.');
+      await respond({ response_type: 'ephemeral', text: ':lock: Only admins can manage tools. Use `/agents` to create agents with existing tools.' });
       return;
     }
 
@@ -187,11 +187,11 @@ export function registerCommands(app: App): void {
       blocks.push({ type: 'section', text: { type: 'mrkdwn', text: '_No tools available._' } });
     }
 
-    await postBlocks(command.channel_id, blocks, 'Tools');
+    await respond({ response_type: 'ephemeral', blocks, text: 'Tools' });
   });
 
   // /kb — Interactive knowledge base management
-  app.command('/kb', async ({ command, ack }) => {
+  app.command('/kb', async ({ command, ack, respond }) => {
     await ack();
     const userId = command.user_id;
     const subcommand = command.text.trim().split(/\s+/)[0]?.toLowerCase() || '';
@@ -201,13 +201,13 @@ export function registerCommands(app: App): void {
     if (subcommand === 'search') {
       const queryText = command.text.trim().slice('search'.length).trim();
       if (!queryText) {
-        await postMessage(command.channel_id, 'Usage: `/kb search <query>`');
+        await respond({ response_type: 'ephemeral', text: 'Usage: `/kb search <query>`' });
         return;
       }
       const { searchKB } = await import('../modules/knowledge-base');
       const results = await searchKB(queryText);
       if (results.length === 0) {
-        await postMessage(command.channel_id, ':mag: No KB entries found.');
+        await respond({ response_type: 'ephemeral', text: ':mag: No KB entries found.' });
         return;
       }
       const blocks: any[] = [
@@ -229,7 +229,7 @@ export function registerCommands(app: App): void {
           } : {}),
         });
       }
-      await postBlocks(command.channel_id, blocks, 'KB search results');
+      await respond({ response_type: 'ephemeral', blocks, text: 'KB search results' });
       return;
     }
 
@@ -272,7 +272,7 @@ export function registerCommands(app: App): void {
 
     // Default: show KB dashboard (admin gets full view with sources)
     if (!isAdmin) {
-      await postMessage(command.channel_id, 'Usage: `/kb search <query>` or `/kb add`');
+      await respond({ response_type: 'ephemeral', text: 'Usage: `/kb search <query>` or `/kb add`' });
       return;
     }
 
@@ -402,7 +402,7 @@ export function registerCommands(app: App): void {
       ],
     });
 
-    await postBlocks(command.channel_id, blocks, 'Knowledge Base');
+    await respond({ response_type: 'ephemeral', blocks, text: 'Knowledge Base' });
   });
 }
 

@@ -172,6 +172,12 @@ REDIS_URL
 
 Optional: `GITHUB_TOKEN`, `PORT` (default 3000), `LOG_LEVEL`, `DOCKER_BASE_IMAGE`, `DAILY_BUDGET_USD`, `AUTO_UPDATE_ENABLED`.
 
+## Development Workflow
+
+- **Use worktrees**: Always use git worktrees (`isolation: "worktree"`) when making code changes, to avoid disrupting the working directory.
+- **Test thoroughly**: Run the full test suite (`npm test`) before committing. All 1912+ tests must pass with 100% code coverage — no skipped or failing tests.
+- **Publish releases**: Every push should include a tagged release with a changelog summarizing what changed. Use `gh release create` with clear release notes.
+
 ## Testing
 
 - **Unit tests**: `tests/unit/` — Vitest, run with `npm test`
