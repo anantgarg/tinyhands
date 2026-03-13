@@ -857,7 +857,7 @@ describe('Commands Module', () => {
 
       await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
-      expect(mockRespond).toHaveBeenCalledWith({ response_type: 'in_channel', text: expect.stringContaining('Usage') });
+      expect(mockRespond).toHaveBeenCalledWith({ response_type: 'ephemeral', text: expect.stringContaining('Usage') });
     });
 
     it('/kb default for admin should show full dashboard with sources section', async () => {
@@ -875,7 +875,7 @@ describe('Commands Module', () => {
       await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
       expect(mockRespond).toHaveBeenCalledWith({
-        response_type: 'in_channel',
+        response_type: 'ephemeral',
         blocks: expect.arrayContaining([
           expect.objectContaining({
             type: 'header',

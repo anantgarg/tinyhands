@@ -272,7 +272,7 @@ export function registerCommands(app: App): void {
 
     // Default: show KB dashboard (admin gets full view with sources)
     if (!isAdmin) {
-      await respond({ response_type: 'in_channel', text: 'Usage: `/kb search <query>` or `/kb add`' });
+      await respond({ response_type: 'ephemeral', text: 'Usage: `/kb search <query>` or `/kb add`' });
       return;
     }
 
@@ -380,7 +380,7 @@ export function registerCommands(app: App): void {
       ],
     });
 
-    await respond({ response_type: 'in_channel', blocks, text: 'Knowledge Base' });
+    await respond({ response_type: 'ephemeral', blocks, text: 'Knowledge Base' });
   });
 }
 
