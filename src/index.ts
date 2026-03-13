@@ -23,8 +23,9 @@ async function main(): Promise<void> {
 
   // Register built-in tools (KB, etc.)
   try {
-    const { registerKBTools } = await import('./modules/tools/kb');
-    await registerKBTools();
+    const { getIntegration } = await import('./modules/tools/integrations');
+    const kb = getIntegration('kb');
+    if (kb) await kb.register('system', {});
   } catch (err: any) {
     logger.warn('KB tool registration failed', { error: err.message });
   }

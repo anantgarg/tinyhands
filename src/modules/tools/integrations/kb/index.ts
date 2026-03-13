@@ -1,18 +1,11 @@
-/**
- * Knowledge Base tool — allows agents to search and browse the internal KB.
- *
- * This tool calls back to the host's internal KB API endpoints
- * (served by src/server.ts) from inside the Docker container.
- *
- * No external API keys needed — the KB lives in PostgreSQL on the host.
- */
-import { registerCustomTool, getCustomTool } from './index';
-import { config } from '../../config';
-import { logger } from '../../utils/logger';
+import { registerCustomTool, getCustomTool } from '../../index';
+import { config as appConfig } from '../../../../config';
+import { logger } from '../../../../utils/logger';
+import type { ToolManifest } from '../manifest';
 
-// ── KB Search Tool ──
+// ── Schema & Code ──
 
-const KB_SEARCH_SCHEMA = JSON.stringify({
+const READ_SCHEMA = JSON.stringify({
   type: 'object',
   description: 'Search and browse the internal knowledge base. Find articles, documentation, and reference material by keyword or category.',
   properties: {
@@ -21,23 +14,14 @@ const KB_SEARCH_SCHEMA = JSON.stringify({
       enum: ['search', 'list', 'categories'],
       description: 'The action to perform: search (find by query), list (browse entries), categories (list available categories)',
     },
-    query: {
-      type: 'string',
-      description: 'Search query text (required for search action)',
-    },
-    category: {
-      type: 'string',
-      description: 'Filter by category (optional, for list action)',
-    },
-    limit: {
-      type: 'number',
-      description: 'Max results to return (default 10, max 20)',
-    },
+    query: { type: 'string', description: 'Search query text (required for search action)' },
+    category: { type: 'string', description: 'Filter by category (optional, for list action)' },
+    limit: { type: 'number', description: 'Max results to return (default 10, max 20)' },
   },
   required: ['action'],
 });
 
-const KB_SEARCH_CODE = `var http = require('http');
+const READ_CODE = `var http = require('http');
 var fs = require('fs');
 var path = require('path');
 
@@ -145,29 +129,38 @@ main().catch(function(err) {
   console.log(JSON.stringify({ error: err.message }));
 });`;
 
-// ── Registration ──
+// ── Manifest ──
 
-export async function registerKBTools(): Promise<void> {
-  const existing = await getCustomTool('kb-search');
-  if (existing) {
-    logger.info('KB search tool already registered, skipping');
-    return;
-  }
+export const manifest: ToolManifest = {
+  id: 'kb',
+  label: 'Knowledge Base',
+  icon: ':books:',
+  description: 'Search and browse the internal knowledge base. No API keys needed.',
+  configKeys: [],
+  tools: [
+    { name: 'kb-search', schema: READ_SCHEMA, code: READ_CODE, accessLevel: 'read-only', displayName: 'Searching knowledge base' },
+  ],
+  async register(_userId, _config) {
+    const existing = await getCustomTool('kb-search');
+    if (existing) return;
 
-  const toolConfig: Record<string, string> = {
-    api_url: `http://host.docker.internal:${config.server.port}`,
-  };
-  if (config.server.internalSecret) {
-    toolConfig.internal_secret = config.server.internalSecret;
-  }
+    const toolConfig: Record<string, string> = {
+      api_url: `http://host.docker.internal:${appConfig.server.port}`,
+    };
+    if (appConfig.server.internalSecret) {
+      toolConfig.internal_secret = appConfig.server.internalSecret;
+    }
 
-  await registerCustomTool('kb-search', KB_SEARCH_SCHEMA, null, 'system', {
-    code: KB_SEARCH_CODE,
-    language: 'javascript',
-    autoApprove: true,
-    accessLevel: 'read-only',
-    configJson: JSON.stringify(toolConfig),
-  });
-
-  logger.info('KB search tool registered');
-}
+    await registerCustomTool('kb-search', READ_SCHEMA, null, 'system', {
+      code: READ_CODE,
+      language: 'javascript',
+      autoApprove: true,
+      accessLevel: 'read-only',
+      configJson: JSON.stringify(toolConfig),
+    });
+    logger.info('KB search tool registered');
+  },
+  async updateConfig() {
+    // KB config is derived from app config, not user-provided
+  },
+};

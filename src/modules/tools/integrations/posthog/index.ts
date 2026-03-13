@@ -1,16 +1,11 @@
-/**
- * PostHog tool registration — read-only analytics tool.
- *
- * Usage:
- *   registerPostHogTools('ADMIN_USER_ID', { api_key: 'phx_...', project_id: '12345' })
- */
-import { registerCustomTool, getCustomTool } from './index';
-import { execute } from '../../db';
-import { logger } from '../../utils/logger';
+import { registerCustomTool, getCustomTool } from '../../index';
+import { execute } from '../../../../db';
+import { logger } from '../../../../utils/logger';
+import type { ToolManifest } from '../manifest';
 
-// ── PostHog Read-Only Tool ──
+// ── Schema & Code ──
 
-const POSTHOG_READ_SCHEMA = JSON.stringify({
+const READ_SCHEMA = JSON.stringify({
   type: 'object',
   description: 'Read-only access to PostHog analytics: query events, get person details, list feature flags, get insights and cohorts.',
   properties: {
@@ -19,43 +14,19 @@ const POSTHOG_READ_SCHEMA = JSON.stringify({
       enum: ['query_events', 'get_person', 'list_feature_flags', 'get_insight', 'list_insights', 'get_cohorts'],
       description: 'The PostHog action to perform',
     },
-    event_name: {
-      type: 'string',
-      description: 'Event name filter (for query_events)',
-    },
-    person_id: {
-      type: 'string',
-      description: 'Person distinct_id (for get_person)',
-    },
-    insight_id: {
-      type: 'number',
-      description: 'Insight ID (for get_insight)',
-    },
-    date_from: {
-      type: 'string',
-      description: 'Start date — ISO format or relative like "-7d", "-30d" (default -7d)',
-    },
-    date_to: {
-      type: 'string',
-      description: 'End date — ISO format or relative (default now)',
-    },
-    properties: {
-      type: 'object',
-      description: 'Property filters as key-value pairs (for query_events)',
-    },
-    limit: {
-      type: 'number',
-      description: 'Max results (default 100, max 1000)',
-    },
-    offset: {
-      type: 'number',
-      description: 'Pagination offset (default 0)',
-    },
+    event_name: { type: 'string', description: 'Event name filter (for query_events)' },
+    person_id: { type: 'string', description: 'Person distinct_id (for get_person)' },
+    insight_id: { type: 'number', description: 'Insight ID (for get_insight)' },
+    date_from: { type: 'string', description: 'Start date — ISO format or relative like "-7d", "-30d" (default -7d)' },
+    date_to: { type: 'string', description: 'End date — ISO format or relative (default now)' },
+    properties: { type: 'object', description: 'Property filters as key-value pairs (for query_events)' },
+    limit: { type: 'number', description: 'Max results (default 100, max 1000)' },
+    offset: { type: 'number', description: 'Pagination offset (default 0)' },
   },
   required: ['action'],
 });
 
-const POSTHOG_READ_CODE = `const https = require('https');
+const READ_CODE = `const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
@@ -157,33 +128,33 @@ main().catch(function(err) {
   console.log(JSON.stringify({ error: err.message }));
 });`;
 
-// ── Registration ──
+// ── Manifest ──
 
-export async function registerPostHogTools(
-  adminUserId: string,
-  posthogConfig: { api_key: string; project_id: string; host?: string },
-): Promise<void> {
-  const configJson = JSON.stringify(posthogConfig);
-
-  const existing = await getCustomTool('posthog-read');
-  if (!existing) {
-    await registerCustomTool('posthog-read', POSTHOG_READ_SCHEMA, null, adminUserId, {
-      code: POSTHOG_READ_CODE,
-      language: 'javascript',
-      autoApprove: true,
-      accessLevel: 'read-only',
-      configJson,
-    });
-    logger.info('PostHog read-only tool registered');
-  } else {
-    logger.info('PostHog read-only tool already exists, skipping');
-  }
-}
-
-export async function updatePostHogConfig(
-  posthogConfig: { api_key: string; project_id: string; host?: string },
-): Promise<void> {
-  const configJson = JSON.stringify(posthogConfig);
-  await execute(`UPDATE custom_tools SET config_json = $1 WHERE name = 'posthog-read'`, [configJson]);
-  logger.info('PostHog config updated');
-}
+export const manifest: ToolManifest = {
+  id: 'posthog',
+  label: 'PostHog',
+  icon: ':bar_chart:',
+  description: 'Query events, get person details, list feature flags, view insights and cohorts.',
+  configKeys: ['api_key', 'project_id'],
+  tools: [
+    { name: 'posthog-read', schema: READ_SCHEMA, code: READ_CODE, accessLevel: 'read-only', displayName: 'Checking PostHog' },
+  ],
+  async register(userId, config) {
+    const configJson = JSON.stringify(config);
+    for (const tool of this.tools) {
+      const existing = await getCustomTool(tool.name);
+      if (!existing) {
+        await registerCustomTool(tool.name, tool.schema, null, userId, {
+          code: tool.code, language: 'javascript', autoApprove: true, accessLevel: tool.accessLevel, configJson,
+        });
+        logger.info(`${this.label} tool registered: ${tool.name}`);
+      }
+    }
+  },
+  async updateConfig(config) {
+    const configJson = JSON.stringify(config);
+    const names = this.tools.map(t => t.name);
+    await execute(`UPDATE custom_tools SET config_json = $1 WHERE name = ANY($2)`, [configJson, names]);
+    logger.info(`${this.label} config updated`);
+  },
+};

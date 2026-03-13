@@ -22,7 +22,9 @@ vi.mock('../../src/utils/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-import { registerPostHogTools, updatePostHogConfig } from '../../src/modules/tools/posthog';
+import { manifest as posthogManifest } from '../../src/modules/tools/integrations/posthog';
+const registerPostHogTools = (userId: string, config: Record<string, string>) => posthogManifest.register(userId, config);
+const updatePostHogConfig = (config: Record<string, string>) => posthogManifest.updateConfig(config);
 
 // ── Helpers ──
 
@@ -460,8 +462,8 @@ describe('PostHog Tools Module', () => {
       await updatePostHogConfig(newConfig);
 
       expect(mockExecute).toHaveBeenCalledWith(
-        `UPDATE custom_tools SET config_json = $1 WHERE name = 'posthog-read'`,
-        [JSON.stringify(newConfig)],
+        `UPDATE custom_tools SET config_json = $1 WHERE name = ANY($2)`,
+        [JSON.stringify(newConfig), ['posthog-read']],
       );
     });
 
@@ -495,14 +497,14 @@ describe('PostHog Tools Module', () => {
       expect(mockExecute).toHaveBeenCalledTimes(1);
     });
 
-    it('uses single tool name in WHERE clause (not IN clause)', async () => {
+    it('uses ANY with array of tool names in WHERE clause', async () => {
       mockExecute.mockResolvedValue(undefined);
 
       await updatePostHogConfig(POSTHOG_CONFIG);
 
       const sql = mockExecute.mock.calls[0][0];
-      expect(sql).toContain("WHERE name = 'posthog-read'");
-      expect(sql).not.toContain('IN');
+      expect(sql).toContain('WHERE name = ANY($2)');
+      expect(mockExecute.mock.calls[0][1][1]).toEqual(['posthog-read']);
     });
   });
 });

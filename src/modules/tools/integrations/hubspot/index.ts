@@ -1,16 +1,12 @@
-/**
- * HubSpot tool registration — read + write tools for HubSpot CRM.
- *
- * Usage:
- *   registerHubSpotTools('ADMIN_USER_ID', { access_token: 'pat-...' })
- */
-import { registerCustomTool, getCustomTool } from './index';
-import { execute } from '../../db';
-import { logger } from '../../utils/logger';
+import { registerCustomTool, getCustomTool } from '../../index';
+import { execute } from '../../../../db';
+import { logger } from '../../../../utils/logger';
+import type { ToolManifest } from '../manifest';
 
-// ── HubSpot Read-Only Tool ──
+// ── Schemas & Code ──
+// Kept as string constants — they run inside Docker, not in the host process.
 
-const HUBSPOT_READ_SCHEMA = JSON.stringify({
+const READ_SCHEMA = JSON.stringify({
   type: 'object',
   description: 'Read-only access to HubSpot CRM: search contacts, deals, companies; get details; list pipelines.',
   properties: {
@@ -19,40 +15,18 @@ const HUBSPOT_READ_SCHEMA = JSON.stringify({
       enum: ['search_contacts', 'search_deals', 'get_contact', 'get_deal', 'list_pipelines', 'get_company', 'search_companies'],
       description: 'The HubSpot action to perform',
     },
-    query: {
-      type: 'string',
-      description: 'Search query text (for search_contacts, search_deals, search_companies)',
-    },
-    contact_id: {
-      type: 'string',
-      description: 'Contact ID (for get_contact)',
-    },
-    deal_id: {
-      type: 'string',
-      description: 'Deal ID (for get_deal)',
-    },
-    company_id: {
-      type: 'string',
-      description: 'Company ID (for get_company)',
-    },
-    properties: {
-      type: 'array',
-      items: { type: 'string' },
-      description: 'Properties to include in response (e.g. ["email","firstname","lastname","phone"])',
-    },
-    limit: {
-      type: 'number',
-      description: 'Max results (default 10, max 100)',
-    },
-    after: {
-      type: 'string',
-      description: 'Pagination cursor for next page',
-    },
+    query: { type: 'string', description: 'Search query text (for search_contacts, search_deals, search_companies)' },
+    contact_id: { type: 'string', description: 'Contact ID (for get_contact)' },
+    deal_id: { type: 'string', description: 'Deal ID (for get_deal)' },
+    company_id: { type: 'string', description: 'Company ID (for get_company)' },
+    properties: { type: 'array', items: { type: 'string' }, description: 'Properties to include in response' },
+    limit: { type: 'number', description: 'Max results (default 10, max 100)' },
+    after: { type: 'string', description: 'Pagination cursor for next page' },
   },
   required: ['action'],
 });
 
-const HUBSPOT_READ_CODE = `const https = require('https');
+const READ_CODE = `const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
@@ -158,9 +132,7 @@ main().catch(function(err) {
   console.log(JSON.stringify({ error: err.message }));
 });`;
 
-// ── HubSpot Read-Write Tool ──
-
-const HUBSPOT_WRITE_SCHEMA = JSON.stringify({
+const WRITE_SCHEMA = JSON.stringify({
   type: 'object',
   description: 'Create and update HubSpot CRM records: contacts, deals, companies, tasks, and notes. No destructive actions (no delete).',
   properties: {
@@ -169,51 +141,24 @@ const HUBSPOT_WRITE_SCHEMA = JSON.stringify({
       enum: ['create_contact', 'update_contact', 'create_deal', 'update_deal', 'create_task', 'add_note', 'create_company'],
       description: 'The HubSpot write action to perform',
     },
-    contact_id: {
-      type: 'string',
-      description: 'Contact ID (for update_contact, or to associate with note/task)',
-    },
-    deal_id: {
-      type: 'string',
-      description: 'Deal ID (for update_deal, or to associate with note/task)',
-    },
-    company_id: {
-      type: 'string',
-      description: 'Company ID (for associating)',
-    },
+    contact_id: { type: 'string', description: 'Contact ID (for update_contact, or to associate with note/task)' },
+    deal_id: { type: 'string', description: 'Deal ID (for update_deal, or to associate with note/task)' },
+    company_id: { type: 'string', description: 'Company ID (for associating)' },
     properties: {
       type: 'object',
       description: 'Property key-value pairs for create/update. Contacts: email, firstname, lastname, phone, company. Deals: dealname, amount, dealstage, pipeline, closedate. Companies: name, domain, industry.',
     },
-    pipeline_id: {
-      type: 'string',
-      description: 'Pipeline ID (for create_deal)',
-    },
-    stage_id: {
-      type: 'string',
-      description: 'Deal stage ID (for create_deal)',
-    },
-    note_body: {
-      type: 'string',
-      description: 'Note content (for add_note)',
-    },
-    task_subject: {
-      type: 'string',
-      description: 'Task subject (for create_task)',
-    },
-    task_body: {
-      type: 'string',
-      description: 'Task description (for create_task)',
-    },
-    task_due_date: {
-      type: 'string',
-      description: 'Task due date in ISO format (for create_task)',
-    },
+    pipeline_id: { type: 'string', description: 'Pipeline ID (for create_deal)' },
+    stage_id: { type: 'string', description: 'Deal stage ID (for create_deal)' },
+    note_body: { type: 'string', description: 'Note content (for add_note)' },
+    task_subject: { type: 'string', description: 'Task subject (for create_task)' },
+    task_body: { type: 'string', description: 'Task description (for create_task)' },
+    task_due_date: { type: 'string', description: 'Task due date in ISO format (for create_task)' },
   },
   required: ['action'],
 });
 
-const HUBSPOT_WRITE_CODE = `const https = require('https');
+const WRITE_CODE = `const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
@@ -342,47 +287,34 @@ main().catch(function(err) {
   console.log(JSON.stringify({ error: err.message }));
 });`;
 
-// ── Registration ──
+// ── Manifest ──
 
-export async function registerHubSpotTools(
-  adminUserId: string,
-  hubspotConfig: { access_token: string },
-): Promise<void> {
-  const configJson = JSON.stringify(hubspotConfig);
-
-  const existingRead = await getCustomTool('hubspot-read');
-  if (!existingRead) {
-    await registerCustomTool('hubspot-read', HUBSPOT_READ_SCHEMA, null, adminUserId, {
-      code: HUBSPOT_READ_CODE,
-      language: 'javascript',
-      autoApprove: true,
-      accessLevel: 'read-only',
-      configJson,
-    });
-    logger.info('HubSpot read-only tool registered');
-  } else {
-    logger.info('HubSpot read-only tool already exists, skipping');
-  }
-
-  const existingWrite = await getCustomTool('hubspot-write');
-  if (!existingWrite) {
-    await registerCustomTool('hubspot-write', HUBSPOT_WRITE_SCHEMA, null, adminUserId, {
-      code: HUBSPOT_WRITE_CODE,
-      language: 'javascript',
-      autoApprove: true,
-      accessLevel: 'read-write',
-      configJson,
-    });
-    logger.info('HubSpot read-write tool registered');
-  } else {
-    logger.info('HubSpot read-write tool already exists, skipping');
-  }
-}
-
-export async function updateHubSpotConfig(
-  hubspotConfig: { access_token: string },
-): Promise<void> {
-  const configJson = JSON.stringify(hubspotConfig);
-  await execute(`UPDATE custom_tools SET config_json = $1 WHERE name IN ('hubspot-read', 'hubspot-write')`, [configJson]);
-  logger.info('HubSpot config updated for both tools');
-}
+export const manifest: ToolManifest = {
+  id: 'hubspot',
+  label: 'HubSpot',
+  icon: ':orange_book:',
+  description: 'Search contacts/deals/companies, manage CRM records, create tasks and notes.',
+  configKeys: ['access_token'],
+  tools: [
+    { name: 'hubspot-read', schema: READ_SCHEMA, code: READ_CODE, accessLevel: 'read-only', displayName: 'Checking HubSpot' },
+    { name: 'hubspot-write', schema: WRITE_SCHEMA, code: WRITE_CODE, accessLevel: 'read-write', displayName: 'Updating HubSpot' },
+  ],
+  async register(userId, config) {
+    const configJson = JSON.stringify(config);
+    for (const tool of this.tools) {
+      const existing = await getCustomTool(tool.name);
+      if (!existing) {
+        await registerCustomTool(tool.name, tool.schema, null, userId, {
+          code: tool.code, language: 'javascript', autoApprove: true, accessLevel: tool.accessLevel, configJson,
+        });
+        logger.info(`${this.label} tool registered: ${tool.name}`);
+      }
+    }
+  },
+  async updateConfig(config) {
+    const configJson = JSON.stringify(config);
+    const names = this.tools.map(t => t.name);
+    await execute(`UPDATE custom_tools SET config_json = $1 WHERE name = ANY($2)`, [configJson, names]);
+    logger.info(`${this.label} config updated`);
+  },
+};

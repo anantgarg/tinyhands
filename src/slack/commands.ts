@@ -8,69 +8,12 @@ import { attachSkillToAgent } from '../modules/skills';
 import { createTrigger } from '../modules/triggers';
 import { logger } from '../utils/logger';
 import { execute, queryOne } from '../db';
+import { getToolIntegrations, getIntegration } from '../modules/tools/integrations';
 
 // ── Available Tool Integrations ──
-// These can be registered by admins via /tools in Slack
+// Auto-discovered from src/modules/tools/integrations/*/index.ts
 
-interface ToolIntegration {
-  id: string;
-  label: string;
-  icon: string;
-  description: string;
-  tools: string[];  // tool names that get registered
-  requiredConfigKeys: string[];  // config keys needed after registration
-}
-
-const TOOL_INTEGRATIONS: ToolIntegration[] = [
-  {
-    id: 'zendesk',
-    label: 'Zendesk',
-    icon: ':ticket:',
-    description: 'Search tickets, get details, create tickets, add comments, manage tags/priority.',
-    tools: ['zendesk-read', 'zendesk-write'],
-    requiredConfigKeys: ['subdomain', 'email', 'api_token'],
-  },
-  {
-    id: 'linear',
-    label: 'Linear',
-    icon: ':pencil2:',
-    description: 'Search issues, manage projects/teams/cycles, create and update issues.',
-    tools: ['linear-read', 'linear-write'],
-    requiredConfigKeys: ['api_key'],
-  },
-  {
-    id: 'posthog',
-    label: 'PostHog',
-    icon: ':bar_chart:',
-    description: 'Query events, get person details, list feature flags, view insights and cohorts.',
-    tools: ['posthog-read'],
-    requiredConfigKeys: ['api_key', 'project_id'],
-  },
-  {
-    id: 'hubspot',
-    label: 'HubSpot',
-    icon: ':orange_book:',
-    description: 'Search contacts/deals/companies, manage CRM records, create tasks and notes.',
-    tools: ['hubspot-read', 'hubspot-write'],
-    requiredConfigKeys: ['access_token'],
-  },
-  {
-    id: 'serpapi',
-    label: 'SerpAPI',
-    icon: ':mag:',
-    description: 'SERP rankings across Google, Bing, Yahoo.',
-    tools: ['serpapi-read'],
-    requiredConfigKeys: ['api_key'],
-  },
-  {
-    id: 'kb',
-    label: 'Knowledge Base',
-    icon: ':books:',
-    description: 'Search and browse the internal knowledge base. No API keys needed.',
-    tools: ['kb-search'],
-    requiredConfigKeys: [],
-  },
-];
+const TOOL_INTEGRATIONS = getToolIntegrations();
 
 export function registerCommands(app: App): void {
   // /agents — Consolidated interactive agent management
@@ -1727,49 +1670,10 @@ export function registerToolAndKBModals(app: App): void {
     }
 
     try {
-      // Call the appropriate registration function
-      switch (integrationId) {
-        case 'zendesk': {
-          const { registerZendeskTools } = await import('../modules/tools/zendesk');
-          await registerZendeskTools(userId, {
-            subdomain: config.subdomain,
-            email: config.email,
-            api_token: config.api_token,
-          });
-          break;
-        }
-        case 'linear': {
-          const { registerLinearTools } = await import('../modules/tools/linear');
-          await registerLinearTools(userId, { api_key: config.api_key });
-          break;
-        }
-        case 'posthog': {
-          const { registerPostHogTools } = await import('../modules/tools/posthog');
-          await registerPostHogTools(userId, {
-            api_key: config.api_key,
-            project_id: config.project_id,
-            ...(config.host ? { host: config.host } : {}),
-          });
-          break;
-        }
-        case 'hubspot': {
-          const { registerHubSpotTools } = await import('../modules/tools/hubspot');
-          await registerHubSpotTools(userId, { access_token: config.access_token });
-          break;
-        }
-        case 'serpapi': {
-          const { registerSerpApiTools } = await import('../modules/tools/serpapi');
-          await registerSerpApiTools(userId, { api_key: config.api_key });
-          break;
-        }
-        case 'kb': {
-          const { registerKBTools } = await import('../modules/tools/kb');
-          await registerKBTools();
-          break;
-        }
-        default:
-          throw new Error(`Unknown integration: ${integrationId}`);
-      }
+      // Look up manifest and call its register function
+      const manifest = getIntegration(integrationId);
+      if (!manifest) throw new Error(`Unknown integration: ${integrationId}`);
+      await manifest.register(userId, config);
 
       const toolList = integration.tools.map(t => `\`${t}\``).join(', ');
       await sendDMBlocks(userId, [

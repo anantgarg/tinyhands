@@ -22,7 +22,9 @@ vi.mock('../../src/utils/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-import { registerZendeskTools, updateZendeskConfig } from '../../src/modules/tools/zendesk';
+import { manifest as zendeskManifest } from '../../src/modules/tools/integrations/zendesk';
+const registerZendeskTools = (userId: string, config: Record<string, string>) => zendeskManifest.register(userId, config);
+const updateZendeskConfig = (config: Record<string, string>) => zendeskManifest.updateConfig(config);
 
 // ── Helpers ──
 
@@ -627,8 +629,8 @@ describe('Zendesk Tools Module', () => {
       await updateZendeskConfig(newConfig);
 
       expect(mockExecute).toHaveBeenCalledWith(
-        `UPDATE custom_tools SET config_json = $1 WHERE name IN ('zendesk-read', 'zendesk-write')`,
-        [JSON.stringify(newConfig)],
+        `UPDATE custom_tools SET config_json = $1 WHERE name = ANY($2)`,
+        [JSON.stringify(newConfig), ['zendesk-read', 'zendesk-write']],
       );
     });
 

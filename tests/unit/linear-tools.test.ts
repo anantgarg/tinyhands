@@ -22,7 +22,9 @@ vi.mock('../../src/utils/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-import { registerLinearTools, updateLinearConfig } from '../../src/modules/tools/linear';
+import { manifest as linearManifest } from '../../src/modules/tools/integrations/linear';
+const registerLinearTools = (userId: string, config: Record<string, string>) => linearManifest.register(userId, config);
+const updateLinearConfig = (config: Record<string, string>) => linearManifest.updateConfig(config);
 
 // ── Helpers ──
 
@@ -606,8 +608,8 @@ describe('Linear Tools Module', () => {
       await updateLinearConfig(newConfig);
 
       expect(mockExecute).toHaveBeenCalledWith(
-        `UPDATE custom_tools SET config_json = $1 WHERE name IN ('linear-read', 'linear-write')`,
-        [JSON.stringify(newConfig)],
+        `UPDATE custom_tools SET config_json = $1 WHERE name = ANY($2)`,
+        [JSON.stringify(newConfig), ['linear-read', 'linear-write']],
       );
     });
 

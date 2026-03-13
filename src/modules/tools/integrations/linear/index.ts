@@ -1,16 +1,11 @@
-/**
- * Linear tool registration — read + write tools for Linear issue tracking.
- *
- * Usage:
- *   registerLinearTools('ADMIN_USER_ID', { api_key: 'lin_api_...' })
- */
-import { registerCustomTool, getCustomTool } from './index';
-import { execute } from '../../db';
-import { logger } from '../../utils/logger';
+import { registerCustomTool, getCustomTool } from '../../index';
+import { execute } from '../../../../db';
+import { logger } from '../../../../utils/logger';
+import type { ToolManifest } from '../manifest';
 
-// ── Linear Read-Only Tool ──
+// ── Schemas & Code ──
 
-const LINEAR_READ_SCHEMA = JSON.stringify({
+const READ_SCHEMA = JSON.stringify({
   type: 'object',
   description: 'Read-only access to Linear: search issues, get issue details, list projects, teams, cycles, labels, and users.',
   properties: {
@@ -19,35 +14,17 @@ const LINEAR_READ_SCHEMA = JSON.stringify({
       enum: ['search_issues', 'get_issue', 'list_projects', 'list_teams', 'get_cycles', 'get_labels', 'get_user'],
       description: 'The Linear action to perform',
     },
-    query: {
-      type: 'string',
-      description: 'Search query text (for search_issues)',
-    },
-    issue_id: {
-      type: 'string',
-      description: 'Issue ID like "ENG-123" or UUID (for get_issue)',
-    },
-    team_id: {
-      type: 'string',
-      description: 'Team ID (for filtering list_projects, get_cycles, get_labels)',
-    },
-    user_id: {
-      type: 'string',
-      description: 'User ID (for get_user)',
-    },
-    status: {
-      type: 'string',
-      description: 'Filter by status name (for search_issues), e.g. "In Progress", "Done"',
-    },
-    limit: {
-      type: 'number',
-      description: 'Max results (default 25, max 50)',
-    },
+    query: { type: 'string', description: 'Search query text (for search_issues)' },
+    issue_id: { type: 'string', description: 'Issue ID like "ENG-123" or UUID (for get_issue)' },
+    team_id: { type: 'string', description: 'Team ID (for filtering list_projects, get_cycles, get_labels)' },
+    user_id: { type: 'string', description: 'User ID (for get_user)' },
+    status: { type: 'string', description: 'Filter by status name (for search_issues), e.g. "In Progress", "Done"' },
+    limit: { type: 'number', description: 'Max results (default 25, max 50)' },
   },
   required: ['action'],
 });
 
-const LINEAR_READ_CODE = `const https = require('https');
+const READ_CODE = `const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
@@ -152,9 +129,7 @@ main().catch(err => {
   console.log(JSON.stringify({ error: err.message }));
 });`;
 
-// ── Linear Read-Write Tool ──
-
-const LINEAR_WRITE_SCHEMA = JSON.stringify({
+const WRITE_SCHEMA = JSON.stringify({
   type: 'object',
   description: 'Create and update Linear issues, add comments, create projects. No destructive actions (no delete).',
   properties: {
@@ -163,56 +138,22 @@ const LINEAR_WRITE_SCHEMA = JSON.stringify({
       enum: ['create_issue', 'update_issue', 'add_comment', 'create_project'],
       description: 'The Linear write action to perform',
     },
-    title: {
-      type: 'string',
-      description: 'Issue or project title (for create_issue, create_project)',
-    },
-    description: {
-      type: 'string',
-      description: 'Issue or project description (for create_issue, create_project)',
-    },
-    team_id: {
-      type: 'string',
-      description: 'Team ID (required for create_issue, create_project)',
-    },
-    issue_id: {
-      type: 'string',
-      description: 'Issue ID (for update_issue, add_comment)',
-    },
-    state_id: {
-      type: 'string',
-      description: 'State/status ID (for update_issue)',
-    },
-    priority: {
-      type: 'number',
-      description: 'Priority 0-4: 0=none, 1=urgent, 2=high, 3=medium, 4=low',
-    },
-    assignee_id: {
-      type: 'string',
-      description: 'User ID to assign (for create_issue, update_issue)',
-    },
-    label_ids: {
-      type: 'array',
-      items: { type: 'string' },
-      description: 'Label IDs to apply',
-    },
-    project_id: {
-      type: 'string',
-      description: 'Project ID to link to (for create_issue)',
-    },
-    cycle_id: {
-      type: 'string',
-      description: 'Cycle ID to add to (for create_issue)',
-    },
-    body: {
-      type: 'string',
-      description: 'Comment body text (for add_comment)',
-    },
+    title: { type: 'string', description: 'Issue or project title (for create_issue, create_project)' },
+    description: { type: 'string', description: 'Issue or project description (for create_issue, create_project)' },
+    team_id: { type: 'string', description: 'Team ID (required for create_issue, create_project)' },
+    issue_id: { type: 'string', description: 'Issue ID (for update_issue, add_comment)' },
+    state_id: { type: 'string', description: 'State/status ID (for update_issue)' },
+    priority: { type: 'number', description: 'Priority 0-4: 0=none, 1=urgent, 2=high, 3=medium, 4=low' },
+    assignee_id: { type: 'string', description: 'User ID to assign (for create_issue, update_issue)' },
+    label_ids: { type: 'array', items: { type: 'string' }, description: 'Label IDs to apply' },
+    project_id: { type: 'string', description: 'Project ID to link to (for create_issue)' },
+    cycle_id: { type: 'string', description: 'Cycle ID to add to (for create_issue)' },
+    body: { type: 'string', description: 'Comment body text (for add_comment)' },
   },
   required: ['action'],
 });
 
-const LINEAR_WRITE_CODE = `const https = require('https');
+const WRITE_CODE = `const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
@@ -314,47 +255,34 @@ main().catch(err => {
   console.log(JSON.stringify({ error: err.message }));
 });`;
 
-// ── Registration ──
+// ── Manifest ──
 
-export async function registerLinearTools(
-  adminUserId: string,
-  linearConfig: { api_key: string },
-): Promise<void> {
-  const configJson = JSON.stringify(linearConfig);
-
-  const existingRead = await getCustomTool('linear-read');
-  if (!existingRead) {
-    await registerCustomTool('linear-read', LINEAR_READ_SCHEMA, null, adminUserId, {
-      code: LINEAR_READ_CODE,
-      language: 'javascript',
-      autoApprove: true,
-      accessLevel: 'read-only',
-      configJson,
-    });
-    logger.info('Linear read-only tool registered');
-  } else {
-    logger.info('Linear read-only tool already exists, skipping');
-  }
-
-  const existingWrite = await getCustomTool('linear-write');
-  if (!existingWrite) {
-    await registerCustomTool('linear-write', LINEAR_WRITE_SCHEMA, null, adminUserId, {
-      code: LINEAR_WRITE_CODE,
-      language: 'javascript',
-      autoApprove: true,
-      accessLevel: 'read-write',
-      configJson,
-    });
-    logger.info('Linear read-write tool registered');
-  } else {
-    logger.info('Linear read-write tool already exists, skipping');
-  }
-}
-
-export async function updateLinearConfig(
-  linearConfig: { api_key: string },
-): Promise<void> {
-  const configJson = JSON.stringify(linearConfig);
-  await execute(`UPDATE custom_tools SET config_json = $1 WHERE name IN ('linear-read', 'linear-write')`, [configJson]);
-  logger.info('Linear config updated for both tools');
-}
+export const manifest: ToolManifest = {
+  id: 'linear',
+  label: 'Linear',
+  icon: ':pencil2:',
+  description: 'Search issues, manage projects/teams/cycles, create and update issues.',
+  configKeys: ['api_key'],
+  tools: [
+    { name: 'linear-read', schema: READ_SCHEMA, code: READ_CODE, accessLevel: 'read-only', displayName: 'Checking Linear' },
+    { name: 'linear-write', schema: WRITE_SCHEMA, code: WRITE_CODE, accessLevel: 'read-write', displayName: 'Updating Linear' },
+  ],
+  async register(userId, config) {
+    const configJson = JSON.stringify(config);
+    for (const tool of this.tools) {
+      const existing = await getCustomTool(tool.name);
+      if (!existing) {
+        await registerCustomTool(tool.name, tool.schema, null, userId, {
+          code: tool.code, language: 'javascript', autoApprove: true, accessLevel: tool.accessLevel, configJson,
+        });
+        logger.info(`${this.label} tool registered: ${tool.name}`);
+      }
+    }
+  },
+  async updateConfig(config) {
+    const configJson = JSON.stringify(config);
+    const names = this.tools.map(t => t.name);
+    await execute(`UPDATE custom_tools SET config_json = $1 WHERE name = ANY($2)`, [configJson, names]);
+    logger.info(`${this.label} config updated`);
+  },
+};

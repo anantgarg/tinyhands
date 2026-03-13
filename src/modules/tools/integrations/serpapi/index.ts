@@ -1,16 +1,11 @@
-/**
- * SerpAPI tool registration — read-only SERP rankings tool.
- *
- * Usage:
- *   registerSerpApiTools('ADMIN_USER_ID', { api_key: 'your-serpapi-key' })
- */
-import { registerCustomTool, getCustomTool } from './index';
-import { execute } from '../../db';
-import { logger } from '../../utils/logger';
+import { registerCustomTool, getCustomTool } from '../../index';
+import { execute } from '../../../../db';
+import { logger } from '../../../../utils/logger';
+import type { ToolManifest } from '../manifest';
 
-// ── SerpAPI Read-Only Tool ──
+// ── Schema & Code ──
 
-const SERPAPI_READ_SCHEMA = JSON.stringify({
+const READ_SCHEMA = JSON.stringify({
   type: 'object',
   description: 'Search engine results page (SERP) rankings across Google, Bing, and Yahoo. Check keyword positions, get organic results with rankings.',
   properties: {
@@ -19,38 +14,17 @@ const SERPAPI_READ_SCHEMA = JSON.stringify({
       enum: ['search', 'batch_search'],
       description: 'The SerpAPI action to perform',
     },
-    keyword: {
-      type: 'string',
-      description: 'Search keyword/query (for search action)',
-    },
-    keywords: {
-      type: 'array',
-      items: { type: 'string' },
-      description: 'Array of search keywords (for batch_search action)',
-    },
-    engine: {
-      type: 'string',
-      enum: ['google', 'bing', 'yahoo'],
-      description: 'Search engine to use (default: google)',
-    },
-    location: {
-      type: 'string',
-      description: 'Location for localized results (e.g. "Austin, Texas")',
-    },
-    device: {
-      type: 'string',
-      enum: ['desktop', 'mobile', 'tablet'],
-      description: 'Device type (default: desktop)',
-    },
-    num: {
-      type: 'number',
-      description: 'Number of results to return (default 10, max 100)',
-    },
+    keyword: { type: 'string', description: 'Search keyword/query (for search action)' },
+    keywords: { type: 'array', items: { type: 'string' }, description: 'Array of search keywords (for batch_search action)' },
+    engine: { type: 'string', enum: ['google', 'bing', 'yahoo'], description: 'Search engine to use (default: google)' },
+    location: { type: 'string', description: 'Location for localized results (e.g. "Austin, Texas")' },
+    device: { type: 'string', enum: ['desktop', 'mobile', 'tablet'], description: 'Device type (default: desktop)' },
+    num: { type: 'number', description: 'Number of results to return (default 10, max 100)' },
   },
   required: ['action'],
 });
 
-const SERPAPI_READ_CODE = `const https = require('https');
+const READ_CODE = `const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
@@ -159,33 +133,33 @@ main().catch(function(err) {
   console.log(JSON.stringify({ error: err.message }));
 });`;
 
-// ── Registration ──
+// ── Manifest ──
 
-export async function registerSerpApiTools(
-  adminUserId: string,
-  serpApiConfig: { api_key: string },
-): Promise<void> {
-  const configJson = JSON.stringify(serpApiConfig);
-
-  const existing = await getCustomTool('serpapi-read');
-  if (!existing) {
-    await registerCustomTool('serpapi-read', SERPAPI_READ_SCHEMA, null, adminUserId, {
-      code: SERPAPI_READ_CODE,
-      language: 'javascript',
-      autoApprove: true,
-      accessLevel: 'read-only',
-      configJson,
-    });
-    logger.info('SerpAPI read-only tool registered');
-  } else {
-    logger.info('SerpAPI read-only tool already exists, skipping');
-  }
-}
-
-export async function updateSerpApiConfig(
-  serpApiConfig: { api_key: string },
-): Promise<void> {
-  const configJson = JSON.stringify(serpApiConfig);
-  await execute(`UPDATE custom_tools SET config_json = $1 WHERE name = 'serpapi-read'`, [configJson]);
-  logger.info('SerpAPI config updated');
-}
+export const manifest: ToolManifest = {
+  id: 'serpapi',
+  label: 'SerpAPI',
+  icon: ':mag:',
+  description: 'SERP rankings across Google, Bing, Yahoo.',
+  configKeys: ['api_key'],
+  tools: [
+    { name: 'serpapi-read', schema: READ_SCHEMA, code: READ_CODE, accessLevel: 'read-only', displayName: 'Searching SerpAPI' },
+  ],
+  async register(userId, config) {
+    const configJson = JSON.stringify(config);
+    for (const tool of this.tools) {
+      const existing = await getCustomTool(tool.name);
+      if (!existing) {
+        await registerCustomTool(tool.name, tool.schema, null, userId, {
+          code: tool.code, language: 'javascript', autoApprove: true, accessLevel: tool.accessLevel, configJson,
+        });
+        logger.info(`${this.label} tool registered: ${tool.name}`);
+      }
+    }
+  },
+  async updateConfig(config) {
+    const configJson = JSON.stringify(config);
+    const names = this.tools.map(t => t.name);
+    await execute(`UPDATE custom_tools SET config_json = $1 WHERE name = ANY($2)`, [configJson, names]);
+    logger.info(`${this.label} config updated`);
+  },
+};

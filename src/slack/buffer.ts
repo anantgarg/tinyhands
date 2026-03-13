@@ -1,6 +1,7 @@
 import { postMessage, updateMessage, deleteMessage } from './index';
 import { markdownToSlack } from '../utils/slack-format';
 import { logger } from '../utils/logger';
+import { getToolDisplayNames } from '../modules/tools/integrations';
 
 // ── Slack Event Buffer ──
 // Batches SDK events in 1.5-second windows to respect Slack rate limits (~1 msg/sec/channel)
@@ -249,7 +250,8 @@ const TOOL_DISPLAY_NAMES: Record<string, string> = {
   Agent: 'Working on a subtask',
   TodoWrite: 'Planning tasks',
   TodoRead: 'Checking tasks',
-  'kb-search': 'Searching knowledge base',
+  // Integration display names are auto-discovered from manifests
+  ...getToolDisplayNames(),
 };
 
 function friendlyToolName(toolName: string): string {

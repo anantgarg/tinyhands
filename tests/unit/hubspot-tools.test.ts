@@ -22,7 +22,9 @@ vi.mock('../../src/utils/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-import { registerHubSpotTools, updateHubSpotConfig } from '../../src/modules/tools/hubspot';
+import { manifest as hubspotManifest } from '../../src/modules/tools/integrations/hubspot';
+const registerHubSpotTools = (userId: string, config: Record<string, string>) => hubspotManifest.register(userId, config);
+const updateHubSpotConfig = (config: Record<string, string>) => hubspotManifest.updateConfig(config);
 
 // ── Helpers ──
 
@@ -687,8 +689,8 @@ describe('HubSpot Tools Module', () => {
       await updateHubSpotConfig(newConfig);
 
       expect(mockExecute).toHaveBeenCalledWith(
-        `UPDATE custom_tools SET config_json = $1 WHERE name IN ('hubspot-read', 'hubspot-write')`,
-        [JSON.stringify(newConfig)],
+        `UPDATE custom_tools SET config_json = $1 WHERE name = ANY($2)`,
+        [JSON.stringify(newConfig), ['hubspot-read', 'hubspot-write']],
       );
     });
 

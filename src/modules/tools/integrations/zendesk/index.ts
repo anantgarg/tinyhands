@@ -1,21 +1,11 @@
-/**
- * Zendesk tool registration — run once to seed the two Zendesk tools into the DB.
- *
- * Usage:
- *   npx ts-node -e "require('./src/modules/tools/zendesk').registerZendeskTools('ADMIN_USER_ID')"
- *
- * Or call registerZendeskTools() from a setup script.
- *
- * Credentials (subdomain, email, apiToken) are stored in the tool's config_json in the database.
- * Update them with updateZendeskConfig() if they change.
- */
-import { registerCustomTool, getCustomTool } from './index';
-import { execute } from '../../db';
-import { logger } from '../../utils/logger';
+import { registerCustomTool, getCustomTool } from '../../index';
+import { execute } from '../../../../db';
+import { logger } from '../../../../utils/logger';
+import type { ToolManifest } from '../manifest';
 
-// ── Zendesk Read-Only Tool ──
+// ── Schemas & Code ──
 
-const ZENDESK_READ_SCHEMA = JSON.stringify({
+const READ_SCHEMA = JSON.stringify({
   type: 'object',
   description: 'Read-only access to Zendesk: search tickets, get ticket details, get users/orgs, ticket metrics, satisfaction ratings, and views.',
   properties: {
@@ -24,48 +14,20 @@ const ZENDESK_READ_SCHEMA = JSON.stringify({
       enum: ['search', 'get_ticket', 'get_ticket_comments', 'get_user', 'get_organization', 'list_views', 'get_view_tickets', 'get_ticket_metrics', 'get_satisfaction_ratings'],
       description: 'The Zendesk action to perform',
     },
-    query: {
-      type: 'string',
-      description: 'Search query (for search action). Uses Zendesk search syntax: e.g. "status:open tags:billing created>2024-01-01"',
-    },
-    ticket_id: {
-      type: 'number',
-      description: 'Ticket ID (for get_ticket, get_ticket_comments, get_ticket_metrics)',
-    },
-    user_id: {
-      type: 'number',
-      description: 'User ID (for get_user)',
-    },
-    organization_id: {
-      type: 'number',
-      description: 'Organization ID (for get_organization)',
-    },
-    view_id: {
-      type: 'number',
-      description: 'View ID (for get_view_tickets)',
-    },
-    page: {
-      type: 'number',
-      description: 'Page number for paginated results (default 1)',
-    },
-    per_page: {
-      type: 'number',
-      description: 'Results per page (default 100, max 100)',
-    },
-    sort_by: {
-      type: 'string',
-      description: 'Sort field (for search: created_at, updated_at, priority, status, ticket_type)',
-    },
-    sort_order: {
-      type: 'string',
-      enum: ['asc', 'desc'],
-      description: 'Sort order (default desc)',
-    },
+    query: { type: 'string', description: 'Search query (for search action). Uses Zendesk search syntax: e.g. "status:open tags:billing created>2024-01-01"' },
+    ticket_id: { type: 'number', description: 'Ticket ID (for get_ticket, get_ticket_comments, get_ticket_metrics)' },
+    user_id: { type: 'number', description: 'User ID (for get_user)' },
+    organization_id: { type: 'number', description: 'Organization ID (for get_organization)' },
+    view_id: { type: 'number', description: 'View ID (for get_view_tickets)' },
+    page: { type: 'number', description: 'Page number for paginated results (default 1)' },
+    per_page: { type: 'number', description: 'Results per page (default 100, max 100)' },
+    sort_by: { type: 'string', description: 'Sort field (for search: created_at, updated_at, priority, status, ticket_type)' },
+    sort_order: { type: 'string', enum: ['asc', 'desc'], description: 'Sort order (default desc)' },
   },
   required: ['action'],
 });
 
-const ZENDESK_READ_CODE = `const https = require('https');
+const READ_CODE = `const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
@@ -178,9 +140,7 @@ main().catch(err => {
   console.log(JSON.stringify({ error: err.message }));
 });`;
 
-// ── Zendesk Read-Write Tool (no destructive actions) ──
-
-const ZENDESK_WRITE_SCHEMA = JSON.stringify({
+const WRITE_SCHEMA = JSON.stringify({
   type: 'object',
   description: 'Create and respond to Zendesk tickets. No destructive actions (no delete, no close).',
   properties: {
@@ -189,45 +149,19 @@ const ZENDESK_WRITE_SCHEMA = JSON.stringify({
       enum: ['create_ticket', 'add_comment', 'update_ticket_tags', 'update_ticket_priority', 'update_ticket_assignee'],
       description: 'The Zendesk write action to perform',
     },
-    subject: {
-      type: 'string',
-      description: 'Ticket subject (for create_ticket)',
-    },
-    body: {
-      type: 'string',
-      description: 'Ticket body / comment text (for create_ticket, add_comment)',
-    },
-    ticket_id: {
-      type: 'number',
-      description: 'Ticket ID (for add_comment, update_ticket_tags, update_ticket_priority, update_ticket_assignee)',
-    },
-    requester_email: {
-      type: 'string',
-      description: 'Requester email address (for create_ticket)',
-    },
-    tags: {
-      type: 'array',
-      items: { type: 'string' },
-      description: 'Tags to set on the ticket (for update_ticket_tags)',
-    },
-    priority: {
-      type: 'string',
-      enum: ['low', 'normal', 'high', 'urgent'],
-      description: 'Priority level (for create_ticket, update_ticket_priority)',
-    },
-    assignee_id: {
-      type: 'number',
-      description: 'Agent user ID to assign to (for update_ticket_assignee)',
-    },
-    public_reply: {
-      type: 'boolean',
-      description: 'Whether the comment is public (true) or internal note (false). Default true.',
-    },
+    subject: { type: 'string', description: 'Ticket subject (for create_ticket)' },
+    body: { type: 'string', description: 'Ticket body / comment text (for create_ticket, add_comment)' },
+    ticket_id: { type: 'number', description: 'Ticket ID (for add_comment, update_ticket_tags, update_ticket_priority, update_ticket_assignee)' },
+    requester_email: { type: 'string', description: 'Requester email address (for create_ticket)' },
+    tags: { type: 'array', items: { type: 'string' }, description: 'Tags to set on the ticket (for update_ticket_tags)' },
+    priority: { type: 'string', enum: ['low', 'normal', 'high', 'urgent'], description: 'Priority level (for create_ticket, update_ticket_priority)' },
+    assignee_id: { type: 'number', description: 'Agent user ID to assign to (for update_ticket_assignee)' },
+    public_reply: { type: 'boolean', description: 'Whether the comment is public (true) or internal note (false). Default true.' },
   },
   required: ['action'],
 });
 
-const ZENDESK_WRITE_CODE = `const https = require('https');
+const WRITE_CODE = `const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
@@ -331,52 +265,34 @@ main().catch(err => {
   console.log(JSON.stringify({ error: err.message }));
 });`;
 
-// ── Registration ──
+// ── Manifest ──
 
-export async function registerZendeskTools(
-  adminUserId: string,
-  zendeskConfig: { subdomain: string; email: string; api_token: string },
-): Promise<void> {
-  const configJson = JSON.stringify(zendeskConfig);
-
-  // Register read-only tool
-  const existingRead = await getCustomTool('zendesk-read');
-  if (!existingRead) {
-    await registerCustomTool('zendesk-read', ZENDESK_READ_SCHEMA, null, adminUserId, {
-      code: ZENDESK_READ_CODE,
-      language: 'javascript',
-      autoApprove: true,
-      accessLevel: 'read-only',
-      configJson,
-    });
-    logger.info('Zendesk read-only tool registered');
-  } else {
-    logger.info('Zendesk read-only tool already exists, skipping');
-  }
-
-  // Register read-write tool
-  const existingWrite = await getCustomTool('zendesk-write');
-  if (!existingWrite) {
-    await registerCustomTool('zendesk-write', ZENDESK_WRITE_SCHEMA, null, adminUserId, {
-      code: ZENDESK_WRITE_CODE,
-      language: 'javascript',
-      autoApprove: true,
-      accessLevel: 'read-write',
-      configJson,
-    });
-    logger.info('Zendesk read-write tool registered');
-  } else {
-    logger.info('Zendesk read-write tool already exists, skipping');
-  }
-}
-
-/**
- * Update Zendesk credentials for both tools.
- */
-export async function updateZendeskConfig(
-  zendeskConfig: { subdomain: string; email: string; api_token: string },
-): Promise<void> {
-  const configJson = JSON.stringify(zendeskConfig);
-  await execute(`UPDATE custom_tools SET config_json = $1 WHERE name IN ('zendesk-read', 'zendesk-write')`, [configJson]);
-  logger.info('Zendesk config updated for both tools');
-}
+export const manifest: ToolManifest = {
+  id: 'zendesk',
+  label: 'Zendesk',
+  icon: ':ticket:',
+  description: 'Search tickets, get details, create tickets, add comments, manage tags/priority.',
+  configKeys: ['subdomain', 'email', 'api_token'],
+  tools: [
+    { name: 'zendesk-read', schema: READ_SCHEMA, code: READ_CODE, accessLevel: 'read-only', displayName: 'Checking Zendesk' },
+    { name: 'zendesk-write', schema: WRITE_SCHEMA, code: WRITE_CODE, accessLevel: 'read-write', displayName: 'Updating Zendesk' },
+  ],
+  async register(userId, config) {
+    const configJson = JSON.stringify(config);
+    for (const tool of this.tools) {
+      const existing = await getCustomTool(tool.name);
+      if (!existing) {
+        await registerCustomTool(tool.name, tool.schema, null, userId, {
+          code: tool.code, language: 'javascript', autoApprove: true, accessLevel: tool.accessLevel, configJson,
+        });
+        logger.info(`${this.label} tool registered: ${tool.name}`);
+      }
+    }
+  },
+  async updateConfig(config) {
+    const configJson = JSON.stringify(config);
+    const names = this.tools.map(t => t.name);
+    await execute(`UPDATE custom_tools SET config_json = $1 WHERE name = ANY($2)`, [configJson, names]);
+    logger.info(`${this.label} config updated`);
+  },
+};
