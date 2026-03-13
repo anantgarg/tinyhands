@@ -178,6 +178,20 @@ Optional: `GITHUB_TOKEN`, `PORT` (default 3000), `LOG_LEVEL`, `DOCKER_BASE_IMAGE
 - **Test thoroughly**: Run the full test suite (`npm test`) before committing. All 1912+ tests must pass with 100% code coverage — no skipped or failing tests.
 - **Publish releases**: Every push should include a tagged release with a changelog summarizing what changed. Use `gh release create` with clear release notes.
 
+### Versioning
+
+Versions follow sequential semver: `v1.X.0` where X increments by 1 for each release.
+
+To determine the next version, check the latest release:
+
+```bash
+gh release list --limit 1
+```
+
+Then increment the minor version by 1. For example, if the latest release is `v1.5.0`, the next release should be `v1.6.0`.
+
+Always update `package.json` version to match the new release version before committing.
+
 ## Testing
 
 - **Unit tests**: `tests/unit/` — Vitest, run with `npm test`
