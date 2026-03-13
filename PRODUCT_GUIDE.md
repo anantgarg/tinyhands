@@ -56,37 +56,30 @@ You can also type `/update-agent` to update any agent via conversation.
 
 ---
 
-## Connecting Knowledge Sources
+## Knowledge Sources
 
-Agents are smarter when they have context. In an agent's channel, type:
+Agents work best when they have context. Your admin can connect knowledge sources like GitHub repos, Google Drive files, and Zendesk help centers to your agents. If you need a source connected, reach out to your admin.
 
-- `connect to owner/repo` — connect a GitHub repository
-- `connect to drive.google.com/...` — connect a Google Drive file or folder
-- `connect to yoursite.zendesk.com` — connect Zendesk help center articles
-
-The agent will index the content and use it when answering questions.
-
-You can also manage the shared knowledge base with `/kb`:
-- `/kb add` — add an entry manually
-- `/kb search <query>` — search existing entries
+You can search the shared knowledge base anytime with `/kb search <query>`.
 
 ---
 
-## Setting Up Triggers
+## Triggers
 
-Make agents run on a schedule or in response to events. In an agent's channel, type:
+Triggers are set up during agent creation. When `/new-agent` asks "When should it run?", describe when the agent should activate:
 
-- `trigger this agent every Monday at 9am` — scheduled trigger
-- `trigger this agent when a Linear issue is created` — event trigger
-- `trigger this agent when a Zendesk ticket comes in` — external trigger
+- *"Whenever someone asks a question in #support"* — responds to channel messages
+- *"Every Monday at 9am"* — runs on a schedule
+- *"When a new Linear issue is created"* — triggers on external events
+- *"When a Zendesk ticket comes in"* — triggers on external events
 
-Triggers are automatically configured based on your description.
+TinyHands will automatically configure the right trigger type and schedule based on your description. You can pause and resume triggers later from `/agents`.
 
 ---
 
-## Adding Tools & Integrations
+## Available Tools & Integrations
 
-Admins can set up integrations with `/tools`. Available integrations:
+Your agents come with built-in tools (web search, file operations, code analysis) and may also have access to these integrations:
 
 | Integration | What it does |
 |------------|--------------|
@@ -97,7 +90,7 @@ Admins can set up integrations with `/tools`. Available integrations:
 | **SerpAPI** | Track search engine rankings across Google, Bing, Yahoo |
 | **Knowledge Base** | Search your internal KB |
 
-Once an integration is configured, any agent can use it.
+When you create an agent, TinyHands automatically selects the right tools based on the agent's goal. If you need an integration that isn't available yet, ask your admin to set it up with `/tools`.
 
 ---
 
@@ -139,9 +132,7 @@ You can change this in the agent's settings via `/agents` → Update.
 | `/new-agent` | Create a new agent |
 | `/agents` | View and manage all your agents |
 | `/update-agent` | Update an existing agent |
-| `/kb` | Manage knowledge base |
 | `/kb search <query>` | Search the knowledge base |
-| `/tools` | Manage integrations (admin) |
 | DM the bot | Talk to any agent directly |
 
 ---
@@ -149,7 +140,6 @@ You can change this in the agent's settings via `/agents` → Update.
 ## Tips
 
 - Start simple. Create an agent with a clear, focused goal — you can always expand it later.
-- Connect relevant knowledge sources so the agent has the context it needs.
 - Use `/opus` before a message for the most capable model on complex tasks.
 - Private agents are great for team-specific workflows that don't need org-wide visibility.
 
