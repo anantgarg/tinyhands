@@ -30,6 +30,10 @@ export interface ToolManifest {
   description: string;
   /** Config keys the admin must provide (e.g. ["api_key", "site"]) */
   configKeys: string[];
+  /** Optional placeholder hints for config fields (key → placeholder text) */
+  configPlaceholders?: Record<string, string>;
+  /** Optional setup instructions shown in registration modal (Slack mrkdwn) */
+  setupGuide?: string;
   /** The tool definitions (read-only and optionally read-write) */
   tools: ToolDefinition[];
   /** Register both tools into the database */

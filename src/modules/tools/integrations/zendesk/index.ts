@@ -273,6 +273,11 @@ export const manifest: ToolManifest = {
   icon: ':ticket:',
   description: 'Search tickets, get details, create tickets, add comments, manage tags/priority.',
   configKeys: ['subdomain', 'email', 'api_token'],
+  configPlaceholders: {
+    subdomain: 'your-company (from your-company.zendesk.com)',
+    email: 'admin@company.com',
+    api_token: 'Zendesk API token from Admin > Channels > API',
+  },
   tools: [
     { name: 'zendesk-read', schema: READ_SCHEMA, code: READ_CODE, accessLevel: 'read-only', displayName: 'Checking Zendesk' },
     { name: 'zendesk-write', schema: WRITE_SCHEMA, code: WRITE_CODE, accessLevel: 'read-write', displayName: 'Updating Zendesk' },

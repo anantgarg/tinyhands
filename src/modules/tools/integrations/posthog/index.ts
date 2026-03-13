@@ -136,6 +136,10 @@ export const manifest: ToolManifest = {
   icon: ':bar_chart:',
   description: 'Query events, get person details, list feature flags, view insights and cohorts.',
   configKeys: ['api_key', 'project_id'],
+  configPlaceholders: {
+    api_key: 'phx_xxxxxxxxxxxxxxxx (Personal API key)',
+    project_id: 'Numeric project ID from Settings > Project',
+  },
   tools: [
     { name: 'posthog-read', schema: READ_SCHEMA, code: READ_CODE, accessLevel: 'read-only', displayName: 'Checking PostHog' },
   ],

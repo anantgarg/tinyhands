@@ -49,6 +49,7 @@ export function getToolIntegrations() {
     description: m.description,
     tools: m.tools.map(t => t.name),
     requiredConfigKeys: m.configKeys,
+    configPlaceholders: m.configPlaceholders || {},
   }));
 }
 

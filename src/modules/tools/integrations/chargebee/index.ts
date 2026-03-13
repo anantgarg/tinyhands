@@ -416,6 +416,10 @@ export const manifest: ToolManifest = {
   icon: ':credit_card:',
   description: 'Search customers, subscriptions, invoices; manage billing, apply coupons.',
   configKeys: ['api_key', 'site'],
+  configPlaceholders: {
+    api_key: 'live_xxxxxxxxxxxxxxxx',
+    site: 'your-subdomain (from your-subdomain.chargebee.com)',
+  },
   tools: [
     { name: 'chargebee-read', schema: READ_SCHEMA, code: READ_CODE, accessLevel: 'read-only', displayName: 'Checking Chargebee' },
     { name: 'chargebee-write', schema: WRITE_SCHEMA, code: WRITE_CODE, accessLevel: 'read-write', displayName: 'Updating Chargebee' },

@@ -938,47 +938,68 @@ export function registerInlineActions(app: App): void {
     await ack();
     const integrationId = (action as any).value;
     const userId = body.user.id;
-    const channelId = body.channel?.id;
     const triggerId = (body as any).trigger_id;
 
-    const { isSuperadmin } = await import('../modules/access-control');
-    if (!(await isSuperadmin(userId))) return;
+    try {
+      const { isSuperadmin } = await import('../modules/access-control');
+      if (!(await isSuperadmin(userId))) return;
 
-    const integration = TOOL_INTEGRATIONS.find(i => i.id === integrationId);
-    if (!integration) return;
+      const integration = TOOL_INTEGRATIONS.find(i => i.id === integrationId);
+      if (!integration) {
+        logger.warn('register_tool_integration: unknown integration', { integrationId });
+        return;
+      }
 
-    // Build a modal asking for the required config keys
-    const blocks: any[] = [
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `${integration.icon} *Register ${integration.label}*\n\n${integration.description}\n\nThis will register: ${integration.tools.map(t => `\`${t}\``).join(', ')}\n\nEnter your API credentials below:`,
+      // Build a modal asking for the required config keys
+      const manifest = getIntegration(integrationId);
+      const setupGuide = manifest?.setupGuide;
+
+      const blocks: any[] = [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `${integration.icon} *Register ${integration.label}*\n\n${integration.description}\n\nThis will register: ${integration.tools.map(t => `\`${t}\``).join(', ')}`,
+          },
         },
-      },
-      { type: 'divider' },
-    ];
+        { type: 'divider' },
+      ];
 
-    for (const key of integration.requiredConfigKeys) {
-      const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-      blocks.push({
-        type: 'input', block_id: `reg_cfg_${key}`,
-        label: { type: 'plain_text', text: label },
-        element: {
-          type: 'plain_text_input', action_id: `reg_input_${key}`,
-          placeholder: { type: 'plain_text', text: `Enter ${label}...` },
-        },
+      if (setupGuide) {
+        blocks.push({
+          type: 'section',
+          text: { type: 'mrkdwn', text: setupGuide },
+        });
+        blocks.push({ type: 'divider' });
+      }
+
+      for (const key of integration.requiredConfigKeys) {
+        const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+        const placeholder = integration.configPlaceholders?.[key] || `Enter ${label}...`;
+        blocks.push({
+          type: 'input', block_id: `reg_cfg_${key}`,
+          label: { type: 'plain_text', text: label },
+          element: {
+            type: 'plain_text_input', action_id: `reg_input_${key}`,
+            placeholder: { type: 'plain_text', text: placeholder },
+          },
+        });
+      }
+
+      await openModal(triggerId, {
+        type: 'modal',
+        callback_id: 'register_tool_modal',
+        private_metadata: JSON.stringify({ integrationId, requiredKeys: integration.requiredConfigKeys }),
+        title: { type: 'plain_text', text: `Register ${integration.label}`.slice(0, 24) },
+        submit: { type: 'plain_text', text: 'Register' },
+        blocks,
       });
+    } catch (err: any) {
+      logger.error('register_tool_integration failed', { integrationId, error: err.message, stack: err.stack });
+      await sendDMBlocks(userId, [
+        { type: 'section', text: { type: 'mrkdwn', text: `:x: Failed to open registration modal for *${integrationId}*: ${err.message}` } },
+      ], 'Registration error').catch(() => {});
     }
-
-    await openModal(triggerId, {
-      type: 'modal',
-      callback_id: 'register_tool_modal',
-      private_metadata: JSON.stringify({ integrationId, requiredKeys: integration.requiredConfigKeys }),
-      title: { type: 'plain_text', text: `Register ${integration.label}`.slice(0, 24) },
-      submit: { type: 'plain_text', text: 'Register' },
-      blocks,
-    });
   });
 
   // "Add Entry" button from KB dashboard

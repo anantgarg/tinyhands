@@ -141,6 +141,9 @@ export const manifest: ToolManifest = {
   icon: ':mag:',
   description: 'SERP rankings across Google, Bing, Yahoo.',
   configKeys: ['api_key'],
+  configPlaceholders: {
+    api_key: 'API key from serpapi.com/manage-api-key',
+  },
   tools: [
     { name: 'serpapi-read', schema: READ_SCHEMA, code: READ_CODE, accessLevel: 'read-only', displayName: 'Searching SerpAPI' },
   ],

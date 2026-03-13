@@ -295,6 +295,10 @@ export const manifest: ToolManifest = {
   icon: ':orange_book:',
   description: 'Search contacts/deals/companies, manage CRM records, create tasks and notes.',
   configKeys: ['access_token'],
+  setupGuide: '*How to get your token:*\n1. Go to *Settings > Integrations > Private Apps*\n2. Click *Create a private app*, give it a name\n3. Under *Scopes*, enable:\n    `crm.objects.contacts.read` · `crm.objects.contacts.write`\n    `crm.objects.deals.read` · `crm.objects.deals.write`\n    `crm.objects.companies.read` · `crm.objects.companies.write`\n4. Click *Create app*, then copy the access token',
+  configPlaceholders: {
+    access_token: 'Paste Private App access token here',
+  },
   tools: [
     { name: 'hubspot-read', schema: READ_SCHEMA, code: READ_CODE, accessLevel: 'read-only', displayName: 'Checking HubSpot' },
     { name: 'hubspot-write', schema: WRITE_SCHEMA, code: WRITE_CODE, accessLevel: 'read-write', displayName: 'Updating HubSpot' },
