@@ -13,7 +13,7 @@ export async function buildDashboardBlocks(): Promise<Record<string, any>[]> {
   // Header
   blocks.push({
     type: 'header',
-    text: { type: 'plain_text', text: `✋ Tiny Hands Dashboard  v${version}` },
+    text: { type: 'plain_text', text: `✋ TinyHands Dashboard  v${version}` },
   });
 
   blocks.push({ type: 'divider' });

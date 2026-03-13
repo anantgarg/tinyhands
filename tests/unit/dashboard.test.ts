@@ -278,7 +278,7 @@ describe('buildDashboardBlocks', () => {
   it('should include a header block with version number', async () => {
     const blocks = await buildDashboardBlocks();
     const header = blocks.find(
-      (b) => b.type === 'header' && b.text?.text?.includes('Tiny Hands Dashboard') && b.text?.text?.includes('v'),
+      (b) => b.type === 'header' && b.text?.text?.includes('TinyHands Dashboard') && b.text?.text?.includes('v'),
     );
     expect(header).toBeDefined();
     expect(header!.text.text).toMatch(/v\d+\.\d+\.\d+/);
@@ -623,7 +623,7 @@ describe('buildDashboardBlocks', () => {
 
     // Find index of each section header
     const headerIdx = blocks.findIndex(
-      (b) => b.type === 'header' && b.text?.text?.includes('Tiny Hands Dashboard'),
+      (b) => b.type === 'header' && b.text?.text?.includes('TinyHands Dashboard'),
     );
     const usageIdx = blocks.findIndex(
       (b) => b.type === 'section' && b.text?.text?.includes('Usage Snapshot'),

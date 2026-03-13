@@ -8,7 +8,7 @@ import { logger } from './utils/logger';
 const workerId = process.env.WORKER_ID || '1';
 
 async function main(): Promise<void> {
-  logger.info(`Starting Tiny Hands worker ${workerId}...`);
+  logger.info(`Starting TinyHands worker ${workerId}...`);
 
   // Initialize database
   await initDb();

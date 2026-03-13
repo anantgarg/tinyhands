@@ -14,7 +14,7 @@ const SYNC_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
 const ALERT_CHECK_INTERVAL_MS = 60 * 1000; // 1 minute
 
 async function main(): Promise<void> {
-  logger.info('Starting Tiny Hands sync process...');
+  logger.info('Starting TinyHands sync process...');
 
   // Initialize database
   await initDb();

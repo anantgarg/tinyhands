@@ -52,7 +52,7 @@ export const CONNECTORS: Record<KBConnectorType, ConnectorDef> = {
     setupSteps: [
       '1. Go to Zendesk Admin Center > Apps and integrations > APIs > Zendesk API',
       '2. Enable *Token Access*',
-      '3. Click *Add API token*, give it a label like "Tiny Hands KB"',
+      '3. Click *Add API token*, give it a label like "TinyHands KB"',
       '4. Copy the generated API token (you won\'t be able to see it again)',
       '5. Your *subdomain* is the part before `.zendesk.com` in your URL',
       '6. Your *email* is the admin email address associated with the token',
@@ -94,7 +94,7 @@ export const CONNECTORS: Record<KBConnectorType, ConnectorDef> = {
     setupSteps: [
       '1. Go to https://github.com/settings/tokens > *Fine-grained tokens* (recommended)',
       '2. Click "Generate new token"',
-      '3. Give it a name like "Tiny Hands KB"',
+      '3. Give it a name like "TinyHands KB"',
       '4. Set repository access to *Only select repositories* and pick the repos you need',
       '5. Under Permissions > Repository permissions, grant *Contents: Read-only*',
       '6. Click *Generate token* and copy it',
@@ -117,7 +117,7 @@ export const CONNECTORS: Record<KBConnectorType, ConnectorDef> = {
     setupSteps: [
       '1. Go to HubSpot > Settings > Integrations > Private Apps',
       '2. Click *Create a private app*',
-      '3. Give it a name like "Tiny Hands KB"',
+      '3. Give it a name like "TinyHands KB"',
       '4. Under *Scopes*, add: `cms.knowledge_base.articles.read`',
       '5. Click *Create app*, then *Continue creating*',
       '6. Copy the *Access Token* shown',
@@ -138,7 +138,7 @@ export const CONNECTORS: Record<KBConnectorType, ConnectorDef> = {
     setupSteps: [
       '1. Go to Linear > Settings > API > *Personal API keys*',
       '2. Click *Create key*',
-      '3. Give it a label like "Tiny Hands KB"',
+      '3. Give it a label like "TinyHands KB"',
       '4. Copy the generated API key',
     ],
     configFields: [

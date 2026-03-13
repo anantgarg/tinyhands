@@ -201,13 +201,13 @@ export function registerCommands(app: App): void {
     if (subcommand === 'search') {
       const queryText = command.text.trim().slice('search'.length).trim();
       if (!queryText) {
-        await respond({ response_type: 'ephemeral', text: 'Usage: `/kb search <query>`' });
+        await respond({ text: 'Usage: `/kb search <query>`' });
         return;
       }
       const { searchKB } = await import('../modules/knowledge-base');
       const results = await searchKB(queryText);
       if (results.length === 0) {
-        await respond({ response_type: 'ephemeral', text: ':mag: No KB entries found.' });
+        await respond({ text: ':mag: No KB entries found.' });
         return;
       }
       const blocks: any[] = [
@@ -229,7 +229,7 @@ export function registerCommands(app: App): void {
           } : {}),
         });
       }
-      await respond({ response_type: 'ephemeral', blocks, text: 'KB search results' });
+      await respond({ blocks, text: 'KB search results' });
       return;
     }
 
@@ -272,7 +272,7 @@ export function registerCommands(app: App): void {
 
     // Default: show KB dashboard (admin gets full view with sources)
     if (!isAdmin) {
-      await respond({ response_type: 'ephemeral', text: 'Usage: `/kb search <query>` or `/kb add`' });
+      await respond({ text: 'Usage: `/kb search <query>` or `/kb add`' });
       return;
     }
 
@@ -380,7 +380,7 @@ export function registerCommands(app: App): void {
       ],
     });
 
-    await respond({ response_type: 'ephemeral', blocks, text: 'Knowledge Base' });
+    await respond({ blocks, text: 'Knowledge Base' });
   });
 }
 

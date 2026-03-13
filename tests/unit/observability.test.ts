@@ -330,7 +330,7 @@ describe('generateDailyDigest', () => {
       .mockResolvedValueOnce([]); // anomalous
 
     const digest = await generateDailyDigest();
-    expect(digest).toContain('Tiny Hands Daily Digest');
+    expect(digest).toContain('TinyHands Daily Digest');
     expect(digest).toContain('Runs: *0*');
     expect(digest).toContain('Cost: *$0.00*');
   });

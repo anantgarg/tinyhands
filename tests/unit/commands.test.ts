@@ -797,7 +797,7 @@ describe('Commands Module', () => {
 
       await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
-      expect(mockRespond).toHaveBeenCalledWith({ response_type: 'ephemeral', text: expect.stringContaining('Usage') });
+      expect(mockRespond).toHaveBeenCalledWith({ text: expect.stringContaining('Usage') });
     });
 
     it('/kb search with no results should show no-results message', async () => {
@@ -810,7 +810,7 @@ describe('Commands Module', () => {
 
       await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
-      expect(mockRespond).toHaveBeenCalledWith({ response_type: 'ephemeral', text: expect.stringContaining('No KB entries') });
+      expect(mockRespond).toHaveBeenCalledWith({ text: expect.stringContaining('No KB entries') });
     });
 
     it('/kb search results should include admin overflow menus when user is admin', async () => {
@@ -857,7 +857,7 @@ describe('Commands Module', () => {
 
       await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
-      expect(mockRespond).toHaveBeenCalledWith({ response_type: 'ephemeral', text: expect.stringContaining('Usage') });
+      expect(mockRespond).toHaveBeenCalledWith({ text: expect.stringContaining('Usage') });
     });
 
     it('/kb default for admin should show full dashboard with sources section', async () => {
@@ -875,7 +875,6 @@ describe('Commands Module', () => {
       await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
       expect(mockRespond).toHaveBeenCalledWith({
-        response_type: 'ephemeral',
         blocks: expect.arrayContaining([
           expect.objectContaining({
             type: 'header',
