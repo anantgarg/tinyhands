@@ -8,7 +8,7 @@ We're excited to launch TinyHands, a platform that lets you create and manage AI
 
 ### Step 1: Create Your First Agent
 
-Type `/new-agent` in any Slack channel. You'll be asked two questions:
+DM the TinyHands bot and type `/agents`. Click the **+ New Agent** button. You'll be asked two questions:
 
 1. **What should this agent do?** Describe its goal in plain English. For example:
    - *"Answer customer support questions using our help center docs"*
@@ -42,7 +42,7 @@ Follow-up messages in the same thread continue with the same agent.
 
 ## Managing Your Agents
 
-Type `/agents` to see all your agents. From there you can:
+DM the TinyHands bot and type `/agents` to see all your agents. From there you can:
 
 | Action | How |
 |--------|-----|
@@ -52,7 +52,7 @@ Type `/agents` to see all your agents. From there you can:
 | Delete | Overflow menu → Delete |
 | Manage members (private agents) | Overflow menu → Members |
 
-You can also type `/update-agent` to update any agent via conversation.
+You can also type `/update-agent` in the bot DM to update any agent via conversation.
 
 ---
 
@@ -60,13 +60,13 @@ You can also type `/update-agent` to update any agent via conversation.
 
 Agents work best when they have context. Your admin can connect knowledge sources like GitHub repos, Google Drive files, and Zendesk help centers to your agents. If you need a source connected, reach out to your admin.
 
-You can search the shared knowledge base anytime with `/kb search <query>`.
+You can search the shared knowledge base anytime by DMing the bot and typing `/kb search <query>`.
 
 ---
 
 ## Triggers
 
-Triggers are set up during agent creation. When `/new-agent` asks "When should it run?", describe when the agent should activate:
+Triggers are set up during agent creation. When asked "When should it run?", describe when the agent should activate:
 
 - *"Whenever someone asks a question in #support"* — responds to channel messages
 - *"Every Monday at 9am"* — runs on a schedule
@@ -90,7 +90,7 @@ Your agents come with built-in tools (web search, file operations, code analysis
 | **SerpAPI** | Track search engine rankings across Google, Bing, Yahoo |
 | **Knowledge Base** | Search your internal KB |
 
-When you create an agent, TinyHands automatically selects the right tools based on the agent's goal. If you need an integration that isn't available yet, ask your admin to set it up with `/tools`.
+When you create an agent, TinyHands automatically selects the right tools based on the agent's goal. If you need an integration that isn't available yet, ask your admin to set it up.
 
 ---
 
@@ -129,10 +129,9 @@ You can change this in the agent's settings via `/agents` → Update.
 
 | Command | What it does |
 |---------|--------------|
-| `/new-agent` | Create a new agent |
-| `/agents` | View and manage all your agents |
-| `/update-agent` | Update an existing agent |
-| `/kb search <query>` | Search the knowledge base |
+| `/agents` | View and manage all your agents (in bot DM) |
+| `/update-agent` | Update an existing agent (in bot DM) |
+| `/kb search <query>` | Search the knowledge base (in bot DM) |
 | DM the bot | Talk to any agent directly |
 
 ---
