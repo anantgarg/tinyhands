@@ -98,6 +98,14 @@ export async function getUserRole(agentId: string, userId: string): Promise<Acce
 
   if (admin?.role === 'owner') return 'owner';
   if (admin?.role === 'admin') return 'admin';
+
+  // Agent creators can always modify their own agents
+  const agent = await queryOne<{ created_by: string }>(
+    'SELECT created_by FROM agents WHERE id = $1',
+    [agentId]
+  );
+  if (agent?.created_by === userId) return 'owner';
+
   return 'member';
 }
 
