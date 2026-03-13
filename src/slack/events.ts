@@ -10,7 +10,7 @@ import { checkMessageRelevance } from '../modules/agents/goal-analyzer';
 import { findSlackChannelTriggers, fireTrigger } from '../modules/triggers';
 import { buildDashboardBlocks } from '../modules/dashboard';
 import { initSuperadmin } from '../modules/access-control';
-import type { JobData } from '../types';
+import type { JobData, ModelAlias } from '../types';
 import { logger } from '../utils/logger';
 
 // ── Slack Event Buffer for Rate Limiting ──
@@ -105,6 +105,22 @@ export function registerEvents(app: App): void {
     );
     const agents = allAgents.filter((_, i) => agentAccessResults[i]);
     logger.info('Agent lookup result', { channelId, agentCount: agents.length, totalInChannel: allAgents.length, agentNames: agents.map(a => a.name) });
+
+    // Check if agent is @mentioned (always respond to mentions)
+    const isMentioned = ownBotUserId ? text.includes(`<@${ownBotUserId}>`) : false;
+    // Thread replies are always relevant — the user is continuing a conversation
+    const isThreadReply = !!msg.thread_ts;
+
+    // No agents in channel but bot is @mentioned — helpful message
+    if (agents.length === 0 && isMentioned) {
+      await postMessage(
+        channelId,
+        `👋 I'm here, but no agents are assigned to this channel yet.\n\nUse \`/agents\` to see available agents, or \`/new-agent\` to create one and add it to this channel.`,
+        threadTs,
+      );
+      return;
+    }
+
     if (agents.length > 0) {
       // Handle interactive agent-channel commands (use first agent for channel-level commands)
       const interactiveResult = await handleAgentChannelCommand(text, agents[0], channelId, userId, threadTs);
@@ -114,10 +130,45 @@ export function registerEvents(app: App): void {
       const modelOverride = parseModelOverride(text);
       const cleanInput = modelOverride ? stripModelOverride(text) : text;
 
-      // Check if agent is @mentioned (always respond to mentions)
-      const isMentioned = ownBotUserId ? text.includes(`<@${ownBotUserId}>`) : false;
-      // Thread replies are always relevant — the user is continuing a conversation
-      const isThreadReply = !!msg.thread_ts;
+      // @mention with multiple agents: show picker (like DM flow)
+      if (isMentioned && agents.length > 1) {
+        const relevanceResults = await Promise.all(
+          agents.map(async (agent) => {
+            try {
+              const isRelevant = await checkMessageRelevance(
+                cleanInput, agent.relevance_keywords, agent.system_prompt, agent.respond_to_all_messages
+              );
+              return { agent, relevant: isRelevant };
+            } catch {
+              return { agent, relevant: false };
+            }
+          })
+        );
+
+        const matches = relevanceResults.filter(r => r.relevant);
+
+        if (matches.length === 1) {
+          // Single relevance match — process just that agent
+          const agent = matches[0].agent;
+          await enqueueAgentRun(agent, cleanInput, channelId, threadTs, userId, modelOverride, msg, isThreadReply);
+          return;
+        }
+
+        // Zero or multiple matches — show picker
+        const agentsToShow = matches.length > 1 ? matches.map(m => m.agent) : agents;
+        const buttons = agentsToShow.map(a => ({
+          type: 'button' as const,
+          text: { type: 'plain_text' as const, text: `${a.avatar_emoji} ${a.name}`.slice(0, 75) },
+          action_id: `channel_pick_agent:${a.id}`,
+          value: JSON.stringify({ agentId: a.id, originalText: text.slice(0, 2000), channelId, threadTs }),
+        }));
+
+        await postBlocks(channelId, [
+          { type: 'section', text: { type: 'mrkdwn', text: '*Which agent should handle this?*' } },
+          { type: 'actions', elements: buttons },
+        ], 'Pick an agent', threadTs);
+        return;
+      }
 
       // Process each agent in the channel
       for (const agent of agents) {
@@ -390,10 +441,136 @@ export function registerEvents(app: App): void {
     }
   });
 
+  // ── Channel Agent Picker ──
+  app.action(/^channel_pick_agent:/, async ({ action, ack, body }: any) => {
+    await ack();
+    try {
+      const payload = JSON.parse(action.value);
+      const { agentId, originalText, channelId, threadTs } = payload;
+      const userId = body.user.id;
+
+      const { getAgent } = await import('../modules/agents');
+      const agent = await getAgent(agentId);
+      if (!agent || agent.status !== 'active') {
+        await postMessage(channelId, ':x: Agent not available.', threadTs);
+        return;
+      }
+
+      // Check for model override
+      const modelOverride = parseModelOverride(originalText);
+      const cleanInput = modelOverride ? stripModelOverride(originalText) : originalText;
+
+      const traceId = uuid();
+
+      // For thread replies, fetch conversation history
+      let inputWithContext = cleanInput;
+      const isThreadReply = !!body.message?.thread_ts;
+      if (isThreadReply) {
+        const history = await getThreadHistory(channelId, threadTs);
+        if (history) {
+          inputWithContext = `<conversation_history>\n${history}\n</conversation_history>\n\n<current_message>\n${cleanInput}\n</current_message>`;
+        }
+      }
+
+      const jobData: JobData = {
+        agentId: agent.id,
+        channelId,
+        threadTs,
+        input: inputWithContext,
+        userId,
+        traceId,
+        modelOverride: modelOverride || undefined,
+      };
+
+      const statusTs = await postBlocks(
+        channelId,
+        [{ type: 'context', elements: [{ type: 'mrkdwn', text: `✋ On it...` }] }],
+        `${agent.name} is adjusting its grip...`,
+        threadTs,
+        agent.name,
+        agent.avatar_emoji,
+      );
+
+      if (statusTs) {
+        jobData.statusMessageTs = statusTs;
+      }
+
+      await enqueueRun(jobData, 'high');
+      logger.info('Channel pick: task enqueued', { agentId: agent.id, traceId, userId });
+    } catch (err: any) {
+      logger.error('Channel agent pick failed', { error: err.message });
+    }
+  });
+
   // ── App Home Opened ──
   app.event('app_home_opened', async ({ event }) => {
     const blocks = await buildDashboardBlocks();
     await publishHomeTab(event.user, blocks);
+  });
+}
+
+// ── Channel Agent Enqueue Helper ──
+
+async function enqueueAgentRun(
+  agent: any,
+  cleanInput: string,
+  channelId: string,
+  threadTs: string,
+  userId: string,
+  modelOverride: ModelAlias | null,
+  msg: any,
+  isThreadReply: boolean,
+): Promise<void> {
+  const traceId = uuid();
+
+  // For thread replies, fetch conversation history so the agent has context
+  let inputWithContext = cleanInput;
+  if (isThreadReply) {
+    const history = await getThreadHistory(channelId, threadTs);
+    if (history) {
+      inputWithContext = `<conversation_history>\n${history}\n</conversation_history>\n\n<current_message>\n${cleanInput}\n</current_message>`;
+    }
+  }
+
+  const jobData: JobData = {
+    agentId: agent.id,
+    channelId,
+    threadTs,
+    input: inputWithContext,
+    userId,
+    traceId,
+    modelOverride: modelOverride || undefined,
+  };
+
+  // Post temporary status message with agent identity
+  const statusTs = await postBlocks(
+    channelId,
+    [
+      {
+        type: 'context',
+        elements: [
+          { type: 'mrkdwn', text: `✋ On it...` },
+        ],
+      },
+    ],
+    `${agent.name} is adjusting its grip...`,
+    threadTs,
+    agent.name,
+    agent.avatar_emoji,
+  );
+
+  // Pass status message TS through job data so the worker can delete it
+  if (statusTs) {
+    jobData.statusMessageTs = statusTs;
+  }
+
+  await enqueueRun(jobData, 'high');
+
+  logger.info('Task enqueued from Slack', {
+    agentId: agent.id,
+    traceId,
+    userId,
+    model: modelOverride || agent.model,
   });
 }
 

@@ -175,13 +175,17 @@ import { registerEvents } from '../../src/slack/events';
 
 function createMockApp() {
   const handlers: Record<string, Function[]> = {};
+  const actionHandlers: { pattern: string | RegExp; handler: Function }[] = [];
   return {
     event: vi.fn((eventName: string, handler: Function) => {
       if (!handlers[eventName]) handlers[eventName] = [];
       handlers[eventName].push(handler);
     }),
-    action: vi.fn((_pattern: string | RegExp, _handler: Function) => {}),
+    action: vi.fn((pattern: string | RegExp, handler: Function) => {
+      actionHandlers.push({ pattern, handler });
+    }),
     _handlers: handlers,
+    _actionHandlers: actionHandlers,
     _trigger: async (eventName: string, payload: any) => {
       const fns = handlers[eventName] || [];
       for (const fn of fns) {
@@ -191,6 +195,17 @@ function createMockApp() {
     _triggerNth: async (eventName: string, payload: any, n: number) => {
       const fns = handlers[eventName] || [];
       if (fns[n]) await fns[n](payload);
+    },
+    _triggerAction: async (actionId: string, payload: any) => {
+      for (const { pattern, handler } of actionHandlers) {
+        const matches = typeof pattern === 'string'
+          ? actionId === pattern
+          : pattern.test(actionId);
+        if (matches) {
+          await handler(payload);
+          return;
+        }
+      }
     },
   };
 }
@@ -1823,6 +1838,352 @@ describe('Slack Events -- registerEvents', () => {
         expect.stringContaining('No tool usage data'),
         expect.any(String),
       );
+    });
+  });
+
+  // ── @mention with no agents in channel ──
+
+  describe('message event -- @mention with no agents in channel', () => {
+    it('should post helpful message when bot is mentioned but no agents are in the channel', async () => {
+      mockGetAgentsByChannel.mockResolvedValue([]);
+
+      registerEvents(mockApp as any);
+      const event = makeMessageEvent({ text: 'hey <@U_BOT> help me', channel: 'C_NO_AGENT' });
+      await mockApp._trigger('message', { event, client: {} });
+
+      expect(mockPostMessage).toHaveBeenCalledWith(
+        'C_NO_AGENT',
+        expect.stringContaining('no agents are assigned'),
+        expect.any(String),
+      );
+      // Should not check triggers
+      expect(mockFindSlackChannelTriggers).not.toHaveBeenCalled();
+    });
+
+    it('should still check triggers when no agents and bot is NOT mentioned', async () => {
+      mockGetAgentsByChannel.mockResolvedValue([]);
+      mockFindSlackChannelTriggers.mockResolvedValue([]);
+
+      registerEvents(mockApp as any);
+      const event = makeMessageEvent({ text: 'hello world', channel: 'C_NO_AGENT' });
+      await mockApp._trigger('message', { event, client: {} });
+
+      expect(mockPostMessage).not.toHaveBeenCalled();
+      expect(mockFindSlackChannelTriggers).toHaveBeenCalled();
+    });
+
+    it('should use threadTs when replying about no agents', async () => {
+      mockGetAgentsByChannel.mockResolvedValue([]);
+
+      registerEvents(mockApp as any);
+      const event = makeMessageEvent({ text: '<@U_BOT> do something', thread_ts: '1700000000.000001', channel: 'C_NO_AGENT' });
+      await mockApp._trigger('message', { event, client: {} });
+
+      expect(mockPostMessage).toHaveBeenCalledWith(
+        'C_NO_AGENT',
+        expect.stringContaining('no agents are assigned'),
+        '1700000000.000001',
+      );
+    });
+  });
+
+  // ── @mention with multiple agents — picker ──
+
+  describe('message event -- @mention multi-agent picker', () => {
+    it('should show picker when mentioned with multiple agents and multiple relevance matches', async () => {
+      const agent1 = makeAgent({ id: 'a1', name: 'bot-alpha', avatar_emoji: ':a:' });
+      const agent2 = makeAgent({ id: 'a2', name: 'bot-beta', avatar_emoji: ':b:' });
+      mockGetAgentsByChannel.mockResolvedValue([agent1, agent2]);
+      mockCheckMessageRelevance.mockResolvedValue(true); // both relevant
+
+      registerEvents(mockApp as any);
+      const event = makeMessageEvent({ text: 'hey <@U_BOT> help me with billing' });
+      await mockApp._trigger('message', { event, client: {} });
+
+      // Should show picker, not enqueue
+      expect(mockEnqueueRun).not.toHaveBeenCalled();
+      expect(mockPostBlocks).toHaveBeenCalledWith(
+        'C_AGENT',
+        expect.arrayContaining([
+          expect.objectContaining({ type: 'section' }),
+          expect.objectContaining({ type: 'actions' }),
+        ]),
+        'Pick an agent',
+        expect.any(String),
+      );
+    });
+
+    it('should show picker with all agents when no relevance matches', async () => {
+      const agent1 = makeAgent({ id: 'a1', name: 'bot-alpha', avatar_emoji: ':a:' });
+      const agent2 = makeAgent({ id: 'a2', name: 'bot-beta', avatar_emoji: ':b:' });
+      mockGetAgentsByChannel.mockResolvedValue([agent1, agent2]);
+      mockCheckMessageRelevance.mockResolvedValue(false); // none relevant
+
+      registerEvents(mockApp as any);
+      const event = makeMessageEvent({ text: 'hey <@U_BOT> do something' });
+      await mockApp._trigger('message', { event, client: {} });
+
+      expect(mockEnqueueRun).not.toHaveBeenCalled();
+      expect(mockPostBlocks).toHaveBeenCalledWith(
+        'C_AGENT',
+        expect.arrayContaining([
+          expect.objectContaining({ type: 'actions' }),
+        ]),
+        'Pick an agent',
+        expect.any(String),
+      );
+    });
+
+    it('should auto-route to single relevance match when mentioned with multiple agents', async () => {
+      const agent1 = makeAgent({ id: 'a1', name: 'billing-bot', relevance_keywords: ['billing'] });
+      const agent2 = makeAgent({ id: 'a2', name: 'deploy-bot', relevance_keywords: ['deploy'] });
+      mockGetAgentsByChannel.mockResolvedValue([agent1, agent2]);
+      mockCheckMessageRelevance
+        .mockResolvedValueOnce(true)   // billing-bot is relevant
+        .mockResolvedValueOnce(false); // deploy-bot is not
+
+      registerEvents(mockApp as any);
+      const event = makeMessageEvent({ text: 'hey <@U_BOT> help with billing' });
+      await mockApp._trigger('message', { event, client: {} });
+
+      // Should enqueue directly for the matching agent
+      expect(mockEnqueueRun).toHaveBeenCalledTimes(1);
+      expect(mockEnqueueRun).toHaveBeenCalledWith(
+        expect.objectContaining({ agentId: 'a1' }),
+        'high'
+      );
+    });
+
+    it('should not show picker when mentioned with only one agent in channel', async () => {
+      const agent = makeAgent({ id: 'a1', name: 'solo-bot' });
+      mockGetAgentsByChannel.mockResolvedValue([agent]);
+
+      registerEvents(mockApp as any);
+      const event = makeMessageEvent({ text: 'hey <@U_BOT> do something' });
+      await mockApp._trigger('message', { event, client: {} });
+
+      // Should proceed to normal processing (enqueue directly)
+      expect(mockEnqueueRun).toHaveBeenCalledTimes(1);
+      expect(mockEnqueueRun).toHaveBeenCalledWith(
+        expect.objectContaining({ agentId: 'a1' }),
+        'high'
+      );
+    });
+
+    it('should still process all agents independently when NOT mentioned (multi-agent)', async () => {
+      const agent1 = makeAgent({ id: 'a1', name: 'agent-1' });
+      const agent2 = makeAgent({ id: 'a2', name: 'agent-2' });
+      mockGetAgentsByChannel.mockResolvedValue([agent1, agent2]);
+      mockCheckMessageRelevance.mockResolvedValue(true);
+
+      registerEvents(mockApp as any);
+      // No @mention — should behave as before
+      const event = makeMessageEvent({ text: 'hello everyone' });
+      await mockApp._trigger('message', { event, client: {} });
+
+      expect(mockEnqueueRun).toHaveBeenCalledTimes(2);
+    });
+
+    it('should handle relevance check errors gracefully in picker flow', async () => {
+      const agent1 = makeAgent({ id: 'a1', name: 'bot-alpha', avatar_emoji: ':a:' });
+      const agent2 = makeAgent({ id: 'a2', name: 'bot-beta', avatar_emoji: ':b:' });
+      mockGetAgentsByChannel.mockResolvedValue([agent1, agent2]);
+      mockCheckMessageRelevance
+        .mockRejectedValueOnce(new Error('relevance check failed'))
+        .mockRejectedValueOnce(new Error('relevance check failed'));
+
+      registerEvents(mockApp as any);
+      const event = makeMessageEvent({ text: 'hey <@U_BOT> help' });
+      await mockApp._trigger('message', { event, client: {} });
+
+      // Zero matches due to errors — show picker with all agents
+      expect(mockEnqueueRun).not.toHaveBeenCalled();
+      expect(mockPostBlocks).toHaveBeenCalledWith(
+        'C_AGENT',
+        expect.arrayContaining([
+          expect.objectContaining({ type: 'actions' }),
+        ]),
+        'Pick an agent',
+        expect.any(String),
+      );
+    });
+
+    it('should include correct action_ids and values in picker buttons', async () => {
+      const agent1 = makeAgent({ id: 'a1', name: 'bot-alpha', avatar_emoji: ':a:' });
+      const agent2 = makeAgent({ id: 'a2', name: 'bot-beta', avatar_emoji: ':b:' });
+      mockGetAgentsByChannel.mockResolvedValue([agent1, agent2]);
+      mockCheckMessageRelevance.mockResolvedValue(true);
+
+      registerEvents(mockApp as any);
+      const event = makeMessageEvent({ text: 'hey <@U_BOT> help me' });
+      await mockApp._trigger('message', { event, client: {} });
+
+      const blocksCall = mockPostBlocks.mock.calls[0];
+      const actionsBlock = blocksCall[1].find((b: any) => b.type === 'actions');
+      expect(actionsBlock.elements).toHaveLength(2);
+      expect(actionsBlock.elements[0].action_id).toBe('channel_pick_agent:a1');
+      expect(actionsBlock.elements[1].action_id).toBe('channel_pick_agent:a2');
+
+      const payload1 = JSON.parse(actionsBlock.elements[0].value);
+      expect(payload1.agentId).toBe('a1');
+      expect(payload1.channelId).toBe('C_AGENT');
+      expect(payload1.originalText).toBe('hey <@U_BOT> help me');
+    });
+  });
+
+  // ── Channel Agent Picker Action Handler ──
+
+  describe('channel_pick_agent action handler', () => {
+    it('should enqueue job for selected agent', async () => {
+      const agent = makeAgent({ id: 'a1', name: 'test-bot', status: 'active', avatar_emoji: ':robot_face:' });
+      mockGetAgentByChannel.mockResolvedValue(agent); // getAgent is aliased to mockGetAgentByChannel
+
+      registerEvents(mockApp as any);
+
+      const actionPayload = {
+        action: {
+          action_id: 'channel_pick_agent:a1',
+          value: JSON.stringify({
+            agentId: 'a1',
+            originalText: 'help me with billing',
+            channelId: 'C_AGENT',
+            threadTs: '1700000000.000100',
+          }),
+        },
+        ack: vi.fn(),
+        body: { user: { id: 'U_USER' }, message: {} },
+      };
+
+      await mockApp._triggerAction('channel_pick_agent:a1', actionPayload);
+
+      expect(actionPayload.ack).toHaveBeenCalled();
+      expect(mockEnqueueRun).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentId: 'a1',
+          channelId: 'C_AGENT',
+          threadTs: '1700000000.000100',
+          input: 'help me with billing',
+          userId: 'U_USER',
+        }),
+        'high'
+      );
+    });
+
+    it('should post error when agent is not available', async () => {
+      mockGetAgentByChannel.mockResolvedValue(null);
+
+      registerEvents(mockApp as any);
+
+      const actionPayload = {
+        action: {
+          action_id: 'channel_pick_agent:missing',
+          value: JSON.stringify({
+            agentId: 'missing',
+            originalText: 'help',
+            channelId: 'C_AGENT',
+            threadTs: '1700000000.000100',
+          }),
+        },
+        ack: vi.fn(),
+        body: { user: { id: 'U_USER' }, message: {} },
+      };
+
+      await mockApp._triggerAction('channel_pick_agent:missing', actionPayload);
+
+      expect(actionPayload.ack).toHaveBeenCalled();
+      expect(mockPostMessage).toHaveBeenCalledWith(
+        'C_AGENT',
+        expect.stringContaining('Agent not available'),
+        '1700000000.000100',
+      );
+      expect(mockEnqueueRun).not.toHaveBeenCalled();
+    });
+
+    it('should post error when agent is paused', async () => {
+      mockGetAgentByChannel.mockResolvedValue(makeAgent({ status: 'paused' }));
+
+      registerEvents(mockApp as any);
+
+      const actionPayload = {
+        action: {
+          action_id: 'channel_pick_agent:a1',
+          value: JSON.stringify({
+            agentId: 'a1',
+            originalText: 'help',
+            channelId: 'C_AGENT',
+            threadTs: '1700000000.000100',
+          }),
+        },
+        ack: vi.fn(),
+        body: { user: { id: 'U_USER' }, message: {} },
+      };
+
+      await mockApp._triggerAction('channel_pick_agent:a1', actionPayload);
+
+      expect(mockPostMessage).toHaveBeenCalledWith(
+        'C_AGENT',
+        expect.stringContaining('Agent not available'),
+        '1700000000.000100',
+      );
+      expect(mockEnqueueRun).not.toHaveBeenCalled();
+    });
+
+    it('should handle model override in original text', async () => {
+      const agent = makeAgent({ id: 'a1', status: 'active' });
+      mockGetAgentByChannel.mockResolvedValue(agent);
+      mockParseModelOverride.mockReturnValue('opus');
+      mockStripModelOverride.mockReturnValue('help me');
+
+      registerEvents(mockApp as any);
+
+      const actionPayload = {
+        action: {
+          action_id: 'channel_pick_agent:a1',
+          value: JSON.stringify({
+            agentId: 'a1',
+            originalText: 'help me [use opus]',
+            channelId: 'C_AGENT',
+            threadTs: '1700000000.000100',
+          }),
+        },
+        ack: vi.fn(),
+        body: { user: { id: 'U_USER' }, message: {} },
+      };
+
+      await mockApp._triggerAction('channel_pick_agent:a1', actionPayload);
+
+      expect(mockEnqueueRun).toHaveBeenCalledWith(
+        expect.objectContaining({
+          input: 'help me',
+          modelOverride: 'opus',
+        }),
+        'high'
+      );
+    });
+
+    it('should handle errors gracefully without crashing', async () => {
+      mockGetAgentByChannel.mockRejectedValue(new Error('DB down'));
+
+      registerEvents(mockApp as any);
+
+      const actionPayload = {
+        action: {
+          action_id: 'channel_pick_agent:a1',
+          value: JSON.stringify({
+            agentId: 'a1',
+            originalText: 'help',
+            channelId: 'C_AGENT',
+            threadTs: '1700000000.000100',
+          }),
+        },
+        ack: vi.fn(),
+        body: { user: { id: 'U_USER' }, message: {} },
+      };
+
+      // Should not throw
+      await expect(
+        mockApp._triggerAction('channel_pick_agent:a1', actionPayload)
+      ).resolves.not.toThrow();
     });
   });
 });
