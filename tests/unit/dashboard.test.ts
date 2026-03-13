@@ -258,7 +258,13 @@ describe('buildDashboardBlocks', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Default: sources query returns [], metrics queries return zeros
+    // Default: all queries return [], metrics queryOne returns zeros
+    // buildDashboardBlocks query call order:
+    //   1. Top Power Users query (query)
+    //   2. Top Agent Creators query (query)
+    //   3. Most Popular Agents query (query)
+    //   4. getMetrics: queryOne (stats) + 5x query (durations, byAgent, byModel, runsByAgent, waits)
+    // Total: 8 query calls, 1 queryOne call
     mockQuery.mockResolvedValue([]);
     mockQueryOne.mockResolvedValue(defaultStatsRow());
   });
@@ -269,18 +275,20 @@ describe('buildDashboardBlocks', () => {
     expect(blocks.length).toBeGreaterThan(0);
   });
 
-  it('should include a header block with "Tiny Hands Dashboard"', async () => {
+  it('should include a header block with version number', async () => {
     const blocks = await buildDashboardBlocks();
     const header = blocks.find(
-      (b) => b.type === 'header' && b.text?.text === '✋ Tiny Hands Dashboard',
+      (b) => b.type === 'header' && b.text?.text?.includes('Tiny Hands Dashboard') && b.text?.text?.includes('v'),
     );
     expect(header).toBeDefined();
+    expect(header!.text.text).toMatch(/v\d+\.\d+\.\d+/);
   });
 
   it('should include divider blocks', async () => {
     const blocks = await buildDashboardBlocks();
     const dividers = blocks.filter((b) => b.type === 'divider');
-    expect(dividers.length).toBeGreaterThanOrEqual(4);
+    // Header, Usage Snapshot, Power Users, Agent Creators, Popular Agents, Agent Fleet = 6 dividers
+    expect(dividers.length).toBeGreaterThanOrEqual(6);
   });
 
   it('should show "No recent runs" when there are no runs', async () => {
@@ -291,16 +299,6 @@ describe('buildDashboardBlocks', () => {
         b.elements?.some((e: any) => e.text?.includes('No recent runs')),
     );
     expect(noRuns).toBeDefined();
-  });
-
-  it('should show "No source connections" when sources are empty', async () => {
-    const blocks = await buildDashboardBlocks();
-    const noSources = blocks.find(
-      (b) =>
-        b.type === 'context' &&
-        b.elements?.some((e: any) => e.text?.includes('No source connections')),
-    );
-    expect(noSources).toBeDefined();
   });
 
   it('should render agent fleet section with agent count', async () => {
@@ -343,12 +341,7 @@ describe('buildDashboardBlocks', () => {
     );
     expect(moreBlock).toBeDefined();
 
-    // Should only show 10 agent sections (not 12)
-    const agentSections = blocks.filter(
-      (b) => b.type === 'section' && b.text?.text?.includes('Agent'),
-    );
-    // 10 agent rows + 1 fleet header section + source health + queue health + usage + recent runs
-    // Just verify agent count in header is correct
+    // Should verify agent count in header is correct
     const fleetHeader = blocks.find(
       (b) => b.type === 'section' && b.text?.text?.includes('12 agents'),
     );
@@ -419,18 +412,7 @@ describe('buildDashboardBlocks', () => {
     expect(runBlock!.elements[0].text).toMatch(/ — - — /);
   });
 
-  it('should include queue health placeholder section', async () => {
-    const blocks = await buildDashboardBlocks();
-    const queueBlock = blocks.find(
-      (b) =>
-        b.type === 'section' &&
-        b.text?.text?.includes('Queue Health'),
-    );
-    expect(queueBlock).toBeDefined();
-    expect(queueBlock!.text.text).toContain('Redis');
-  });
-
-  it('should include usage overview section', async () => {
+  it('should include usage snapshot section with emoji formatting', async () => {
     mockQueryOne.mockResolvedValue(
       defaultStatsRow({
         total_runs: '42',
@@ -445,45 +427,177 @@ describe('buildDashboardBlocks', () => {
     const usageBlock = blocks.find(
       (b) =>
         b.type === 'section' &&
-        b.text?.text?.includes('Usage Overview'),
+        b.text?.text?.includes('Usage Snapshot'),
     );
     expect(usageBlock).toBeDefined();
-    expect(usageBlock!.text.text).toContain('Total runs: 42');
-    expect(usageBlock!.text.text).toContain('$5.50');
+    expect(usageBlock!.text.text).toContain(':chart_with_upwards_trend:');
+    expect(usageBlock!.text.text).toContain('*42* runs');
+    expect(usageBlock!.text.text).toContain('*$5.50* spent');
+    expect(usageBlock!.text.text).toContain(':coin:');
+    expect(usageBlock!.text.text).toContain(':zap:');
+    expect(usageBlock!.text.text).toContain(':stopwatch:');
+    expect(usageBlock!.text.text).toContain(':rotating_light:');
   });
 
-  it('should render source health entries', async () => {
-    // First mockQuery call is for sources in buildSourceHealthSection
+  it('should show "No user activity yet" when no power users', async () => {
+    const blocks = await buildDashboardBlocks();
+    const noUsers = blocks.find(
+      (b) =>
+        b.type === 'context' &&
+        b.elements?.some((e: any) => e.text?.includes('No user activity yet')),
+    );
+    expect(noUsers).toBeDefined();
+  });
+
+  it('should show "No agents created yet" when no agent creators', async () => {
+    const blocks = await buildDashboardBlocks();
+    const noCreators = blocks.find(
+      (b) =>
+        b.type === 'context' &&
+        b.elements?.some((e: any) => e.text?.includes('No agents created yet')),
+    );
+    expect(noCreators).toBeDefined();
+  });
+
+  it('should show "No agent runs yet" when no popular agents', async () => {
+    const blocks = await buildDashboardBlocks();
+    const noPopular = blocks.find(
+      (b) =>
+        b.type === 'context' &&
+        b.elements?.some((e: any) => e.text?.includes('No agent runs yet')),
+    );
+    expect(noPopular).toBeDefined();
+  });
+
+  it('should render top power users with medals', async () => {
     mockQuery.mockReset();
-    // sources query
-    mockQuery.mockResolvedValueOnce([
-      {
-        label: 'Google Drive',
-        source_type: 'google_drive',
-        status: 'active',
-        agent_name: 'MyBot',
-        chunk_count: 150,
-        last_sync_at: '2025-01-01T12:00:00Z',
-      },
-    ]);
-    // durations, byAgent, byModel, runsByAgent, waits for getMetrics
+    // getMetrics (called first by buildUsageSnapshotSection): durations, byAgent, byModel, runsByAgent, waits
     mockQuery
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([]);
+    // Top Power Users query
+    mockQuery.mockResolvedValueOnce([
+      { slack_user_id: 'U111', run_count: '42', agent_names: ['Alpha', 'Beta'] },
+      { slack_user_id: 'U222', run_count: '30', agent_names: ['Gamma'] },
+      { slack_user_id: 'U333', run_count: '20', agent_names: ['Delta'] },
+    ]);
+    // Top Agent Creators query
+    mockQuery.mockResolvedValueOnce([]);
+    // Most Popular Agents query
+    mockQuery.mockResolvedValueOnce([]);
 
     const blocks = await buildDashboardBlocks();
-    const sourceBlock = blocks.find(
+
+    // Check header
+    const powerHeader = blocks.find(
+      (b) => b.type === 'section' && b.text?.text?.includes('Top Power Users'),
+    );
+    expect(powerHeader).toBeDefined();
+
+    // Check medals
+    const userBlocks = blocks.filter(
       (b) =>
         b.type === 'context' &&
-        b.elements?.some((e: any) => e.text?.includes('Google Drive')),
+        b.elements?.some((e: any) => e.text?.includes('<@U')),
     );
-    expect(sourceBlock).toBeDefined();
-    expect(sourceBlock!.elements[0].text).toContain(':white_check_mark:');
-    expect(sourceBlock!.elements[0].text).toContain('150 chunks');
-    expect(sourceBlock!.elements[0].text).toContain('MyBot');
+    expect(userBlocks.length).toBe(3);
+    expect(userBlocks[0].elements[0].text).toContain(':first_place_medal:');
+    expect(userBlocks[0].elements[0].text).toContain('<@U111>');
+    expect(userBlocks[0].elements[0].text).toContain('42 runs');
+    expect(userBlocks[0].elements[0].text).toContain('Alpha, Beta');
+    expect(userBlocks[1].elements[0].text).toContain(':second_place_medal:');
+    expect(userBlocks[2].elements[0].text).toContain(':third_place_medal:');
+  });
+
+  it('should render top agent creators with "+N more" for many agents', async () => {
+    mockQuery.mockReset();
+    // getMetrics (called first by buildUsageSnapshotSection): durations, byAgent, byModel, runsByAgent, waits
+    mockQuery
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    // Top Power Users query
+    mockQuery.mockResolvedValueOnce([]);
+    // Top Agent Creators query
+    mockQuery.mockResolvedValueOnce([
+      { created_by: 'U111', agent_count: '5', agent_names: ['A', 'B', 'C', 'D', 'E'] },
+      { created_by: 'U222', agent_count: '2', agent_names: ['X', 'Y'] },
+    ]);
+    // Most Popular Agents query
+    mockQuery.mockResolvedValueOnce([]);
+
+    const blocks = await buildDashboardBlocks();
+
+    const creatorHeader = blocks.find(
+      (b) => b.type === 'section' && b.text?.text?.includes('Top Agent Creators'),
+    );
+    expect(creatorHeader).toBeDefined();
+
+    const creatorBlocks = blocks.filter(
+      (b) =>
+        b.type === 'context' &&
+        b.elements?.some((e: any) => e.text?.includes(':hammer_and_wrench:')),
+    );
+    expect(creatorBlocks.length).toBe(2);
+    // First creator has 5 agents, should show 3 + "+2 more"
+    expect(creatorBlocks[0].elements[0].text).toContain('<@U111>');
+    expect(creatorBlocks[0].elements[0].text).toContain('5 agents');
+    expect(creatorBlocks[0].elements[0].text).toContain('A, B, C');
+    expect(creatorBlocks[0].elements[0].text).toContain('+2 more');
+    // Second creator has 2 agents, no "+N more"
+    expect(creatorBlocks[1].elements[0].text).toContain('<@U222>');
+    expect(creatorBlocks[1].elements[0].text).toContain('2 agents');
+    expect(creatorBlocks[1].elements[0].text).toContain('X, Y');
+    expect(creatorBlocks[1].elements[0].text).not.toContain('+');
+  });
+
+  it('should render most popular agents with fire emoji for #1', async () => {
+    mockQuery.mockReset();
+    // getMetrics (called first by buildUsageSnapshotSection): durations, byAgent, byModel, runsByAgent, waits
+    mockQuery
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    // Top Power Users query
+    mockQuery.mockResolvedValueOnce([]);
+    // Top Agent Creators query
+    mockQuery.mockResolvedValueOnce([]);
+    // Most Popular Agents query
+    mockQuery.mockResolvedValueOnce([
+      { agent_id: 'a1', name: 'AlphaBot', avatar_emoji: ':robot_face:', run_count: '150', total_cost: '12.34' },
+      { agent_id: 'a2', name: 'BetaBot', avatar_emoji: ':star:', run_count: '80', total_cost: '5.67' },
+    ]);
+
+    const blocks = await buildDashboardBlocks();
+
+    const popularHeader = blocks.find(
+      (b) => b.type === 'section' && b.text?.text?.includes('Most Popular Agents'),
+    );
+    expect(popularHeader).toBeDefined();
+
+    const popularBlocks = blocks.filter(
+      (b) =>
+        b.type === 'context' &&
+        b.elements?.some((e: any) => e.text?.includes('runs*') && e.text?.includes('spent')),
+    );
+    expect(popularBlocks.length).toBe(2);
+    // First agent gets :fire:
+    expect(popularBlocks[0].elements[0].text).toContain(':fire:');
+    expect(popularBlocks[0].elements[0].text).toContain(':robot_face:');
+    expect(popularBlocks[0].elements[0].text).toContain('*AlphaBot*');
+    expect(popularBlocks[0].elements[0].text).toContain('150 runs');
+    expect(popularBlocks[0].elements[0].text).toContain('$12.34 spent');
+    // Second agent gets :chart_with_upwards_trend:
+    expect(popularBlocks[1].elements[0].text).toContain(':chart_with_upwards_trend:');
+    expect(popularBlocks[1].elements[0].text).toContain(':star:');
+    expect(popularBlocks[1].elements[0].text).toContain('*BetaBot*');
   });
 
   it('should truncate to 20 blocks when payload exceeds 48KB', async () => {
@@ -502,5 +616,75 @@ describe('buildDashboardBlocks', () => {
     // If the blocks exceeded 48KB, they should be truncated to 20
     // The exact behavior depends on whether the combined size exceeds 48000 chars
     expect(blocks.length).toBeLessThanOrEqual(48);
+  });
+
+  it('should have correct section order: header, usage, power users, creators, popular, fleet, runs', async () => {
+    const blocks = await buildDashboardBlocks();
+
+    // Find index of each section header
+    const headerIdx = blocks.findIndex(
+      (b) => b.type === 'header' && b.text?.text?.includes('Tiny Hands Dashboard'),
+    );
+    const usageIdx = blocks.findIndex(
+      (b) => b.type === 'section' && b.text?.text?.includes('Usage Snapshot'),
+    );
+    const powerIdx = blocks.findIndex(
+      (b) => b.type === 'section' && b.text?.text?.includes('Top Power Users'),
+    );
+    const creatorsIdx = blocks.findIndex(
+      (b) => b.type === 'section' && b.text?.text?.includes('Top Agent Creators'),
+    );
+    const popularIdx = blocks.findIndex(
+      (b) => b.type === 'section' && b.text?.text?.includes('Most Popular Agents'),
+    );
+    const fleetIdx = blocks.findIndex(
+      (b) => b.type === 'section' && b.text?.text?.includes('Agent Fleet'),
+    );
+    const runsIdx = blocks.findIndex(
+      (b) => b.type === 'section' && b.text?.text?.includes('Recent Runs'),
+    );
+
+    expect(headerIdx).toBeLessThan(usageIdx);
+    expect(usageIdx).toBeLessThan(powerIdx);
+    expect(powerIdx).toBeLessThan(creatorsIdx);
+    expect(creatorsIdx).toBeLessThan(popularIdx);
+    expect(popularIdx).toBeLessThan(fleetIdx);
+    expect(fleetIdx).toBeLessThan(runsIdx);
+  });
+
+  it('should use :star: for power users ranked 4th and 5th', async () => {
+    mockQuery.mockReset();
+    // getMetrics (called first by buildUsageSnapshotSection): durations, byAgent, byModel, runsByAgent, waits
+    mockQuery
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    // Top Power Users query - 5 users
+    mockQuery.mockResolvedValueOnce([
+      { slack_user_id: 'U1', run_count: '50', agent_names: ['A'] },
+      { slack_user_id: 'U2', run_count: '40', agent_names: ['B'] },
+      { slack_user_id: 'U3', run_count: '30', agent_names: ['C'] },
+      { slack_user_id: 'U4', run_count: '20', agent_names: ['D'] },
+      { slack_user_id: 'U5', run_count: '10', agent_names: ['E'] },
+    ]);
+    // Top Agent Creators query
+    mockQuery.mockResolvedValueOnce([]);
+    // Most Popular Agents query
+    mockQuery.mockResolvedValueOnce([]);
+
+    const blocks = await buildDashboardBlocks();
+
+    const userBlocks = blocks.filter(
+      (b) =>
+        b.type === 'context' &&
+        b.elements?.some((e: any) => e.text?.includes('<@U')),
+    );
+    expect(userBlocks.length).toBe(5);
+    expect(userBlocks[3].elements[0].text).toContain(':star:');
+    expect(userBlocks[3].elements[0].text).toContain('<@U4>');
+    expect(userBlocks[4].elements[0].text).toContain(':star:');
+    expect(userBlocks[4].elements[0].text).toContain('<@U5>');
   });
 });

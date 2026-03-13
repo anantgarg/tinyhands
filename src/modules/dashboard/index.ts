@@ -3,6 +3,7 @@ import { listAgents } from '../agents';
 import { getRecentRuns } from '../execution';
 import type { DashboardMetrics, ModelAlias } from '../../types';
 import { logger } from '../../utils/logger';
+import { version } from '../../../package.json';
 
 // ── Slack Home Tab Dashboard ──
 
@@ -12,9 +13,25 @@ export async function buildDashboardBlocks(): Promise<Record<string, any>[]> {
   // Header
   blocks.push({
     type: 'header',
-    text: { type: 'plain_text', text: '✋ Tiny Hands Dashboard' },
+    text: { type: 'plain_text', text: `✋ Tiny Hands Dashboard  v${version}` },
   });
 
+  blocks.push({ type: 'divider' });
+
+  // Usage Snapshot (30 days)
+  blocks.push(...(await buildUsageSnapshotSection()));
+  blocks.push({ type: 'divider' });
+
+  // Top Power Users
+  blocks.push(...(await buildTopPowerUsersSection()));
+  blocks.push({ type: 'divider' });
+
+  // Top Agent Creators
+  blocks.push(...(await buildTopAgentCreatorsSection()));
+  blocks.push({ type: 'divider' });
+
+  // Most Popular Agents
+  blocks.push(...(await buildMostPopularAgentsSection()));
   blocks.push({ type: 'divider' });
 
   // Agent Fleet
@@ -23,24 +40,164 @@ export async function buildDashboardBlocks(): Promise<Record<string, any>[]> {
 
   // Recent Runs
   blocks.push(...(await buildRecentRunsSection()));
-  blocks.push({ type: 'divider' });
-
-  // Source Sync Health
-  blocks.push(...(await buildSourceHealthSection()));
-  blocks.push({ type: 'divider' });
-
-  // Queue Health
-  blocks.push(...buildQueueHealthSection());
-  blocks.push({ type: 'divider' });
-
-  // Usage Overview
-  blocks.push(...(await buildUsageOverviewSection()));
 
   // Ensure under 50KB Block Kit limit
   const json = JSON.stringify(blocks);
   if (json.length > 48000) {
     logger.warn('Dashboard exceeds 48KB, truncating', { size: json.length });
     return blocks.slice(0, 20); // Truncate to fit
+  }
+
+  return blocks;
+}
+
+async function buildUsageSnapshotSection(): Promise<Record<string, any>[]> {
+  const metrics = await getMetrics(30);
+
+  const errorRate = (metrics.errorRate * 100).toFixed(1);
+  const avgDuration = (metrics.avgDurationMs / 1000).toFixed(1);
+
+  return [{
+    type: 'section',
+    text: {
+      type: 'mrkdwn',
+      text: `*Usage Snapshot (30 days)*\n` +
+        `:chart_with_upwards_trend: *${metrics.totalRuns}* runs  |  :coin: *$${metrics.totalCostUsd.toFixed(2)}* spent  |  :zap: *${metrics.totalTokens.toLocaleString()}* tokens\n` +
+        `:stopwatch: avg *${avgDuration}s*  |  :rotating_light: *${errorRate}%* error rate`,
+    },
+  }];
+}
+
+async function buildTopPowerUsersSection(): Promise<Record<string, any>[]> {
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  const rows = await query<any>(`
+    SELECT r.slack_user_id, COUNT(*) as run_count,
+      array_agg(DISTINCT a.name) as agent_names
+    FROM run_history r
+    JOIN agents a ON r.agent_id = a.id
+    WHERE r.slack_user_id IS NOT NULL AND r.created_at >= $1
+    GROUP BY r.slack_user_id
+    ORDER BY run_count DESC
+    LIMIT 5
+  `, [since]);
+
+  const blocks: Record<string, any>[] = [];
+  blocks.push({
+    type: 'section',
+    text: { type: 'mrkdwn', text: '*Top Power Users*' },
+  });
+
+  if (rows.length === 0) {
+    blocks.push({
+      type: 'context',
+      elements: [{ type: 'mrkdwn', text: '_No user activity yet_' }],
+    });
+    return blocks;
+  }
+
+  const medals = [':first_place_medal:', ':second_place_medal:', ':third_place_medal:', ':star:', ':star:'];
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const medal = medals[i];
+    const agentList = (row.agent_names || []).join(', ');
+    blocks.push({
+      type: 'context',
+      elements: [{
+        type: 'mrkdwn',
+        text: `${medal} <@${row.slack_user_id}> — *${row.run_count} runs* — uses ${agentList}`,
+      }],
+    });
+  }
+
+  return blocks;
+}
+
+async function buildTopAgentCreatorsSection(): Promise<Record<string, any>[]> {
+  const rows = await query<any>(`
+    SELECT created_by, COUNT(*) as agent_count,
+      array_agg(name ORDER BY created_at DESC) as agent_names
+    FROM agents
+    WHERE status != 'archived'
+    GROUP BY created_by
+    ORDER BY agent_count DESC
+    LIMIT 5
+  `);
+
+  const blocks: Record<string, any>[] = [];
+  blocks.push({
+    type: 'section',
+    text: { type: 'mrkdwn', text: '*Top Agent Creators*' },
+  });
+
+  if (rows.length === 0) {
+    blocks.push({
+      type: 'context',
+      elements: [{ type: 'mrkdwn', text: '_No agents created yet_' }],
+    });
+    return blocks;
+  }
+
+  for (const row of rows) {
+    const names: string[] = row.agent_names || [];
+    let nameDisplay: string;
+    if (names.length <= 3) {
+      nameDisplay = names.join(', ');
+    } else {
+      nameDisplay = names.slice(0, 3).join(', ') + ` +${names.length - 3} more`;
+    }
+    blocks.push({
+      type: 'context',
+      elements: [{
+        type: 'mrkdwn',
+        text: `:hammer_and_wrench: <@${row.created_by}> — *${row.agent_count} agents* — ${nameDisplay}`,
+      }],
+    });
+  }
+
+  return blocks;
+}
+
+async function buildMostPopularAgentsSection(): Promise<Record<string, any>[]> {
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  const rows = await query<any>(`
+    SELECT r.agent_id, a.name, a.avatar_emoji, COUNT(*) as run_count,
+      COALESCE(SUM(r.estimated_cost_usd), 0) as total_cost
+    FROM run_history r
+    JOIN agents a ON r.agent_id = a.id
+    WHERE r.created_at >= $1
+    GROUP BY r.agent_id, a.name, a.avatar_emoji
+    ORDER BY run_count DESC
+    LIMIT 5
+  `, [since]);
+
+  const blocks: Record<string, any>[] = [];
+  blocks.push({
+    type: 'section',
+    text: { type: 'mrkdwn', text: '*Most Popular Agents*' },
+  });
+
+  if (rows.length === 0) {
+    blocks.push({
+      type: 'context',
+      elements: [{ type: 'mrkdwn', text: '_No agent runs yet_' }],
+    });
+    return blocks;
+  }
+
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const prefix = i === 0 ? ':fire:' : ':chart_with_upwards_trend:';
+    const cost = parseFloat(row.total_cost).toFixed(2);
+    blocks.push({
+      type: 'context',
+      elements: [{
+        type: 'mrkdwn',
+        text: `${prefix} ${row.avatar_emoji} *${row.name}* — *${row.run_count} runs* — $${cost} spent`,
+      }],
+    });
   }
 
   return blocks;
@@ -118,70 +275,6 @@ async function buildRecentRunsSection(): Promise<Record<string, any>[]> {
   }
 
   return blocks;
-}
-
-async function buildSourceHealthSection(): Promise<Record<string, any>[]> {
-  const sources = await query<any>(`
-    SELECT s.*, a.name as agent_name
-    FROM sources s
-    JOIN agents a ON s.agent_id = a.id
-    ORDER BY s.last_sync_at DESC NULLS LAST
-    LIMIT 10
-  `);
-
-  const blocks: Record<string, any>[] = [];
-  blocks.push({
-    type: 'section',
-    text: { type: 'mrkdwn', text: '*Source Sync Health*' },
-  });
-
-  for (const source of sources) {
-    const statusEmoji = source.status === 'active' ? ':white_check_mark:'
-      : source.status === 'error' ? ':warning:'
-      : ':arrows_counterclockwise:';
-
-    blocks.push({
-      type: 'context',
-      elements: [{
-        type: 'mrkdwn',
-        text: `${statusEmoji} *${source.label}* (${source.source_type}) — ${source.agent_name} — ${source.chunk_count} chunks — last sync: ${source.last_sync_at || 'never'}`,
-      }],
-    });
-  }
-
-  if (sources.length === 0) {
-    blocks.push({
-      type: 'context',
-      elements: [{ type: 'mrkdwn', text: '_No source connections_' }],
-    });
-  }
-
-  return blocks;
-}
-
-function buildQueueHealthSection(): Record<string, any>[] {
-  // Queue metrics would come from Redis in production
-  return [{
-    type: 'section',
-    text: { type: 'mrkdwn', text: '*Queue Health*\n_Connect to Redis for live queue metrics_' },
-  }];
-}
-
-async function buildUsageOverviewSection(): Promise<Record<string, any>[]> {
-  const metrics = await getMetrics(30);
-
-  return [{
-    type: 'section',
-    text: {
-      type: 'mrkdwn',
-      text: `*Usage Overview (30 days)*\n` +
-        `Total runs: ${metrics.totalRuns}\n` +
-        `Total tokens: ${metrics.totalTokens.toLocaleString()}\n` +
-        `Total cost: $${metrics.totalCostUsd.toFixed(2)}\n` +
-        `Error rate: ${(metrics.errorRate * 100).toFixed(1)}%\n` +
-        `Avg duration: ${(metrics.avgDurationMs / 1000).toFixed(1)}s`,
-    },
-  }];
 }
 
 // ── Metrics ──
