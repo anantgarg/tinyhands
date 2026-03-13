@@ -434,6 +434,13 @@ Run `/agents` to see all agents. Use the overflow menu on any agent to:
 
 ---
 
+## Guides
+
+- **[Product Guide](./PRODUCT_GUIDE.md)** — For all users: how to create agents, talk to them, use DMs, manage settings, and more.
+- **[Admin Guide](./ADMIN_GUIDE.md)** — For superadmins: setup, integrations, knowledge base, access control, and ongoing management.
+
+---
+
 ## License
 
 [MIT](./LICENSE) — Copyright (c) 2026 Anant Garg
