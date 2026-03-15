@@ -44,6 +44,9 @@ import {
   fireTrigger,
   checkTriggerStorm,
   findSlackChannelTriggers,
+  getScheduledTriggersDue,
+  updateTriggerLastFired,
+  getTriggerLastFiredAt,
 } from '../../src/modules/triggers/index';
 
 beforeEach(() => {
@@ -371,6 +374,23 @@ describe('fireTrigger', () => {
     expect(jobData.input).toContain('<@U456>');
   });
 
+  it('should normalize slack_channel payload without user or text', async () => {
+    const trigger = {
+      id: 't1',
+      agent_id: 'a1',
+      trigger_type: 'slack_channel',
+      status: 'active',
+    };
+    mockQueryOne.mockResolvedValue(trigger);
+    mockIsDuplicateEvent.mockResolvedValue(false);
+
+    await fireTrigger(makeEvent({ payload: {} }));
+
+    const jobData = mockEnqueueRun.mock.calls[0][0];
+    expect(jobData.input).toBe('New message in channel: ""');
+    expect(jobData.input).not.toContain('from');
+  });
+
   it('should normalize linear payload', async () => {
     const trigger = {
       id: 't1',
@@ -396,6 +416,23 @@ describe('fireTrigger', () => {
     expect(jobData.input).toContain('Something broke');
   });
 
+  it('should normalize linear payload with defaults when fields are missing', async () => {
+    const trigger = {
+      id: 't1',
+      agent_id: 'a1',
+      trigger_type: 'linear',
+      status: 'active',
+    };
+    mockQueryOne.mockResolvedValue(trigger);
+    mockIsDuplicateEvent.mockResolvedValue(false);
+
+    await fireTrigger(makeEvent({ payload: {} }));
+
+    const jobData = mockEnqueueRun.mock.calls[0][0];
+    expect(jobData.input).toContain('Linear event: update on issue');
+    expect(jobData.input).not.toContain('Description:');
+  });
+
   it('should normalize zendesk payload', async () => {
     const trigger = {
       id: 't1',
@@ -414,6 +451,23 @@ describe('fireTrigger', () => {
     expect(jobData.input).toContain('Support ticket');
     expect(jobData.input).toContain('Login issue');
     expect(jobData.input).toContain('Cannot sign in');
+  });
+
+  it('should normalize zendesk payload with defaults when fields are missing', async () => {
+    const trigger = {
+      id: 't1',
+      agent_id: 'a1',
+      trigger_type: 'zendesk',
+      status: 'active',
+    };
+    mockQueryOne.mockResolvedValue(trigger);
+    mockIsDuplicateEvent.mockResolvedValue(false);
+
+    await fireTrigger(makeEvent({ payload: {} }));
+
+    const jobData = mockEnqueueRun.mock.calls[0][0];
+    expect(jobData.input).toContain('Support ticket update');
+    expect(jobData.input).not.toContain('\n\n');
   });
 
   it('should normalize webhook payload as JSON', async () => {
@@ -469,6 +523,96 @@ describe('fireTrigger', () => {
 
     const jobData = mockEnqueueRun.mock.calls[0][0];
     expect(jobData.input).toBe(JSON.stringify({ foo: 'bar' }));
+  });
+
+  it('should normalize schedule payload', async () => {
+    const trigger = {
+      id: 't1',
+      agent_id: 'a1',
+      trigger_type: 'schedule',
+      status: 'active',
+    };
+    mockQueryOne.mockResolvedValue(trigger);
+    mockIsDuplicateEvent.mockResolvedValue(false);
+
+    await fireTrigger(makeEvent({ payload: { firedAt: '2025-06-01T12:00:00Z' } }));
+
+    const jobData = mockEnqueueRun.mock.calls[0][0];
+    expect(jobData.input).toContain('Scheduled execution triggered at');
+    expect(jobData.input).toContain('2025-06-01T12:00:00Z');
+  });
+
+  it('should normalize schedule payload without firedAt', async () => {
+    const trigger = {
+      id: 't1',
+      agent_id: 'a1',
+      trigger_type: 'schedule',
+      status: 'active',
+    };
+    mockQueryOne.mockResolvedValue(trigger);
+    mockIsDuplicateEvent.mockResolvedValue(false);
+
+    await fireTrigger(makeEvent({ payload: {} }));
+
+    const jobData = mockEnqueueRun.mock.calls[0][0];
+    expect(jobData.input).toContain('Scheduled execution triggered at');
+  });
+
+  it('should normalize intercom payload', async () => {
+    const trigger = {
+      id: 't1',
+      agent_id: 'a1',
+      trigger_type: 'intercom',
+      status: 'active',
+    };
+    mockQueryOne.mockResolvedValue(trigger);
+    mockIsDuplicateEvent.mockResolvedValue(false);
+
+    await fireTrigger(makeEvent({
+      payload: { action: 'opened', title: 'Need help', description: 'I am stuck' },
+    }));
+
+    const jobData = mockEnqueueRun.mock.calls[0][0];
+    expect(jobData.input).toContain('Support ticket');
+    expect(jobData.input).toContain('Need help');
+    expect(jobData.input).toContain('I am stuck');
+  });
+
+  it('should normalize zendesk payload using title when subject is missing', async () => {
+    const trigger = {
+      id: 't1',
+      agent_id: 'a1',
+      trigger_type: 'zendesk',
+      status: 'active',
+    };
+    mockQueryOne.mockResolvedValue(trigger);
+    mockIsDuplicateEvent.mockResolvedValue(false);
+
+    await fireTrigger(makeEvent({
+      payload: { title: 'Fallback title' },
+    }));
+
+    const jobData = mockEnqueueRun.mock.calls[0][0];
+    expect(jobData.input).toContain('Fallback title');
+  });
+
+  it('should normalize linear payload with title but no description', async () => {
+    const trigger = {
+      id: 't1',
+      agent_id: 'a1',
+      trigger_type: 'linear',
+      status: 'active',
+    };
+    mockQueryOne.mockResolvedValue(trigger);
+    mockIsDuplicateEvent.mockResolvedValue(false);
+
+    await fireTrigger(makeEvent({
+      payload: { data: { title: 'Title only' } },
+    }));
+
+    const jobData = mockEnqueueRun.mock.calls[0][0];
+    expect(jobData.input).toContain('Title only');
+    expect(jobData.input).not.toContain('Description');
   });
 });
 
@@ -534,5 +678,73 @@ describe('findSlackChannelTriggers', () => {
       'SELECT * FROM triggers WHERE trigger_type = $1 AND status = $2',
       ['slack_channel', 'active'],
     );
+  });
+});
+
+// ═══════════════════════════════════════════════════
+// Schedule Trigger Helpers
+// ═══════════════════════════════════════════════════
+
+describe('getScheduledTriggersDue', () => {
+  it('should query for active schedule triggers', async () => {
+    const triggers = [
+      { id: 't1', trigger_type: 'schedule', status: 'active' },
+      { id: 't2', trigger_type: 'schedule', status: 'active' },
+    ];
+    mockQuery.mockResolvedValue(triggers);
+
+    const result = await getScheduledTriggersDue();
+    expect(result).toEqual(triggers);
+    expect(mockQuery).toHaveBeenCalledWith(
+      `SELECT * FROM triggers WHERE trigger_type = 'schedule' AND status = 'active'`,
+      [],
+    );
+  });
+
+  it('should return empty array when no scheduled triggers exist', async () => {
+    mockQuery.mockResolvedValue([]);
+
+    const result = await getScheduledTriggersDue();
+    expect(result).toEqual([]);
+  });
+});
+
+describe('updateTriggerLastFired', () => {
+  it('should update the last_fired_at timestamp', async () => {
+    mockExecute.mockResolvedValue(undefined);
+
+    await updateTriggerLastFired('t1');
+
+    expect(mockExecute).toHaveBeenCalledWith(
+      'UPDATE triggers SET last_fired_at = NOW() WHERE id = $1',
+      ['t1'],
+    );
+  });
+});
+
+describe('getTriggerLastFiredAt', () => {
+  it('should return the last fired date when set', async () => {
+    mockQueryOne.mockResolvedValue({ last_fired_at: '2025-06-01T12:00:00Z' });
+
+    const result = await getTriggerLastFiredAt('t1');
+    expect(result).toEqual(new Date('2025-06-01T12:00:00Z'));
+    expect(mockQueryOne).toHaveBeenCalledWith(
+      'SELECT last_fired_at FROM triggers WHERE id = $1',
+      ['t1'],
+    );
+  });
+
+  it('should return null when last_fired_at is null', async () => {
+    mockQueryOne.mockResolvedValue({ last_fired_at: null });
+
+    const result = await getTriggerLastFiredAt('t1');
+    expect(result).toBeNull();
+  });
+
+  it('should return null when trigger does not exist', async () => {
+    mockQueryOne.mockResolvedValue(null);
+
+    const result = await getTriggerLastFiredAt('nonexistent');
+    expect(result).toBeNull();
   });
 });

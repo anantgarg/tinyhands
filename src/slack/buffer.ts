@@ -21,7 +21,7 @@ interface ChannelBuffer {
   statusMessageTs?: string; // Temporary status message that gets updated/deleted on completion
 }
 
-const buffers = new Map<string, ChannelBuffer>();
+export const buffers = new Map<string, ChannelBuffer>();
 
 // Map of channelId:threadTs -> statusMessageTs for pre-created status messages from events.ts
 const pendingStatusMessages = new Map<string, string>();
@@ -116,7 +116,7 @@ async function updateStatusMessage(buffer: ChannelBuffer, statusText: string): P
   }
 }
 
-async function flushBuffer(key: string): Promise<void> {
+export async function flushBuffer(key: string): Promise<void> {
   const buffer = buffers.get(key);
   if (!buffer || buffer.events.length === 0) {
     if (buffer?.timer) {
@@ -230,7 +230,7 @@ export function cleanupBuffer(channelId: string, threadTs: string, agentId?: str
   pendingStatusMessages.delete(key);
 }
 
-function agentPrefix(buffer: ChannelBuffer): string {
+export function agentPrefix(buffer: ChannelBuffer): string {
   if (!buffer.username) return '';
   return `${buffer.iconEmoji || ':robot_face:'} *${buffer.username}* `;
 }

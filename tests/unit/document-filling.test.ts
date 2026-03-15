@@ -456,4 +456,34 @@ describe('writeBackDocument', () => {
     const result = await writeBackDocument(url, 'content', 'google_sheets');
     expect(result).toBe(url);
   });
+
+  it('should write plain text for unknown docType (default case)', async () => {
+    const result = await writeBackDocument('/tmp/test.txt', 'plain text content', 'plain_text' as any);
+    expect(result).toBe('/tmp/test.txt');
+    expect(mockWriteFileSync).toHaveBeenCalledWith('/tmp/test.txt', 'plain text content', 'utf-8');
+  });
+
+  it('should write back google_sheets successfully when module is available', async () => {
+    const mockWriteGoogleSheet = vi.fn().mockResolvedValue(undefined);
+    const mockGetServiceAccountToken = vi.fn().mockResolvedValue('fake-token');
+
+    vi.doMock('../../src/modules/sources/google-drive', () => ({
+      writeGoogleSheet: mockWriteGoogleSheet,
+      getServiceAccountToken: mockGetServiceAccountToken,
+    }));
+
+    // Need to reimport to use the mocked module
+    const { writeBackDocument: freshWriteBackDocument } = await import('../../src/modules/document-filling');
+
+    const url = 'https://sheets.google.com/spreadsheets/d/abc123/edit';
+    const result = await freshWriteBackDocument(url, 'col1\tcol2\nval1\tval2', 'google_sheets');
+
+    expect(result).toBe(url);
+    expect(mockWriteGoogleSheet).toHaveBeenCalledWith(
+      'abc123',
+      'Sheet1!A1',
+      [['col1', 'col2'], ['val1', 'val2']],
+      'fake-token',
+    );
+  });
 });

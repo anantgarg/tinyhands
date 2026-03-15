@@ -230,15 +230,6 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
     }
     customToolsConfig = JSON.stringify(customToolEntries);
 
-    // If agent has custom tools, ensure Bash is allowed (needed to execute tool scripts)
-    if (customToolEntries.length > 0) {
-      const bashIdx = disallowedTools.indexOf('Bash');
-      if (bashIdx !== -1) {
-        disallowedTools.splice(bashIdx, 1);
-        logger.info('Auto-allowed Bash for agent with custom tools', { agentId: agent.id, toolCount: customToolEntries.length });
-      }
-    }
-
     // Collect DB-stored MCP configs
     const mcpConfigs = (await getMcpConfigs(agent.id)).filter(m => m.approved);
     if (mcpConfigs.length > 0) {

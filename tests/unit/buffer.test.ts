@@ -25,6 +25,10 @@ import {
   setStatusMessageTs,
   setMainMessageTs,
   cleanupBuffer,
+  cleanupStatusMessage,
+  agentPrefix,
+  flushBuffer,
+  buffers,
 } from '../../src/slack/buffer';
 
 // ── Tests ──
@@ -132,6 +136,16 @@ describe('Slack buffer module', () => {
         'status-ts-1',
         ':brain: Thinking...',
       );
+    });
+
+    it('should not update status message when no statusMessageTs is set', async () => {
+      bufferEvent('C001', '111.222', 'text', 'init');
+      bufferEvent('C001', '111.222', 'thinking', '');
+
+      await vi.runAllTimersAsync();
+
+      // updateMessage should not be called since no statusMessageTs was set
+      expect(mockUpdateMessage).not.toHaveBeenCalled();
     });
 
     it('should suppress thinking events when suppressThinking is true', async () => {
@@ -418,6 +432,272 @@ describe('Slack buffer module', () => {
         'Failed to update status message',
         expect.objectContaining({ error: 'channel_not_found' }),
       );
+    });
+  });
+
+  // ── cleanupStatusMessage ──
+
+  describe('cleanupStatusMessage', () => {
+    it('should delete status message from buffer and clean up', async () => {
+      setStatusMessageTs('C001', '111.222', 'status-ts-cleanup');
+      bufferEvent('C001', '111.222', 'text', 'init');
+
+      await cleanupStatusMessage('C001', '111.222');
+
+      expect(mockDeleteMessage).toHaveBeenCalledWith('C001', 'status-ts-cleanup');
+    });
+
+    it('should delete status message from pendingStatusMessages when buffer does not exist', async () => {
+      setStatusMessageTs('C003', '333.444', 'pending-status-ts');
+
+      await cleanupStatusMessage('C003', '333.444');
+
+      expect(mockDeleteMessage).toHaveBeenCalledWith('C003', 'pending-status-ts');
+    });
+
+    it('should handle delete failure gracefully', async () => {
+      mockDeleteMessage.mockRejectedValueOnce(new Error('message_not_found'));
+
+      setStatusMessageTs('C001', '111.222', 'status-ts-fail');
+      bufferEvent('C001', '111.222', 'text', 'init');
+
+      // Should not throw
+      await cleanupStatusMessage('C001', '111.222');
+
+      const { logger } = await import('../../src/utils/logger');
+      expect(logger.warn).toHaveBeenCalledWith(
+        'Failed to delete status message during silent cleanup',
+        expect.objectContaining({ error: expect.stringContaining('message_not_found') }),
+      );
+    });
+
+    it('should support agentId in the key', async () => {
+      setStatusMessageTs('C001', '111.222', 'agent-status-cleanup', 'agent-1');
+      bufferEvent('C001', '111.222', 'text', 'init', undefined, undefined, false, 'agent-1');
+
+      await cleanupStatusMessage('C001', '111.222', 'agent-1');
+
+      expect(mockDeleteMessage).toHaveBeenCalledWith('C001', 'agent-status-cleanup');
+    });
+
+    it('should do nothing when no status message exists', async () => {
+      await cleanupStatusMessage('C999', '999.999');
+
+      expect(mockDeleteMessage).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── agentPrefix (indirectly tested via buffer internals) ──
+  // The agentPrefix function is private, but we can test it indirectly
+  // through the handleDoneEvent path. However, since we need to access it directly,
+  // we test the conditions that exercise it.
+
+  // ── splitMessage with various split strategies ──
+
+  describe('splitMessage edge cases', () => {
+    it('should split at space when no newline is available near the limit', async () => {
+      // Create a long string of words (no newlines) that exceeds 15000 chars
+      // Using words separated by spaces but no newlines
+      const words = [];
+      while (words.join(' ').length < 20000) {
+        words.push('word'.repeat(10));
+      }
+      const longText = words.join(' ');
+
+      bufferEvent('C001', '111.222', 'done', longText);
+      await vi.runAllTimersAsync();
+
+      // Should have split into multiple messages
+      expect(mockPostMessage.mock.calls.length).toBeGreaterThanOrEqual(2);
+      // Each chunk should be at or below 15000
+      for (const call of mockPostMessage.mock.calls) {
+        expect(call[1].length).toBeLessThanOrEqual(15000);
+      }
+    });
+
+    it('should hard split when no space or newline break point available', async () => {
+      // Create a single long string with no spaces or newlines
+      const longText = 'x'.repeat(20000);
+
+      bufferEvent('C001', '111.222', 'done', longText);
+      await vi.runAllTimersAsync();
+
+      expect(mockPostMessage.mock.calls.length).toBe(2);
+      expect(mockPostMessage.mock.calls[0][1].length).toBe(15000);
+      expect(mockPostMessage.mock.calls[1][1].length).toBe(5000);
+    });
+  });
+
+  // ── handleDoneEvent error recovery ──
+
+  describe('handleDoneEvent error recovery', () => {
+    it('should retry posting message when first attempt fails', async () => {
+      mockPostMessage
+        .mockRejectedValueOnce(new Error('network error'))
+        .mockResolvedValue(undefined);
+
+      bufferEvent('C001', '111.222', 'done', 'Final output');
+      await vi.runAllTimersAsync();
+
+      // Should have tried twice: first attempt fails, retry succeeds
+      expect(mockPostMessage).toHaveBeenCalledTimes(2);
+      const { logger } = await import('../../src/utils/logger');
+      expect(logger.warn).toHaveBeenCalledWith(
+        'Failed to post done event',
+        expect.objectContaining({ error: 'network error' }),
+      );
+    });
+
+    it('should not throw when both attempts fail', async () => {
+      mockPostMessage
+        .mockRejectedValueOnce(new Error('first failure'))
+        .mockRejectedValueOnce(new Error('second failure'));
+
+      bufferEvent('C001', '111.222', 'done', 'Final output');
+      // Should not throw
+      await vi.runAllTimersAsync();
+
+      expect(mockPostMessage).toHaveBeenCalledTimes(2);
+    });
+
+    it('should delete status message catch logging in handleDoneEvent', async () => {
+      setStatusMessageTs('C001', '111.222', 'status-ts-done');
+      mockDeleteMessage.mockRejectedValueOnce(new Error('delete_failed'));
+
+      bufferEvent('C001', '111.222', 'done', 'Final output');
+      await vi.runAllTimersAsync();
+
+      const { logger } = await import('../../src/utils/logger');
+      expect(logger.warn).toHaveBeenCalledWith(
+        'Failed to delete status message',
+        expect.objectContaining({ error: expect.stringContaining('delete_failed') }),
+      );
+      // Should still post the final message
+      expect(mockPostMessage).toHaveBeenCalled();
+    });
+  });
+
+  // ── Default event type fallthrough ──
+
+  describe('default event type', () => {
+    it('should use content as-is for unknown event types', async () => {
+      // Cast to bypass TypeScript type checking for unknown event type
+      bufferEvent('C001', '111.222', 'unknown_type' as any, 'Raw content');
+
+      vi.advanceTimersByTime(1500);
+      await vi.runAllTimersAsync();
+
+      expect(mockPostMessage).toHaveBeenCalledWith(
+        'C001',
+        'Raw content',
+        '111.222',
+        undefined,
+        undefined,
+      );
+    });
+  });
+
+  // ── flushBuffer with empty events but existing timer ──
+
+  describe('flushBuffer edge cases', () => {
+    it('should clear timer when buffer has no events to flush', async () => {
+      bufferEvent('C001', '111.222', 'text', 'First message');
+
+      // Advance to flush the first message
+      vi.advanceTimersByTime(1500);
+      await vi.runAllTimersAsync();
+
+      expect(mockPostMessage).toHaveBeenCalledTimes(1);
+
+      // Now the buffer exists but has no events - adding and removing should work
+      // Send a thinking event (which doesn't add to buffer.events)
+      setStatusMessageTs('C001', '111.222', 'status-ts-flush');
+      bufferEvent('C001', '111.222', 'thinking', '');
+
+      vi.advanceTimersByTime(1500);
+      await vi.runAllTimersAsync();
+
+      // postMessage should still be 1 (no new events to flush)
+      expect(mockPostMessage).toHaveBeenCalledTimes(1);
+    });
+
+    it('should handle flushBuffer called on done when buffer events were already flushed', async () => {
+      // Create buffer with a text event
+      bufferEvent('C001', '111.222', 'text', 'Some text');
+
+      // Flush the buffer by advancing timer
+      vi.advanceTimersByTime(1500);
+      await vi.runAllTimersAsync();
+
+      expect(mockPostMessage).toHaveBeenCalledTimes(1);
+
+      // Now send a done event - the flushBuffer(key) call inside bufferEvent('done')
+      // will encounter the buffer with 0 events and a null timer
+      bufferEvent('C001', '111.222', 'done', 'Final output');
+      await vi.runAllTimersAsync();
+
+      // Should post the final output
+      expect(mockPostMessage).toHaveBeenCalledTimes(2);
+    });
+
+    it('should clear timer when flushBuffer finds buffer with timer but no events', async () => {
+      // Create a buffer with a text event (sets timer)
+      bufferEvent('C001', '111.222', 'text', 'Initial');
+
+      // Directly access the buffer and empty its events while keeping the timer
+      const key = 'C001:111.222';
+      const buffer = buffers.get(key)!;
+      expect(buffer.timer).not.toBeNull();
+      buffer.events = []; // Clear events but leave timer set
+
+      // Now call flushBuffer directly - should hit the path where
+      // buffer exists, events.length === 0, and timer is truthy
+      await flushBuffer(key);
+
+      // Timer should now be cleared
+      expect(buffer.timer).toBeNull();
+      // postMessage should not have been called (no events to flush)
+      expect(mockPostMessage).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── agentPrefix ──
+
+  describe('agentPrefix', () => {
+    it('should return empty string when no username is set', () => {
+      const buffer = {
+        events: [],
+        timer: null,
+        channelId: 'C001',
+        threadTs: '111.222',
+      } as any;
+
+      expect(agentPrefix(buffer)).toBe('');
+    });
+
+    it('should return formatted prefix with username and iconEmoji', () => {
+      const buffer = {
+        events: [],
+        timer: null,
+        channelId: 'C001',
+        threadTs: '111.222',
+        username: 'TestBot',
+        iconEmoji: ':sparkles:',
+      } as any;
+
+      expect(agentPrefix(buffer)).toBe(':sparkles: *TestBot* ');
+    });
+
+    it('should use robot_face emoji as default when iconEmoji is not set', () => {
+      const buffer = {
+        events: [],
+        timer: null,
+        channelId: 'C001',
+        threadTs: '111.222',
+        username: 'TestBot',
+      } as any;
+
+      expect(agentPrefix(buffer)).toBe(':robot_face: *TestBot* ');
     });
   });
 });

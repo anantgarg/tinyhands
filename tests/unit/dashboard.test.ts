@@ -600,22 +600,31 @@ describe('buildDashboardBlocks', () => {
     expect(popularBlocks[1].elements[0].text).toContain('*BetaBot*');
   });
 
-  it('should truncate to 20 blocks when payload exceeds 48KB', async () => {
-    // Create many agents to inflate the block array beyond 48KB
+  it('should truncate to exactly 20 blocks when payload exceeds 48KB', async () => {
+    // Create agents with very long names to guarantee exceeding 48KB
     const bigAgents = Array.from({ length: 10 }, (_, i) =>
       makeAgent({
         id: `agent-${i}`,
-        name: 'A'.repeat(4000) + i,
+        name: 'A'.repeat(5000) + i,
         avatar_emoji: ':robot_face:',
       }),
     );
     vi.mocked(listAgents).mockResolvedValueOnce(bigAgents as any);
 
+    // Also make the recent runs produce large blocks
+    const bigRuns = Array.from({ length: 10 }, (_, i) =>
+      makeRun({
+        trace_id: 'X'.repeat(36),
+        agent_id: 'Y'.repeat(36),
+        model: 'Z'.repeat(100),
+      }),
+    );
+    vi.mocked(getRecentRuns).mockResolvedValueOnce(bigRuns as any);
+
     const blocks = await buildDashboardBlocks();
 
-    // If the blocks exceeded 48KB, they should be truncated to 20
-    // The exact behavior depends on whether the combined size exceeds 48000 chars
-    expect(blocks.length).toBeLessThanOrEqual(48);
+    // When JSON exceeds 48KB, blocks.slice(0, 20) is returned
+    expect(blocks.length).toBe(20);
   });
 
   it('should have correct section order: header, usage, power users, creators, popular, fleet, runs', async () => {
@@ -650,6 +659,74 @@ describe('buildDashboardBlocks', () => {
     expect(creatorsIdx).toBeLessThan(popularIdx);
     expect(popularIdx).toBeLessThan(fleetIdx);
     expect(fleetIdx).toBeLessThan(runsIdx);
+  });
+
+  it('should show :clock1: emoji for queued/other status runs', async () => {
+    const runs = [
+      makeRun({ status: 'queued', trace_id: 'qqqqqqqq-aaaa-bbbb-cccc-dddddddddddd' }),
+    ];
+    vi.mocked(getRecentRuns).mockResolvedValueOnce(runs as any);
+
+    const blocks = await buildDashboardBlocks();
+
+    const contextBlocks = blocks.filter(
+      (b) => b.type === 'context' && b.elements?.some((e: any) => e.text?.includes('qqqqqqqq')),
+    );
+    expect(contextBlocks.length).toBe(1);
+    expect(contextBlocks[0].elements[0].text).toContain(':clock1:');
+  });
+
+  it('should handle null agent_names in power users', async () => {
+    mockQuery.mockReset();
+    mockQuery
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    // Top Power Users query — null agent_names
+    mockQuery.mockResolvedValueOnce([
+      { slack_user_id: 'U111', run_count: '5', agent_names: null },
+    ]);
+    mockQuery.mockResolvedValueOnce([]);
+    mockQuery.mockResolvedValueOnce([]);
+
+    const blocks = await buildDashboardBlocks();
+
+    const userBlock = blocks.find(
+      (b) =>
+        b.type === 'context' &&
+        b.elements?.some((e: any) => e.text?.includes('<@U111>')),
+    );
+    expect(userBlock).toBeDefined();
+    // With null agent_names, should show empty string (joined from [])
+    expect(userBlock!.elements[0].text).toContain('5 runs');
+  });
+
+  it('should handle null agent_names in top agent creators', async () => {
+    mockQuery.mockReset();
+    mockQuery
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([]);
+    mockQuery.mockResolvedValueOnce([]);
+    // Top Agent Creators query — null agent_names
+    mockQuery.mockResolvedValueOnce([
+      { created_by: 'U222', agent_count: '1', agent_names: null },
+    ]);
+    mockQuery.mockResolvedValueOnce([]);
+
+    const blocks = await buildDashboardBlocks();
+
+    const creatorBlock = blocks.find(
+      (b) =>
+        b.type === 'context' &&
+        b.elements?.some((e: any) => e.text?.includes(':hammer_and_wrench:') && e.text?.includes('<@U222>')),
+    );
+    expect(creatorBlock).toBeDefined();
+    expect(creatorBlock!.elements[0].text).toContain('1 agents');
   });
 
   it('should use :star: for power users ranked 4th and 5th', async () => {

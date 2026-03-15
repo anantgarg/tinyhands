@@ -289,6 +289,8 @@ describe('addAgentAdmin', () => {
     mockQueryOne.mockResolvedValueOnce(null);
     // agent_admins: no record
     mockQueryOne.mockResolvedValueOnce(null);
+    // created_by check: different user
+    mockQueryOne.mockResolvedValueOnce({ created_by: 'U_OTHER' });
 
     await expect(
       addAgentAdmin('agent_1', 'U_NEW', 'admin', 'U_MEMBER')
@@ -345,6 +347,8 @@ describe('removeAgentAdmin', () => {
     mockQueryOne.mockResolvedValueOnce(null);
     // getUserRole → agent_admins: no record (member)
     mockQueryOne.mockResolvedValueOnce(null);
+    // created_by check: different user
+    mockQueryOne.mockResolvedValueOnce({ created_by: 'U_OTHER' });
 
     await expect(
       removeAgentAdmin('agent_1', 'U_TARGET', 'U_MEMBER')
@@ -412,9 +416,30 @@ describe('getUserRole', () => {
     expect(role).toBe('admin');
   });
 
-  it('should return member if user has no special role', async () => {
+  it('should return member if user has no special role and is not the creator', async () => {
     mockQueryOne.mockResolvedValueOnce(null); // not superadmin
     mockQueryOne.mockResolvedValueOnce(null); // not in agent_admins
+    mockQueryOne.mockResolvedValueOnce({ created_by: 'U_CREATOR' }); // different creator
+
+    const role = await getUserRole('agent_1', 'U_NOBODY');
+
+    expect(role).toBe('member');
+  });
+
+  it('should return owner when user is the agent creator (created_by matches)', async () => {
+    mockQueryOne.mockResolvedValueOnce(null); // not superadmin
+    mockQueryOne.mockResolvedValueOnce(null); // not in agent_admins
+    mockQueryOne.mockResolvedValueOnce({ created_by: 'U_CREATOR' }); // user IS the creator
+
+    const role = await getUserRole('agent_1', 'U_CREATOR');
+
+    expect(role).toBe('owner');
+  });
+
+  it('should return member when agent has no created_by field', async () => {
+    mockQueryOne.mockResolvedValueOnce(null); // not superadmin
+    mockQueryOne.mockResolvedValueOnce(null); // not in agent_admins
+    mockQueryOne.mockResolvedValueOnce(null); // agent not found or no created_by
 
     const role = await getUserRole('agent_1', 'U_NOBODY');
 
@@ -424,6 +449,7 @@ describe('getUserRole', () => {
   it('should return member if agent_admins row has an unexpected role value', async () => {
     mockQueryOne.mockResolvedValueOnce(null); // not superadmin
     mockQueryOne.mockResolvedValueOnce({ role: 'viewer' }); // unexpected role
+    mockQueryOne.mockResolvedValueOnce({ created_by: 'U_OTHER' }); // different creator
 
     const role = await getUserRole('agent_1', 'U_VIEWER');
 
@@ -431,8 +457,9 @@ describe('getUserRole', () => {
   });
 
   it('should query the correct agent-user pair', async () => {
-    mockQueryOne.mockResolvedValueOnce(null);
-    mockQueryOne.mockResolvedValueOnce(null);
+    mockQueryOne.mockResolvedValueOnce(null); // not superadmin
+    mockQueryOne.mockResolvedValueOnce(null); // not in agent_admins
+    mockQueryOne.mockResolvedValueOnce({ created_by: 'U_OTHER' }); // not the creator
 
     await getUserRole('agent_42', 'U_123');
 
@@ -475,6 +502,7 @@ describe('canModifyAgent', () => {
   it('should return false for regular member', async () => {
     mockQueryOne.mockResolvedValueOnce(null); // not superadmin
     mockQueryOne.mockResolvedValueOnce(null); // not in agent_admins
+    mockQueryOne.mockResolvedValueOnce({ created_by: 'U_OTHER' }); // not the creator
 
     const result = await canModifyAgent('agent_1', 'U_MEMBER');
 

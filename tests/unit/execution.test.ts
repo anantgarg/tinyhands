@@ -55,13 +55,47 @@ vi.mock('../../src/modules/permissions', () => ({
   validateIntegrationAccess: vi.fn(),
 }));
 
-vi.mock('../../src/modules/skills', () => ({ getAgentSkills: vi.fn().mockResolvedValue([]) }));
-vi.mock('../../src/modules/tools', () => ({ listCustomTools: vi.fn().mockResolvedValue([]) }));
+const mockGetAgentSkills = vi.fn().mockResolvedValue([]);
+vi.mock('../../src/modules/skills', () => ({ getAgentSkills: (...args: any[]) => mockGetAgentSkills(...args) }));
+
+const mockListCustomTools = vi.fn().mockResolvedValue([]);
+vi.mock('../../src/modules/tools', () => ({ listCustomTools: (...args: any[]) => mockListCustomTools(...args) }));
+
+const mockGetToolExecutionScript = vi.fn();
+const mockGetMcpConfigs = vi.fn().mockResolvedValue([]);
+const mockGetCodeArtifacts = vi.fn().mockResolvedValue([]);
 vi.mock('../../src/modules/self-authoring', () => ({
-  getToolExecutionScript: vi.fn(),
-  getMcpConfigs: vi.fn().mockResolvedValue([]),
-  getCodeArtifacts: vi.fn().mockResolvedValue([]),
+  getToolExecutionScript: (...args: any[]) => mockGetToolExecutionScript(...args),
+  getMcpConfigs: (...args: any[]) => mockGetMcpConfigs(...args),
+  getCodeArtifacts: (...args: any[]) => mockGetCodeArtifacts(...args),
   recordToolRun: vi.fn(),
+}));
+
+// Mock Anthropic SDK for memory extraction
+const mockAnthropicCreate = vi.fn();
+vi.mock('@anthropic-ai/sdk', () => ({
+  default: class {
+    messages = { create: (...args: any[]) => mockAnthropicCreate(...args) };
+  },
+}));
+
+// Mock BullMQ Worker
+const mockWorkerOn = vi.fn();
+const mockWorkerPause = vi.fn().mockResolvedValue(undefined);
+const mockWorkerResume = vi.fn().mockResolvedValue(undefined);
+let capturedWorkerProcessor: any = null;
+vi.mock('bullmq', () => ({
+  Worker: class {
+    on: any;
+    pause: any;
+    resume: any;
+    constructor(_queue: string, processor: any, _opts: any) {
+      capturedWorkerProcessor = processor;
+      this.on = mockWorkerOn;
+      this.pause = mockWorkerPause;
+      this.resume = mockWorkerResume;
+    }
+  },
 }));
 
 const mockBufferEvent = vi.fn();
@@ -94,8 +128,17 @@ vi.mock('../../src/utils/costs', () => ({
 }));
 
 const mockLogRunEvent = vi.fn();
+const mockLoggerInfo = vi.fn();
+const mockLoggerWarn = vi.fn();
+const mockLoggerError = vi.fn();
+const mockLoggerDebug = vi.fn();
 vi.mock('../../src/utils/logger', () => ({
-  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+  logger: {
+    info: (...args: any[]) => mockLoggerInfo(...args),
+    warn: (...args: any[]) => mockLoggerWarn(...args),
+    error: (...args: any[]) => mockLoggerError(...args),
+    debug: (...args: any[]) => mockLoggerDebug(...args),
+  },
   logRunEvent: (...args: any[]) => mockLogRunEvent(...args),
 }));
 
@@ -539,6 +582,10 @@ describe('Execution Module – executeAgentRun', () => {
     mockCheckRequestRate.mockResolvedValue(true);
     mockRetrieveContext.mockResolvedValue([]);
     mockRemoveContainer.mockResolvedValue(undefined);
+    mockGetAgentSkills.mockResolvedValue([]);
+    mockListCustomTools.mockResolvedValue([]);
+    mockGetMcpConfigs.mockResolvedValue([]);
+    mockGetCodeArtifacts.mockResolvedValue([]);
   });
 
   it('should throw if agent is not found', async () => {
@@ -999,6 +1046,725 @@ describe('Execution Module – executeAgentRun', () => {
     const containerCall = mockCreateAgentContainer.mock.calls[0][0];
     expect(containerCall.networkAllowlist).toEqual(['*']);
   });
+
+  // ── Skills, Custom Tools, MCP configs, Code Artifacts loading ──
+
+  it('should load and pass skills config to container', async () => {
+    mockGetAgentSkills.mockResolvedValue([
+      { name: 'my-skill', skill_type: 'prompt', config_json: '{"template":"hello"}', permission_level: 'read' },
+    ]);
+
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"ok","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+    });
+
+    const job = makeFakeJob(makeJobData());
+    await executeAgentRun(job);
+
+    const containerCall = mockCreateAgentContainer.mock.calls[0][0];
+    const skills = JSON.parse(containerCall.envVars.SKILLS_CONFIG);
+    expect(skills).toHaveLength(1);
+    expect(skills[0].name).toBe('my-skill');
+    expect(skills[0].type).toBe('prompt');
+    expect(skills[0].config).toEqual({ template: 'hello' });
+    expect(skills[0].permission_level).toBe('read');
+  });
+
+  it('should load custom tools matching agent.tools and pass to container', async () => {
+    mockGetAgent.mockResolvedValue(makeAgent({ tools: ['my-custom-tool'] }));
+    mockListCustomTools.mockResolvedValue([
+      { name: 'my-custom-tool', schema_json: '{"type":"object"}', script_path: '/scripts/tool.js', language: 'javascript', config_json: null },
+      { name: 'other-tool', schema_json: '{}', script_path: '/scripts/other.js', language: 'python', config_json: '{"x":1}' },
+    ]);
+    mockGetToolExecutionScript.mockResolvedValue('console.log("hello")');
+
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"ok","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+    });
+
+    const job = makeFakeJob(makeJobData());
+    await executeAgentRun(job);
+
+    const containerCall = mockCreateAgentContainer.mock.calls[0][0];
+    const customTools = JSON.parse(containerCall.envVars.CUSTOM_TOOLS_CONFIG);
+    expect(customTools).toHaveLength(1);
+    expect(customTools[0].name).toBe('my-custom-tool');
+    expect(customTools[0].schema).toEqual({ type: 'object' });
+    expect(customTools[0].script_code).toBe('console.log("hello")');
+    expect(customTools[0].config).toEqual({}); // config_json was null, falls back to '{}'
+  });
+
+  it('should load approved MCP configs and merge with skills', async () => {
+    mockGetMcpConfigs.mockResolvedValue([
+      { name: 'mcp-server', config_json: '{"url":"http://localhost"}', approved: true },
+      { name: 'unapproved-mcp', config_json: '{}', approved: false },
+    ]);
+
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"ok","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+    });
+
+    const job = makeFakeJob(makeJobData());
+    await executeAgentRun(job);
+
+    const containerCall = mockCreateAgentContainer.mock.calls[0][0];
+    const skills = JSON.parse(containerCall.envVars.SKILLS_CONFIG);
+    expect(skills).toHaveLength(1); // Only the approved one
+    expect(skills[0].name).toBe('mcp-server');
+    expect(skills[0].type).toBe('mcp');
+    expect(skills[0].permission_level).toBe('write');
+  });
+
+  it('should load code artifacts and pass to container', async () => {
+    mockGetCodeArtifacts.mockResolvedValue([
+      { file_path: '/workspace/main.py', content: 'print("hello")', language: 'python' },
+    ]);
+
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"ok","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+    });
+
+    const job = makeFakeJob(makeJobData());
+    await executeAgentRun(job);
+
+    const containerCall = mockCreateAgentContainer.mock.calls[0][0];
+    const artifacts = JSON.parse(containerCall.envVars.CODE_ARTIFACTS_CONFIG);
+    expect(artifacts).toHaveLength(1);
+    expect(artifacts[0].file_path).toBe('/workspace/main.py');
+    expect(artifacts[0].content).toBe('print("hello")');
+  });
+
+  it('should handle skills/tools loading failure gracefully', async () => {
+    mockGetAgentSkills.mockRejectedValue(new Error('Skills DB error'));
+
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"ok","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+    });
+
+    const job = makeFakeJob(makeJobData());
+    const result = await executeAgentRun(job);
+
+    // Should not throw - skills loading errors are caught
+    expect(result).toBe('ok');
+    // Skills config should remain as empty array default
+    const containerCall = mockCreateAgentContainer.mock.calls[0][0];
+    expect(containerCall.envVars.SKILLS_CONFIG).toBe('[]');
+  });
+
+  // ── Content block start events (granular stream format) ──
+
+  it('should detect content_block_start tool_use events from granular stream', async () => {
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockImplementation(async (_container: any, callback: (line: string) => void, _timeout: number) => {
+      callback(JSON.stringify({ type: 'content_block_start', content_block: { type: 'tool_use', name: 'Read' } }));
+      return {
+        exitCode: 0,
+        allLogs: 'TINYHANDS_OUTPUT:{"output":"ok","input_tokens":10,"output_tokens":5,"tool_calls_count":1,"cost_usd":0}',
+      };
+    });
+
+    const job = makeFakeJob(makeJobData());
+    await executeAgentRun(job);
+
+    const toolUseCalls = mockBufferEvent.mock.calls.filter((c: any[]) => c[2] === 'tool_use');
+    expect(toolUseCalls.length).toBe(1);
+    expect(toolUseCalls[0][3]).toBe('Read');
+  });
+
+  it('should detect content_block_start thinking events from granular stream', async () => {
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockImplementation(async (_container: any, callback: (line: string) => void, _timeout: number) => {
+      callback(JSON.stringify({ type: 'content_block_start', content_block: { type: 'thinking' } }));
+      return {
+        exitCode: 0,
+        allLogs: 'TINYHANDS_OUTPUT:{"output":"ok","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+      };
+    });
+
+    const job = makeFakeJob(makeJobData());
+    await executeAgentRun(job);
+
+    // Should have initial thinking + content_block_start thinking
+    const thinkingCalls = mockBufferEvent.mock.calls.filter((c: any[]) => c[2] === 'thinking' && c[3] === 'Thinking...');
+    expect(thinkingCalls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it('should detect content_block_start text events from granular stream', async () => {
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockImplementation(async (_container: any, callback: (line: string) => void, _timeout: number) => {
+      callback(JSON.stringify({ type: 'content_block_start', content_block: { type: 'text' } }));
+      return {
+        exitCode: 0,
+        allLogs: 'TINYHANDS_OUTPUT:{"output":"ok","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+      };
+    });
+
+    const job = makeFakeJob(makeJobData());
+    await executeAgentRun(job);
+
+    const writingCalls = mockBufferEvent.mock.calls.filter((c: any[]) => c[2] === 'thinking' && c[3] === 'Writing response...');
+    expect(writingCalls.length).toBe(1);
+  });
+
+  it('should not duplicate thinking status for consecutive content_block_start thinking events', async () => {
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockImplementation(async (_container: any, callback: (line: string) => void, _timeout: number) => {
+      // Two consecutive thinking events - second should be suppressed
+      callback(JSON.stringify({ type: 'content_block_start', content_block: { type: 'thinking' } }));
+      callback(JSON.stringify({ type: 'content_block_start', content_block: { type: 'thinking' } }));
+      return {
+        exitCode: 0,
+        allLogs: 'TINYHANDS_OUTPUT:{"output":"ok","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+      };
+    });
+
+    const job = makeFakeJob(makeJobData());
+    await executeAgentRun(job);
+
+    // Initial thinking + one content_block_start thinking (second suppressed because lastStreamEventType === 'thinking')
+    const thinkingCalls = mockBufferEvent.mock.calls.filter((c: any[]) => c[2] === 'thinking' && c[3] === 'Thinking...');
+    expect(thinkingCalls.length).toBe(2); // initial + first content_block_start
+  });
+
+  it('should use tool name "tool" as fallback for content_block_start without name', async () => {
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockImplementation(async (_container: any, callback: (line: string) => void, _timeout: number) => {
+      callback(JSON.stringify({ type: 'content_block_start', content_block: { type: 'tool_use' } }));
+      return {
+        exitCode: 0,
+        allLogs: 'TINYHANDS_OUTPUT:{"output":"ok","input_tokens":10,"output_tokens":5,"tool_calls_count":1,"cost_usd":0}',
+      };
+    });
+
+    const job = makeFakeJob(makeJobData());
+    await executeAgentRun(job);
+
+    const toolUseCalls = mockBufferEvent.mock.calls.filter((c: any[]) => c[2] === 'tool_use');
+    expect(toolUseCalls.length).toBe(1);
+    expect(toolUseCalls[0][3]).toBe('tool');
+  });
+
+  // ── Empty output patterns ──
+
+  it('should treat "(No output)" as empty output and silently clean up', async () => {
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"(No output)","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+    });
+
+    const job = makeFakeJob(makeJobData());
+    const result = await executeAgentRun(job);
+
+    // The output is the trimmed string since it's truthy, but Slack should not post done event
+    expect(result).toBe('(No output)');
+    expect(mockCleanupStatusMessage).toHaveBeenCalled();
+    // Should NOT post a done event to Slack (agentProducedOutput is false)
+    const doneCalls = mockBufferEvent.mock.calls.filter((c: any[]) => c[2] === 'done');
+    expect(doneCalls).toHaveLength(0);
+  });
+
+  it('should treat "No output" as empty output and silently clean up', async () => {
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"No output","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+    });
+
+    const job = makeFakeJob(makeJobData());
+    const result = await executeAgentRun(job);
+
+    expect(result).toBe('No output');
+    expect(mockCleanupStatusMessage).toHaveBeenCalled();
+    const doneCalls = mockBufferEvent.mock.calls.filter((c: any[]) => c[2] === 'done');
+    expect(doneCalls).toHaveLength(0);
+  });
+
+  it('should treat "Agent completed but no structured result captured" as empty output', async () => {
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"Agent completed but no structured result captured","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+    });
+
+    const job = makeFakeJob(makeJobData());
+    const result = await executeAgentRun(job);
+
+    expect(result).toBe('Agent completed but no structured result captured');
+    expect(mockCleanupStatusMessage).toHaveBeenCalled();
+    const doneCalls = mockBufferEvent.mock.calls.filter((c: any[]) => c[2] === 'done');
+    expect(doneCalls).toHaveLength(0);
+  });
+
+  // ── Log parse error recovery ──
+
+  it('should handle log parse errors gracefully with best-effort container cleanup', async () => {
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    // Make removeContainer throw on the first call (the one inside the try block at line 371)
+    // but the log parse itself fails
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{invalid json that will cause parse error',
+    });
+    // Make the first removeContainer call throw (this is the one inside the try)
+    mockRemoveContainer
+      .mockRejectedValueOnce(new Error('container not found'))
+      .mockResolvedValue(undefined);
+
+    const job = makeFakeJob(makeJobData());
+    const result = await executeAgentRun(job);
+
+    // Should still complete (logErr catch block handles parse error)
+    expect(typeof result).toBe('string');
+    // Should have attempted removeContainer in the catch block (best-effort)
+    expect(mockRemoveContainer).toHaveBeenCalled();
+  });
+
+  // ── Memory extraction ──
+
+  it('should extract and store memories when memory_enabled and run completed', async () => {
+    mockGetAgent.mockResolvedValue(makeAgent({ memory_enabled: true }));
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"Here is the result","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0.001}',
+    });
+
+    mockAnthropicCreate.mockResolvedValue({
+      content: [{ type: 'text', text: '[{"fact":"User prefers JSON","category":"preference"}]' }],
+    });
+
+    const job = makeFakeJob(makeJobData());
+    await executeAgentRun(job);
+
+    expect(mockAnthropicCreate).toHaveBeenCalled();
+    expect(mockStoreMemories).toHaveBeenCalledWith(
+      'agent-1',
+      expect.any(String),
+      [{ fact: 'User prefers JSON', category: 'preference' }],
+    );
+  });
+
+  it('should handle memory extraction failure gracefully', async () => {
+    mockGetAgent.mockResolvedValue(makeAgent({ memory_enabled: true }));
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"Result","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0.001}',
+    });
+
+    mockAnthropicCreate.mockRejectedValue(new Error('API error'));
+
+    const job = makeFakeJob(makeJobData());
+    // Should not throw even if memory extraction fails
+    const result = await executeAgentRun(job);
+    expect(result).toBe('Result');
+  });
+
+  it('should not extract memories when memory is disabled', async () => {
+    mockGetAgent.mockResolvedValue(makeAgent({ memory_enabled: false }));
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"Result","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0.001}',
+    });
+
+    const job = makeFakeJob(makeJobData());
+    await executeAgentRun(job);
+
+    expect(mockAnthropicCreate).not.toHaveBeenCalled();
+    expect(mockStoreMemories).not.toHaveBeenCalled();
+  });
+
+  it('should not extract memories when run status is failed', async () => {
+    mockGetAgent.mockResolvedValue(makeAgent({ memory_enabled: true }));
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 1,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"Error","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+    });
+
+    const job = makeFakeJob(makeJobData());
+    await executeAgentRun(job);
+
+    expect(mockAnthropicCreate).not.toHaveBeenCalled();
+  });
+
+  it('should filter invalid categories in extracted memories', async () => {
+    mockGetAgent.mockResolvedValue(makeAgent({ memory_enabled: true }));
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"Result","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0.001}',
+    });
+
+    mockAnthropicCreate.mockResolvedValue({
+      content: [{ type: 'text', text: '[{"fact":"Important info","category":"invalid_category"},{"fact":"Valid fact","category":"entity"}]' }],
+    });
+
+    const job = makeFakeJob(makeJobData());
+    await executeAgentRun(job);
+
+    expect(mockStoreMemories).toHaveBeenCalledWith(
+      'agent-1',
+      expect.any(String),
+      expect.arrayContaining([
+        { fact: 'Important info', category: 'context' }, // invalid_category -> context
+        { fact: 'Valid fact', category: 'entity' },
+      ]),
+    );
+  });
+
+  it('should not store memories when AI returns empty array', async () => {
+    mockGetAgent.mockResolvedValue(makeAgent({ memory_enabled: true }));
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"Result","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0.001}',
+    });
+
+    mockAnthropicCreate.mockResolvedValue({
+      content: [{ type: 'text', text: '[]' }],
+    });
+
+    const job = makeFakeJob(makeJobData());
+    await executeAgentRun(job);
+
+    expect(mockStoreMemories).not.toHaveBeenCalled();
+  });
+
+  it('should limit memories to 5 facts and filter out entries without fact or category', async () => {
+    mockGetAgent.mockResolvedValue(makeAgent({ memory_enabled: true }));
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"Result","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0.001}',
+    });
+
+    const manyFacts = [
+      { fact: 'Fact 1', category: 'entity' },
+      { fact: 'Fact 2', category: 'preference' },
+      { fact: 'Fact 3', category: 'procedure' },
+      { fact: 'Fact 4', category: 'correction' },
+      { fact: 'Fact 5', category: 'context' },
+      { fact: 'Fact 6', category: 'entity' }, // Should be excluded (> 5)
+      { fact: '', category: 'entity' }, // Should be filtered (empty fact)
+      { fact: 'No category', category: '' }, // Should be filtered (empty category)
+    ];
+
+    mockAnthropicCreate.mockResolvedValue({
+      content: [{ type: 'text', text: JSON.stringify(manyFacts) }],
+    });
+
+    const job = makeFakeJob(makeJobData());
+    await executeAgentRun(job);
+
+    expect(mockStoreMemories).toHaveBeenCalledWith(
+      'agent-1',
+      expect.any(String),
+      expect.any(Array),
+    );
+    const storedFacts = mockStoreMemories.mock.calls[0][2];
+    expect(storedFacts.length).toBeLessThanOrEqual(5);
+  });
+
+  it('should handle AI returning non-JSON response in memory extraction', async () => {
+    mockGetAgent.mockResolvedValue(makeAgent({ memory_enabled: true }));
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"Result","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0.001}',
+    });
+
+    mockAnthropicCreate.mockResolvedValue({
+      content: [{ type: 'text', text: 'This is not valid JSON at all' }],
+    });
+
+    const job = makeFakeJob(makeJobData());
+    // Should not throw
+    const result = await executeAgentRun(job);
+    expect(result).toBe('Result');
+    expect(mockStoreMemories).not.toHaveBeenCalled();
+  });
+
+  // ── Stream callback JSON parse error ──
+
+  it('should silently ignore non-JSON lines from container output stream', async () => {
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockImplementation(async (_container: any, callback: (line: string) => void, _timeout: number) => {
+      // Send non-JSON data (e.g., stderr or TINYHANDS_OUTPUT line)
+      callback('This is not JSON');
+      callback('TINYHANDS_OUTPUT:{"some":"data"}');
+      callback('');
+      return {
+        exitCode: 0,
+        allLogs: 'TINYHANDS_OUTPUT:{"output":"ok","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+      };
+    });
+
+    const job = makeFakeJob(makeJobData());
+    // Should not throw
+    const result = await executeAgentRun(job);
+    expect(result).toBe('ok');
+  });
+
+  // ── Error with empty output ──
+
+  it('should use exit code message when outputData.output is empty on failure', async () => {
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 1,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+    });
+
+    const job = makeFakeJob(makeJobData());
+    const result = await executeAgentRun(job);
+
+    expect(result).toContain('Task failed with exit code 1');
+    // Error event should use the fallback message
+    const errorCalls = mockBufferEvent.mock.calls.filter((c: any[]) => c[2] === 'error');
+    expect(errorCalls.length).toBe(1);
+    expect(errorCalls[0][3]).toContain('Task failed with exit code 1');
+  });
+
+  // ── Job with no id ──
+
+  it('should handle job with undefined id', async () => {
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"ok","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+    });
+
+    // Create a job with no id (simulating undefined job.id)
+    const job = { data: makeJobData(), name: 'tinyhands-runs' } as unknown as Job<JobData>;
+    await executeAgentRun(job);
+
+    // logRunEvent should have been called with empty string for job_id (job.id || '')
+    const thinkingEvent = mockLogRunEvent.mock.calls.find((c: any[]) => c[0].event_type === 'thinking');
+    expect(thinkingEvent![0].job_id).toBe('');
+  });
+
+  // ── Parsed output with missing/falsy fields ──
+
+  it('should default to 0 when parsed output fields are missing', async () => {
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"ok"}',
+    });
+
+    const job = makeFakeJob(makeJobData());
+    await executeAgentRun(job);
+
+    // Should have used 0 defaults for missing fields
+    expect(mockRecordTokenUsage).toHaveBeenCalledWith(0); // 0 + 0
+  });
+
+  // ── system_prompt fallback ──
+
+  it('should use empty string when agent system_prompt is null', async () => {
+    mockGetAgent.mockResolvedValue(makeAgent({ system_prompt: null }));
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"ok","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+    });
+
+    const job = makeFakeJob(makeJobData());
+    await executeAgentRun(job);
+
+    const containerCall = mockCreateAgentContainer.mock.calls[0][0];
+    expect(containerCall.envVars.SYSTEM_PROMPT).toBe('');
+  });
+
+  // ── Error with undefined job id ──
+
+  it('should handle error catch block with undefined job id', async () => {
+    mockCreateAgentContainer.mockRejectedValue(new Error('Docker crash'));
+
+    const job = { data: makeJobData(), name: 'tinyhands-runs' } as unknown as Job<JobData>;
+
+    await expect(executeAgentRun(job)).rejects.toThrow('Docker crash');
+
+    // logRunEvent in error handler should use '' for job_id
+    const errorEvent = mockLogRunEvent.mock.calls.find((c: any[]) => c[0].event_type === 'error');
+    expect(errorEvent![0].job_id).toBe('');
+  });
+
+  // ── Error with no message ──
+
+  it('should use "Unknown error" when error has no message', async () => {
+    const err: any = new Error();
+    err.message = '';
+    mockCreateAgentContainer.mockRejectedValue(err);
+
+    const job = makeFakeJob(makeJobData());
+
+    await expect(executeAgentRun(job)).rejects.toThrow();
+
+    // Should have updated run record with 'Unknown error'
+    const updateCall = mockExecute.mock.calls.find(
+      (c: any[]) => c[0].includes('UPDATE run_history') && c[1]?.includes('Unknown error')
+    );
+    expect(updateCall).toBeDefined();
+  });
+
+  // ── Error without channelId ──
+
+  it('should not buffer Slack error events when channelId is empty on failure', async () => {
+    mockCreateAgentContainer.mockRejectedValue(new Error('Docker error'));
+
+    const job = makeFakeJob(makeJobData({ channelId: '' }));
+    await expect(executeAgentRun(job)).rejects.toThrow('Docker error');
+
+    expect(mockCleanupStatusMessage).not.toHaveBeenCalled();
+    expect(mockBufferEvent.mock.calls.filter((c: any[]) => c[2] === 'error')).toHaveLength(0);
+  });
+
+  // ── streaming_detail flag ──
+
+  it('should pass STREAMING_DETAIL=1 when agent has streaming_detail enabled', async () => {
+    mockGetAgent.mockResolvedValue(makeAgent({ streaming_detail: true }));
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"ok","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+    });
+
+    const job = makeFakeJob(makeJobData());
+    await executeAgentRun(job);
+
+    const containerCall = mockCreateAgentContainer.mock.calls[0][0];
+    expect(containerCall.envVars.STREAMING_DETAIL).toBe('1');
+  });
+
+  // ── context block with no context ──
+
+  it('should not include context block in task prompt when no context or memories', async () => {
+    mockRetrieveContext.mockResolvedValue([]);
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"ok","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+    });
+
+    const job = makeFakeJob(makeJobData());
+    await executeAgentRun(job);
+
+    const containerCall = mockCreateAgentContainer.mock.calls[0][0];
+    expect(containerCall.envVars.TASK_PROMPT).not.toContain('Relevant Context');
+  });
+
+  // ── Format 1 assistant message tool_use with no name ──
+
+  it('should use "tool" as fallback name for assistant message tool_use without name', async () => {
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockImplementation(async (_container: any, callback: (line: string) => void, _timeout: number) => {
+      callback(JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'toolu_1' }] } }));
+      return {
+        exitCode: 0,
+        allLogs: 'TINYHANDS_OUTPUT:{"output":"ok","input_tokens":10,"output_tokens":5,"tool_calls_count":1,"cost_usd":0}',
+      };
+    });
+
+    const job = makeFakeJob(makeJobData());
+    await executeAgentRun(job);
+
+    const toolUseCalls = mockBufferEvent.mock.calls.filter((c: any[]) => c[2] === 'tool_use');
+    expect(toolUseCalls.length).toBe(1);
+    expect(toolUseCalls[0][3]).toBe('tool');
+  });
+
+  // ── memory extraction outer catch (line 433-434) ──
+
+  it('should catch memory extraction errors at the outer level', async () => {
+    mockGetAgent.mockResolvedValue(makeAgent({ memory_enabled: true }));
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"Result","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0.001}',
+    });
+
+    // Make the Anthropic API call fail, AND make logger.warn throw when called
+    // from the inner catch. This causes the inner catch handler to throw,
+    // which propagates to the outer catch at lines 432-434.
+    mockAnthropicCreate.mockRejectedValue(new Error('API crash'));
+    // The first logger.warn call during this run will be from the inner catch
+    // of extractAndStoreMemories ('AI memory extraction failed').
+    // Make it throw to trigger the outer catch.
+    mockLoggerWarn.mockImplementationOnce(() => {
+      throw new Error('Logger itself crashed');
+    });
+
+    const job = makeFakeJob(makeJobData());
+    // Should not throw - outer catch handles it
+    const result = await executeAgentRun(job);
+    expect(result).toBe('Result');
+    // The outer catch should have logged the warning
+    expect(mockLoggerWarn).toHaveBeenCalledWith(
+      'Memory extraction failed',
+      expect.objectContaining({ error: expect.stringContaining('Logger itself crashed') }),
+    );
+  });
+
+  // ── cost_usd > 0 path ──
+
+  it('should use cost_usd from container output when positive', async () => {
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"ok","input_tokens":100,"output_tokens":50,"tool_calls_count":0,"cost_usd":0.123}',
+    });
+
+    const job = makeFakeJob(makeJobData());
+    await executeAgentRun(job);
+
+    // Should NOT call estimateCost when cost_usd > 0
+    expect(mockEstimateCost).not.toHaveBeenCalled();
+  });
 });
 
 // ══════════════════════════════════════════════════
@@ -1010,19 +1776,140 @@ describe('Execution Module – createWorker', () => {
     vi.clearAllMocks();
   });
 
-  it('should create a BullMQ Worker with correct queue name and options', () => {
-    // Mock the Worker constructor
-    const mockWorkerInstance = {
-      on: vi.fn(),
-    };
+  it('should capture the processor function that calls executeAgentRun', async () => {
+    // Reset captured processor
+    capturedWorkerProcessor = null;
+    createWorker();
+    expect(capturedWorkerProcessor).toBeDefined();
+    expect(typeof capturedWorkerProcessor).toBe('function');
 
-    // We need to mock the bullmq module
-    const { Worker } = require('bullmq');
+    // The processor should call executeAgentRun when invoked
+    // We need to set up mocks for a successful run
+    mockGetAgent.mockResolvedValue(makeAgent());
+    mockExecute.mockResolvedValue(undefined);
+    mockCheckRateLimit.mockResolvedValue({ allowed: true });
+    mockCheckRequestRate.mockResolvedValue(true);
+    mockRetrieveContext.mockResolvedValue([]);
+    mockRemoveContainer.mockResolvedValue(undefined);
+    mockGetAgentSkills.mockResolvedValue([]);
+    mockListCustomTools.mockResolvedValue([]);
+    mockGetMcpConfigs.mockResolvedValue([]);
+    mockGetCodeArtifacts.mockResolvedValue([]);
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"processor ok","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+    });
 
-    // createWorker uses new Worker() which is mocked by vi.mock
-    // We just verify it does not throw
-    // Since Worker is from bullmq, it may not be easily testable without a real mock
-    // Instead, let's verify the function exists and is callable
-    expect(typeof createWorker).toBe('function');
+    const fakeJob = makeFakeJob(makeJobData());
+    const result = await capturedWorkerProcessor(fakeJob);
+    expect(result).toBe('processor ok');
+  });
+
+  it('should create a BullMQ Worker and register event handlers', () => {
+    const worker = createWorker();
+
+    // Should have registered 'completed' and 'failed' handlers
+    expect(mockWorkerOn).toHaveBeenCalledWith('completed', expect.any(Function));
+    expect(mockWorkerOn).toHaveBeenCalledWith('failed', expect.any(Function));
+  });
+
+  it('should log on job completion', () => {
+    createWorker();
+
+    // Find the 'completed' handler
+    const completedCall = mockWorkerOn.mock.calls.find((c: any[]) => c[0] === 'completed');
+    expect(completedCall).toBeDefined();
+    const completedHandler = completedCall![1];
+
+    // Invoke the handler
+    const fakeJob = { id: 'job-42', data: { traceId: 'trace-xyz' } };
+    completedHandler(fakeJob);
+
+    expect(mockLoggerInfo).toHaveBeenCalledWith('Job completed', { jobId: 'job-42', traceId: 'trace-xyz' });
+  });
+
+  it('should log on job failure', () => {
+    createWorker();
+
+    const failedCall = mockWorkerOn.mock.calls.find((c: any[]) => c[0] === 'failed');
+    expect(failedCall).toBeDefined();
+    const failedHandler = failedCall![1];
+
+    const fakeJob = { id: 'job-42', data: { traceId: 'trace-xyz' } };
+    failedHandler(fakeJob, new Error('Some generic error'));
+
+    expect(mockLoggerError).toHaveBeenCalledWith('Job failed', { jobId: 'job-42', error: 'Some generic error' });
+  });
+
+  it('should pause and resume worker on 429 rate limit error', async () => {
+    vi.useFakeTimers();
+
+    createWorker();
+
+    const failedCall = mockWorkerOn.mock.calls.find((c: any[]) => c[0] === 'failed');
+    const failedHandler = failedCall![1];
+
+    const fakeJob = { id: 'job-42', data: { traceId: 'trace-xyz' } };
+    failedHandler(fakeJob, new Error('Anthropic 429 Too Many Requests'));
+
+    expect(mockLoggerWarn).toHaveBeenCalledWith('Anthropic 429 detected, pausing worker', { retryAfter: 60 });
+
+    // pause should have been called
+    expect(mockWorkerPause).toHaveBeenCalled();
+
+    // Wait for pause to resolve
+    await vi.runAllTimersAsync();
+
+    // After 60s, resume should be called
+    vi.advanceTimersByTime(60000);
+    expect(mockWorkerResume).toHaveBeenCalled();
+
+    vi.useRealTimers();
+  });
+
+  it('should pause and resume worker on rate limit error message', async () => {
+    vi.useFakeTimers();
+
+    createWorker();
+
+    const failedCall = mockWorkerOn.mock.calls.find((c: any[]) => c[0] === 'failed');
+    const failedHandler = failedCall![1];
+
+    const fakeJob = { id: 'job-42', data: { traceId: 'trace-xyz' } };
+    failedHandler(fakeJob, new Error('rate limit exceeded'));
+
+    expect(mockWorkerPause).toHaveBeenCalled();
+
+    await vi.runAllTimersAsync();
+    vi.advanceTimersByTime(60000);
+    expect(mockWorkerResume).toHaveBeenCalled();
+
+    vi.useRealTimers();
+  });
+
+  it('should handle failure with null job', () => {
+    createWorker();
+
+    const failedCall = mockWorkerOn.mock.calls.find((c: any[]) => c[0] === 'failed');
+    const failedHandler = failedCall![1];
+
+    // Job can be undefined in some BullMQ failure scenarios
+    failedHandler(undefined, new Error('Unknown error'));
+
+    expect(mockLoggerError).toHaveBeenCalledWith('Job failed', { jobId: undefined, error: 'Unknown error' });
+  });
+
+  it('should not pause worker for non-rate-limit errors', () => {
+    createWorker();
+
+    const failedCall = mockWorkerOn.mock.calls.find((c: any[]) => c[0] === 'failed');
+    const failedHandler = failedCall![1];
+
+    const fakeJob = { id: 'job-42', data: { traceId: 'trace-xyz' } };
+    failedHandler(fakeJob, new Error('Some random error'));
+
+    expect(mockWorkerPause).not.toHaveBeenCalled();
   });
 });

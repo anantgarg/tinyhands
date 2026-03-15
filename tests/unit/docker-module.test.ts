@@ -12,6 +12,9 @@ const {
   mockContainerKill,
   mockCreateContainer,
   mockDemuxStream,
+  mockListContainers,
+  mockBuildImage,
+  mockFollowProgress,
 } = vi.hoisted(() => {
   const mockContainerStart = vi.fn();
   const mockContainerWait = vi.fn().mockResolvedValue({ StatusCode: 0 });
@@ -31,6 +34,9 @@ const {
   });
 
   const mockDemuxStream = vi.fn();
+  const mockListContainers = vi.fn().mockResolvedValue([]);
+  const mockBuildImage = vi.fn();
+  const mockFollowProgress = vi.fn();
 
   return {
     mockContainerStart,
@@ -41,6 +47,9 @@ const {
     mockContainerKill,
     mockCreateContainer,
     mockDemuxStream,
+    mockListContainers,
+    mockBuildImage,
+    mockFollowProgress,
   };
 });
 
@@ -48,9 +57,9 @@ vi.mock('dockerode', () => {
   return {
     default: vi.fn().mockImplementation(() => ({
       createContainer: mockCreateContainer,
-      modem: { demuxStream: mockDemuxStream, followProgress: vi.fn() },
-      listContainers: vi.fn().mockResolvedValue([]),
-      buildImage: vi.fn(),
+      modem: { demuxStream: mockDemuxStream, followProgress: mockFollowProgress },
+      listContainers: mockListContainers,
+      buildImage: mockBuildImage,
     })),
   };
 });
@@ -80,6 +89,9 @@ import {
   waitForContainer,
   removeContainer,
   getContainerLogs,
+  followContainerOutput,
+  buildBaseImage,
+  listAgentContainers,
 } from '../../src/docker';
 
 import type { ContainerConfig } from '../../src/docker';
@@ -492,6 +504,327 @@ describe('Docker Module', () => {
       const result = await getContainerLogs(container);
 
       expect(result).toBe('');
+    });
+
+    it('should handle truncated frame where offset + size > buf.length', async () => {
+      // Build a frame header claiming 100 bytes but only provide 5 bytes of payload
+      const header = Buffer.alloc(8);
+      header.writeUInt8(1, 0); // stdout
+      header.writeUInt32BE(100, 4); // claims 100 bytes
+      const shortPayload = Buffer.from('hello');
+      const buf = Buffer.concat([header, shortPayload]);
+      const container = { logs: vi.fn().mockResolvedValue(buf) } as any;
+
+      const result = await getContainerLogs(container);
+      // Should fall back to non-multiplexed mode since chunks array is empty
+      expect(result).toContain('hello');
+    });
+
+    it('should strip null bytes from demultiplexed output', async () => {
+      const payload = Buffer.from('hello\0world');
+      const header = Buffer.alloc(8);
+      header.writeUInt8(1, 0);
+      header.writeUInt32BE(payload.length, 4);
+      const buf = Buffer.concat([header, payload]);
+      const container = { logs: vi.fn().mockResolvedValue(buf) } as any;
+
+      const result = await getContainerLogs(container);
+      expect(result).toBe('helloworld');
+    });
+  });
+
+  // ────────────────────────────────────────────
+  // waitForContainer — timeout kill error path
+  // ────────────────────────────────────────────
+
+  describe('waitForContainer - timeout kill error', () => {
+    it('should reject with kill error when container.kill() fails during timeout', async () => {
+      vi.useFakeTimers();
+
+      const killError = new Error('kill failed');
+      const container = {
+        wait: vi.fn().mockReturnValue(new Promise(() => {})), // never resolves
+        kill: vi.fn().mockRejectedValue(killError),
+      } as any;
+
+      const promise = waitForContainer(container, 5000);
+
+      vi.advanceTimersByTime(5000);
+
+      await expect(promise).rejects.toThrow('kill failed');
+
+      vi.useRealTimers();
+    });
+  });
+
+  // ────────────────────────────────────────────
+  // followContainerOutput
+  // ────────────────────────────────────────────
+
+  describe('followContainerOutput', () => {
+    it('should attach, start, and stream stdout lines via onLine callback', async () => {
+      const { PassThrough } = await import('stream');
+      const stdoutPassThrough = new PassThrough();
+      const stderrPassThrough = new PassThrough();
+
+      const mockStream = new PassThrough();
+
+      const container = {
+        attach: vi.fn().mockResolvedValue(mockStream),
+        start: vi.fn().mockResolvedValue(undefined),
+        wait: vi.fn().mockResolvedValue({ StatusCode: 0 }),
+        kill: vi.fn(),
+      } as any;
+
+      // Mock demuxStream to pipe data to stdout/stderr passthrough streams
+      mockDemuxStream.mockImplementation((_stream: any, stdout: any, _stderr: any) => {
+        // Simulate sending data to stdout
+        setTimeout(() => {
+          stdout.write(Buffer.from('{"event":"start"}\n{"event":"end"}\n'));
+        }, 1);
+      });
+
+      const lines: string[] = [];
+      const onLine = (line: string) => lines.push(line);
+
+      const result = await followContainerOutput(container, onLine, 30000);
+
+      expect(container.attach).toHaveBeenCalledWith({
+        stream: true,
+        stdout: true,
+        stderr: true,
+      });
+      expect(container.start).toHaveBeenCalled();
+      expect(result.exitCode).toBe(0);
+      expect(result.allLogs).toContain('{"event":"start"}');
+    });
+
+    it('should collect stderr lines prefixed with [stderr]', async () => {
+      const { PassThrough } = await import('stream');
+      const mockStream = new PassThrough();
+
+      const container = {
+        attach: vi.fn().mockResolvedValue(mockStream),
+        start: vi.fn().mockResolvedValue(undefined),
+        wait: vi.fn().mockResolvedValue({ StatusCode: 0 }),
+        kill: vi.fn(),
+      } as any;
+
+      mockDemuxStream.mockImplementation((_stream: any, _stdout: any, stderr: any) => {
+        setTimeout(() => {
+          stderr.write(Buffer.from('error message'));
+        }, 1);
+      });
+
+      const lines: string[] = [];
+      const result = await followContainerOutput(container, (line) => lines.push(line), 30000);
+
+      expect(result.exitCode).toBe(0);
+      expect(result.allLogs).toContain('[stderr] error message');
+    });
+
+    it('should flush remaining lineBuffer after container exits', async () => {
+      const { PassThrough } = await import('stream');
+      const mockStream = new PassThrough();
+
+      const container = {
+        attach: vi.fn().mockResolvedValue(mockStream),
+        start: vi.fn().mockResolvedValue(undefined),
+        wait: vi.fn().mockResolvedValue({ StatusCode: 0 }),
+        kill: vi.fn(),
+      } as any;
+
+      mockDemuxStream.mockImplementation((_stream: any, stdout: any, _stderr: any) => {
+        // Send data without trailing newline to test flush
+        setTimeout(() => {
+          stdout.write(Buffer.from('partial-line'));
+        }, 1);
+      });
+
+      const lines: string[] = [];
+      const result = await followContainerOutput(container, (line) => lines.push(line), 30000);
+
+      expect(result.allLogs).toContain('partial-line');
+      expect(lines).toContain('partial-line');
+    });
+
+    it('should ignore errors thrown by onLine callback', async () => {
+      const { PassThrough } = await import('stream');
+      const mockStream = new PassThrough();
+
+      const container = {
+        attach: vi.fn().mockResolvedValue(mockStream),
+        start: vi.fn().mockResolvedValue(undefined),
+        wait: vi.fn().mockResolvedValue({ StatusCode: 0 }),
+        kill: vi.fn(),
+      } as any;
+
+      mockDemuxStream.mockImplementation((_stream: any, stdout: any, _stderr: any) => {
+        setTimeout(() => {
+          stdout.write(Buffer.from('line1\nline2\n'));
+        }, 1);
+      });
+
+      const onLine = vi.fn().mockImplementation(() => {
+        throw new Error('callback error');
+      });
+
+      // Should not throw even though callback throws
+      const result = await followContainerOutput(container, onLine, 30000);
+      expect(result.exitCode).toBe(0);
+    });
+
+    it('should return non-zero exit code', async () => {
+      const { PassThrough } = await import('stream');
+      const mockStream = new PassThrough();
+
+      const container = {
+        attach: vi.fn().mockResolvedValue(mockStream),
+        start: vi.fn().mockResolvedValue(undefined),
+        wait: vi.fn().mockResolvedValue({ StatusCode: 1 }),
+        kill: vi.fn(),
+      } as any;
+
+      mockDemuxStream.mockImplementation(() => {});
+
+      const result = await followContainerOutput(container, vi.fn(), 30000);
+      expect(result.exitCode).toBe(1);
+    });
+
+    it('should skip empty lines from stdout', async () => {
+      const { PassThrough } = await import('stream');
+      const mockStream = new PassThrough();
+
+      const container = {
+        attach: vi.fn().mockResolvedValue(mockStream),
+        start: vi.fn().mockResolvedValue(undefined),
+        wait: vi.fn().mockResolvedValue({ StatusCode: 0 }),
+        kill: vi.fn(),
+      } as any;
+
+      mockDemuxStream.mockImplementation((_stream: any, stdout: any, _stderr: any) => {
+        setTimeout(() => {
+          stdout.write(Buffer.from('line1\n\n\nline2\n'));
+        }, 1);
+      });
+
+      const lines: string[] = [];
+      const result = await followContainerOutput(container, (line) => lines.push(line), 30000);
+
+      // Empty lines should be skipped (trimmed empty lines are falsy)
+      expect(lines).toContain('line1');
+      expect(lines).toContain('line2');
+      expect(lines).not.toContain('');
+    });
+
+    it('should ignore errors from onLine during buffer flush', async () => {
+      const { PassThrough } = await import('stream');
+      const mockStream = new PassThrough();
+
+      const container = {
+        attach: vi.fn().mockResolvedValue(mockStream),
+        start: vi.fn().mockResolvedValue(undefined),
+        wait: vi.fn().mockResolvedValue({ StatusCode: 0 }),
+        kill: vi.fn(),
+      } as any;
+
+      // Send data without trailing newline so it only flushes after exit
+      mockDemuxStream.mockImplementation((_stream: any, stdout: any, _stderr: any) => {
+        setTimeout(() => {
+          stdout.write(Buffer.from('flush-data'));
+        }, 1);
+      });
+
+      const onLine = vi.fn().mockImplementation(() => {
+        throw new Error('flush callback error');
+      });
+
+      const result = await followContainerOutput(container, onLine, 30000);
+      expect(result.exitCode).toBe(0);
+      expect(result.allLogs).toContain('flush-data');
+    });
+
+    it('should skip empty stderr', async () => {
+      const { PassThrough } = await import('stream');
+      const mockStream = new PassThrough();
+
+      const container = {
+        attach: vi.fn().mockResolvedValue(mockStream),
+        start: vi.fn().mockResolvedValue(undefined),
+        wait: vi.fn().mockResolvedValue({ StatusCode: 0 }),
+        kill: vi.fn(),
+      } as any;
+
+      mockDemuxStream.mockImplementation((_stream: any, _stdout: any, stderr: any) => {
+        setTimeout(() => {
+          stderr.write(Buffer.from('   '));
+        }, 1);
+      });
+
+      const result = await followContainerOutput(container, vi.fn(), 30000);
+      // Empty trimmed stderr should not be added to logs
+      expect(result.allLogs).not.toContain('[stderr]');
+    });
+  });
+
+  // ────────────────────────────────────────────
+  // buildBaseImage
+  // ────────────────────────────────────────────
+
+  describe('buildBaseImage', () => {
+    it('should build the Docker image with correct context and tag', async () => {
+      const mockStream = {};
+      mockBuildImage.mockResolvedValue(mockStream);
+      mockFollowProgress.mockImplementation((_stream: any, cb: (err: Error | null) => void) => {
+        cb(null);
+      });
+
+      await buildBaseImage();
+
+      expect(mockBuildImage).toHaveBeenCalledWith(
+        { context: './docker', src: ['Dockerfile'] },
+        { t: 'tinyhands-runner:latest' }
+      );
+    });
+
+    it('should reject when build fails', async () => {
+      const mockStream = {};
+      mockBuildImage.mockResolvedValue(mockStream);
+      mockFollowProgress.mockImplementation((_stream: any, cb: (err: Error | null) => void) => {
+        cb(new Error('build failed'));
+      });
+
+      await expect(buildBaseImage()).rejects.toThrow('build failed');
+    });
+  });
+
+  // ────────────────────────────────────────────
+  // listAgentContainers
+  // ────────────────────────────────────────────
+
+  describe('listAgentContainers', () => {
+    it('should list containers with tinyhands label filter', async () => {
+      const mockContainers = [
+        { Id: 'c1', Labels: { 'tinyhands.agent_id': 'agent-1' } },
+        { Id: 'c2', Labels: { 'tinyhands.agent_id': 'agent-2' } },
+      ];
+      mockListContainers.mockResolvedValue(mockContainers);
+
+      const result = await listAgentContainers();
+
+      expect(result).toEqual(mockContainers);
+      expect(mockListContainers).toHaveBeenCalledWith({
+        all: true,
+        filters: { label: ['tinyhands.agent_id'] },
+      });
+    });
+
+    it('should return empty array when no agent containers exist', async () => {
+      mockListContainers.mockResolvedValue([]);
+
+      const result = await listAgentContainers();
+
+      expect(result).toEqual([]);
     });
   });
 });

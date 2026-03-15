@@ -584,5 +584,106 @@ describe('Webhook Server', () => {
       expect(res.status).toBe(200);
       expect(res.body.categories).toEqual(['docs', 'faq', 'guides']);
     });
+
+    it('returns 500 when getCategories throws', async () => {
+      mockGetCategories.mockRejectedValueOnce(new Error('DB connection failed'));
+
+      const res = await makeTestRequest(app, 'GET', '/internal/kb/categories');
+
+      expect(res.status).toBe(500);
+      expect(res.body).toEqual({ error: 'Categories failed' });
+    });
+  });
+
+  // ────────────────────────────────────────────────
+  // startWebhookServer
+  // ────────────────────────────────────────────────
+  describe('startWebhookServer', () => {
+    it('creates server and listens on configured port', async () => {
+      const createdApp = createWebhookServer();
+
+      // Verify that createWebhookServer returns a working Express app
+      expect(createdApp).toBeDefined();
+      expect(typeof createdApp.listen).toBe('function');
+
+      // Test actual listen on ephemeral port
+      const server = createdApp.listen(0, () => {
+        server.close();
+      });
+    });
+  });
+
+  // ────────────────────────────────────────────────
+  // Internal secret validation
+  // ────────────────────────────────────────────────
+  describe('Internal secret validation', () => {
+    it('POST /internal/kb/search returns 401 when secret is wrong', async () => {
+      // Temporarily set internalSecret
+      const { config: appConfig } = await import('../../src/config');
+      const origSecret = appConfig.server.internalSecret;
+      appConfig.server.internalSecret = 'my-secret-key';
+
+      const secretApp = createWebhookServer();
+      const res = await makeTestRequest(secretApp, 'POST', '/internal/kb/search', { query: 'test' }, {
+        'x-internal-secret': 'wrong-secret',
+      });
+
+      expect(res.status).toBe(401);
+      expect(res.body).toEqual({ error: 'Unauthorized' });
+      appConfig.server.internalSecret = origSecret;
+    });
+
+    it('GET /internal/kb/list returns 401 when secret is wrong', async () => {
+      const { config: appConfig } = await import('../../src/config');
+      const origSecret = appConfig.server.internalSecret;
+      appConfig.server.internalSecret = 'my-secret-key';
+
+      const secretApp = createWebhookServer();
+      const res = await makeTestRequest(secretApp, 'GET', '/internal/kb/list', undefined, {
+        'x-internal-secret': 'wrong-secret',
+      });
+
+      expect(res.status).toBe(401);
+      expect(res.body).toEqual({ error: 'Unauthorized' });
+      appConfig.server.internalSecret = origSecret;
+    });
+
+    it('GET /internal/kb/categories returns 401 when secret is wrong', async () => {
+      const { config: appConfig } = await import('../../src/config');
+      const origSecret = appConfig.server.internalSecret;
+      appConfig.server.internalSecret = 'my-secret-key';
+
+      const secretApp = createWebhookServer();
+      const res = await makeTestRequest(secretApp, 'GET', '/internal/kb/categories', undefined, {
+        'x-internal-secret': 'wrong-secret',
+      });
+
+      expect(res.status).toBe(401);
+      expect(res.body).toEqual({ error: 'Unauthorized' });
+      appConfig.server.internalSecret = origSecret;
+    });
+  });
+
+  // ────────────────────────────────────────────────
+  // Internal KB API error handling
+  // ────────────────────────────────────────────────
+  describe('Internal KB API error handling', () => {
+    it('POST /internal/kb/search returns 500 when searchKB throws', async () => {
+      mockSearchKB.mockRejectedValueOnce(new Error('Search index corrupted'));
+
+      const res = await makeTestRequest(app, 'POST', '/internal/kb/search', { query: 'test' });
+
+      expect(res.status).toBe(500);
+      expect(res.body).toEqual({ error: 'Search failed' });
+    });
+
+    it('GET /internal/kb/list returns 500 when listKBEntries throws', async () => {
+      mockListKBEntries.mockRejectedValueOnce(new Error('DB connection lost'));
+
+      const res = await makeTestRequest(app, 'GET', '/internal/kb/list');
+
+      expect(res.status).toBe(500);
+      expect(res.body).toEqual({ error: 'List failed' });
+    });
   });
 });

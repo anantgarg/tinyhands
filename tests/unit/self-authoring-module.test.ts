@@ -59,8 +59,33 @@ vi.mock('uuid', () => ({
   v4: () => 'test-uuid-1234',
 }));
 
-vi.mock('dockerode', () => {
-  return { default: vi.fn().mockImplementation(() => ({})) };
+const mockDockerCreateContainer = vi.fn();
+vi.mock('dockerode', () => ({
+  default: vi.fn().mockImplementation(() => ({
+    createContainer: (...args: any[]) => mockDockerCreateContainer(...args),
+  })),
+}));
+
+const mockMkdtempSync = vi.fn().mockReturnValue('/tmp/tj-sandbox-test');
+const mockWriteFileSyncFs = vi.fn();
+const mockRmSync = vi.fn();
+vi.mock('fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('fs')>();
+  return {
+    ...actual,
+    mkdtempSync: (...args: any[]) => mockMkdtempSync(...args),
+    writeFileSync: (...args: any[]) => mockWriteFileSyncFs(...args),
+    unlinkSync: vi.fn(),
+    rmSync: (...args: any[]) => mockRmSync(...args),
+  };
+});
+
+vi.mock('os', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('os')>();
+  return {
+    ...actual,
+    tmpdir: vi.fn().mockReturnValue('/tmp'),
+  };
 });
 
 import {
@@ -550,6 +575,19 @@ describe('Self-Authoring Module', () => {
       await expect(updateToolCode('my-tool', 'eval("bad")', 'javascript', 'user-1'))
         .rejects.toThrow('forbidden pattern');
     });
+
+    it('uses empty string fallback when tool.script_code is null', async () => {
+      const tool = makeCustomTool({ script_code: null, language: 'javascript' });
+      mockGetCustomTool.mockResolvedValueOnce(tool);
+      const fakeClient = { query: vi.fn() };
+      mockWithTransaction.mockImplementationOnce(async (fn: any) => fn(fakeClient));
+
+      await updateToolCode('my-tool', 'new code', 'javascript', 'user-1');
+
+      // The INSERT INTO tool_versions should use '' (empty string) as the old script_code
+      const insertParams = fakeClient.query.mock.calls[0][1];
+      expect(insertParams[3]).toBe(''); // tool.script_code || '' fallback
+    });
   });
 
   // ────────────────────────────────────────────
@@ -714,6 +752,35 @@ describe('Self-Authoring Module', () => {
         null,
         'agent-1',
         expect.objectContaining({ language: 'javascript', autoApprove: true })
+      );
+    });
+
+    it('uses default schema when first tool returns null', async () => {
+      const toolB = makeCustomTool({ name: 'transform' });
+      mockGetCustomTool
+        .mockResolvedValueOnce(toolB) // step validation: transform exists
+        .mockResolvedValueOnce(null); // first tool lookup returns null
+
+      mockRegisterCustomTool.mockResolvedValueOnce(makeCustomTool({ name: 'solo-pipeline' }));
+
+      const pipeline = {
+        name: 'solo-pipeline',
+        description: 'Single step',
+        steps: [
+          { toolName: 'transform', inputMapping: {} },
+        ],
+      };
+
+      const result = await createToolPipeline('agent-1', pipeline);
+
+      expect(result.name).toBe('solo-pipeline');
+      // Should have used default schema since firstTool was null
+      expect(mockRegisterCustomTool).toHaveBeenCalledWith(
+        'solo-pipeline',
+        JSON.stringify({ type: 'object', properties: {} }),
+        null,
+        'agent-1',
+        expect.any(Object),
       );
     });
 
@@ -1117,6 +1184,317 @@ describe('Self-Authoring Module', () => {
 
       expect(result.requiresApproval).toBe(false);
     });
+
+    it('exercises sandbox success path (container exits with code 0)', async () => {
+      mockGetAgent.mockResolvedValueOnce(makeAgent({ self_evolution_mode: 'autonomous' }));
+      mockListCustomTools.mockResolvedValueOnce([]);
+
+      const mockAnthropicCreate = vi.fn().mockResolvedValue({
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            name: 'sandbox-ok',
+            description: 'Sandbox test tool',
+            language: 'javascript',
+            inputSchema: { type: 'object', properties: { data: { type: 'string' } } },
+            code: 'console.log("ok");',
+          }),
+        }],
+      });
+
+      vi.doMock('@anthropic-ai/sdk', () => ({
+        default: vi.fn().mockImplementation(() => ({
+          messages: { create: mockAnthropicCreate },
+        })),
+      }));
+
+      // Mock Docker container — exit code 0 (success)
+      const mockContainer = {
+        start: vi.fn().mockResolvedValue(undefined),
+        wait: vi.fn().mockResolvedValue({ StatusCode: 0 }),
+        logs: vi.fn().mockResolvedValue(Buffer.from('{"result":"ok"}')),
+        remove: vi.fn().mockResolvedValue(undefined),
+      };
+      mockDockerCreateContainer.mockResolvedValue(mockContainer);
+
+      mockRegisterCustomTool.mockResolvedValueOnce(makeCustomTool({ name: 'sandbox-ok' }));
+      mockExecute.mockResolvedValue({ rowCount: 1 });
+      mockCreateProposal.mockResolvedValueOnce(undefined);
+
+      const result = await authorTool('agent-1', 'a sandbox test');
+
+      expect(result.testResult).not.toBeNull();
+      expect(result.testResult!.passed).toBe(true);
+    });
+
+    it('exercises sandbox failure path (container exits with non-zero code)', async () => {
+      mockGetAgent.mockResolvedValueOnce(makeAgent({ self_evolution_mode: 'autonomous' }));
+      mockListCustomTools.mockResolvedValueOnce([]);
+
+      const mockAnthropicCreate = vi.fn()
+        // generateToolCode
+        .mockResolvedValueOnce({
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              name: 'sandbox-fail',
+              description: 'Sandbox fail tool',
+              language: 'javascript',
+              inputSchema: { type: 'object', properties: {} },
+              code: 'console.log("fail");',
+            }),
+          }],
+        })
+        // autoFixToolCode (called because sandbox fails)
+        .mockResolvedValueOnce({
+          content: [{
+            type: 'text',
+            text: 'console.log("fixed");',
+          }],
+        });
+
+      vi.doMock('@anthropic-ai/sdk', () => ({
+        default: vi.fn().mockImplementation(() => ({
+          messages: { create: mockAnthropicCreate },
+        })),
+      }));
+
+      // Mock Docker container — exit code 1 (failure), then success on retry
+      const mockContainer = {
+        start: vi.fn().mockResolvedValue(undefined),
+        wait: vi.fn()
+          .mockResolvedValueOnce({ StatusCode: 1 })
+          .mockResolvedValueOnce({ StatusCode: 0 }),
+        logs: vi.fn()
+          .mockResolvedValueOnce(Buffer.from('Error: something broke'))
+          .mockResolvedValueOnce(Buffer.from('{"result":"fixed"}')),
+        remove: vi.fn().mockResolvedValue(undefined),
+      };
+      mockDockerCreateContainer.mockResolvedValue(mockContainer);
+
+      mockRegisterCustomTool.mockResolvedValueOnce(makeCustomTool({ name: 'sandbox-fail' }));
+      mockExecute.mockResolvedValue({ rowCount: 1 });
+      mockCreateProposal.mockResolvedValueOnce(undefined);
+
+      const result = await authorTool('agent-1', 'a failing sandbox test');
+
+      expect(result.testResult).not.toBeNull();
+      // After auto-fix, the second sandbox run succeeds
+      expect(result.testResult!.passed).toBe(true);
+    });
+
+    it('exercises sandbox container error with cleanup (Docker throws)', async () => {
+      mockGetAgent.mockResolvedValueOnce(makeAgent({ self_evolution_mode: 'autonomous' }));
+      mockListCustomTools.mockResolvedValueOnce([]);
+
+      const mockAnthropicCreate = vi.fn().mockResolvedValue({
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            name: 'sandbox-err',
+            description: 'Sandbox error tool',
+            language: 'javascript',
+            inputSchema: { type: 'object', properties: {} },
+            code: 'console.log("err");',
+          }),
+        }],
+      });
+
+      vi.doMock('@anthropic-ai/sdk', () => ({
+        default: vi.fn().mockImplementation(() => ({
+          messages: { create: mockAnthropicCreate },
+        })),
+      }));
+
+      // Mock Docker container — start throws to trigger container cleanup catch
+      const mockContainer = {
+        start: vi.fn().mockRejectedValue(new Error('Docker start failed')),
+        remove: vi.fn().mockResolvedValue(undefined),
+      };
+      mockDockerCreateContainer.mockResolvedValue(mockContainer);
+
+      mockRegisterCustomTool.mockResolvedValueOnce(makeCustomTool({ name: 'sandbox-err' }));
+      mockExecute.mockResolvedValue({ rowCount: 1 });
+      mockCreateProposal.mockResolvedValueOnce(undefined);
+
+      const result = await authorTool('agent-1', 'a sandbox error test');
+
+      // sandboxTest catches the error internally and returns { passed: false }
+      expect(result.testResult).not.toBeNull();
+      expect(result.testResult!.passed).toBe(false);
+      expect(result.testResult!.error).toContain('Docker start failed');
+    });
+
+    it('handles sandboxTest throwing (mkdtempSync error) — authorTool catch path', async () => {
+      mockGetAgent.mockResolvedValueOnce(makeAgent({ self_evolution_mode: 'autonomous' }));
+      mockListCustomTools.mockResolvedValueOnce([]);
+
+      const mockAnthropicCreate = vi.fn().mockResolvedValue({
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            name: 'sandbox-throw',
+            description: 'Sandbox throw tool',
+            language: 'javascript',
+            inputSchema: { type: 'object', properties: {} },
+            code: 'console.log("throw");',
+          }),
+        }],
+      });
+
+      vi.doMock('@anthropic-ai/sdk', () => ({
+        default: vi.fn().mockImplementation(() => ({
+          messages: { create: mockAnthropicCreate },
+        })),
+      }));
+
+      // Make mkdtempSync throw to trigger the authorTool catch (lines 70-71)
+      mockMkdtempSync.mockImplementationOnce(() => {
+        throw new Error('ENOSPC: no space left on device');
+      });
+
+      mockRegisterCustomTool.mockResolvedValueOnce(makeCustomTool({ name: 'sandbox-throw' }));
+      mockExecute.mockResolvedValue({ rowCount: 1 });
+      mockCreateProposal.mockResolvedValueOnce(undefined);
+
+      const result = await authorTool('agent-1', 'a sandbox throw test');
+
+      // sandbox threw, so testResult is null
+      expect(result.testResult).toBeNull();
+      // Tool was still registered (line 90+)
+      expect(mockRegisterCustomTool).toHaveBeenCalled();
+    });
+
+    it('exercises sandbox container.wait rejection path', async () => {
+      mockGetAgent.mockResolvedValueOnce(makeAgent({ self_evolution_mode: 'autonomous' }));
+      mockListCustomTools.mockResolvedValueOnce([]);
+
+      const mockAnthropicCreate = vi.fn().mockResolvedValue({
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            name: 'sandbox-reject',
+            description: 'Wait rejection tool',
+            language: 'bash',
+            inputSchema: { type: 'object', properties: {} },
+            code: 'echo "reject"',
+          }),
+        }],
+      });
+
+      vi.doMock('@anthropic-ai/sdk', () => ({
+        default: vi.fn().mockImplementation(() => ({
+          messages: { create: mockAnthropicCreate },
+        })),
+      }));
+
+      // Mock Docker container — wait rejects
+      const mockContainer = {
+        start: vi.fn().mockResolvedValue(undefined),
+        wait: vi.fn().mockRejectedValue(new Error('Container wait error')),
+        remove: vi.fn().mockResolvedValue(undefined),
+      };
+      mockDockerCreateContainer.mockResolvedValue(mockContainer);
+
+      mockRegisterCustomTool.mockResolvedValueOnce(makeCustomTool({ name: 'sandbox-reject' }));
+      mockExecute.mockResolvedValue({ rowCount: 1 });
+      mockCreateProposal.mockResolvedValueOnce(undefined);
+
+      const result = await authorTool('agent-1', 'a wait rejection test');
+
+      expect(result.testResult).not.toBeNull();
+      expect(result.testResult!.passed).toBe(false);
+      expect(result.testResult!.error).toContain('Container wait error');
+    });
+
+    it('exercises sandbox with unsupported language', async () => {
+      mockGetAgent.mockResolvedValueOnce(makeAgent({ self_evolution_mode: 'autonomous' }));
+      mockListCustomTools.mockResolvedValueOnce([]);
+
+      const mockAnthropicCreate = vi.fn().mockResolvedValue({
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            name: 'sandbox-lang',
+            description: 'Unknown language tool',
+            language: 'rust',
+            inputSchema: { type: 'object', properties: {} },
+            code: 'fn main() {}',
+          }),
+        }],
+      });
+
+      vi.doMock('@anthropic-ai/sdk', () => ({
+        default: vi.fn().mockImplementation(() => ({
+          messages: { create: mockAnthropicCreate },
+        })),
+      }));
+
+      mockRegisterCustomTool.mockResolvedValueOnce(makeCustomTool({ name: 'sandbox-lang' }));
+      mockExecute.mockResolvedValue({ rowCount: 1 });
+      mockCreateProposal.mockResolvedValueOnce(undefined);
+
+      const result = await authorTool('agent-1', 'an unsupported language test');
+
+      expect(result.testResult).not.toBeNull();
+      expect(result.testResult!.passed).toBe(false);
+      expect(result.testResult!.error).toContain('Unsupported language');
+    });
+
+    it('exercises sandbox non-zero exit with empty output', async () => {
+      mockGetAgent.mockResolvedValueOnce(makeAgent({ self_evolution_mode: 'autonomous' }));
+      mockListCustomTools.mockResolvedValueOnce([]);
+
+      const mockAnthropicCreate = vi.fn()
+        .mockResolvedValueOnce({
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              name: 'empty-err',
+              description: 'Empty error tool',
+              language: 'javascript',
+              inputSchema: { type: 'object', properties: {} },
+              code: 'console.log("test");',
+            }),
+          }],
+        })
+        // autoFixToolCode response
+        .mockResolvedValueOnce({
+          content: [{
+            type: 'text',
+            text: 'console.log("fixed");',
+          }],
+        });
+
+      vi.doMock('@anthropic-ai/sdk', () => ({
+        default: vi.fn().mockImplementation(() => ({
+          messages: { create: mockAnthropicCreate },
+        })),
+      }));
+
+      // Container exits with code 1 and empty output
+      const mockContainer = {
+        start: vi.fn().mockResolvedValue(undefined),
+        wait: vi.fn()
+          .mockResolvedValueOnce({ StatusCode: 1 })
+          .mockResolvedValueOnce({ StatusCode: 1 }),
+        logs: vi.fn().mockResolvedValue(Buffer.from('')),
+        remove: vi.fn().mockResolvedValue(undefined),
+      };
+      mockDockerCreateContainer.mockResolvedValue(mockContainer);
+
+      mockRegisterCustomTool.mockResolvedValueOnce(makeCustomTool({ name: 'empty-err' }));
+      mockExecute.mockResolvedValue({ rowCount: 1 });
+      mockCreateProposal.mockResolvedValueOnce(undefined);
+
+      const result = await authorTool('agent-1', 'empty error test');
+
+      // Auto-fix also fails (2nd sandbox also returns code 1), so original code is used
+      expect(result.testResult).not.toBeNull();
+      expect(result.testResult!.passed).toBe(false);
+      // Empty output should fallback to "Process exited with code 1"
+      expect(result.testResult!.error).toContain('Process exited with code 1');
+    });
   });
 
   // ────────────────────────────────────────────
@@ -1192,6 +1570,705 @@ describe('Self-Authoring Module', () => {
       const result = await authorSkill('agent-1', 'quick task');
 
       expect(result.approved).toBe(true);
+    });
+  });
+
+  // ────────────────────────────────────────────
+  //  authorTool — auto-fix flow (lines 74-86)
+  // ────────────────────────────────────────────
+  describe('authorTool — auto-fix flow', () => {
+    it('attempts auto-fix when sandbox test fails and succeeds', async () => {
+      // Agent that triggers sandbox test failure then auto-fix success
+      mockGetAgent.mockResolvedValueOnce(makeAgent({ self_evolution_mode: 'autonomous' }));
+      mockListCustomTools.mockResolvedValueOnce([]);
+
+      // Mock Anthropic SDK — called for both generateToolCode AND autoFixToolCode
+      const mockAnthropicCreate = vi.fn()
+        // First call: generateToolCode
+        .mockResolvedValueOnce({
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              name: 'fix-tool',
+              description: 'A tool to fix',
+              language: 'javascript',
+              inputSchema: { type: 'object', properties: { data: { type: 'string' } } },
+              code: 'console.log("original");',
+            }),
+          }],
+        })
+        // Second call: autoFixToolCode
+        .mockResolvedValueOnce({
+          content: [{
+            type: 'text',
+            text: '```javascript\nconsole.log("fixed");\n```',
+          }],
+        });
+
+      vi.doMock('@anthropic-ai/sdk', () => ({
+        default: vi.fn().mockImplementation(() => ({
+          messages: { create: mockAnthropicCreate },
+        })),
+      }));
+
+      // Mock Docker for sandbox test — first test fails, second succeeds
+      const mockDocker = await import('dockerode');
+      const mockContainer = {
+        start: vi.fn().mockResolvedValue(undefined),
+        wait: vi.fn()
+          .mockResolvedValueOnce({ StatusCode: 1 }) // First sandbox: failed
+          .mockResolvedValueOnce({ StatusCode: 0 }), // Second sandbox (after fix): success
+        logs: vi.fn().mockResolvedValue(Buffer.from('output')),
+        kill: vi.fn().mockResolvedValue(undefined),
+        remove: vi.fn().mockResolvedValue(undefined),
+      };
+
+      const DockerClass = (mockDocker.default as any);
+      DockerClass.mockImplementation(() => ({
+        createContainer: vi.fn().mockResolvedValue(mockContainer),
+      }));
+
+      // Re-import to pick up the mocked Docker
+      vi.resetModules();
+      // We need to re-mock all dependencies after resetModules
+      vi.doMock('../../src/db', () => ({
+        query: (...args: any[]) => mockQuery(...args),
+        queryOne: (...args: any[]) => mockQueryOne(...args),
+        execute: (...args: any[]) => mockExecute(...args),
+        withTransaction: (fn: any) => mockWithTransaction(fn),
+      }));
+      vi.doMock('../../src/utils/logger', () => ({
+        logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+      }));
+      vi.doMock('../../src/modules/agents', () => ({
+        getAgent: (...args: any[]) => mockGetAgent(...args),
+        updateAgent: (...args: any[]) => mockUpdateAgent(...args),
+      }));
+      vi.doMock('../../src/modules/tools', () => ({
+        registerCustomTool: (...args: any[]) => mockRegisterCustomTool(...args),
+        getCustomTool: (...args: any[]) => mockGetCustomTool(...args),
+        listCustomTools: (...args: any[]) => mockListCustomTools(...args),
+      }));
+      vi.doMock('../../src/modules/skills', () => ({
+        registerSkill: (...args: any[]) => mockRegisterSkill(...args),
+        attachSkillToAgent: (...args: any[]) => mockAttachSkillToAgent(...args),
+      }));
+      vi.doMock('../../src/modules/self-evolution', () => ({
+        createProposal: (...args: any[]) => mockCreateProposal(...args),
+      }));
+      vi.doMock('../../src/modules/access-control', () => ({
+        canModifyAgent: (...args: any[]) => mockCanModifyAgent(...args),
+      }));
+      vi.doMock('../../src/config', () => ({
+        config: { docker: { baseImage: 'node:20-slim' } },
+      }));
+      vi.doMock('uuid', () => ({ v4: () => 'test-uuid-1234' }));
+
+      mockRegisterCustomTool.mockResolvedValueOnce(makeCustomTool({ name: 'fix-tool' }));
+      mockExecute.mockResolvedValue({ rowCount: 1 });
+      mockCreateProposal.mockResolvedValueOnce(undefined);
+
+      // The test exercises sandbox paths even if they throw in test env.
+      // The try/catch around sandboxTest will handle errors gracefully.
+      const { authorTool: freshAuthorTool } = await import('../../src/modules/self-authoring');
+      const result = await freshAuthorTool('agent-1', 'make a fix tool');
+
+      expect(result.tool).toBeDefined();
+      expect(mockRegisterCustomTool).toHaveBeenCalled();
+    });
+
+    it('uses original code when auto-fix attempt throws', async () => {
+      mockGetAgent.mockResolvedValueOnce(makeAgent({ self_evolution_mode: 'autonomous' }));
+      mockListCustomTools.mockResolvedValueOnce([]);
+
+      const mockAnthropicCreate = vi.fn()
+        // generateToolCode
+        .mockResolvedValueOnce({
+          content: [{
+            type: 'text',
+            text: JSON.stringify({
+              name: 'broken-tool',
+              description: 'A broken tool',
+              language: 'javascript',
+              inputSchema: { type: 'object', properties: {} },
+              code: 'console.log("original");',
+            }),
+          }],
+        })
+        // autoFixToolCode throws
+        .mockRejectedValueOnce(new Error('AI service unavailable'));
+
+      vi.doMock('@anthropic-ai/sdk', () => ({
+        default: vi.fn().mockImplementation(() => ({
+          messages: { create: mockAnthropicCreate },
+        })),
+      }));
+
+      mockRegisterCustomTool.mockResolvedValueOnce(makeCustomTool({ name: 'broken-tool' }));
+      mockExecute.mockResolvedValue({ rowCount: 1 });
+      mockCreateProposal.mockResolvedValueOnce(undefined);
+
+      const result = await authorTool('agent-1', 'make a broken tool');
+
+      expect(result.tool).toBeDefined();
+      expect(result.code).toContain('console.log');
+    });
+
+    it('exercises container.remove failure in catch path', async () => {
+      mockGetAgent.mockResolvedValueOnce(makeAgent({ self_evolution_mode: 'autonomous' }));
+      mockListCustomTools.mockResolvedValueOnce([]);
+
+      const mockAnthropicCreate = vi.fn().mockResolvedValue({
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            name: 'remove-fail-tool',
+            description: 'Remove fail tool',
+            language: 'javascript',
+            inputSchema: { type: 'object', properties: {} },
+            code: 'console.log("test");',
+          }),
+        }],
+      });
+
+      vi.doMock('@anthropic-ai/sdk', () => ({
+        default: vi.fn().mockImplementation(() => ({
+          messages: { create: mockAnthropicCreate },
+        })),
+      }));
+
+      // Container start throws AND remove also throws (branch 50: catch{} on container.remove)
+      const mockContainer = {
+        start: vi.fn().mockRejectedValue(new Error('Docker start failed')),
+        remove: vi.fn().mockRejectedValue(new Error('Container already removed')),
+      };
+      mockDockerCreateContainer.mockResolvedValue(mockContainer);
+
+      mockRegisterCustomTool.mockResolvedValueOnce(makeCustomTool({ name: 'remove-fail-tool' }));
+      mockExecute.mockResolvedValue({ rowCount: 1 });
+      mockCreateProposal.mockResolvedValueOnce(undefined);
+
+      const result = await authorTool('agent-1', 'remove fail test');
+
+      expect(result.testResult).not.toBeNull();
+      expect(result.testResult!.passed).toBe(false);
+      expect(result.testResult!.error).toContain('Docker start failed');
+    });
+  });
+
+  // ────────────────────────────────────────────
+  //  authorTool — sandbox with Python language
+  // ────────────────────────────────────────────
+  describe('authorTool — sandbox Python language', () => {
+    it('exercises sandbox with python language (interpreter = python3)', async () => {
+      mockGetAgent.mockResolvedValueOnce(makeAgent({ self_evolution_mode: 'autonomous' }));
+      mockListCustomTools.mockResolvedValueOnce([]);
+
+      const mockAnthropicCreate = vi.fn().mockResolvedValue({
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            name: 'py-sandbox-tool',
+            description: 'Python sandbox tool',
+            language: 'python',
+            inputSchema: { type: 'object', properties: { text: { type: 'string' } } },
+            code: 'print("hello")',
+          }),
+        }],
+      });
+
+      vi.doMock('@anthropic-ai/sdk', () => ({
+        default: vi.fn().mockImplementation(() => ({
+          messages: { create: mockAnthropicCreate },
+        })),
+      }));
+
+      const mockContainer = {
+        start: vi.fn().mockResolvedValue(undefined),
+        wait: vi.fn().mockResolvedValue({ StatusCode: 0 }),
+        logs: vi.fn().mockResolvedValue(Buffer.from('hello')),
+        remove: vi.fn().mockResolvedValue(undefined),
+      };
+      mockDockerCreateContainer.mockResolvedValue(mockContainer);
+
+      mockRegisterCustomTool.mockResolvedValueOnce(makeCustomTool({ name: 'py-sandbox-tool' }));
+      mockExecute.mockResolvedValue({ rowCount: 1 });
+      mockCreateProposal.mockResolvedValueOnce(undefined);
+
+      const result = await authorTool('agent-1', 'a python tool');
+
+      expect(result.testResult).not.toBeNull();
+      expect(result.testResult!.passed).toBe(true);
+      // Verify python3 interpreter was used
+      expect(mockDockerCreateContainer).toHaveBeenCalledWith(
+        expect.objectContaining({
+          Cmd: ['python3', '/sandbox/test.py'],
+        }),
+      );
+    });
+  });
+
+  // ────────────────────────────────────────────
+  //  authorTool — sandbox error with no message
+  // ────────────────────────────────────────────
+  describe('authorTool — sandbox error with empty message', () => {
+    it('uses "Unknown sandbox error" when err.message is falsy', async () => {
+      mockGetAgent.mockResolvedValueOnce(makeAgent({ self_evolution_mode: 'autonomous' }));
+      mockListCustomTools.mockResolvedValueOnce([]);
+
+      const mockAnthropicCreate = vi.fn().mockResolvedValue({
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            name: 'no-msg-tool',
+            description: 'No message error tool',
+            language: 'javascript',
+            inputSchema: { type: 'object', properties: {} },
+            code: 'console.log("test");',
+          }),
+        }],
+      });
+
+      vi.doMock('@anthropic-ai/sdk', () => ({
+        default: vi.fn().mockImplementation(() => ({
+          messages: { create: mockAnthropicCreate },
+        })),
+      }));
+
+      // Docker container start throws error with empty message
+      const mockContainer = {
+        start: vi.fn().mockRejectedValue({ message: '' }),
+        remove: vi.fn().mockResolvedValue(undefined),
+      };
+      mockDockerCreateContainer.mockResolvedValue(mockContainer);
+
+      mockRegisterCustomTool.mockResolvedValueOnce(makeCustomTool({ name: 'no-msg-tool' }));
+      mockExecute.mockResolvedValue({ rowCount: 1 });
+      mockCreateProposal.mockResolvedValueOnce(undefined);
+
+      const result = await authorTool('agent-1', 'no message error test');
+
+      expect(result.testResult).not.toBeNull();
+      expect(result.testResult!.passed).toBe(false);
+      expect(result.testResult!.error).toBe('Unknown sandbox error');
+    });
+  });
+
+  // ────────────────────────────────────────────
+  //  authorTool — sandbox rmSync failure
+  // ────────────────────────────────────────────
+  describe('authorTool — sandbox cleanup failure', () => {
+    it('handles rmSync throwing in finally block', async () => {
+      mockGetAgent.mockResolvedValueOnce(makeAgent({ self_evolution_mode: 'autonomous' }));
+      mockListCustomTools.mockResolvedValueOnce([]);
+
+      const mockAnthropicCreate = vi.fn().mockResolvedValue({
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            name: 'rm-fail-tool',
+            description: 'rmSync fail tool',
+            language: 'javascript',
+            inputSchema: { type: 'object', properties: {} },
+            code: 'console.log("test");',
+          }),
+        }],
+      });
+
+      vi.doMock('@anthropic-ai/sdk', () => ({
+        default: vi.fn().mockImplementation(() => ({
+          messages: { create: mockAnthropicCreate },
+        })),
+      }));
+
+      const mockContainer = {
+        start: vi.fn().mockResolvedValue(undefined),
+        wait: vi.fn().mockResolvedValue({ StatusCode: 0 }),
+        logs: vi.fn().mockResolvedValue(Buffer.from('ok')),
+        remove: vi.fn().mockResolvedValue(undefined),
+      };
+      mockDockerCreateContainer.mockResolvedValue(mockContainer);
+
+      // Make rmSync throw to exercise the catch in finally block
+      mockRmSync.mockImplementationOnce(() => { throw new Error('EPERM'); });
+
+      mockRegisterCustomTool.mockResolvedValueOnce(makeCustomTool({ name: 'rm-fail-tool' }));
+      mockExecute.mockResolvedValue({ rowCount: 1 });
+      mockCreateProposal.mockResolvedValueOnce(undefined);
+
+      // Should still succeed despite rmSync failure
+      const result = await authorTool('agent-1', 'rmSync fail test');
+
+      expect(result.testResult).not.toBeNull();
+      expect(result.testResult!.passed).toBe(true);
+    });
+  });
+
+  // ────────────────────────────────────────────
+  //  authorTool — sandbox container null in catch
+  // ────────────────────────────────────────────
+  describe('authorTool — sandbox container null in catch', () => {
+    it('handles error when container is null (createContainer throws)', async () => {
+      mockGetAgent.mockResolvedValueOnce(makeAgent({ self_evolution_mode: 'autonomous' }));
+      mockListCustomTools.mockResolvedValueOnce([]);
+
+      const mockAnthropicCreate = vi.fn().mockResolvedValue({
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            name: 'null-container-tool',
+            description: 'Null container tool',
+            language: 'javascript',
+            inputSchema: { type: 'object', properties: {} },
+            code: 'console.log("test");',
+          }),
+        }],
+      });
+
+      vi.doMock('@anthropic-ai/sdk', () => ({
+        default: vi.fn().mockImplementation(() => ({
+          messages: { create: mockAnthropicCreate },
+        })),
+      }));
+
+      // createContainer throws, so container is still null in catch
+      mockDockerCreateContainer.mockRejectedValue(new Error('Docker daemon not available'));
+
+      mockRegisterCustomTool.mockResolvedValueOnce(makeCustomTool({ name: 'null-container-tool' }));
+      mockExecute.mockResolvedValue({ rowCount: 1 });
+      mockCreateProposal.mockResolvedValueOnce(undefined);
+
+      const result = await authorTool('agent-1', 'null container test');
+
+      expect(result.testResult).not.toBeNull();
+      expect(result.testResult!.passed).toBe(false);
+      expect(result.testResult!.error).toContain('Docker daemon not available');
+    });
+  });
+
+  // ────────────────────────────────────────────
+  //  generateSampleInput type branches
+  // ────────────────────────────────────────────
+  describe('authorTool — generateSampleInput type branches', () => {
+    it('handles number type with example value', async () => {
+      mockGetAgent.mockResolvedValueOnce(makeAgent({ self_evolution_mode: 'autonomous' }));
+      mockListCustomTools.mockResolvedValueOnce([]);
+
+      const mockAnthropicCreate = vi.fn().mockResolvedValue({
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            name: 'num-example-tool',
+            description: 'Number example tool',
+            language: 'javascript',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                count: { type: 'number', example: 99 },
+                index: { type: 'integer', default: 7 },
+                flag: { type: 'boolean', example: false },
+                items: { type: 'array', example: [1, 2, 3] },
+                meta: { type: 'object', example: { key: 'val' } },
+                other: { type: 'unknown_type' },
+              },
+            },
+            code: 'console.log("test");',
+          }),
+        }],
+      });
+
+      vi.doMock('@anthropic-ai/sdk', () => ({
+        default: vi.fn().mockImplementation(() => ({
+          messages: { create: mockAnthropicCreate },
+        })),
+      }));
+
+      const mockContainer = {
+        start: vi.fn().mockResolvedValue(undefined),
+        wait: vi.fn().mockResolvedValue({ StatusCode: 0 }),
+        logs: vi.fn().mockResolvedValue(Buffer.from('ok')),
+        remove: vi.fn().mockResolvedValue(undefined),
+      };
+      mockDockerCreateContainer.mockResolvedValue(mockContainer);
+
+      mockRegisterCustomTool.mockResolvedValueOnce(makeCustomTool({ name: 'num-example-tool' }));
+      mockExecute.mockResolvedValue({ rowCount: 1 });
+      mockCreateProposal.mockResolvedValueOnce(undefined);
+
+      const result = await authorTool('agent-1', 'a number example tool');
+
+      // Verify the INPUT env var contains the right sample values
+      const createCallArgs = mockDockerCreateContainer.mock.calls[0][0];
+      const inputEnv = createCallArgs.Env.find((e: string) => e.startsWith('INPUT='));
+      const inputData = JSON.parse(inputEnv.replace('INPUT=', ''));
+
+      expect(inputData.count).toBe(99); // number with example
+      expect(inputData.index).toBe(7); // integer with default
+      expect(inputData.flag).toBe(false); // boolean with example
+      expect(inputData.items).toEqual([1, 2, 3]); // array with example
+      expect(inputData.meta).toEqual({ key: 'val' }); // object with example
+      expect(inputData.other).toBe('sample'); // default case
+    });
+
+    it('handles number/integer with default fallback', async () => {
+      mockGetAgent.mockResolvedValueOnce(makeAgent({ self_evolution_mode: 'autonomous' }));
+      mockListCustomTools.mockResolvedValueOnce([]);
+
+      const mockAnthropicCreate = vi.fn().mockResolvedValue({
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            name: 'num-default-tool',
+            description: 'Number default tool',
+            language: 'javascript',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                plain_num: { type: 'number' },
+                plain_int: { type: 'integer' },
+                plain_bool: { type: 'boolean' },
+                plain_arr: { type: 'array' },
+                plain_obj: { type: 'object' },
+              },
+            },
+            code: 'console.log("test");',
+          }),
+        }],
+      });
+
+      vi.doMock('@anthropic-ai/sdk', () => ({
+        default: vi.fn().mockImplementation(() => ({
+          messages: { create: mockAnthropicCreate },
+        })),
+      }));
+
+      const mockContainer = {
+        start: vi.fn().mockResolvedValue(undefined),
+        wait: vi.fn().mockResolvedValue({ StatusCode: 0 }),
+        logs: vi.fn().mockResolvedValue(Buffer.from('ok')),
+        remove: vi.fn().mockResolvedValue(undefined),
+      };
+      mockDockerCreateContainer.mockResolvedValue(mockContainer);
+
+      mockRegisterCustomTool.mockResolvedValueOnce(makeCustomTool({ name: 'num-default-tool' }));
+      mockExecute.mockResolvedValue({ rowCount: 1 });
+      mockCreateProposal.mockResolvedValueOnce(undefined);
+
+      const result = await authorTool('agent-1', 'a number default tool');
+
+      const createCallArgs = mockDockerCreateContainer.mock.calls[0][0];
+      const inputEnv = createCallArgs.Env.find((e: string) => e.startsWith('INPUT='));
+      const inputData = JSON.parse(inputEnv.replace('INPUT=', ''));
+
+      expect(inputData.plain_num).toBe(42); // number fallback
+      expect(inputData.plain_int).toBe(42); // integer fallback
+      expect(inputData.plain_bool).toBe(true); // boolean fallback
+      expect(inputData.plain_arr).toEqual(['item1', 'item2']); // array fallback
+      expect(inputData.plain_obj).toEqual({}); // object fallback
+    });
+
+    it('handles boolean with default (not example)', async () => {
+      mockGetAgent.mockResolvedValueOnce(makeAgent({ self_evolution_mode: 'autonomous' }));
+      mockListCustomTools.mockResolvedValueOnce([]);
+
+      const mockAnthropicCreate = vi.fn().mockResolvedValue({
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            name: 'bool-default-tool',
+            description: 'Boolean default tool',
+            language: 'javascript',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                active: { type: 'boolean', default: false },
+              },
+            },
+            code: 'console.log("test");',
+          }),
+        }],
+      });
+
+      vi.doMock('@anthropic-ai/sdk', () => ({
+        default: vi.fn().mockImplementation(() => ({
+          messages: { create: mockAnthropicCreate },
+        })),
+      }));
+
+      const mockContainer = {
+        start: vi.fn().mockResolvedValue(undefined),
+        wait: vi.fn().mockResolvedValue({ StatusCode: 0 }),
+        logs: vi.fn().mockResolvedValue(Buffer.from('ok')),
+        remove: vi.fn().mockResolvedValue(undefined),
+      };
+      mockDockerCreateContainer.mockResolvedValue(mockContainer);
+
+      mockRegisterCustomTool.mockResolvedValueOnce(makeCustomTool({ name: 'bool-default-tool' }));
+      mockExecute.mockResolvedValue({ rowCount: 1 });
+      mockCreateProposal.mockResolvedValueOnce(undefined);
+
+      const result = await authorTool('agent-1', 'a boolean default tool');
+
+      const createCallArgs = mockDockerCreateContainer.mock.calls[0][0];
+      const inputEnv = createCallArgs.Env.find((e: string) => e.startsWith('INPUT='));
+      const inputData = JSON.parse(inputEnv.replace('INPUT=', ''));
+
+      expect(inputData.active).toBe(false); // boolean with default (uses ?? so picks false)
+    });
+
+    it('handles array/object with default values', async () => {
+      mockGetAgent.mockResolvedValueOnce(makeAgent({ self_evolution_mode: 'autonomous' }));
+      mockListCustomTools.mockResolvedValueOnce([]);
+
+      const mockAnthropicCreate = vi.fn().mockResolvedValue({
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            name: 'arr-obj-default-tool',
+            description: 'Array/Object default tool',
+            language: 'javascript',
+            inputSchema: {
+              type: 'object',
+              properties: {
+                tags: { type: 'array', default: ['a', 'b'] },
+                config: { type: 'object', default: { x: 1 } },
+              },
+            },
+            code: 'console.log("test");',
+          }),
+        }],
+      });
+
+      vi.doMock('@anthropic-ai/sdk', () => ({
+        default: vi.fn().mockImplementation(() => ({
+          messages: { create: mockAnthropicCreate },
+        })),
+      }));
+
+      const mockContainer = {
+        start: vi.fn().mockResolvedValue(undefined),
+        wait: vi.fn().mockResolvedValue({ StatusCode: 0 }),
+        logs: vi.fn().mockResolvedValue(Buffer.from('ok')),
+        remove: vi.fn().mockResolvedValue(undefined),
+      };
+      mockDockerCreateContainer.mockResolvedValue(mockContainer);
+
+      mockRegisterCustomTool.mockResolvedValueOnce(makeCustomTool({ name: 'arr-obj-default-tool' }));
+      mockExecute.mockResolvedValue({ rowCount: 1 });
+      mockCreateProposal.mockResolvedValueOnce(undefined);
+
+      const result = await authorTool('agent-1', 'an array/object default tool');
+
+      const createCallArgs = mockDockerCreateContainer.mock.calls[0][0];
+      const inputEnv = createCallArgs.Env.find((e: string) => e.startsWith('INPUT='));
+      const inputData = JSON.parse(inputEnv.replace('INPUT=', ''));
+
+      expect(inputData.tags).toEqual(['a', 'b']); // array with default
+      expect(inputData.config).toEqual({ x: 1 }); // object with default
+    });
+  });
+
+  // ────────────────────────────────────────────
+  //  generateToolCode fallback branches
+  // ────────────────────────────────────────────
+  describe('authorTool — generateToolCode fallback branches', () => {
+    it('uses default inputSchema and language when AI response omits them', async () => {
+      mockGetAgent.mockResolvedValueOnce(makeAgent({ self_evolution_mode: 'autonomous' }));
+      mockListCustomTools.mockResolvedValueOnce([]);
+
+      // AI returns JSON without inputSchema and language fields
+      const mockAnthropicCreate = vi.fn().mockResolvedValue({
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            name: 'minimal-tool',
+            description: 'A minimal tool',
+            code: 'console.log("hello");',
+            // no inputSchema, no language
+          }),
+        }],
+      });
+
+      vi.doMock('@anthropic-ai/sdk', () => ({
+        default: vi.fn().mockImplementation(() => ({
+          messages: { create: mockAnthropicCreate },
+        })),
+      }));
+
+      const mockContainer = {
+        start: vi.fn().mockResolvedValue(undefined),
+        wait: vi.fn().mockResolvedValue({ StatusCode: 0 }),
+        logs: vi.fn().mockResolvedValue(Buffer.from('ok')),
+        remove: vi.fn().mockResolvedValue(undefined),
+      };
+      mockDockerCreateContainer.mockResolvedValue(mockContainer);
+
+      mockRegisterCustomTool.mockResolvedValueOnce(makeCustomTool({ name: 'minimal-tool' }));
+      mockExecute.mockResolvedValue({ rowCount: 1 });
+      mockCreateProposal.mockResolvedValueOnce(undefined);
+
+      const result = await authorTool('agent-1', 'a minimal tool');
+
+      expect(result.tool).toBeDefined();
+      // The tool should be registered with default schema and javascript language
+      expect(mockRegisterCustomTool).toHaveBeenCalledWith(
+        'minimal-tool',
+        JSON.stringify({ type: 'object', properties: {} }), // default inputSchema
+        null,
+        'agent-1',
+        expect.objectContaining({ language: 'javascript' }), // default language
+      );
+    });
+  });
+
+  // ────────────────────────────────────────────
+  //  authorSkill — generateSkillTemplate no JSON
+  // ────────────────────────────────────────────
+  describe('authorSkill — AI returns no valid JSON', () => {
+    it('throws when generateSkillTemplate AI response has no JSON', async () => {
+      mockGetAgent.mockResolvedValueOnce(makeAgent({ self_evolution_mode: 'autonomous' }));
+
+      const mockAnthropicCreate = vi.fn().mockResolvedValue({
+        content: [{
+          type: 'text',
+          text: 'Sorry, I cannot generate a skill template for that.',
+        }],
+      });
+
+      vi.doMock('@anthropic-ai/sdk', () => ({
+        default: vi.fn().mockImplementation(() => ({
+          messages: { create: mockAnthropicCreate },
+        })),
+      }));
+
+      await expect(authorSkill('agent-1', 'something weird'))
+        .rejects.toThrow('AI did not return valid JSON');
+    });
+  });
+
+  // ────────────────────────────────────────────
+  //  authorTool — generateToolCode no JSON
+  // ────────────────────────────────────────────
+  describe('authorTool — AI returns no valid JSON', () => {
+    it('throws when generateToolCode AI response has no JSON', async () => {
+      mockGetAgent.mockResolvedValueOnce(makeAgent({ self_evolution_mode: 'autonomous' }));
+      mockListCustomTools.mockResolvedValueOnce([]);
+
+      const mockAnthropicCreate = vi.fn().mockResolvedValue({
+        content: [{
+          type: 'text',
+          text: 'I cannot generate code for that task.',
+        }],
+      });
+
+      vi.doMock('@anthropic-ai/sdk', () => ({
+        default: vi.fn().mockImplementation(() => ({
+          messages: { create: mockAnthropicCreate },
+        })),
+      }));
+
+      await expect(authorTool('agent-1', 'something impossible'))
+        .rejects.toThrow('AI did not return valid JSON');
     });
   });
 });

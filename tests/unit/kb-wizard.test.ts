@@ -202,6 +202,117 @@ describe('KB Wizard', () => {
       expect(result).toHaveProperty('tags');
       expect(Array.isArray(result.tags)).toBe(true);
     });
+
+    it('should return AI-generated suggestions when Anthropic SDK succeeds', async () => {
+      const mockAnthropicCreate = vi.fn().mockResolvedValue({
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            title: 'AI Generated Title',
+            summary: 'AI generated summary of the content.',
+            category: 'Engineering',
+            tags: ['deployment', 'docker', 'kubernetes'],
+          }),
+        }],
+      });
+
+      vi.doMock('@anthropic-ai/sdk', () => ({
+        default: vi.fn().mockImplementation(() => ({
+          messages: { create: mockAnthropicCreate },
+        })),
+      }));
+
+      // Re-import to pick up mock
+      const { generateSuggestions: freshGenerateSuggestions } = await import('../../src/modules/kb-wizard');
+      const result = await freshGenerateSuggestions('Some deployment content about Docker and Kubernetes.');
+
+      expect(result.title).toBe('AI Generated Title');
+      expect(result.summary).toBe('AI generated summary of the content.');
+      expect(result.category).toBe('Engineering');
+      expect(result.tags).toEqual(['deployment', 'docker', 'kubernetes']);
+    });
+
+    it('should handle AI response with missing fields and use fallbacks', async () => {
+      const mockAnthropicCreate = vi.fn().mockResolvedValue({
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            // Missing title, summary, category
+            tags: 'not-an-array',
+          }),
+        }],
+      });
+
+      vi.doMock('@anthropic-ai/sdk', () => ({
+        default: vi.fn().mockImplementation(() => ({
+          messages: { create: mockAnthropicCreate },
+        })),
+      }));
+
+      const { generateSuggestions: freshGenerateSuggestions } = await import('../../src/modules/kb-wizard');
+      const result = await freshGenerateSuggestions('First line of content\nSecond line.');
+
+      // Fallback for title: first line sliced to 80 chars
+      expect(result.title).toBe('First line of content');
+      expect(result.summary).toBe('');
+      expect(result.category).toBe('General');
+      expect(result.tags).toEqual([]);
+    });
+
+    it('should use "Untitled" when AI title is empty and content has no first line', async () => {
+      const mockAnthropicCreate = vi.fn().mockResolvedValue({
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            title: '',
+            summary: 'Some summary',
+            category: 'Engineering',
+            tags: ['tag1'],
+          }),
+        }],
+      });
+
+      vi.doMock('@anthropic-ai/sdk', () => ({
+        default: vi.fn().mockImplementation(() => ({
+          messages: { create: mockAnthropicCreate },
+        })),
+      }));
+
+      const { generateSuggestions: freshGenerateSuggestions } = await import('../../src/modules/kb-wizard');
+      // Pass empty content so content.split('\n')[0] is '' (falsy)
+      const result = await freshGenerateSuggestions('');
+
+      // '' || '' || 'Untitled' = 'Untitled'
+      expect(result.title).toBe('Untitled');
+    });
+
+    it('should handle AI response with null content fields', async () => {
+      const mockAnthropicCreate = vi.fn().mockResolvedValue({
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            title: null,
+            summary: null,
+            category: null,
+            tags: ['valid-tag'],
+          }),
+        }],
+      });
+
+      vi.doMock('@anthropic-ai/sdk', () => ({
+        default: vi.fn().mockImplementation(() => ({
+          messages: { create: mockAnthropicCreate },
+        })),
+      }));
+
+      const { generateSuggestions: freshGenerateSuggestions } = await import('../../src/modules/kb-wizard');
+      const result = await freshGenerateSuggestions('Test content line\nMore content.');
+
+      // null || fallback
+      expect(result.title).toBe('Test content line');
+      expect(result.category).toBe('General');
+      expect(result.tags).toEqual(['valid-tag']);
+    });
   });
 
   // ── advanceWizard ──

@@ -7,6 +7,7 @@ const mockSlackClient = {
     postMessage: vi.fn().mockResolvedValue({ ok: true, ts: '123.456' }),
     update: vi.fn().mockResolvedValue({ ok: true }),
     delete: vi.fn().mockResolvedValue({ ok: true }),
+    postEphemeral: vi.fn().mockResolvedValue({ ok: true }),
   },
   conversations: {
     create: vi.fn().mockResolvedValue({ ok: true, channel: { id: 'C123' } }),
@@ -79,6 +80,7 @@ import {
   deleteMessage,
   createChannel,
   postBlocks,
+  postEphemeral,
   openModal,
   pushModal,
   updateModal,
@@ -124,14 +126,38 @@ describe('Slack module', () => {
       createSlackApp();
       expect(mockApp.error).toHaveBeenCalledWith(expect.any(Function));
     });
+
+    it('should log errors when global error handler is invoked', async () => {
+      createSlackApp();
+      const { logger } = await import('../../src/utils/logger');
+      const errorHandler = mockApp.error.mock.calls[0][0];
+      const testError = new Error('test bolt error');
+      await errorHandler(testError);
+      expect(logger.error).toHaveBeenCalledWith(
+        'Bolt global error handler',
+        expect.objectContaining({
+          message: 'test bolt error',
+        }),
+      );
+    });
   });
 
   // ── initSlackClient ──
 
   describe('initSlackClient', () => {
-    it('should initialize without error', () => {
-      // createSlackApp already ran above, so app is set — initSlackClient should short-circuit
+    it('should initialize without error when app already exists', () => {
+      createSlackApp();
+      // createSlackApp already ran, so app is set — initSlackClient should short-circuit
       expect(() => initSlackClient()).not.toThrow();
+    });
+
+    it('should create a new app when not yet initialized', async () => {
+      // Reset modules to get a fresh slack/index with app === undefined
+      vi.resetModules();
+      const freshSlack = await import('../../src/slack/index');
+      freshSlack.initSlackClient();
+      // Should now have a working app
+      expect(() => freshSlack.getSlackApp()).not.toThrow();
     });
   });
 
@@ -289,6 +315,21 @@ describe('Slack module', () => {
       const calledName = lastCall[lastCall.length - 1][0].name;
       expect(calledName.length).toBeLessThanOrEqual(80);
     });
+
+    it('should return empty string when channel ID is missing from response', async () => {
+      mockSlackClient.conversations.create.mockResolvedValueOnce({ ok: true, channel: {} });
+      const channelId = await createChannel('no-id');
+      expect(channelId).toBe('');
+      // Should not attempt to join when channelId is empty
+      expect(mockSlackClient.conversations.join).not.toHaveBeenCalled();
+    });
+
+    it('should handle join failure silently after creating channel', async () => {
+      mockSlackClient.conversations.create.mockResolvedValueOnce({ ok: true, channel: { id: 'C999' } });
+      mockSlackClient.conversations.join.mockRejectedValueOnce(new Error('cannot_join'));
+      const channelId = await createChannel('test-join-fail');
+      expect(channelId).toBe('C999');
+    });
   });
 
   // ── postBlocks ──
@@ -322,6 +363,35 @@ describe('Slack module', () => {
           icon_emoji: ':star:',
         }),
       );
+    });
+  });
+
+  // ── postEphemeral ──
+
+  describe('postEphemeral', () => {
+    beforeEach(() => {
+      createSlackApp();
+    });
+
+    it('should call chat.postEphemeral with correct parameters', async () => {
+      const blocks = [{ type: 'section', text: { type: 'mrkdwn', text: 'Ephemeral' } }];
+      await postEphemeral('C001', 'U001', blocks, 'fallback text');
+      expect(mockSlackClient.chat.postEphemeral).toHaveBeenCalledWith({
+        channel: 'C001',
+        user: 'U001',
+        blocks,
+        text: 'fallback text',
+      });
+    });
+
+    it('should call chat.postEphemeral with empty blocks', async () => {
+      await postEphemeral('C002', 'U002', [], 'simple text');
+      expect(mockSlackClient.chat.postEphemeral).toHaveBeenCalledWith({
+        channel: 'C002',
+        user: 'U002',
+        blocks: [],
+        text: 'simple text',
+      });
     });
   });
 

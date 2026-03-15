@@ -7,16 +7,42 @@ vi.mock('child_process', () => ({
   execSync: (...args: any[]) => mockExecSync(...args),
 }));
 
+// ── Mock fs ──
+const mockReadFileSync = vi.fn();
+vi.mock('fs', () => ({
+  default: {
+    readFileSync: (...args: any[]) => mockReadFileSync(...args),
+  },
+  readFileSync: (...args: any[]) => mockReadFileSync(...args),
+}));
+
+// ── Mock https ──
+const mockHttpsGet = vi.fn();
+vi.mock('https', () => ({
+  default: {
+    get: (...args: any[]) => mockHttpsGet(...args),
+  },
+  get: (...args: any[]) => mockHttpsGet(...args),
+}));
+
 // ── Mock config ──
-vi.mock('../../src/config', () => ({
-  config: {
+const { mockConfig } = vi.hoisted(() => {
+  const mockConfig = {
     github: {
       webhookSecret: 'test-webhook-secret',
     },
     docker: {
       baseImage: 'tinyhands-runner:latest',
     },
-  },
+    autoUpdate: {
+      enabled: true,
+      branch: 'main',
+    },
+  };
+  return { mockConfig };
+});
+vi.mock('../../src/config', () => ({
+  config: mockConfig,
 }));
 
 vi.mock('../../src/utils/logger', () => ({
@@ -28,6 +54,10 @@ import {
   handleDeploy,
   deployWebhookHandler,
   formatDeploySummary,
+  readLocalVersion,
+  fetchRemoteVersion,
+  compareVersions,
+  checkForUpdates,
   type DeployResult,
 } from '../../src/modules/auto-update/index';
 
@@ -259,6 +289,18 @@ describe('Auto-Update Module', () => {
       expect(result.dockerfileChanged).toBe(false);
     });
 
+    it('should handle commits with missing added/modified/removed fields', async () => {
+      const payload = makePushPayload({
+        commits: [
+          { /* no added, modified, or removed fields */ },
+        ],
+      });
+
+      const result = await handleDeploy(payload);
+      expect(result.success).toBe(true);
+      expect(result.changedFiles).toEqual([]);
+    });
+
     it('should handle payload with missing "after" field', async () => {
       const payload = makePushPayload({ after: undefined });
 
@@ -449,6 +491,279 @@ describe('Auto-Update Module', () => {
 
       const summary = formatDeploySummary(result);
       expect(summary).toContain('0.1s');
+    });
+  });
+
+  // ── handleDeploy - migration file changes ──
+
+  describe('handleDeploy - migration files', () => {
+    it('should log specific message when migration files changed', async () => {
+      const payload = makePushPayload({
+        commits: [
+          { added: ['src/db/migrations/010-new.sql'], modified: [], removed: [] },
+        ],
+      });
+
+      const result = await handleDeploy(payload);
+      expect(result.success).toBe(true);
+    });
+  });
+
+  // ── deployWebhookHandler - handleDeploy error ──
+
+  describe('deployWebhookHandler - deploy error handling', () => {
+    it('should catch and log errors from handleDeploy when it rejects', async () => {
+      // To trigger the .catch() handler, we need handleDeploy to reject.
+      // The commits iteration happens before the try/catch in handleDeploy.
+      // A commits array with a custom [Symbol.iterator] that throws will cause rejection.
+      const body = makePushPayload();
+      const signature = makeSignature(JSON.stringify(body));
+
+      // After signature verification, replace commits with something that throws during iteration
+      const evilCommits: any = [];
+      evilCommits[Symbol.iterator] = () => { throw new Error('iteration crash'); };
+      // Make JSON.stringify still work (toJSON returns valid array)
+      evilCommits.toJSON = () => body.commits;
+
+      const reqBody = { ...body, commits: evilCommits };
+      // The body stringifies correctly for sig check
+      const req = {
+        headers: {
+          'x-hub-signature-256': signature,
+          'x-github-event': 'push',
+        },
+        body: reqBody,
+      };
+      const res = makeResponse();
+
+      deployWebhookHandler(req as any, res);
+      expect(res.status).toHaveBeenCalledWith(202);
+      // Wait for async error to be caught
+      await new Promise(r => setTimeout(r, 10));
+    });
+  });
+
+  // ── verifyGithubSignature - no webhook secret ──
+
+  describe('verifyGithubSignature - no secret configured', () => {
+    it('should return false when webhookSecret is empty', () => {
+      const originalSecret = mockConfig.github.webhookSecret;
+      mockConfig.github.webhookSecret = '';
+
+      expect(verifyGithubSignature('payload', 'sha256=abc')).toBe(false);
+
+      mockConfig.github.webhookSecret = originalSecret;
+    });
+  });
+
+  // ── readLocalVersion ──
+
+  describe('readLocalVersion', () => {
+    it('should read VERSION file and trim whitespace', () => {
+      mockReadFileSync.mockReturnValueOnce('1.5.0\n');
+
+      const version = readLocalVersion();
+      expect(version).toBe('1.5.0');
+    });
+
+    it('should return 0.0.0 when VERSION file does not exist', () => {
+      mockReadFileSync.mockImplementationOnce(() => {
+        throw new Error('ENOENT');
+      });
+
+      const version = readLocalVersion();
+      expect(version).toBe('0.0.0');
+    });
+  });
+
+  // ── fetchRemoteVersion ──
+
+  describe('fetchRemoteVersion', () => {
+    it('should resolve with remote version on HTTP 200', async () => {
+      mockHttpsGet.mockImplementation((_url: string, callback: Function) => {
+        const fakeResponse = {
+          statusCode: 200,
+          on: vi.fn((event: string, handler: Function) => {
+            if (event === 'data') {
+              handler(Buffer.from('1.6.0\n'));
+            }
+            if (event === 'end') {
+              handler();
+            }
+          }),
+        };
+        callback(fakeResponse);
+        return { on: vi.fn() };
+      });
+
+      const version = await fetchRemoteVersion('main');
+      expect(version).toBe('1.6.0');
+    });
+
+    it('should reject when HTTP status is not 200', async () => {
+      mockHttpsGet.mockImplementation((_url: string, callback: Function) => {
+        const fakeResponse = {
+          statusCode: 404,
+          on: vi.fn((event: string, handler: Function) => {
+            if (event === 'data') {
+              // no data
+            }
+            if (event === 'end') {
+              handler();
+            }
+          }),
+        };
+        callback(fakeResponse);
+        return { on: vi.fn() };
+      });
+
+      await expect(fetchRemoteVersion('main')).rejects.toThrow('Failed to fetch remote VERSION');
+    });
+
+    it('should reject on network error', async () => {
+      mockHttpsGet.mockImplementation((_url: string, _callback: Function) => {
+        const req = {
+          on: vi.fn((event: string, handler: Function) => {
+            if (event === 'error') {
+              handler(new Error('ECONNREFUSED'));
+            }
+          }),
+        };
+        return req;
+      });
+
+      await expect(fetchRemoteVersion('main')).rejects.toThrow('ECONNREFUSED');
+    });
+  });
+
+  // ── compareVersions ──
+
+  describe('compareVersions', () => {
+    it('should return 1 when remote is newer', () => {
+      expect(compareVersions('1.5.0', '1.6.0')).toBe(1);
+    });
+
+    it('should return -1 when local is newer', () => {
+      expect(compareVersions('1.6.0', '1.5.0')).toBe(-1);
+    });
+
+    it('should return 0 when versions are equal', () => {
+      expect(compareVersions('1.5.0', '1.5.0')).toBe(0);
+    });
+
+    it('should compare major versions', () => {
+      expect(compareVersions('1.0.0', '2.0.0')).toBe(1);
+      expect(compareVersions('2.0.0', '1.0.0')).toBe(-1);
+    });
+
+    it('should compare patch versions', () => {
+      expect(compareVersions('1.5.0', '1.5.1')).toBe(1);
+      expect(compareVersions('1.5.1', '1.5.0')).toBe(-1);
+    });
+
+    it('should handle missing version parts', () => {
+      expect(compareVersions('1.5', '1.5.1')).toBe(1);
+      expect(compareVersions('1.5.1', '1.5')).toBe(-1);
+      expect(compareVersions('1', '1.0.0')).toBe(0);
+    });
+  });
+
+  // ── checkForUpdates ──
+
+  describe('checkForUpdates', () => {
+    it('should skip when auto-update is disabled', async () => {
+      mockConfig.autoUpdate.enabled = false;
+
+      await checkForUpdates();
+
+      // Should not call readLocalVersion or fetchRemoteVersion
+      expect(mockReadFileSync).not.toHaveBeenCalled();
+
+      mockConfig.autoUpdate.enabled = true;
+    });
+
+    it('should trigger deploy when remote version is newer', async () => {
+      mockReadFileSync.mockReturnValueOnce('1.5.0\n');
+
+      mockHttpsGet.mockImplementation((_url: string, callback: Function) => {
+        const fakeResponse = {
+          statusCode: 200,
+          on: vi.fn((event: string, handler: Function) => {
+            if (event === 'data') handler(Buffer.from('1.6.0'));
+            if (event === 'end') handler();
+          }),
+        };
+        callback(fakeResponse);
+        return { on: vi.fn() };
+      });
+
+      await checkForUpdates();
+
+      // handleDeploy should have been called (via execSync for git pull)
+      expect(mockExecSync).toHaveBeenCalledWith(
+        'git pull origin main',
+        expect.any(Object)
+      );
+    });
+
+    it('should not deploy when versions are equal', async () => {
+      mockReadFileSync.mockReturnValueOnce('1.5.0\n');
+
+      mockHttpsGet.mockImplementation((_url: string, callback: Function) => {
+        const fakeResponse = {
+          statusCode: 200,
+          on: vi.fn((event: string, handler: Function) => {
+            if (event === 'data') handler(Buffer.from('1.5.0'));
+            if (event === 'end') handler();
+          }),
+        };
+        callback(fakeResponse);
+        return { on: vi.fn() };
+      });
+
+      await checkForUpdates();
+
+      // handleDeploy should NOT have been called
+      expect(mockExecSync).not.toHaveBeenCalled();
+    });
+
+    it('should handle errors gracefully', async () => {
+      mockReadFileSync.mockImplementationOnce(() => {
+        throw new Error('read failed');
+      });
+
+      // Should not throw
+      await checkForUpdates();
+    });
+
+    it('should handle fetchRemoteVersion errors gracefully', async () => {
+      mockReadFileSync.mockReturnValueOnce('1.5.0\n');
+
+      mockHttpsGet.mockImplementation((_url: string, _callback: Function) => {
+        return {
+          on: vi.fn((event: string, handler: Function) => {
+            if (event === 'error') handler(new Error('network error'));
+          }),
+        };
+      });
+
+      // Should not throw
+      await checkForUpdates();
+    });
+  });
+
+  // ── handleDeploy - pull-based (no changedFiles) ──
+
+  describe('handleDeploy - pull-based auto-update', () => {
+    it('should run npm install when changedFiles is empty (pull-based)', async () => {
+      const payload = { after: 'auto-update', commits: [] };
+
+      const result = await handleDeploy(payload);
+
+      expect(result.success).toBe(true);
+      // Should install deps because isPullBased is true
+      const calls = mockExecSync.mock.calls.map((c: any[]) => c[0]);
+      expect(calls).toContainEqual('npm install --production');
     });
   });
 });

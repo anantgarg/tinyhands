@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 // ── Mocks ──
 
@@ -109,6 +109,33 @@ function setupHttpsMock(responses: Array<{ status: number; body: string }>): voi
   });
 }
 
+/**
+ * Like setupHttpsMock but delivers response data via process.nextTick instead
+ * of setTimeout, so it works with vi.useFakeTimers() without needing to
+ * advance timers for data delivery.
+ */
+/**
+ * Like setupHttpsMock but patches global setTimeout to execute callbacks
+ * immediately (with 0 delay), so polling loops don't actually wait.
+ * Call restoreSetTimeout() in afterEach or at end of test to restore.
+ */
+const _originalSetTimeout = globalThis.setTimeout;
+let _setTimeoutPatched = false;
+
+function patchSetTimeoutImmediate(): void {
+  if (_setTimeoutPatched) return;
+  _setTimeoutPatched = true;
+  (globalThis as any).setTimeout = (fn: Function, _delay?: number, ...args: any[]) => {
+    return _originalSetTimeout(fn, 0, ...args);
+  };
+}
+
+function restoreSetTimeout(): void {
+  if (!_setTimeoutPatched) return;
+  _setTimeoutPatched = false;
+  globalThis.setTimeout = _originalSetTimeout;
+}
+
 function setupProviderCredentials(provider: string, creds: Record<string, string>): void {
   mockGetProviderForConnector.mockReturnValue(provider);
   mockGetApiKey.mockResolvedValue({
@@ -128,6 +155,11 @@ describe('KB Source Sync Handlers', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockNormalizeConnectorType.mockImplementation((type: string) => type);
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    restoreSetTimeout();
   });
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1602,6 +1634,2026 @@ describe('KB Source Sync Handlers', () => {
   });
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // stripJsx helper (tested via Mintlify page sync)
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  describe('stripJsx (via Mintlify sync)', () => {
+    it('should strip import statements, JSX tags, and export statements from MDX content', async () => {
+      setupProviderCredentials('github', { token: 'ghp_test' });
+
+      const mintlifyConfig = { navigation: [{ group: 'Guide', pages: ['intro'] }] };
+      const mdxContent = '---\ntitle: Intro\n---\nimport { Component } from "./comp"\n\n<Card title="hello" />\n\n<Accordion>\nSome text inside JSX\n</Accordion>\n\nexport default Layout\n\n# Hello World\n\nContent here';
+
+      setupHttpsMock([
+        githubRepoOk,
+        // docs.json found
+        { status: 200, body: JSON.stringify({ download_url: 'https://raw.githubusercontent.com/docs.json' }) },
+        // raw docs.json content
+        { status: 200, body: JSON.stringify(mintlifyConfig) },
+        // Try .mdx first for intro page - found
+        { status: 200, body: JSON.stringify({ download_url: 'https://raw.githubusercontent.com/intro.mdx' }) },
+        // Raw .mdx content
+        { status: 200, body: mdxContent },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'github',
+        config_json: JSON.stringify({ repo: 'owner/repo', branch: 'main', content_type: 'docs' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(1);
+      const entry = mockCreateKBEntry.mock.calls[0][0];
+      expect(entry.title).toBe('Intro');
+      expect(entry.content).toContain('Hello World');
+      expect(entry.content).toContain('Some text inside JSX');
+      expect(entry.content).not.toContain('import');
+      expect(entry.content).not.toMatch(/<Card\s/);
+      expect(entry.content).not.toContain('export default');
+      expect(entry.category).toBe('Guide');
+      expect(entry.tags).toContain('mintlify');
+    });
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // parseFrontmatter helper (quote stripping)
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  describe('parseFrontmatter quote stripping (via GitHub sync)', () => {
+    it('should strip surrounding quotes from frontmatter values', async () => {
+      setupProviderCredentials('github', { token: 'ghp_test' });
+
+      const mdContent = '---\ntitle: "Quoted Title"\ndescription: \'Single Quoted\'\n---\n# Content\nBody here';
+
+      setupHttpsMock([
+        githubRepoOk,
+        { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
+        { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
+        {
+          status: 200,
+          body: JSON.stringify([
+            { path: 'docs/page.md', type: 'file', download_url: 'https://raw.githubusercontent.com/page.md', size: 100 },
+          ]),
+        },
+        { status: 200, body: mdContent },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'github',
+        config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(1);
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+        title: 'Quoted Title',
+        summary: 'Single Quoted',
+      }));
+    });
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // syncSource error handling edge cases
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  describe('syncSource error path with undefined message', () => {
+    it('should use "Unknown error" when error has no message', async () => {
+      mockGetProviderForConnector.mockReturnValue('github');
+      // Reject with an error-like object that has no message property
+      mockGetApiKey.mockRejectedValue({ code: 'ERR' });
+
+      const source = makeFakeSource({
+        source_type: 'github',
+        config_json: JSON.stringify({ repo: 'owner/repo' }),
+      });
+
+      await expect(syncSource(source)).rejects.toBeDefined();
+      expect(mockUpdateSource).toHaveBeenCalledWith('src-1', expect.objectContaining({
+        status: 'error',
+        error_message: 'Unknown error',
+      }));
+    });
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // GitHub — repo validation errors
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  describe('syncGitHub repo validation', () => {
+    it('should throw on 401/403 repo check', async () => {
+      setupProviderCredentials('github', { token: 'ghp_test' });
+
+      setupHttpsMock([
+        { status: 401, body: JSON.stringify({ message: 'Bad credentials' }) },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'github',
+        config_json: JSON.stringify({ repo: 'owner/repo' }),
+      });
+
+      await expect(syncSource(source)).rejects.toThrow('GitHub token is invalid or lacks access');
+    });
+
+    it('should throw on 403 repo check', async () => {
+      setupProviderCredentials('github', { token: 'ghp_test' });
+
+      setupHttpsMock([
+        { status: 403, body: JSON.stringify({ message: 'Forbidden' }) },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'github',
+        config_json: JSON.stringify({ repo: 'owner/repo' }),
+      });
+
+      await expect(syncSource(source)).rejects.toThrow('GitHub token is invalid or lacks access');
+    });
+
+    it('should throw on 404 repo check', async () => {
+      setupProviderCredentials('github', { token: 'ghp_test' });
+
+      setupHttpsMock([
+        { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'github',
+        config_json: JSON.stringify({ repo: 'owner/repo' }),
+      });
+
+      await expect(syncSource(source)).rejects.toThrow('GitHub repository "owner/repo" not found');
+    });
+
+    it('should throw on generic repo check error (e.g. 500)', async () => {
+      setupProviderCredentials('github', { token: 'ghp_test' });
+
+      setupHttpsMock([
+        { status: 500, body: JSON.stringify({ message: 'Internal Server Error' }) },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'github',
+        config_json: JSON.stringify({ repo: 'owner/repo' }),
+      });
+
+      await expect(syncSource(source)).rejects.toThrow('GitHub API error (500) checking repo');
+    });
+
+    it('should throw when GitHub token is missing from credentials', async () => {
+      setupProviderCredentials('github', {});
+
+      const source = makeFakeSource({
+        source_type: 'github',
+        config_json: JSON.stringify({ repo: 'owner/repo' }),
+      });
+
+      await expect(syncSource(source)).rejects.toThrow('GitHub token is not configured');
+    });
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // GitHub — listGitHubDir error handling
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  describe('syncGitHub listGitHubDir errors', () => {
+    it('should throw on 401 when listing directory', async () => {
+      setupProviderCredentials('github', { token: 'ghp_test' });
+
+      setupHttpsMock([
+        githubRepoOk,
+        { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
+        { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
+        // Listing directory returns 401
+        { status: 401, body: JSON.stringify({ message: 'Bad credentials' }) },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'github',
+        config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
+      });
+
+      await expect(syncSource(source)).rejects.toThrow('GitHub API auth failed');
+    });
+
+    it('should throw on 404 when listing directory', async () => {
+      setupProviderCredentials('github', { token: 'ghp_test' });
+
+      setupHttpsMock([
+        githubRepoOk,
+        { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
+        { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
+        // Listing directory returns 404
+        { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'github',
+        config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
+      });
+
+      await expect(syncSource(source)).rejects.toThrow('GitHub path not found');
+    });
+
+    it('should throw on generic error when listing directory', async () => {
+      setupProviderCredentials('github', { token: 'ghp_test' });
+
+      setupHttpsMock([
+        githubRepoOk,
+        { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
+        { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
+        // Listing directory returns 422
+        { status: 422, body: JSON.stringify({ message: 'Unprocessable' }) },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'github',
+        config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
+      });
+
+      await expect(syncSource(source)).rejects.toThrow('GitHub API error (422)');
+    });
+
+    it('should handle non-array response for directory listing', async () => {
+      setupProviderCredentials('github', { token: 'ghp_test' });
+
+      setupHttpsMock([
+        githubRepoOk,
+        { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
+        { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
+        // Directory listing returns an object (single file) rather than array
+        { status: 200, body: JSON.stringify({ type: 'file', path: 'README.md' }) },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'github',
+        config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(0);
+    });
+
+    it('should recurse into subdirectories and handle subdir failures gracefully', async () => {
+      setupProviderCredentials('github', { token: 'ghp_test' });
+
+      setupHttpsMock([
+        githubRepoOk,
+        { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
+        { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
+        // Top level listing: has a subdirectory
+        {
+          status: 200,
+          body: JSON.stringify([
+            { path: 'docs/sub', type: 'dir' },
+            { path: 'docs/readme.md', type: 'file', download_url: 'https://raw.githubusercontent.com/readme.md', size: 100 },
+          ]),
+        },
+        // Subdirectory listing fails
+        { status: 500, body: JSON.stringify({ message: 'Server Error' }) },
+        // Fetch readme.md
+        { status: 200, body: '# Readme\nContent here' },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'github',
+        config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
+      });
+
+      const result = await syncSource(source);
+      // Only the file should be synced, subdir error is caught
+      expect(result).toBe(1);
+    });
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // GitHub — Mintlify detection and page sync
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  describe('syncGitHub Mintlify page sync', () => {
+    it('should handle Mintlify config parse failure gracefully', async () => {
+      setupProviderCredentials('github', { token: 'ghp_test' });
+
+      setupHttpsMock([
+        githubRepoOk,
+        // docs.json found
+        { status: 200, body: JSON.stringify({ download_url: 'https://raw.githubusercontent.com/docs.json' }) },
+        // raw docs.json content is invalid JSON
+        { status: 200, body: 'not valid json {{{' },
+        // mint.json not found
+        { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
+        // Fall through to standard sync - list directory
+        { status: 200, body: JSON.stringify([]) },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'github',
+        config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(0);
+    });
+
+    it('should sync Mintlify pages trying .mdx then .md then bare path', async () => {
+      setupProviderCredentials('github', { token: 'ghp_test' });
+
+      const mintlifyConfig = {
+        navigation: [{ group: 'Guide', pages: ['getting-started', 'advanced'] }],
+      };
+
+      setupHttpsMock([
+        githubRepoOk,
+        // docs.json found
+        { status: 200, body: JSON.stringify({ download_url: 'https://raw.githubusercontent.com/docs.json' }) },
+        { status: 200, body: JSON.stringify(mintlifyConfig) },
+        // getting-started: .mdx not found, .md found
+        { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
+        { status: 200, body: JSON.stringify({ download_url: 'https://raw.githubusercontent.com/getting-started.md' }) },
+        { status: 200, body: '---\ntitle: Getting Started\ndescription: How to begin\ntags: guide,intro\n---\n# Getting Started\nWelcome!' },
+        // advanced: .mdx not found, .md not found, bare path found
+        { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
+        { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
+        { status: 200, body: JSON.stringify({ download_url: 'https://raw.githubusercontent.com/advanced' }) },
+        { status: 200, body: '# Advanced Guide\nAdvanced content here' },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'github',
+        config_json: JSON.stringify({ repo: 'owner/repo', branch: 'main', content_type: 'mintlify' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(2);
+
+      // First entry has frontmatter with tags
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+        title: 'Getting Started',
+        category: 'Guide',
+        tags: expect.arrayContaining(['mintlify', 'guide', 'intro']),
+      }));
+
+      // Second entry has no frontmatter
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+        title: 'advanced',
+        category: 'Guide',
+      }));
+    });
+
+    it('should skip Mintlify pages that cannot be found in any extension', async () => {
+      setupProviderCredentials('github', { token: 'ghp_test' });
+
+      const mintlifyConfig = {
+        navigation: [{ group: 'Guide', pages: ['nonexistent'] }],
+      };
+
+      setupHttpsMock([
+        githubRepoOk,
+        { status: 200, body: JSON.stringify({ download_url: 'https://raw.githubusercontent.com/docs.json' }) },
+        { status: 200, body: JSON.stringify(mintlifyConfig) },
+        // All three extensions fail
+        { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
+        { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
+        { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'github',
+        config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(0);
+    });
+
+    it('should catch and continue when individual Mintlify page sync fails', async () => {
+      setupProviderCredentials('github', { token: 'ghp_test' });
+
+      const mintlifyConfig = {
+        navigation: [{ group: 'Guide', pages: ['page-a', 'page-b'] }],
+      };
+
+      setupHttpsMock([
+        githubRepoOk,
+        { status: 200, body: JSON.stringify({ download_url: 'https://raw.githubusercontent.com/docs.json' }) },
+        { status: 200, body: JSON.stringify(mintlifyConfig) },
+        // page-a: .mdx found
+        { status: 200, body: JSON.stringify({ download_url: 'https://raw.githubusercontent.com/page-a.mdx' }) },
+        { status: 200, body: '# Page A\nContent A' },
+        // page-b: .mdx found
+        { status: 200, body: JSON.stringify({ download_url: 'https://raw.githubusercontent.com/page-b.mdx' }) },
+        { status: 200, body: '# Page B\nContent B' },
+      ]);
+
+      // First createKBEntry call fails
+      mockCreateKBEntry
+        .mockRejectedValueOnce(new Error('DB error'))
+        .mockResolvedValueOnce({ id: 'kb-2' });
+
+      const source = makeFakeSource({
+        source_type: 'github',
+        config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
+      });
+
+      const result = await syncSource(source);
+      // First page fails but second succeeds
+      expect(result).toBe(1);
+    });
+
+    it('should handle Mintlify config with basePath in paths', async () => {
+      setupProviderCredentials('github', { token: 'ghp_test' });
+
+      const mintlifyConfig = {
+        navigation: [{ group: 'API', pages: ['auth'] }],
+      };
+
+      setupHttpsMock([
+        githubRepoOk,
+        // Check docs.json under docs/ base path
+        { status: 200, body: JSON.stringify({ download_url: 'https://raw.githubusercontent.com/docs/docs.json' }) },
+        { status: 200, body: JSON.stringify(mintlifyConfig) },
+        // Try docs/auth.mdx
+        { status: 200, body: JSON.stringify({ download_url: 'https://raw.githubusercontent.com/docs/auth.mdx' }) },
+        { status: 200, body: '---\ntitle: Auth\n---\n# Auth\nAuth docs' },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'github',
+        config_json: JSON.stringify({ repo: 'owner/repo', paths: 'docs/', content_type: 'docs' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(1);
+    });
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // Mintlify navigation extraction
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  describe('extractMintlifyPages and getMintlifyNavigation', () => {
+    it('should extract pages from tabs-style navigation', async () => {
+      setupProviderCredentials('github', { token: 'ghp_test' });
+
+      const mintlifyConfig = {
+        tabs: [
+          { tab: 'Docs', groups: [{ group: 'Getting Started', pages: ['intro', 'setup'] }] },
+          { tab: 'API', pages: ['api-ref'] },
+          { tab: 'SDK', items: [{ group: 'SDKs', pages: ['sdk-node'] }] },
+        ],
+      };
+
+      setupHttpsMock([
+        githubRepoOk,
+        { status: 200, body: JSON.stringify({ download_url: 'https://raw.githubusercontent.com/docs.json' }) },
+        { status: 200, body: JSON.stringify(mintlifyConfig) },
+        // intro.mdx found
+        { status: 200, body: JSON.stringify({ download_url: 'https://raw.githubusercontent.com/intro.mdx' }) },
+        { status: 200, body: '# Intro\nIntro content' },
+        // setup.mdx found
+        { status: 200, body: JSON.stringify({ download_url: 'https://raw.githubusercontent.com/setup.mdx' }) },
+        { status: 200, body: '# Setup\nSetup content' },
+        // api-ref.mdx found
+        { status: 200, body: JSON.stringify({ download_url: 'https://raw.githubusercontent.com/api-ref.mdx' }) },
+        { status: 200, body: '# API Ref\nAPI content' },
+        // sdk-node.mdx found
+        { status: 200, body: JSON.stringify({ download_url: 'https://raw.githubusercontent.com/sdk-node.mdx' }) },
+        { status: 200, body: '# SDK Node\nSDK content' },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'github',
+        config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(4);
+    });
+
+    it('should extract pages from sidebar navigation', async () => {
+      setupProviderCredentials('github', { token: 'ghp_test' });
+
+      const mintlifyConfig = {
+        sidebar: [{ group: 'Guides', pages: ['guide-1'] }],
+      };
+
+      setupHttpsMock([
+        githubRepoOk,
+        { status: 200, body: JSON.stringify({ download_url: 'https://raw.githubusercontent.com/docs.json' }) },
+        { status: 200, body: JSON.stringify(mintlifyConfig) },
+        { status: 200, body: JSON.stringify({ download_url: 'https://raw.githubusercontent.com/guide-1.mdx' }) },
+        { status: 200, body: '# Guide 1\nContent' },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'github',
+        config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(1);
+    });
+
+    it('should extract pages from anchors navigation', async () => {
+      setupProviderCredentials('github', { token: 'ghp_test' });
+
+      const mintlifyConfig = {
+        anchors: [{ group: 'Ref', pages: ['ref-1'] }],
+      };
+
+      setupHttpsMock([
+        githubRepoOk,
+        { status: 200, body: JSON.stringify({ download_url: 'https://raw.githubusercontent.com/docs.json' }) },
+        { status: 200, body: JSON.stringify(mintlifyConfig) },
+        { status: 200, body: JSON.stringify({ download_url: 'https://raw.githubusercontent.com/ref-1.mdx' }) },
+        { status: 200, body: '# Ref 1\nContent' },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'github',
+        config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(1);
+    });
+
+    it('should handle non-array, non-tabs navigation as object without known keys', async () => {
+      setupProviderCredentials('github', { token: 'ghp_test' });
+
+      // A config with no known navigation keys at all
+      const mintlifyConfig = {
+        name: 'Docs',
+        colors: { primary: '#000' },
+      };
+
+      setupHttpsMock([
+        githubRepoOk,
+        { status: 200, body: JSON.stringify({ download_url: 'https://raw.githubusercontent.com/docs.json' }) },
+        { status: 200, body: JSON.stringify(mintlifyConfig) },
+        // Falls through: no nav -> warns, pageRefs empty -> fallback to standard sync
+        { status: 200, body: JSON.stringify([]) },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'github',
+        config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(0);
+    });
+
+    it('should resolve getMintlifyCategory for pages in tabs navigation', async () => {
+      setupProviderCredentials('github', { token: 'ghp_test' });
+
+      const mintlifyConfig = {
+        tabs: [
+          { tab: 'API Reference', groups: [{ group: 'Endpoints', pages: ['api-page'] }] },
+        ],
+      };
+
+      setupHttpsMock([
+        githubRepoOk,
+        { status: 200, body: JSON.stringify({ download_url: 'https://raw.githubusercontent.com/docs.json' }) },
+        { status: 200, body: JSON.stringify(mintlifyConfig) },
+        { status: 200, body: JSON.stringify({ download_url: 'https://raw.githubusercontent.com/api-page.mdx' }) },
+        { status: 200, body: '# API Page\nContent' },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'github',
+        config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(1);
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+        category: 'Endpoints',
+      }));
+    });
+
+    it('should fall back to "docs" category when page is not found in navigation', async () => {
+      setupProviderCredentials('github', { token: 'ghp_test' });
+
+      // The page ref is a plain string in navigation, but getMintlifyCategory
+      // returns 'docs' as fallback when no group found
+      const mintlifyConfig = {
+        navigation: ['orphan-page'],
+      };
+
+      setupHttpsMock([
+        githubRepoOk,
+        { status: 200, body: JSON.stringify({ download_url: 'https://raw.githubusercontent.com/docs.json' }) },
+        { status: 200, body: JSON.stringify(mintlifyConfig) },
+        { status: 200, body: JSON.stringify({ download_url: 'https://raw.githubusercontent.com/orphan-page.mdx' }) },
+        { status: 200, body: '# Orphan\nContent' },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'github',
+        config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(1);
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+        category: 'docs',
+      }));
+    });
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // GitHub — .mdx file JSX stripping in standard sync
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  describe('syncGitHub standard sync .mdx stripping', () => {
+    it('should strip JSX from .mdx files in standard (non-Mintlify) sync', async () => {
+      setupProviderCredentials('github', { token: 'ghp_test' });
+
+      const mdxContent = 'import X from "y"\n\n<Note>\nHello\n</Note>\n\nexport default Z\n\n# Doc\nContent';
+
+      setupHttpsMock([
+        githubRepoOk,
+        { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
+        { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
+        {
+          status: 200,
+          body: JSON.stringify([
+            { path: 'docs/page.mdx', type: 'file', download_url: 'https://raw.githubusercontent.com/page.mdx', size: 100 },
+          ]),
+        },
+        { status: 200, body: mdxContent },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'github',
+        config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(1);
+      const entry = mockCreateKBEntry.mock.calls[0][0];
+      expect(entry.content).not.toContain('import X');
+      expect(entry.content).not.toContain('export default');
+      expect(entry.content).toContain('Hello');
+      expect(entry.content).toContain('Doc');
+    });
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // Website (Firecrawl) sync — polling, completion, failure, timeout
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  describe('syncWebsite polling and completion', () => {
+    it('should poll and create entries when crawl completes', async () => {
+      setupProviderCredentials('firecrawl', { api_key: 'fc_test' });
+      patchSetTimeoutImmediate();
+
+      setupHttpsMock([
+        // Start crawl
+        { status: 200, body: JSON.stringify({ id: 'crawl-123' }) },
+        // Poll 1: still scraping, partial pages
+        {
+          status: 200,
+          body: JSON.stringify({
+            status: 'scraping',
+            data: [{
+              markdown: '# Page 1\nContent',
+              url: 'https://example.com/page1',
+              metadata: { title: 'Page 1', description: 'Desc 1' },
+            }],
+          }),
+        },
+        // Poll 2: completed
+        {
+          status: 200,
+          body: JSON.stringify({
+            status: 'completed',
+            data: [{
+              markdown: '# Page 2\nContent',
+              url: 'https://example.com/page2',
+              metadata: { ogTitle: 'Page 2 OG' },
+            }],
+          }),
+        },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'website',
+        config_json: JSON.stringify({ url: 'https://example.com', max_pages: '10' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(2);
+      expect(mockCreateKBEntry).toHaveBeenCalledTimes(2);
+    });
+
+    it('should throw when crawl status is failed', async () => {
+      setupProviderCredentials('firecrawl', { api_key: 'fc_test' });
+      patchSetTimeoutImmediate();
+
+      setupHttpsMock([
+        { status: 200, body: JSON.stringify({ id: 'crawl-456' }) },
+        { status: 200, body: JSON.stringify({ status: 'failed', data: null }) },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'website',
+        config_json: JSON.stringify({ url: 'https://example.com' }),
+      });
+
+      await expect(syncSource(source)).rejects.toThrow('Firecrawl crawl failed');
+    });
+
+    it('should throw when status check returns an error', async () => {
+      setupProviderCredentials('firecrawl', { api_key: 'fc_test' });
+      patchSetTimeoutImmediate();
+
+      setupHttpsMock([
+        { status: 200, body: JSON.stringify({ id: 'crawl-789' }) },
+        { status: 500, body: JSON.stringify({ error: 'Internal Error' }) },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'website',
+        config_json: JSON.stringify({ url: 'https://example.com' }),
+      });
+
+      await expect(syncSource(source)).rejects.toThrow('Firecrawl status check failed');
+    });
+
+    it('should skip pages with empty markdown content', async () => {
+      setupProviderCredentials('firecrawl', { api_key: 'fc_test' });
+      patchSetTimeoutImmediate();
+
+      setupHttpsMock([
+        { status: 200, body: JSON.stringify({ id: 'crawl-111' }) },
+        {
+          status: 200,
+          body: JSON.stringify({
+            status: 'completed',
+            data: [
+              { markdown: '', url: 'https://example.com/empty', metadata: {} },
+              { markdown: '# Real Page\nContent', url: 'https://example.com/real', metadata: { title: 'Real' } },
+            ],
+          }),
+        },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'website',
+        config_json: JSON.stringify({ url: 'https://example.com' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(1);
+    });
+
+    it('should use page.content as fallback when markdown is missing', async () => {
+      setupProviderCredentials('firecrawl', { api_key: 'fc_test' });
+      patchSetTimeoutImmediate();
+
+      setupHttpsMock([
+        { status: 200, body: JSON.stringify({ id: 'crawl-222' }) },
+        {
+          status: 200,
+          body: JSON.stringify({
+            status: 'completed',
+            data: [{
+              content: 'Fallback content from page.content',
+              url: 'https://example.com/fallback',
+              metadata: {},
+            }],
+          }),
+        },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'website',
+        config_json: JSON.stringify({ url: 'https://example.com' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(1);
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+        content: 'Fallback content from page.content',
+      }));
+    });
+
+    it('should use URL pathname as title fallback when no metadata title', async () => {
+      setupProviderCredentials('firecrawl', { api_key: 'fc_test' });
+      patchSetTimeoutImmediate();
+
+      setupHttpsMock([
+        { status: 200, body: JSON.stringify({ id: 'crawl-333' }) },
+        {
+          status: 200,
+          body: JSON.stringify({
+            status: 'completed',
+            data: [{
+              markdown: '# Page\nContent',
+              url: 'https://example.com/some/path',
+              metadata: {},
+            }],
+          }),
+        },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'website',
+        config_json: JSON.stringify({ url: 'https://example.com' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(1);
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+        title: '/some/path',
+      }));
+    });
+
+    it('should include/exclude paths when provided', async () => {
+      setupProviderCredentials('firecrawl', { api_key: 'fc_test' });
+      patchSetTimeoutImmediate();
+
+      setupHttpsMock([
+        { status: 200, body: JSON.stringify({ id: 'crawl-444' }) },
+        {
+          status: 200,
+          body: JSON.stringify({
+            status: 'completed',
+            data: [{
+              markdown: '# Filtered Page\nContent',
+              url: 'https://example.com/docs/intro',
+              metadata: { title: 'Intro' },
+            }],
+          }),
+        },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'website',
+        config_json: JSON.stringify({
+          url: 'https://example.com',
+          include_paths: '/docs, /api',
+          exclude_paths: '/blog',
+        }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(1);
+      // Verify include/exclude paths were included in the crawl request body
+      expect(mockHttpsWrite).toHaveBeenCalled();
+      const writtenBody = mockHttpsWrite.mock.calls[0][0];
+      const parsed = JSON.parse(writtenBody);
+      expect(parsed.includePaths).toEqual(['/docs', '/api']);
+      expect(parsed.excludePaths).toEqual(['/blog']);
+    });
+
+    it('should timeout after max attempts', async () => {
+      setupProviderCredentials('firecrawl', { api_key: 'fc_test' });
+      patchSetTimeoutImmediate();
+
+      const responses: Array<{ status: number; body: string }> = [
+        { status: 200, body: JSON.stringify({ id: 'crawl-timeout' }) },
+      ];
+      for (let i = 0; i < 125; i++) {
+        responses.push({
+          status: 200,
+          body: JSON.stringify({ status: 'scraping', data: [] }),
+        });
+      }
+      setupHttpsMock(responses);
+
+      const source = makeFakeSource({
+        source_type: 'website',
+        config_json: JSON.stringify({ url: 'https://example.com' }),
+      });
+
+      await expect(syncSource(source)).rejects.toThrow('Firecrawl crawl timed out after 10 minutes');
+    });
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // Google Drive — additional coverage
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  describe('syncGoogleDrive additional coverage', () => {
+    it('should export Google Sheets as CSV', async () => {
+      setupProviderCredentials('google', {
+        client_id: 'id',
+        client_secret: 'secret',
+        refresh_token: 'refresh',
+      });
+
+      setupHttpsMock([
+        { status: 200, body: JSON.stringify({ access_token: 'access_tok' }) },
+        {
+          status: 200,
+          body: JSON.stringify({
+            files: [{
+              id: 'sheet1',
+              name: 'My Spreadsheet',
+              mimeType: 'application/vnd.google-apps.spreadsheet',
+              size: 500,
+            }],
+            nextPageToken: null,
+          }),
+        },
+        // Export sheet as CSV
+        { status: 200, body: 'Name,Age\nAlice,30\nBob,25' },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'google_drive',
+        config_json: JSON.stringify({ folder_id: 'folder_123' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(1);
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+        title: 'My Spreadsheet',
+        content: 'Name,Age\nAlice,30\nBob,25',
+      }));
+    });
+
+    it('should export Google Slides as plain text', async () => {
+      setupProviderCredentials('google', {
+        client_id: 'id',
+        client_secret: 'secret',
+        refresh_token: 'refresh',
+      });
+
+      setupHttpsMock([
+        { status: 200, body: JSON.stringify({ access_token: 'access_tok' }) },
+        {
+          status: 200,
+          body: JSON.stringify({
+            files: [{
+              id: 'slide1',
+              name: 'My Presentation',
+              mimeType: 'application/vnd.google-apps.presentation',
+              size: 500,
+            }],
+            nextPageToken: null,
+          }),
+        },
+        // Export slides as text
+        { status: 200, body: 'Slide 1: Introduction\nSlide 2: Details' },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'google_drive',
+        config_json: JSON.stringify({ folder_id: 'folder_123' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(1);
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+        title: 'My Presentation',
+        content: 'Slide 1: Introduction\nSlide 2: Details',
+      }));
+    });
+
+    it('should download text files directly', async () => {
+      setupProviderCredentials('google', {
+        client_id: 'id',
+        client_secret: 'secret',
+        refresh_token: 'refresh',
+      });
+
+      setupHttpsMock([
+        { status: 200, body: JSON.stringify({ access_token: 'access_tok' }) },
+        {
+          status: 200,
+          body: JSON.stringify({
+            files: [{
+              id: 'txt1',
+              name: 'notes.txt',
+              mimeType: 'text/plain',
+              size: 500,
+            }],
+            nextPageToken: null,
+          }),
+        },
+        // Download text file
+        { status: 200, body: 'Plain text content of the file' },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'google_drive',
+        config_json: JSON.stringify({ folder_id: 'folder_123' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(1);
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+        title: 'notes.txt',
+        content: 'Plain text content of the file',
+      }));
+    });
+
+    it('should download JSON files directly', async () => {
+      setupProviderCredentials('google', {
+        client_id: 'id',
+        client_secret: 'secret',
+        refresh_token: 'refresh',
+      });
+
+      setupHttpsMock([
+        { status: 200, body: JSON.stringify({ access_token: 'access_tok' }) },
+        {
+          status: 200,
+          body: JSON.stringify({
+            files: [{
+              id: 'json1',
+              name: 'config.json',
+              mimeType: 'application/json',
+              size: 500,
+            }],
+            nextPageToken: null,
+          }),
+        },
+        // Download JSON file
+        { status: 200, body: '{"key": "value"}' },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'google_drive',
+        config_json: JSON.stringify({ folder_id: 'folder_123' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(1);
+    });
+
+    it('should skip files with unknown mime types', async () => {
+      setupProviderCredentials('google', {
+        client_id: 'id',
+        client_secret: 'secret',
+        refresh_token: 'refresh',
+      });
+
+      setupHttpsMock([
+        { status: 200, body: JSON.stringify({ access_token: 'access_tok' }) },
+        {
+          status: 200,
+          body: JSON.stringify({
+            files: [{
+              id: 'unknown1',
+              name: 'archive.zip',
+              mimeType: 'application/zip',
+              size: 500,
+            }],
+            nextPageToken: null,
+          }),
+        },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'google_drive',
+        config_json: JSON.stringify({ folder_id: 'folder_123' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(0);
+    });
+
+    it('should handle pagination with nextPageToken', async () => {
+      setupProviderCredentials('google', {
+        client_id: 'id',
+        client_secret: 'secret',
+        refresh_token: 'refresh',
+      });
+
+      setupHttpsMock([
+        { status: 200, body: JSON.stringify({ access_token: 'access_tok' }) },
+        // Page 1
+        {
+          status: 200,
+          body: JSON.stringify({
+            files: [{
+              id: 'doc1',
+              name: 'Doc 1',
+              mimeType: 'application/vnd.google-apps.document',
+              size: 500,
+            }],
+            nextPageToken: 'page2token',
+          }),
+        },
+        // Export Doc 1
+        { status: 200, body: 'Document 1 content' },
+        // Page 2
+        {
+          status: 200,
+          body: JSON.stringify({
+            files: [{
+              id: 'doc2',
+              name: 'Doc 2',
+              mimeType: 'application/vnd.google-apps.document',
+              size: 500,
+            }],
+            nextPageToken: null,
+          }),
+        },
+        // Export Doc 2
+        { status: 200, body: 'Document 2 content' },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'google_drive',
+        config_json: JSON.stringify({ folder_id: 'folder_123' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(2);
+    });
+
+    it('should filter by file_types MIME mapping', async () => {
+      setupProviderCredentials('google', {
+        client_id: 'id',
+        client_secret: 'secret',
+        refresh_token: 'refresh',
+      });
+
+      setupHttpsMock([
+        { status: 200, body: JSON.stringify({ access_token: 'access_tok' }) },
+        {
+          status: 200,
+          body: JSON.stringify({
+            files: [],
+            nextPageToken: null,
+          }),
+        },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'google_drive',
+        config_json: JSON.stringify({
+          folder_id: 'folder_123',
+          file_types: 'doc, sheet, slide',
+        }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(0);
+
+      // Verify the query included mime type filters
+      expect(mockHttpsRequest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          path: expect.stringContaining('mimeType'),
+        }),
+        expect.any(Function),
+      );
+    });
+
+    it('should handle file export failure gracefully', async () => {
+      setupProviderCredentials('google', {
+        client_id: 'id',
+        client_secret: 'secret',
+        refresh_token: 'refresh',
+      });
+
+      setupHttpsMock([
+        { status: 200, body: JSON.stringify({ access_token: 'access_tok' }) },
+        {
+          status: 200,
+          body: JSON.stringify({
+            files: [
+              { id: 'doc1', name: 'Failing Doc', mimeType: 'application/vnd.google-apps.document', size: 500 },
+              { id: 'doc2', name: 'Good Doc', mimeType: 'application/vnd.google-apps.document', size: 500 },
+            ],
+            nextPageToken: null,
+          }),
+        },
+        // First doc export succeeds but createKBEntry fails
+        { status: 200, body: 'Doc 1 content' },
+        // Second doc export succeeds
+        { status: 200, body: 'Doc 2 content' },
+      ]);
+
+      mockCreateKBEntry
+        .mockRejectedValueOnce(new Error('DB insert error'))
+        .mockResolvedValueOnce({ id: 'kb-2' });
+
+      const source = makeFakeSource({
+        source_type: 'google_drive',
+        config_json: JSON.stringify({ folder_id: 'folder_123' }),
+      });
+
+      const result = await syncSource(source);
+      // First file fails, second succeeds
+      expect(result).toBe(1);
+    });
+
+    it('should handle doc export returning error status (content stays empty)', async () => {
+      setupProviderCredentials('google', {
+        client_id: 'id',
+        client_secret: 'secret',
+        refresh_token: 'refresh',
+      });
+
+      setupHttpsMock([
+        { status: 200, body: JSON.stringify({ access_token: 'access_tok' }) },
+        {
+          status: 200,
+          body: JSON.stringify({
+            files: [{
+              id: 'doc1',
+              name: 'Failed Export',
+              mimeType: 'application/vnd.google-apps.document',
+              size: 500,
+            }],
+            nextPageToken: null,
+          }),
+        },
+        // Export returns error status (content remains empty, entry skipped)
+        { status: 500, body: 'Server Error' },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'google_drive',
+        config_json: JSON.stringify({ folder_id: 'folder_123' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(0);
+    });
+
+    it('should handle sheet export returning error status', async () => {
+      setupProviderCredentials('google', {
+        client_id: 'id',
+        client_secret: 'secret',
+        refresh_token: 'refresh',
+      });
+
+      setupHttpsMock([
+        { status: 200, body: JSON.stringify({ access_token: 'access_tok' }) },
+        {
+          status: 200,
+          body: JSON.stringify({
+            files: [{
+              id: 'sheet1',
+              name: 'Failed Sheet',
+              mimeType: 'application/vnd.google-apps.spreadsheet',
+              size: 500,
+            }],
+            nextPageToken: null,
+          }),
+        },
+        { status: 500, body: 'Server Error' },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'google_drive',
+        config_json: JSON.stringify({ folder_id: 'folder_123' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(0);
+    });
+
+    it('should handle slides export returning error status', async () => {
+      setupProviderCredentials('google', {
+        client_id: 'id',
+        client_secret: 'secret',
+        refresh_token: 'refresh',
+      });
+
+      setupHttpsMock([
+        { status: 200, body: JSON.stringify({ access_token: 'access_tok' }) },
+        {
+          status: 200,
+          body: JSON.stringify({
+            files: [{
+              id: 'slide1',
+              name: 'Failed Slides',
+              mimeType: 'application/vnd.google-apps.presentation',
+              size: 500,
+            }],
+            nextPageToken: null,
+          }),
+        },
+        { status: 500, body: 'Server Error' },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'google_drive',
+        config_json: JSON.stringify({ folder_id: 'folder_123' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(0);
+    });
+
+    it('should handle text file download returning error status', async () => {
+      setupProviderCredentials('google', {
+        client_id: 'id',
+        client_secret: 'secret',
+        refresh_token: 'refresh',
+      });
+
+      setupHttpsMock([
+        { status: 200, body: JSON.stringify({ access_token: 'access_tok' }) },
+        {
+          status: 200,
+          body: JSON.stringify({
+            files: [{
+              id: 'txt1',
+              name: 'Failed Text',
+              mimeType: 'text/plain',
+              size: 500,
+            }],
+            nextPageToken: null,
+          }),
+        },
+        { status: 500, body: 'Server Error' },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'google_drive',
+        config_json: JSON.stringify({ folder_id: 'folder_123' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(0);
+    });
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // HubSpot KB — additional coverage
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  describe('syncHubSpotKB additional coverage', () => {
+    it('should use metaDescription for summary when available, truncated to 500 chars', async () => {
+      setupProviderCredentials('hubspot', { access_token: 'hs_tok' });
+
+      const longMeta = 'x'.repeat(600);
+      setupHttpsMock([
+        {
+          status: 200,
+          body: JSON.stringify({
+            results: [{
+              name: 'Test Post',
+              postBody: '<p>Body content here</p>',
+              metaDescription: longMeta,
+              categoryId: null,
+              tagIds: [],
+            }],
+            paging: null,
+          }),
+        },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'hubspot_kb',
+        config_json: JSON.stringify({}),
+      });
+
+      await syncSource(source);
+      const call = mockCreateKBEntry.mock.calls[0][0];
+      expect(call.summary.length).toBeLessThanOrEqual(500);
+    });
+
+    it('should fall back to "Untitled" when name and htmlTitle are both empty', async () => {
+      setupProviderCredentials('hubspot', { access_token: 'hs_tok' });
+
+      setupHttpsMock([
+        {
+          status: 200,
+          body: JSON.stringify({
+            results: [{
+              name: '',
+              htmlTitle: '',
+              postBody: '<p>Some body content</p>',
+              categoryId: null,
+              tagIds: [],
+            }],
+            paging: null,
+          }),
+        },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'hubspot_kb',
+        config_json: JSON.stringify({}),
+      });
+
+      await syncSource(source);
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+        title: 'Untitled',
+      }));
+    });
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // Linear Docs — team filtering and issue pagination
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  describe('syncLinearDocs team filtering', () => {
+    it('should filter issues by team_key', async () => {
+      setupProviderCredentials('linear', { api_key: 'lin_test' });
+
+      setupHttpsMock([
+        // Projects query (empty)
+        {
+          status: 200,
+          body: JSON.stringify({
+            data: {
+              projects: {
+                nodes: [],
+                pageInfo: { hasNextPage: false, endCursor: null },
+              },
+            },
+          }),
+        },
+        // Team lookup query
+        {
+          status: 200,
+          body: JSON.stringify({
+            data: {
+              teams: {
+                nodes: [{ id: 'team-abc-123' }],
+              },
+            },
+          }),
+        },
+        // Issues query (with team filter)
+        {
+          status: 200,
+          body: JSON.stringify({
+            data: {
+              issues: {
+                nodes: [{
+                  id: 'issue-1',
+                  identifier: 'ENG-42',
+                  title: 'Team-filtered issue',
+                  description: 'This is a filtered issue description that is long enough to pass the 20 char threshold.',
+                  state: { name: 'Done' },
+                  labels: { nodes: [] },
+                }],
+                pageInfo: { hasNextPage: false, endCursor: null },
+              },
+            },
+          }),
+        },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'linear_docs',
+        config_json: JSON.stringify({ include_issues: 'true', team_key: 'ENG' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(1);
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+        title: 'ENG-42: Team-filtered issue',
+      }));
+    });
+
+    it('should handle team_key that returns no team (teamFilter stays empty)', async () => {
+      setupProviderCredentials('linear', { api_key: 'lin_test' });
+
+      setupHttpsMock([
+        // Projects query (empty)
+        {
+          status: 200,
+          body: JSON.stringify({
+            data: {
+              projects: {
+                nodes: [],
+                pageInfo: { hasNextPage: false, endCursor: null },
+              },
+            },
+          }),
+        },
+        // Team lookup query returns empty
+        {
+          status: 200,
+          body: JSON.stringify({
+            data: {
+              teams: {
+                nodes: [],
+              },
+            },
+          }),
+        },
+        // Issues query (no team filter since team not found)
+        {
+          status: 200,
+          body: JSON.stringify({
+            data: {
+              issues: {
+                nodes: [],
+                pageInfo: { hasNextPage: false, endCursor: null },
+              },
+            },
+          }),
+        },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'linear_docs',
+        config_json: JSON.stringify({ include_issues: 'true', team_key: 'UNKNOWN' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(0);
+    });
+  });
+
+  describe('syncLinearDocs issue cap', () => {
+    it('should cap issues at 500', async () => {
+      setupProviderCredentials('linear', { api_key: 'lin_test' });
+
+      // Generate 50 issues per page, with 11 pages (550 total)
+      // but the cap should stop at 500
+      const makeIssues = (startIdx: number, count: number) =>
+        Array.from({ length: count }, (_, i) => ({
+          id: `issue-${startIdx + i}`,
+          identifier: `ENG-${startIdx + i}`,
+          title: `Issue ${startIdx + i}`,
+          description: 'A description that is definitely longer than twenty characters for sure.',
+          state: { name: 'Todo' },
+          labels: { nodes: [] },
+        }));
+
+      const httpResponses: Array<{ status: number; body: string }> = [];
+
+      // include_projects: 'false' means projects are skipped entirely.
+      // First HTTP call will be the issues query.
+
+      // 10 pages of 50 issues (= 500 issues)
+      for (let page = 0; page < 10; page++) {
+        httpResponses.push({
+          status: 200,
+          body: JSON.stringify({
+            data: {
+              issues: {
+                nodes: makeIssues(page * 50, 50),
+                pageInfo: { hasNextPage: true, endCursor: `cursor-${page + 1}` },
+              },
+            },
+          }),
+        });
+      }
+      // 11th page with 50 more issues (should not be fetched due to cap)
+      httpResponses.push({
+        status: 200,
+        body: JSON.stringify({
+          data: {
+            issues: {
+              nodes: makeIssues(500, 50),
+              pageInfo: { hasNextPage: false, endCursor: null },
+            },
+          },
+        }),
+      });
+
+      setupHttpsMock(httpResponses);
+
+      const source = makeFakeSource({
+        source_type: 'linear_docs',
+        config_json: JSON.stringify({ include_issues: 'true', include_projects: 'false' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(500);
+      expect(mockCreateKBEntry).toHaveBeenCalledTimes(500);
+    });
+  });
+
+  describe('syncLinearDocs issue with missing labels and state', () => {
+    it('should handle issues with no labels and null state', async () => {
+      setupProviderCredentials('linear', { api_key: 'lin_test' });
+
+      setupHttpsMock([
+        {
+          status: 200,
+          body: JSON.stringify({
+            data: {
+              projects: {
+                nodes: [],
+                pageInfo: { hasNextPage: false, endCursor: null },
+              },
+            },
+          }),
+        },
+        {
+          status: 200,
+          body: JSON.stringify({
+            data: {
+              issues: {
+                nodes: [{
+                  id: 'issue-1',
+                  identifier: 'ENG-1',
+                  title: 'No labels issue',
+                  description: 'This issue has no labels or state and is long enough to pass the threshold.',
+                  state: null,
+                  labels: null,
+                }],
+                pageInfo: { hasNextPage: false, endCursor: null },
+              },
+            },
+          }),
+        },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'linear_docs',
+        config_json: JSON.stringify({ include_issues: 'true' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(1);
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+        tags: expect.arrayContaining(['linear', 'issue', 'unknown']),
+      }));
+    });
+  });
+
+  describe('syncLinearDocs issue pagination', () => {
+    it('should paginate through issues across multiple pages', async () => {
+      setupProviderCredentials('linear', { api_key: 'lin_test' });
+
+      setupHttpsMock([
+        // Projects (empty)
+        {
+          status: 200,
+          body: JSON.stringify({
+            data: {
+              projects: {
+                nodes: [],
+                pageInfo: { hasNextPage: false, endCursor: null },
+              },
+            },
+          }),
+        },
+        // Issues page 1
+        {
+          status: 200,
+          body: JSON.stringify({
+            data: {
+              issues: {
+                nodes: [{
+                  id: 'issue-1',
+                  identifier: 'ENG-1',
+                  title: 'Issue 1',
+                  description: 'Description that is long enough to pass the twenty character threshold.',
+                  state: { name: 'Todo' },
+                  labels: { nodes: [] },
+                }],
+                pageInfo: { hasNextPage: true, endCursor: 'cursor-1' },
+              },
+            },
+          }),
+        },
+        // Issues page 2
+        {
+          status: 200,
+          body: JSON.stringify({
+            data: {
+              issues: {
+                nodes: [{
+                  id: 'issue-2',
+                  identifier: 'ENG-2',
+                  title: 'Issue 2',
+                  description: 'Another description that is definitely long enough for this particular test.',
+                  state: { name: 'Done' },
+                  labels: { nodes: [{ name: 'feature' }] },
+                }],
+                pageInfo: { hasNextPage: false, endCursor: null },
+              },
+            },
+          }),
+        },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'linear_docs',
+        config_json: JSON.stringify({ include_issues: 'true' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(2);
+    });
+  });
+
+  describe('syncLinearDocs project document with missing title', () => {
+    it('should use project name as doc title fallback', async () => {
+      setupProviderCredentials('linear', { api_key: 'lin_test' });
+
+      setupHttpsMock([
+        {
+          status: 200,
+          body: JSON.stringify({
+            data: {
+              projects: {
+                nodes: [{
+                  id: 'proj-1',
+                  name: 'MyProject',
+                  description: '',
+                  content: '',
+                  state: 'started',
+                  documents: {
+                    nodes: [{
+                      id: 'doc-1',
+                      title: '',
+                      content: 'This is a document with no title but enough content to pass the threshold check.',
+                      updatedAt: '2025-01-01T00:00:00Z',
+                    }],
+                  },
+                }],
+                pageInfo: { hasNextPage: false, endCursor: null },
+              },
+            },
+          }),
+        },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'linear_docs',
+        config_json: JSON.stringify({}),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(1);
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+        title: 'MyProject Doc',
+      }));
+    });
+  });
+
+  describe('syncLinearDocs include_projects default', () => {
+    it('should include projects by default when include_projects is not set', async () => {
+      setupProviderCredentials('linear', { api_key: 'lin_test' });
+
+      const longContent = 'x'.repeat(100);
+
+      setupHttpsMock([
+        {
+          status: 200,
+          body: JSON.stringify({
+            data: {
+              projects: {
+                nodes: [{
+                  id: 'proj-1',
+                  name: 'Default',
+                  description: 'desc',
+                  content: longContent,
+                  state: 'started',
+                  documents: { nodes: [] },
+                }],
+                pageInfo: { hasNextPage: false, endCursor: null },
+              },
+            },
+          }),
+        },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'linear_docs',
+        config_json: JSON.stringify({}), // no include_projects key
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(1);
+    });
+
+    it('should skip projects when include_projects is explicitly false', async () => {
+      setupProviderCredentials('linear', { api_key: 'lin_test' });
+
+      setupHttpsMock([]);
+
+      const source = makeFakeSource({
+        source_type: 'linear_docs',
+        config_json: JSON.stringify({ include_projects: 'false', include_issues: 'false' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(0);
+      // No API calls should be made
+      expect(mockHttpsRequest).not.toHaveBeenCalled();
+    });
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // httpsRequest non-JSON response (catch branch)
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  describe('httpsRequest non-JSON response', () => {
+    it('should resolve with raw string data when response is not valid JSON', async () => {
+      setupProviderCredentials('zendesk', {
+        subdomain: 'acme',
+        email: 'admin@acme.com',
+        api_token: 'zt_12345',
+      });
+
+      // Return non-JSON body
+      setupHttpsMock([
+        { status: 200, body: 'This is not valid JSON' },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'zendesk_help_center',
+        config_json: JSON.stringify({}),
+      });
+
+      // This will cause the Zendesk handler to try accessing res.data.articles
+      // on a string, which will be undefined, so it will loop with articles = []
+      // and immediately stop pagination since next_page will be null
+      const result = await syncSource(source);
+      expect(result).toBe(0);
+    });
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // httpsGetRaw redirect following
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  describe('httpsGetRaw redirect', () => {
+    it('should follow redirects in raw requests (GitHub raw URL)', async () => {
+      setupProviderCredentials('github', { token: 'ghp_test' });
+
+      let callIndex = 0;
+      mockHttpsRequest.mockImplementation((_opts: any, callback?: Function) => {
+        callIndex++;
+
+        const mockReq: any = {
+          on: vi.fn(),
+          setTimeout: vi.fn(),
+          write: mockHttpsWrite,
+          end: vi.fn().mockImplementation(() => {
+            if (callback) {
+              if (callIndex === 1) {
+                // Repo check - normal JSON response
+                const mockRes = {
+                  statusCode: 200,
+                  headers: {},
+                  on: vi.fn().mockImplementation((event: string, handler: Function) => {
+                    if (event === 'data') setTimeout(() => handler(JSON.stringify({ id: 1, full_name: 'owner/repo' })), 0);
+                    if (event === 'end') setTimeout(() => handler(), 1);
+                    return mockRes;
+                  }),
+                };
+                callback(mockRes);
+              } else if (callIndex === 2 || callIndex === 3) {
+                // Mintlify checks - 404
+                const mockRes = {
+                  statusCode: 404,
+                  headers: {},
+                  on: vi.fn().mockImplementation((event: string, handler: Function) => {
+                    if (event === 'data') setTimeout(() => handler(JSON.stringify({ message: 'Not Found' })), 0);
+                    if (event === 'end') setTimeout(() => handler(), 1);
+                    return mockRes;
+                  }),
+                };
+                callback(mockRes);
+              } else if (callIndex === 4) {
+                // Directory listing
+                const files = [{ path: 'docs/readme.md', type: 'file', download_url: 'https://raw.githubusercontent.com/readme.md', size: 100 }];
+                const mockRes = {
+                  statusCode: 200,
+                  headers: {},
+                  on: vi.fn().mockImplementation((event: string, handler: Function) => {
+                    if (event === 'data') setTimeout(() => handler(JSON.stringify(files)), 0);
+                    if (event === 'end') setTimeout(() => handler(), 1);
+                    return mockRes;
+                  }),
+                };
+                callback(mockRes);
+              } else if (callIndex === 5) {
+                // Raw file fetch - redirect
+                const mockRes = {
+                  statusCode: 302,
+                  headers: { location: 'https://raw.githubusercontent.com/redirected/readme.md' },
+                  on: vi.fn().mockImplementation((event: string, handler: Function) => {
+                    if (event === 'data') setTimeout(() => handler(''), 0);
+                    if (event === 'end') setTimeout(() => handler(), 1);
+                    return mockRes;
+                  }),
+                };
+                callback(mockRes);
+              } else if (callIndex === 6) {
+                // Redirect target - actual content
+                const mockRes = {
+                  statusCode: 200,
+                  headers: {},
+                  on: vi.fn().mockImplementation((event: string, handler: Function) => {
+                    if (event === 'data') setTimeout(() => handler('# Redirected Content\nHello'), 0);
+                    if (event === 'end') setTimeout(() => handler(), 1);
+                    return mockRes;
+                  }),
+                };
+                callback(mockRes);
+              }
+            }
+          }),
+          destroy: mockHttpsDestroy,
+        };
+
+        return mockReq;
+      });
+
+      const source = makeFakeSource({
+        source_type: 'github',
+        config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(1);
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+        content: '# Redirected Content\nHello',
+      }));
+    });
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // GitHub — successful subdirectory recursion
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  describe('syncGitHub successful subdirectory recursion', () => {
+    it('should recurse into subdirectories and include their files', async () => {
+      setupProviderCredentials('github', { token: 'ghp_test' });
+
+      setupHttpsMock([
+        githubRepoOk,
+        { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
+        { status: 404, body: JSON.stringify({ message: 'Not Found' }) },
+        // Top level listing: has a file and a subdirectory
+        {
+          status: 200,
+          body: JSON.stringify([
+            { path: 'docs/sub', type: 'dir' },
+          ]),
+        },
+        // Subdirectory listing succeeds, returns a file
+        {
+          status: 200,
+          body: JSON.stringify([
+            { path: 'docs/sub/nested.md', type: 'file', download_url: 'https://raw.githubusercontent.com/nested.md', size: 100 },
+          ]),
+        },
+        // Fetch nested.md
+        { status: 200, body: '# Nested Doc\nContent from subdirectory' },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'github',
+        config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(1);
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+        title: 'nested',
+        content: '# Nested Doc\nContent from subdirectory',
+      }));
+    });
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // getMintlifyCategory — groups recursion
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  describe('getMintlifyCategory groups recursion', () => {
+    it('should find category from nested groups in navigation', async () => {
+      setupProviderCredentials('github', { token: 'ghp_test' });
+
+      // Navigation with groups nested inside groups
+      const mintlifyConfig = {
+        navigation: [{
+          group: 'TopLevel',
+          groups: [{
+            group: 'NestedGroup',
+            pages: ['nested-page'],
+          }],
+        }],
+      };
+
+      setupHttpsMock([
+        githubRepoOk,
+        { status: 200, body: JSON.stringify({ download_url: 'https://raw.githubusercontent.com/docs.json' }) },
+        { status: 200, body: JSON.stringify(mintlifyConfig) },
+        // nested-page.mdx found
+        { status: 200, body: JSON.stringify({ download_url: 'https://raw.githubusercontent.com/nested-page.mdx' }) },
+        { status: 200, body: '# Nested Page\nContent here' },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'github',
+        config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
+      });
+
+      const result = await syncSource(source);
+      expect(result).toBe(1);
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+        category: 'NestedGroup',
+      }));
+    });
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // Connector type normalization
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -1611,12 +3663,17 @@ describe('KB Source Sync Handlers', () => {
       mockNormalizeConnectorType.mockReturnValue('github');
       setupProviderCredentials('github', { token: 'ghp_test' });
 
+      // Set up HTTP mock that immediately fails to avoid timeout
+      setupHttpsMock([
+        { status: 500, body: JSON.stringify({ message: 'Error' }) },
+      ]);
+
       const source = makeFakeSource({
         source_type: 'github' as any,
         config_json: JSON.stringify({ repo: 'owner/repo' }),
       });
 
-      // Force a quick failure after normalization by not providing proper mocks
+      // Force a quick failure after normalization
       // We just want to verify normalizeConnectorType was called
       try { await syncSource(source); } catch { /* expected */ }
       expect(mockNormalizeConnectorType).toHaveBeenCalledWith('github');

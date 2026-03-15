@@ -347,6 +347,25 @@ describe('Teams Module', () => {
         .rejects.toThrow('Lead agent not found');
     });
 
+    it('should handle null active count gracefully', async () => {
+      // getTeamRun
+      mockQueryOne.mockResolvedValueOnce({
+        id: 'team-1',
+        lead_agent_id: 'lead-1',
+        max_concurrent: 3,
+        max_depth: 2,
+      });
+      mockQuery.mockResolvedValueOnce([]);
+      // active count returns null
+      mockQueryOne.mockResolvedValueOnce(null);
+      mockGetAgent.mockResolvedValueOnce({ id: 'agent-2' });
+      mockGetAgent.mockResolvedValueOnce({ id: 'lead-1' });
+
+      const subRun = await spawnSubAgent('team-1', 'agent-2', 'task');
+      // null count defaults to 0 via || '0', so spawn succeeds
+      expect(subRun).toBeDefined();
+    });
+
     it('should enqueue the sub-agent job with correct data', async () => {
       setupSpawnMocks();
 
@@ -708,6 +727,201 @@ describe('Teams Module', () => {
       const result = await formatTeamProgress('team-1');
       expect(result).toContain('*12345678*');
       expect(result).not.toContain('12345678-');
+    });
+  });
+
+  // ── checkTeamCompletion — Slack posting path ──
+
+  describe('checkTeamCompletion via completeSubAgent', () => {
+    it('should post results with failed sub-agents to Slack when all done', async () => {
+      mockExecute.mockResolvedValueOnce(undefined);
+      // queryOne for sub-run lookup
+      mockQueryOne.mockResolvedValueOnce({
+        id: 'sub-1',
+        team_run_id: 'team-1',
+      });
+      // checkTeamCompletion: count of pending = 0 (all done)
+      mockQueryOne.mockResolvedValueOnce({ count: '0' });
+      // getTeamRun inside checkTeamCompletion
+      mockQueryOne.mockResolvedValueOnce({
+        id: 'team-1',
+        lead_agent_id: 'lead-1',
+        lead_run_id: 'run-1',
+      });
+      mockQuery.mockResolvedValueOnce([
+        { id: 'sub-1', status: 'completed', agent_id: 'agent-aa', result: 'done' },
+        { id: 'sub-2', status: 'failed', agent_id: 'agent-bb', result: 'error occurred' },
+      ]);
+      // lead run lookup
+      mockQueryOne.mockResolvedValueOnce({
+        id: 'run-1',
+        channel_id: 'C123',
+        thread_ts: '1234.5678',
+      });
+      // getTeamResults query
+      mockQuery.mockResolvedValueOnce([
+        { id: 'sub-1', status: 'completed', agent_id: 'agent-aa', result: 'done' },
+        { id: 'sub-2', status: 'failed', agent_id: 'agent-bb', result: 'error occurred' },
+      ]);
+      // getTeamCost query
+      mockQueryOne.mockResolvedValueOnce({ total_cost: '0.0500' });
+
+      await completeSubAgent('sub-1', 'completed', 'done');
+
+      const { postMessage } = await import('../../src/slack');
+      expect(postMessage).toHaveBeenCalled();
+      const callArgs = (postMessage as any).mock.calls[0];
+      expect(callArgs[0]).toBe('C123');
+      // Summary should contain both completed and failed
+      expect(callArgs[1]).toContain(':white_check_mark:');
+      expect(callArgs[1]).toContain(':x:');
+      expect(callArgs[1]).toContain('error occurred');
+      expect(callArgs[2]).toBe('1234.5678');
+    });
+
+    it('should handle Slack posting failure gracefully', async () => {
+      mockExecute.mockResolvedValueOnce(undefined);
+      mockQueryOne.mockResolvedValueOnce({
+        id: 'sub-1',
+        team_run_id: 'team-1',
+      });
+      // checkTeamCompletion: pending count = 0
+      mockQueryOne.mockResolvedValueOnce({ count: '0' });
+      // getTeamRun
+      mockQueryOne.mockResolvedValueOnce({
+        id: 'team-1',
+        lead_agent_id: 'lead-1',
+        lead_run_id: 'run-1',
+      });
+      mockQuery.mockResolvedValueOnce([
+        { id: 'sub-1', status: 'completed', agent_id: 'agent-aa', result: 'done' },
+      ]);
+      // lead run lookup
+      mockQueryOne.mockResolvedValueOnce({
+        id: 'run-1',
+        channel_id: 'C123',
+        thread_ts: '1234.5678',
+      });
+      // getTeamResults
+      mockQuery.mockResolvedValueOnce([
+        { id: 'sub-1', status: 'completed', agent_id: 'agent-aa', result: 'done' },
+      ]);
+      // getTeamCost
+      mockQueryOne.mockResolvedValueOnce({ total_cost: '0.01' });
+
+      // Make postMessage throw
+      const { postMessage } = await import('../../src/slack');
+      (postMessage as any).mockRejectedValueOnce(new Error('Slack API error'));
+
+      // Should not throw — error is caught and logged
+      await completeSubAgent('sub-1', 'completed', 'done');
+
+      const { logger } = await import('../../src/utils/logger');
+      expect(logger.warn).toHaveBeenCalledWith(
+        'Failed to post team results to Slack',
+        expect.objectContaining({ error: 'Slack API error' }),
+      );
+    });
+
+    it('should handle null result in completed and failed sub-agents when posting to Slack', async () => {
+      mockExecute.mockResolvedValueOnce(undefined);
+      mockQueryOne.mockResolvedValueOnce({
+        id: 'sub-1',
+        team_run_id: 'team-1',
+      });
+      // checkTeamCompletion: pending count = 0
+      mockQueryOne.mockResolvedValueOnce({ count: '0' });
+      // getTeamRun
+      mockQueryOne.mockResolvedValueOnce({
+        id: 'team-1',
+        lead_agent_id: 'lead-1',
+        lead_run_id: 'run-1',
+      });
+      mockQuery.mockResolvedValueOnce([
+        { id: 'sub-1', status: 'completed', agent_id: 'agent-aa', result: null },
+        { id: 'sub-2', status: 'failed', agent_id: 'agent-bb', result: null },
+      ]);
+      // lead run
+      mockQueryOne.mockResolvedValueOnce({
+        id: 'run-1',
+        channel_id: 'C123',
+        thread_ts: '1234.5678',
+      });
+      // getTeamResults
+      mockQuery.mockResolvedValueOnce([
+        { id: 'sub-1', status: 'completed', agent_id: 'agent-aa', result: null },
+        { id: 'sub-2', status: 'failed', agent_id: 'agent-bb', result: null },
+      ]);
+      // getTeamCost
+      mockQueryOne.mockResolvedValueOnce({ total_cost: '0.01' });
+
+      await completeSubAgent('sub-1', 'completed', 'done');
+
+      const { postMessage } = await import('../../src/slack');
+      expect(postMessage).toHaveBeenCalled();
+      const msg = (postMessage as any).mock.calls[0][1];
+      // null result for completed should use '' fallback
+      expect(msg).toContain(':white_check_mark:');
+      // null result for failed should use 'Failed' fallback
+      expect(msg).toContain('Failed');
+    });
+
+    it('should handle null pending count in checkTeamCompletion', async () => {
+      mockExecute.mockResolvedValueOnce(undefined);
+      mockQueryOne.mockResolvedValueOnce({
+        id: 'sub-1',
+        team_run_id: 'team-1',
+      });
+      // checkTeamCompletion: pending count is null
+      mockQueryOne.mockResolvedValueOnce(null);
+      // getTeamRun (because 0 === 0)
+      mockQueryOne.mockResolvedValueOnce({
+        id: 'team-1',
+        lead_agent_id: 'lead-1',
+        lead_run_id: 'run-1',
+      });
+      mockQuery.mockResolvedValueOnce([]);
+      // lead run lookup — no channel
+      mockQueryOne.mockResolvedValueOnce({
+        id: 'run-1',
+        channel_id: null,
+        thread_ts: null,
+      });
+
+      await completeSubAgent('sub-1', 'completed', 'done');
+      // Should not throw — null count defaults to 0
+    });
+
+    it('should not post to Slack when lead run has no channel_id', async () => {
+      mockExecute.mockResolvedValueOnce(undefined);
+      mockQueryOne.mockResolvedValueOnce({
+        id: 'sub-1',
+        team_run_id: 'team-1',
+      });
+      // checkTeamCompletion: pending count = 0
+      mockQueryOne.mockResolvedValueOnce({ count: '0' });
+      // getTeamRun
+      mockQueryOne.mockResolvedValueOnce({
+        id: 'team-1',
+        lead_agent_id: 'lead-1',
+        lead_run_id: 'run-1',
+      });
+      mockQuery.mockResolvedValueOnce([]);
+      // lead run lookup — no channel_id
+      mockQueryOne.mockResolvedValueOnce({
+        id: 'run-1',
+        channel_id: null,
+        thread_ts: null,
+      });
+
+      await completeSubAgent('sub-1', 'completed', 'done');
+
+      const { postMessage } = await import('../../src/slack');
+      // postMessage should NOT have been called for this specific test
+      // (it may have been called by previous tests, so we check the last call)
+      const callCount = (postMessage as any).mock.calls.length;
+      // The function should have returned without posting
+      expect(callCount).toBe(0);
     });
   });
 });
