@@ -663,7 +663,37 @@ describe('Commands Module', () => {
 
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
-      expect(mockRespond).toHaveBeenCalledWith({ response_type: 'ephemeral', blocks: expect.any(Array), text: 'Agents' });
+      expect(mockRespond).toHaveBeenCalledWith({ response_type: 'in_channel', blocks: expect.any(Array), text: 'Agents' });
+    });
+
+    it('should show created_by when present', async () => {
+      const app = createMockApp();
+      registerCommands(app as any);
+
+      mockListAgents.mockResolvedValue([makeFakeAgent({ created_by: 'U_OWNER' })]);
+      mockCanModifyAgent.mockResolvedValue(false);
+      const ack = vi.fn();
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '' };
+
+      await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
+
+      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
+      expect(allText).toContain('by <@U_OWNER>');
+    });
+
+    it('should omit created_by when null or undefined', async () => {
+      const app = createMockApp();
+      registerCommands(app as any);
+
+      mockListAgents.mockResolvedValue([makeFakeAgent({ created_by: null })]);
+      mockCanModifyAgent.mockResolvedValue(false);
+      const ack = vi.fn();
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '' };
+
+      await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
+
+      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
+      expect(allText).not.toContain('by <@');
     });
   });
 

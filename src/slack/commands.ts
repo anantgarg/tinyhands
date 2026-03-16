@@ -67,7 +67,7 @@ export function registerCommands(app: App): void {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `${statusIcon} *${a.avatar_emoji} ${a.name}*${visibilityIcon}\n${channels} · ${a.model} · ${maxTurnsToEffort(a.max_turns)} effort · ${a.tools.length} tools · memory ${a.memory_enabled ? 'on' : 'off'} · by <@${a.created_by}>`,
+            text: `${statusIcon} *${a.avatar_emoji} ${a.name}*${visibilityIcon}\n${channels} · ${a.model} · ${maxTurnsToEffort(a.max_turns)} effort · ${a.tools.length} tools · memory ${a.memory_enabled ? 'on' : 'off'}${a.created_by ? ` · by <@${a.created_by}>` : ''}`,
           },
           accessory: {
             type: 'overflow',
@@ -91,7 +91,7 @@ export function registerCommands(app: App): void {
       ],
     });
 
-    await respond({ response_type: 'ephemeral', blocks, text: 'Agents' });
+    await respond({ response_type: 'in_channel', blocks, text: 'Agents' });
   });
 
   // /new-agent — Alias, starts new agent flow directly
