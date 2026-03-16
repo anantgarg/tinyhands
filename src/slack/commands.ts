@@ -41,8 +41,13 @@ export function registerCommands(app: App): void {
 
         const overflowOptions: any[] = [
           { text: { type: 'plain_text', text: ':gear: View Config' }, value: `view_config:${a.id}` },
-          { text: { type: 'plain_text', text: ':pencil: Update' }, value: `update:${a.id}` },
         ];
+
+        const canModify = await canModifyAgent(a.id, userId);
+
+        if (canModify) {
+          overflowOptions.push({ text: { type: 'plain_text', text: ':pencil: Update' }, value: `update:${a.id}` });
+        }
 
         if (a.status === 'active') {
           overflowOptions.push({ text: { type: 'plain_text', text: ':double_vertical_bar: Pause' }, value: `pause:${a.id}` });
@@ -50,11 +55,11 @@ export function registerCommands(app: App): void {
           overflowOptions.push({ text: { type: 'plain_text', text: ':arrow_forward: Resume' }, value: `resume:${a.id}` });
         }
 
-        if (a.visibility === 'private' && await canModifyAgent(a.id, userId)) {
+        if (a.visibility === 'private' && canModify) {
           overflowOptions.push({ text: { type: 'plain_text', text: ':busts_in_silhouette: Members' }, value: `members:${a.id}` });
         }
 
-        if (await canModifyAgent(a.id, userId)) {
+        if (canModify) {
           overflowOptions.push({ text: { type: 'plain_text', text: ':wastebasket: Delete' }, value: `delete:${a.id}` });
         }
 
@@ -62,7 +67,7 @@ export function registerCommands(app: App): void {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `${statusIcon} *${a.avatar_emoji} ${a.name}*${visibilityIcon}\n${channels} · ${a.model} · ${maxTurnsToEffort(a.max_turns)} effort · ${a.tools.length} tools · memory ${a.memory_enabled ? 'on' : 'off'}`,
+            text: `${statusIcon} *${a.avatar_emoji} ${a.name}*${visibilityIcon}\n${channels} · ${a.model} · ${maxTurnsToEffort(a.max_turns)} effort · ${a.tools.length} tools · memory ${a.memory_enabled ? 'on' : 'off'} · by <@${a.created_by}>`,
           },
           accessory: {
             type: 'overflow',
