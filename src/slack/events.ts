@@ -137,13 +137,59 @@ export function registerEvents(app: App): void {
     // Thread replies are always relevant — the user is continuing a conversation
     const isThreadReply = !!msg.thread_ts;
 
-    // No agents in channel but bot is @mentioned — helpful message
-    if (agents.length === 0 && isMentioned) {
-      await postMessage(
-        channelId,
-        `👋 I'm here, but no agents are assigned to this channel yet.\n\nUse \`/agents\` to see available agents, or \`/new-agent\` to create one and add it to this channel.`,
-        threadTs,
+    // ── @Mention in a channel → Conversational mode (route across all accessible agents) ──
+    if (isMentioned && msg.channel_type !== 'im') {
+      const mentionCleaned = text.replace(/<@[\w]+>/g, '').replace(/\s+/g, ' ').trim();
+      const modelOverride = parseModelOverride(mentionCleaned);
+      const cleanInput = modelOverride ? stripModelOverride(mentionCleaned) : mentionCleaned;
+
+      const accessible = await getAccessibleAgents(userId);
+      const activeAgents = accessible.filter((a: any) => a.status === 'active');
+
+      if (activeAgents.length === 0) {
+        await postMessage(channelId, `No agents available yet. Use \`/new-agent\` to create one.`, threadTs);
+        return;
+      }
+
+      if (activeAgents.length === 1) {
+        await enqueueAgentRun(activeAgents[0], cleanInput, channelId, threadTs, userId, modelOverride, msg, isThreadReply);
+        return;
+      }
+
+      // Multiple agents → relevance check to find the right one
+      const relevanceResults = await Promise.all(
+        activeAgents.map(async (agent: any) => {
+          try {
+            const isRelevant = await checkMessageRelevance(
+              cleanInput, agent.relevance_keywords, agent.system_prompt, agent.respond_to_all_messages
+            );
+            return { agent, relevant: isRelevant };
+          } catch {
+            return { agent, relevant: false };
+          }
+        })
       );
+
+      const matches = relevanceResults.filter(r => r.relevant);
+
+      if (matches.length === 1) {
+        await enqueueAgentRun(matches[0].agent, cleanInput, channelId, threadTs, userId, modelOverride, msg, isThreadReply);
+        return;
+      }
+
+      // Unable to determine → show agent picker
+      const agentsToShow = matches.length > 1 ? matches.map(m => m.agent) : activeAgents.slice(0, 10);
+      const buttons = agentsToShow.map((a: any) => ({
+        type: 'button' as const,
+        text: { type: 'plain_text' as const, text: `${a.avatar_emoji} ${a.name}`.slice(0, 75) },
+        action_id: `channel_pick_agent:${a.id}`,
+        value: JSON.stringify({ agentId: a.id, originalText: cleanInput.slice(0, 2000), channelId, threadTs }),
+      }));
+
+      await postBlocks(channelId, [
+        { type: 'section', text: { type: 'mrkdwn', text: '*Which agent should handle this?*' } },
+        { type: 'actions', elements: buttons },
+      ], 'Pick an agent', threadTs);
       return;
     }
 
@@ -155,46 +201,6 @@ export function registerEvents(app: App): void {
       // Check for model override
       const modelOverride = parseModelOverride(text);
       const cleanInput = modelOverride ? stripModelOverride(text) : text;
-
-      // @mention with multiple agents: show picker (like DM flow)
-      if (isMentioned && agents.length > 1) {
-        const relevanceResults = await Promise.all(
-          agents.map(async (agent) => {
-            try {
-              const isRelevant = await checkMessageRelevance(
-                cleanInput, agent.relevance_keywords, agent.system_prompt, agent.respond_to_all_messages
-              );
-              return { agent, relevant: isRelevant };
-            } catch {
-              return { agent, relevant: false };
-            }
-          })
-        );
-
-        const matches = relevanceResults.filter(r => r.relevant);
-
-        if (matches.length === 1) {
-          // Single relevance match — process just that agent
-          const agent = matches[0].agent;
-          await enqueueAgentRun(agent, cleanInput, channelId, threadTs, userId, modelOverride, msg, isThreadReply);
-          return;
-        }
-
-        // Zero or multiple matches — show picker
-        const agentsToShow = matches.length > 1 ? matches.map(m => m.agent) : agents;
-        const buttons = agentsToShow.map(a => ({
-          type: 'button' as const,
-          text: { type: 'plain_text' as const, text: `${a.avatar_emoji} ${a.name}`.slice(0, 75) },
-          action_id: `channel_pick_agent:${a.id}`,
-          value: JSON.stringify({ agentId: a.id, originalText: text.slice(0, 2000), channelId, threadTs }),
-        }));
-
-        await postBlocks(channelId, [
-          { type: 'section', text: { type: 'mrkdwn', text: '*Which agent should handle this?*' } },
-          { type: 'actions', elements: buttons },
-        ], 'Pick an agent', threadTs);
-        return;
-      }
 
       // Process each agent in the channel
       for (const agent of agents) {

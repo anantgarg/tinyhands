@@ -891,20 +891,59 @@ describe('Slack Events -- registerEvents', () => {
     });
   });
 
-  // ── @mention Skips Relevance Check ──
+  // ── @mention Conversational Mode ──
 
-  describe('message event -- @mention bypass relevance', () => {
-    it('should skip relevance check when bot is @mentioned', async () => {
+  describe('message event -- @mention conversational mode', () => {
+    it('should route to single accessible agent without relevance check when @mentioned', async () => {
       const agent = makeAgent({ respond_to_all_messages: false });
-      mockGetAgentsByChannel.mockResolvedValue([agent]);
+      mockGetAgentsByChannel.mockResolvedValue([]);
+      mockGetAccessibleAgents.mockResolvedValue([agent]);
 
       registerEvents(mockApp as any);
 
       const mentionEvent = makeMessageEvent({ text: 'hey <@U_BOT> help me' });
       await mockApp._trigger('message', { event: mentionEvent, client: {} });
 
+      // Single agent — no relevance check needed, enqueue directly
       expect(mockCheckMessageRelevance).not.toHaveBeenCalled();
       expect(mockEnqueueRun).toHaveBeenCalled();
+    });
+
+    it('should use all accessible agents (not just channel agents) when @mentioned', async () => {
+      const channelAgent = makeAgent({ id: 'channel-1', name: 'in-channel' });
+      const otherAgent = makeAgent({ id: 'other-1', name: 'not-in-channel' });
+      mockGetAgentsByChannel.mockResolvedValue([channelAgent]);
+      mockGetAccessibleAgents.mockResolvedValue([channelAgent, otherAgent]);
+      mockCheckMessageRelevance
+        .mockResolvedValueOnce(false)  // channel agent not relevant
+        .mockResolvedValueOnce(true);  // other agent is relevant
+
+      registerEvents(mockApp as any);
+
+      const mentionEvent = makeMessageEvent({ text: 'hey <@U_BOT> help me' });
+      await mockApp._trigger('message', { event: mentionEvent, client: {} });
+
+      // Should route to the relevant agent even though it's not in the channel
+      expect(mockEnqueueRun).toHaveBeenCalledWith(
+        expect.objectContaining({ agentId: 'other-1' }),
+        'high'
+      );
+    });
+
+    it('should strip bot mention from input text', async () => {
+      const agent = makeAgent();
+      mockGetAccessibleAgents.mockResolvedValue([agent]);
+
+      registerEvents(mockApp as any);
+
+      const mentionEvent = makeMessageEvent({ text: 'hey <@U_BOT> help me' });
+      await mockApp._trigger('message', { event: mentionEvent, client: {} });
+
+      // Input should have mention stripped
+      expect(mockEnqueueRun).toHaveBeenCalledWith(
+        expect.objectContaining({ input: 'hey help me' }),
+        'high'
+      );
     });
 
     it('should still check relevance when a different user is @mentioned', async () => {
@@ -917,7 +956,23 @@ describe('Slack Events -- registerEvents', () => {
       const mentionEvent = makeMessageEvent({ text: 'hey <@U_OTHER_USER> check this' });
       await mockApp._trigger('message', { event: mentionEvent, client: {} });
 
+      // Not our bot mentioned — falls through to normal channel processing
       expect(mockCheckMessageRelevance).toHaveBeenCalled();
+    });
+
+    it('should not trigger conversational mode for @mentions in DMs', async () => {
+      const agent = makeAgent();
+      mockGetAgentsByChannel.mockResolvedValue([agent]);
+      mockGetAccessibleAgents.mockResolvedValue([agent]);
+
+      registerEvents(mockApp as any);
+
+      // DM channel — should NOT trigger conversational mode, should use channel agent processing
+      const mentionEvent = makeMessageEvent({ text: 'hey <@U_BOT> help', channel_type: 'im', channel: 'D_DM' });
+      await mockApp._trigger('message', { event: mentionEvent, client: {} });
+
+      // Should go through channel agent processing (not conversational mode)
+      expect(mockGetAccessibleAgents).not.toHaveBeenCalled();
     });
   });
 
@@ -1862,11 +1917,12 @@ describe('Slack Events -- registerEvents', () => {
     });
   });
 
-  // ── @mention with no agents in channel ──
+  // ── @mention with no accessible agents ──
 
-  describe('message event -- @mention with no agents in channel', () => {
-    it('should post helpful message when bot is mentioned but no agents are in the channel', async () => {
+  describe('message event -- @mention with no accessible agents', () => {
+    it('should post no-agents message when bot is mentioned but user has no accessible agents', async () => {
       mockGetAgentsByChannel.mockResolvedValue([]);
+      mockGetAccessibleAgents.mockResolvedValue([]);
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'hey <@U_BOT> help me', channel: 'C_NO_AGENT' });
@@ -1874,11 +1930,27 @@ describe('Slack Events -- registerEvents', () => {
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_NO_AGENT',
-        expect.stringContaining('no agents are assigned'),
+        expect.stringContaining('No agents available yet'),
         expect.any(String),
       );
       // Should not check triggers
       expect(mockFindSlackChannelTriggers).not.toHaveBeenCalled();
+    });
+
+    it('should route to accessible agent even when channel has no assigned agents', async () => {
+      const agent = makeAgent({ id: 'a1', name: 'remote-agent' });
+      mockGetAgentsByChannel.mockResolvedValue([]);
+      mockGetAccessibleAgents.mockResolvedValue([agent]);
+
+      registerEvents(mockApp as any);
+      const event = makeMessageEvent({ text: 'hey <@U_BOT> help me', channel: 'C_NO_AGENT' });
+      await mockApp._trigger('message', { event, client: {} });
+
+      // Should enqueue even though no agents are in the channel
+      expect(mockEnqueueRun).toHaveBeenCalledWith(
+        expect.objectContaining({ agentId: 'a1' }),
+        'high'
+      );
     });
 
     it('should still check triggers when no agents and bot is NOT mentioned', async () => {
@@ -1895,6 +1967,7 @@ describe('Slack Events -- registerEvents', () => {
 
     it('should use threadTs when replying about no agents', async () => {
       mockGetAgentsByChannel.mockResolvedValue([]);
+      mockGetAccessibleAgents.mockResolvedValue([]);
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: '<@U_BOT> do something', thread_ts: '1700000000.000001', channel: 'C_NO_AGENT' });
@@ -1902,19 +1975,19 @@ describe('Slack Events -- registerEvents', () => {
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_NO_AGENT',
-        expect.stringContaining('no agents are assigned'),
+        expect.stringContaining('No agents available yet'),
         '1700000000.000001',
       );
     });
   });
 
-  // ── @mention with multiple agents — picker ──
+  // ── @mention with multiple agents — conversational picker ──
 
   describe('message event -- @mention multi-agent picker', () => {
-    it('should show picker when mentioned with multiple agents and multiple relevance matches', async () => {
+    it('should show picker when mentioned with multiple accessible agents and multiple relevance matches', async () => {
       const agent1 = makeAgent({ id: 'a1', name: 'bot-alpha', avatar_emoji: ':a:' });
       const agent2 = makeAgent({ id: 'a2', name: 'bot-beta', avatar_emoji: ':b:' });
-      mockGetAgentsByChannel.mockResolvedValue([agent1, agent2]);
+      mockGetAccessibleAgents.mockResolvedValue([agent1, agent2]);
       mockCheckMessageRelevance.mockResolvedValue(true); // both relevant
 
       registerEvents(mockApp as any);
@@ -1934,10 +2007,10 @@ describe('Slack Events -- registerEvents', () => {
       );
     });
 
-    it('should show picker with all agents when no relevance matches', async () => {
+    it('should show picker with all accessible agents when no relevance matches', async () => {
       const agent1 = makeAgent({ id: 'a1', name: 'bot-alpha', avatar_emoji: ':a:' });
       const agent2 = makeAgent({ id: 'a2', name: 'bot-beta', avatar_emoji: ':b:' });
-      mockGetAgentsByChannel.mockResolvedValue([agent1, agent2]);
+      mockGetAccessibleAgents.mockResolvedValue([agent1, agent2]);
       mockCheckMessageRelevance.mockResolvedValue(false); // none relevant
 
       registerEvents(mockApp as any);
@@ -1955,10 +2028,10 @@ describe('Slack Events -- registerEvents', () => {
       );
     });
 
-    it('should auto-route to single relevance match when mentioned with multiple agents', async () => {
+    it('should auto-route to single relevance match when mentioned with multiple accessible agents', async () => {
       const agent1 = makeAgent({ id: 'a1', name: 'billing-bot', relevance_keywords: ['billing'] });
       const agent2 = makeAgent({ id: 'a2', name: 'deploy-bot', relevance_keywords: ['deploy'] });
-      mockGetAgentsByChannel.mockResolvedValue([agent1, agent2]);
+      mockGetAccessibleAgents.mockResolvedValue([agent1, agent2]);
       mockCheckMessageRelevance
         .mockResolvedValueOnce(true)   // billing-bot is relevant
         .mockResolvedValueOnce(false); // deploy-bot is not
@@ -1975,9 +2048,9 @@ describe('Slack Events -- registerEvents', () => {
       );
     });
 
-    it('should not show picker when mentioned with only one agent in channel', async () => {
+    it('should not show picker when mentioned with only one accessible agent', async () => {
       const agent = makeAgent({ id: 'a1', name: 'solo-bot' });
-      mockGetAgentsByChannel.mockResolvedValue([agent]);
+      mockGetAccessibleAgents.mockResolvedValue([agent]);
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'hey <@U_BOT> do something' });
@@ -2008,7 +2081,7 @@ describe('Slack Events -- registerEvents', () => {
     it('should handle relevance check errors gracefully in picker flow', async () => {
       const agent1 = makeAgent({ id: 'a1', name: 'bot-alpha', avatar_emoji: ':a:' });
       const agent2 = makeAgent({ id: 'a2', name: 'bot-beta', avatar_emoji: ':b:' });
-      mockGetAgentsByChannel.mockResolvedValue([agent1, agent2]);
+      mockGetAccessibleAgents.mockResolvedValue([agent1, agent2]);
       mockCheckMessageRelevance
         .mockRejectedValueOnce(new Error('relevance check failed'))
         .mockRejectedValueOnce(new Error('relevance check failed'));
@@ -2032,7 +2105,7 @@ describe('Slack Events -- registerEvents', () => {
     it('should include correct action_ids and values in picker buttons', async () => {
       const agent1 = makeAgent({ id: 'a1', name: 'bot-alpha', avatar_emoji: ':a:' });
       const agent2 = makeAgent({ id: 'a2', name: 'bot-beta', avatar_emoji: ':b:' });
-      mockGetAgentsByChannel.mockResolvedValue([agent1, agent2]);
+      mockGetAccessibleAgents.mockResolvedValue([agent1, agent2]);
       mockCheckMessageRelevance.mockResolvedValue(true);
 
       registerEvents(mockApp as any);
@@ -2048,7 +2121,8 @@ describe('Slack Events -- registerEvents', () => {
       const payload1 = JSON.parse(actionsBlock.elements[0].value);
       expect(payload1.agentId).toBe('a1');
       expect(payload1.channelId).toBe('C_AGENT');
-      expect(payload1.originalText).toBe('hey <@U_BOT> help me');
+      // Input should have mention stripped in conversational mode
+      expect(payload1.originalText).toBe('hey help me');
     });
   });
 
@@ -2921,9 +2995,10 @@ describe('Slack Events -- registerEvents', () => {
       expect(mockEnqueueRun).not.toHaveBeenCalled();
     });
 
-    it('should respond to mentions_only agents when @mentioned', async () => {
+    it('should respond to mentions_only agents when @mentioned (via conversational mode)', async () => {
       const agent = makeAgent({ id: 'a1', mentions_only: true });
       mockGetAgentsByChannel.mockResolvedValue([agent]);
+      mockGetAccessibleAgents.mockResolvedValue([agent]);
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'hey <@U_BOT> help' });
@@ -2943,14 +3018,16 @@ describe('Slack Events -- registerEvents', () => {
       expect(mockEnqueueRun).toHaveBeenCalledTimes(1);
     });
 
-    it('should skip relevance check for mentions_only agents when @mentioned', async () => {
+    it('should skip relevance check for mentions_only agents when @mentioned (single agent)', async () => {
       const agent = makeAgent({ id: 'a1', mentions_only: true });
       mockGetAgentsByChannel.mockResolvedValue([agent]);
+      mockGetAccessibleAgents.mockResolvedValue([agent]);
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'hey <@U_BOT> help' });
       await mockApp._trigger('message', { event, client: {} });
 
+      // Single accessible agent — no relevance check needed
       expect(mockCheckMessageRelevance).not.toHaveBeenCalled();
     });
   });
@@ -3156,7 +3233,7 @@ describe('Slack Events -- registerEvents', () => {
     it('should include thread history in auto-routed single-match agent', async () => {
       const agent1 = makeAgent({ id: 'a1', name: 'billing-bot', relevance_keywords: ['billing'] });
       const agent2 = makeAgent({ id: 'a2', name: 'deploy-bot', relevance_keywords: ['deploy'] });
-      mockGetAgentsByChannel.mockResolvedValue([agent1, agent2]);
+      mockGetAccessibleAgents.mockResolvedValue([agent1, agent2]);
       mockCheckMessageRelevance
         .mockResolvedValueOnce(true)
         .mockResolvedValueOnce(false);
@@ -3177,7 +3254,7 @@ describe('Slack Events -- registerEvents', () => {
     it('should not wrap with context tags when enqueueAgentRun has no thread history', async () => {
       const agent1 = makeAgent({ id: 'a1', name: 'billing-bot', relevance_keywords: ['billing'] });
       const agent2 = makeAgent({ id: 'a2', name: 'deploy-bot', relevance_keywords: ['deploy'] });
-      mockGetAgentsByChannel.mockResolvedValue([agent1, agent2]);
+      mockGetAccessibleAgents.mockResolvedValue([agent1, agent2]);
       mockCheckMessageRelevance
         .mockResolvedValueOnce(true)
         .mockResolvedValueOnce(false);
@@ -3187,9 +3264,10 @@ describe('Slack Events -- registerEvents', () => {
       const event = makeMessageEvent({ text: 'hey <@U_BOT> billing help', thread_ts: '1700000000.000001' });
       await mockApp._trigger('message', { event, client: {} });
 
+      // Mention is stripped in conversational mode
       expect(mockEnqueueRun).toHaveBeenCalledWith(
         expect.objectContaining({
-          input: 'hey <@U_BOT> billing help',
+          input: 'hey billing help',
         }),
         'high'
       );
