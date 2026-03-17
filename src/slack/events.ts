@@ -10,6 +10,7 @@ import { checkMessageRelevance } from '../modules/agents/goal-analyzer';
 import { findSlackChannelTriggers, fireTrigger } from '../modules/triggers';
 import { buildDashboardBlocks } from '../modules/dashboard';
 import { initSuperadmin } from '../modules/access-control';
+import { queryOne } from '../db';
 import type { JobData, ModelAlias } from '../types';
 import { logger } from '../utils/logger';
 
@@ -55,8 +56,17 @@ export function registerEvents(app: App): void {
 
     // Ignore our own bot's messages to prevent infinite loops
     await getOwnBotIdentity();
-    if (msg.bot_id && (msg.bot_id === ownBotId || msg.user === ownBotUserId)) {
-      logger.info('Skipping own bot message', { bot_id: msg.bot_id, ownBotId, ownBotUserId });
+    if (
+      (msg.bot_id && msg.bot_id === ownBotId) ||
+      (ownBotUserId && msg.user === ownBotUserId)
+    ) {
+      logger.info('Skipping own bot message', { bot_id: msg.bot_id, user: msg.user, ownBotId, ownBotUserId });
+      return;
+    }
+
+    // Skip messages with no identifiable sender (system/webhook messages)
+    if (!msg.user && !msg.bot_id) {
+      logger.info('Skipping message — no user or bot_id', { subtype: msg.subtype, ts: msg.ts });
       return;
     }
 
@@ -91,6 +101,22 @@ export function registerEvents(app: App): void {
         } catch { /* best effort */ }
         return;
       }
+
+      // Check if this thread belongs to a wizard/conversation flow (even if this user isn't the flow owner)
+      // This prevents agents from processing messages in wizard threads
+      try {
+        const wizardThread = await queryOne<{ id: string }>(
+          `SELECT id FROM pending_confirmations WHERE data->>'type' = 'conversation' AND data->>'threadTs' = $1 AND expires_at > NOW() LIMIT 1`,
+          [msg.thread_ts],
+        );
+        if (wizardThread) {
+          logger.info('Thread reply in active wizard thread — skipping agent processing', { threadTs: msg.thread_ts });
+          return;
+        }
+      } catch {
+        // DB check failed — fall through to normal agent handling
+      }
+
       logger.info('Thread reply — continuing to agent check', { threadTs: msg.thread_ts, channelId });
     }
 

@@ -180,6 +180,13 @@ vi.mock('../../src/utils/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+const mockQueryOne = vi.fn().mockResolvedValue(null);
+vi.mock('../../src/db', () => ({
+  queryOne: (...args: any[]) => mockQueryOne(...args),
+  query: vi.fn().mockResolvedValue([]),
+  execute: vi.fn(),
+}));
+
 import { registerEvents } from '../../src/slack/events';
 
 // ── Helpers ──
