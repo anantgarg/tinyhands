@@ -252,10 +252,21 @@ Optional: `GITHUB_TOKEN`, `PORT` (default 3000), `LOG_LEVEL`, `DOCKER_BASE_IMAGE
 - **Use worktrees**: Always use git worktrees (`isolation: "worktree"`) when making code changes, to avoid disrupting the working directory.
 - **Test thoroughly**: Run the full test suite (`npm test`) before committing. All 2598+ tests must pass with 100% code coverage — no skipped or failing tests.
 - **Publish releases**: Every push should include a tagged release with a changelog summarizing what changed. Use `gh release create` with clear release notes.
+- **Update documentation**: Every time you make code changes, you MUST also update the relevant documentation files to reflect those changes:
+  - `README.md` — User-facing overview, features list, getting started
+  - `PRODUCT_GUIDE.md` — Product capabilities, use cases, workflows
+  - `ADMIN_GUIDE.md` — Setup, configuration, administration, troubleshooting
+  - `CLAUDE.md` — Architecture, code structure, developer reference (only if the change affects project structure, patterns, or dev workflow)
+
+  If a change adds a new feature, update README.md and PRODUCT_GUIDE.md. If it changes configuration or setup, update ADMIN_GUIDE.md. If it changes architecture or adds new modules, update CLAUDE.md. Bug fixes typically don't need doc changes unless they affect documented behavior.
 
 ### Versioning
 
-Versions follow sequential semver: `v1.X.0` where X increments by 1 for each release.
+Versions follow [semver](https://semver.org/):
+
+- **Patch** (`v1.X.Y` → `v1.X.Y+1`): Bug fixes, minor tweaks, no new features
+- **Minor** (`v1.X.0` → `v1.X+1.0`): New features, new integrations, non-breaking changes
+- **Major** (`vX.0.0` → `vX+1.0.0`): Breaking changes to APIs, DB schema, or config format
 
 To determine the next version, check the latest release:
 
@@ -263,7 +274,10 @@ To determine the next version, check the latest release:
 gh release list --limit 1
 ```
 
-Then increment the minor version by 1. For example, if the latest release is `v1.5.0`, the next release should be `v1.6.0`.
+Then increment the appropriate version component based on the change type. For example, if the latest release is `v1.5.0`:
+- Bug fix → `v1.5.1`
+- New feature → `v1.6.0`
+- Breaking change → `v2.0.0`
 
 Always update `package.json` version to match the new release version before committing.
 
