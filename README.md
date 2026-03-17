@@ -128,6 +128,8 @@ The GitHub connector automatically detects Mintlify documentation projects:
 - **Self-Evolution** — Agents can write their own tools, create MCP configs, and update their prompts
 - **Access Control** — Superadmin role for tool/KB management, per-agent owner/admin roles
 - **Pull-Based Deploy** — Multiple deployments poll for updates automatically. No webhook needed.
+- **Agent Templates** — 10 pre-built agent templates. Browse via `/templates`, activate with one click.
+- **Contributor-Friendly** — Add templates, skills, or tools via PR. No wiring needed — just drop a file.
 
 ---
 
@@ -136,6 +138,7 @@ The GitHub connector automatically detects Mintlify documentation projects:
 | Command | Description |
 |---------|-------------|
 | `/agents` | Interactive agent dashboard — create, update, pause, resume, delete |
+| `/templates` | Browse and activate pre-built agent templates |
 | `/tools` | View registered tool integrations, register new ones |
 | `/kb` | Knowledge base dashboard — sources, entries, API keys |
 
@@ -317,6 +320,7 @@ This starts:
    - `im:history`, `im:write` (for superadmin DM commands)
 4. Under **Slash Commands**, create:
    - `/agents` — Manage AI agents
+   - `/templates` — Browse and activate agent templates
    - `/tools` — Manage tool integrations
    - `/kb` — Knowledge base dashboard
 5. Under **Interactivity & Shortcuts**, enable Interactivity
@@ -338,7 +342,17 @@ The first user to run `/agents` is automatically promoted to superadmin. Superad
 
 ## Usage
 
-### Creating an Agent
+### Creating an Agent from a Template
+
+1. Run `/templates` (or click **Templates** from `/agents`)
+2. Browse 10 pre-built CMO agent templates grouped by category
+3. Click **Use Template** — pick a channel and confirm
+4. The agent is live with a tuned system prompt, tools, skills, and model pre-configured
+5. On first interaction, templates like Competitor Analyst and SEO Monitor will ask for your company context and remember it
+
+**Available templates:** SEO Monitor, Content Strategist, Social Media Manager, Brand Monitor, Competitor Analyst, Market Research Analyst, Marketing Analytics Reporter, Email Campaign Optimizer, Customer Feedback Analyst, Growth Strategist
+
+### Creating a Custom Agent
 
 1. Run `/agents` and click **+ New Agent**
 2. **Step 1:** Describe what you want the hand to do (e.g., "Enrich incoming leads with company data from their email domain")
@@ -421,6 +435,59 @@ Run `/agents` to see all agents. Use the overflow menu on any agent to:
 | Process Manager | PM2 |
 | HTTP Server | Express |
 | Logging | Winston |
+
+---
+
+## Contributing Templates, Skills & Tools
+
+Tiny Hands is designed so anyone can add templates, skills, or tool integrations via PR — no wiring or boilerplate needed.
+
+### Add a Template
+
+Create `templates/my-agent.md` with YAML frontmatter (config) + markdown body (system prompt):
+
+```markdown
+---
+id: my-agent
+name: My Agent
+emoji: ":robot_face:"
+category: Content & SEO
+description: Does something useful.
+model: sonnet
+memory_enabled: true
+mentions_only: false
+respond_to_all_messages: false
+max_turns: 25
+tools:
+  - WebSearch
+  - WebFetch
+custom_tools: []
+skills: []
+relevance_keywords:
+  - keyword
+---
+
+You are an agent that does something useful...
+```
+
+### Add a Skill
+
+Create `skills/my-skill.md`. Prompt template skills have a body; MCP skills are frontmatter-only:
+
+```markdown
+---
+id: my-skill
+name: My Skill
+skillType: prompt_template
+description: What this skill does
+---
+
+Analyze {{topic}} and return key findings, trends, and recommendations.
+```
+
+### Add a Tool Integration
+
+Create `src/modules/tools/integrations/myservice/index.ts` and export a `manifest` satisfying the `ToolManifest` interface. See any existing integration for the pattern. Tools are auto-discovered — no imports to update.
 
 ---
 
