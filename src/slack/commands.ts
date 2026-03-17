@@ -2674,7 +2674,7 @@ async function handleUpdateAgentGoalWithChannels(agentId: string, newGoal: strin
   await postMessage(channelId, `:gear: Analyzing updated goal for *${agent.name}*...`, threadTs);
 
   try {
-    const analysis = await analyzeGoal(newGoal, agent.system_prompt, userId);
+    const analysis = await analyzeGoal(newGoal, agent.system_prompt, userId, agent.name);
     await showUpdateAgentConfirmation(analysis, agentId, newGoal, userId, channelId, threadTs, newChannelIds);
   } catch (err: any) {
     logger.error('Update goal analysis failed', { error: err.message, agentId, userId });
@@ -2692,7 +2692,7 @@ async function handleUpdateAgentGoal(agentId: string, newGoal: string, userId: s
   await postMessage(channelId, `:gear: Analyzing updated goal for *${agent.name}*...`, threadTs);
 
   try {
-    const analysis = await analyzeGoal(newGoal, agent.system_prompt, userId);
+    const analysis = await analyzeGoal(newGoal, agent.system_prompt, userId, agent.name);
     const currentChannels = agent.channel_ids?.length > 0 ? agent.channel_ids : [agent.channel_id];
     await showUpdateAgentConfirmation(analysis, agentId, newGoal, userId, channelId, threadTs, currentChannels);
   } catch (err: any) {

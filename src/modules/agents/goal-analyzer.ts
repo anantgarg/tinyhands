@@ -28,7 +28,7 @@ export interface GoalAnalysis {
   summary: string;
 }
 
-export async function analyzeGoal(goal: string, existingPrompt?: string, requestingUserId?: string): Promise<GoalAnalysis> {
+export async function analyzeGoal(goal: string, existingPrompt?: string, requestingUserId?: string, currentAgentName?: string): Promise<GoalAnalysis> {
   const client = new Anthropic();
   const builtinTools = getBuiltinTools();
   const availableSkills = getAvailableSkills();
@@ -137,7 +137,7 @@ IMPORTANT guidelines:
     messages: [{
       role: 'user',
       content: (existingPrompt
-        ? `Current system prompt:\n${existingPrompt}\n\nUser's update request:\n${goal}\n\nIMPORTANT: The user may describe a problem, a specific tweak, or a full new goal. If they describe a problem or a small change, make targeted incremental edits to the existing system_prompt — preserve everything that's working and only modify what's needed to address their request. If they provide a completely new goal, generate a fresh prompt. Keep the agent_name from current config if not explicitly changing it.`
+        ? `Current agent_name: ${currentAgentName || '(unknown)'}\nCurrent system prompt:\n${existingPrompt}\n\nUser's update request:\n${goal}\n\nIMPORTANT: The user may describe a problem, a specific tweak, or a full new goal. If they describe a problem or a small change, make targeted incremental edits to the existing system_prompt — preserve everything that's working and only modify what's needed to address their request. If they provide a completely new goal, generate a fresh prompt. Keep the agent_name "${currentAgentName || ''}" from current config if the user is not explicitly requesting a name change.`
         : `Agent goal:\n${goal}`) + (requestingUserId ? `\n\nRequesting user's Slack ID: ${requestingUserId}` : ''),
     }],
   });

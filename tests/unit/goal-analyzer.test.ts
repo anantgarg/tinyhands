@@ -242,6 +242,17 @@ describe('Goal Analyzer', () => {
       expect(userContent).toContain('Add error handling');
     });
 
+    it('should include current agent name in user message for update mode', async () => {
+      mockAnthropicJsonResponse();
+
+      await analyzeGoal('Change the name to something nicer', 'You are a domain lookup agent.', 'U123', 'domain-employee-lookup');
+
+      const callArgs = mockCreate.mock.calls[0][0];
+      const userContent = callArgs.messages[0].content;
+      expect(userContent).toContain('Current agent_name: domain-employee-lookup');
+      expect(userContent).toContain('domain-employee-lookup');
+    });
+
     it('should use goal-only format when no existing prompt', async () => {
       mockAnthropicJsonResponse();
 
