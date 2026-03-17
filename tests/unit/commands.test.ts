@@ -5890,7 +5890,8 @@ describe('Commands Module', () => {
         content: [{ type: 'text', text: JSON.stringify({
           intent: 'channel_update',
           channel_action: 'remove',
-          channel_ids_mentioned: ['C_CHAN'],
+          channels_to_add: [],
+          channels_to_remove: ['C_CHAN'],
           info_response: null,
           pass_through_message: null,
         }) }],
