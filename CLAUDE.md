@@ -41,6 +41,8 @@ Slack (Socket Mode) → Listener (src/index.ts)
 ## Project Structure
 
 ```
+skills/                                             # Skill definitions (Markdown + YAML frontmatter)
+templates/                                          # Agent template definitions (Markdown + YAML frontmatter)
 src/
 ├── index.ts, worker.ts, scheduler.ts, sync.ts    # Process entry points
 ├── server.ts                                       # Express routes (webhooks, internal APIs)
@@ -67,7 +69,7 @@ src/
 │   ├── triggers/            # Trigger types: slack, linear, zendesk, intercom, webhook, schedule
 │   ├── workflows/           # Multi-step stateful workflows (DAG of steps)
 │   ├── teams/               # Multi-agent orchestration
-│   ├── skills/              # MCP integrations + prompt template skills
+│   ├── skills/              # Skill registry + builtins loader (reads /skills/*.md)
 │   ├── self-evolution/      # Agent improvement proposals + approval
 │   ├── self-improvement/    # Critique detection, prompt refinement
 │   ├── self-authoring/      # Agent-created tools, code artifacts, MCPs
@@ -121,9 +123,8 @@ Use `/add-tool <service name>` to get guided instructions, or follow this patter
 
 1. Create `src/modules/tools/integrations/<name>/index.ts`
 2. Export a `manifest` satisfying the `ToolManifest` interface from `../manifest.ts`
-3. Add one import + array entry in `src/modules/tools/integrations/index.ts`
 
-No other files need editing. The manifest includes schema, code, display names, and registration logic. See any existing integration for the full pattern.
+No other files need editing — the system auto-discovers all integration folders. The manifest includes schema, code, display names, and registration logic. See any existing integration for the full pattern.
 
 Key constraints for tool code (the `code` string in manifests):
 - Runs inside Docker with only Node.js built-ins (no npm packages)
@@ -131,6 +132,42 @@ Key constraints for tool code (the `code` string in manifests):
 - Inputs available via global `input` variable
 - Output via `console.log(JSON.stringify(result))`
 - 30-second timeout on all HTTP requests
+
+## Skills
+
+Skills are Markdown files in `skills/` at the repo root. YAML frontmatter has metadata; for prompt template skills, the markdown body IS the template.
+
+### Adding a new skill
+
+1. Create `skills/<name>.md`
+2. Add YAML frontmatter with required fields
+3. For prompt template skills, write the template as the markdown body
+
+No other files need editing — the system auto-discovers all `.md` files in the skills directory.
+
+**Prompt template example** (`skills/my-analysis.md`):
+```markdown
+---
+id: my-analysis
+name: My Analysis
+skillType: prompt_template
+description: Analyze data and provide insights
+---
+
+Analyze the provided {{topic}} data and return: key findings, trends, anomalies, and recommendations.
+```
+
+**MCP skill example** (`skills/my-service.md`):
+```markdown
+---
+id: my-service
+name: My Service
+skillType: mcp
+capabilities:
+  - Read data
+  - Update records
+---
+```
 
 ## Agent Execution Flow
 
@@ -159,6 +196,44 @@ Types: `slack_channel`, `linear`, `zendesk`, `intercom`, `webhook`, `schedule`. 
 ### Agent Memory
 Optional per-agent. Categories: customer_preference, decision, context, technical, general, preference, procedure, correction, entity. Stored in `agent_memories` table with relevance scores.
 
+## Slack App Configuration
+
+### Required Bot Token Scopes (OAuth & Permissions)
+
+| Scope | Purpose |
+|-------|---------|
+| `app_mentions:read` | Receive @mention events |
+| `channels:history` | Read messages in public channels |
+| `channels:join` | Auto-join public channels |
+| `channels:manage` | Create channels for agents |
+| `chat:write` | Send messages |
+| `chat:write.customize` | Send messages with custom username/emoji |
+| `commands` | Slash commands (/agents, /new-agent, etc.) |
+| `files:read` | Read uploaded files for KB |
+| `groups:history` | Read messages in private channels |
+| `groups:read` | View private channels the bot is in |
+| `groups:write` | Auto-invite bot to private channels |
+| `im:history` | Read DM messages |
+| `im:read` | View DMs |
+| `im:write` | Send DMs |
+| `users:read` | Look up user info |
+
+### Required Event Subscriptions (Socket Mode)
+
+Subscribe to these bot events under **Event Subscriptions**:
+
+- `message.channels` — messages in public channels
+- `message.groups` — messages in private channels
+- `message.im` — direct messages
+- `message.mpim` — group DMs
+- `app_mention` — @mentions of the bot
+- `app_home_opened` — Home tab opened
+- `file_shared` — file uploads for KB
+
+### App-Level Token
+
+Socket Mode requires an App-Level Token (`xapp-...`) with the `connections:write` scope. Generate this under **Basic Information → App-Level Tokens**.
+
 ## Environment Variables
 
 Core required vars (see `.env.example` for full list):
@@ -175,12 +250,23 @@ Optional: `GITHUB_TOKEN`, `PORT` (default 3000), `LOG_LEVEL`, `DOCKER_BASE_IMAGE
 ## Development Workflow
 
 - **Use worktrees**: Always use git worktrees (`isolation: "worktree"`) when making code changes, to avoid disrupting the working directory.
-- **Test thoroughly**: Run the full test suite (`npm test`) before committing. All 1912+ tests must pass with 100% code coverage — no skipped or failing tests.
+- **Test thoroughly**: Run the full test suite (`npm test`) before committing. All tests must pass with 100% code coverage — no skipped or failing tests. Every code change MUST include corresponding test updates: add tests for new functionality, update existing tests for modified behavior, and remove tests for deleted code.
 - **Publish releases**: Every push should include a tagged release with a changelog summarizing what changed. Use `gh release create` with clear release notes.
+- **Update documentation**: Every time you make code changes, you MUST also update the relevant documentation files to reflect those changes:
+  - `README.md` — User-facing overview, features list, getting started
+  - `PRODUCT_GUIDE.md` — Product capabilities, use cases, workflows
+  - `ADMIN_GUIDE.md` — Setup, configuration, administration, troubleshooting
+  - `CLAUDE.md` — Architecture, code structure, developer reference (only if the change affects project structure, patterns, or dev workflow)
+
+  If a change adds a new feature, update README.md and PRODUCT_GUIDE.md. If it changes configuration or setup, update ADMIN_GUIDE.md. If it changes architecture or adds new modules, update CLAUDE.md. Bug fixes typically don't need doc changes unless they affect documented behavior.
 
 ### Versioning
 
-Versions follow sequential semver: `v1.X.0` where X increments by 1 for each release.
+Versions follow [semver](https://semver.org/):
+
+- **Patch** (`v1.X.Y` → `v1.X.Y+1`): Bug fixes, minor tweaks, no new features
+- **Minor** (`v1.X.0` → `v1.X+1.0`): New features, new integrations, non-breaking changes
+- **Major** (`vX.0.0` → `vX+1.0.0`): Breaking changes to APIs, DB schema, or config format
 
 To determine the next version, check the latest release:
 
@@ -188,7 +274,10 @@ To determine the next version, check the latest release:
 gh release list --limit 1
 ```
 
-Then increment the minor version by 1. For example, if the latest release is `v1.5.0`, the next release should be `v1.6.0`.
+Then increment the appropriate version component based on the change type. For example, if the latest release is `v1.5.0`:
+- Bug fix → `v1.5.1`
+- New feature → `v1.6.0`
+- Breaking change → `v2.0.0`
 
 Always update `package.json` version to match the new release version before committing.
 

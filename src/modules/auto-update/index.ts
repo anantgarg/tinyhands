@@ -56,11 +56,12 @@ export async function handleDeploy(payload: any): Promise<DeployResult> {
     execSync('git pull origin main', { cwd: process.cwd(), timeout: 30000 });
 
     // 2. npm install if package.json changed or pull-based (no changedFiles info)
-    // Full install (including devDeps) is needed because tsc requires @types/* packages
+    // --include=dev is required because NODE_ENV=production (from .env) causes npm
+    // to skip devDependencies, but tsc needs @types/* packages to compile
     const isPullBased = changedFiles.length === 0;
     if (packageJsonChanged || isPullBased) {
       logger.info('Deploy: installing dependencies');
-      execSync('npm install', { cwd: process.cwd(), timeout: 120000 });
+      execSync('npm install --include=dev', { cwd: process.cwd(), timeout: 120000 });
     }
 
     // 3. Docker rebuild if Dockerfile changed
@@ -85,12 +86,10 @@ export async function handleDeploy(payload: any): Promise<DeployResult> {
     }
     execSync('npm run migrate', { cwd: process.cwd(), timeout: 60000 });
 
-    // 5. Restart PM2 (restart instead of reload to avoid duplicate Socket Mode connections)
-    // Restart workers/sync first, then listener last — otherwise the listener restart
-    // kills this process before the other restarts can execute
+    // 5. Restart PM2 using startOrRestart to pick up any .env changes
+    // (pm2 restart reuses cached env; startOrRestart re-evaluates ecosystem.config.js)
     logger.info('Deploy: restarting PM2');
-    execSync('pm2 restart tinyhands-worker-1 tinyhands-worker-2 tinyhands-worker-3 tinyhands-sync tinyhands-scheduler', { cwd: process.cwd(), timeout: 30000 });
-    execSync('pm2 restart tinyhands-listener', { cwd: process.cwd(), timeout: 30000 });
+    execSync('pm2 startOrRestart ecosystem.config.js', { cwd: process.cwd(), timeout: 30000 });
 
     const restartTime = Date.now() - startTime;
 
