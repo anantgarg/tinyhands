@@ -252,7 +252,17 @@ export async function updateAgent(id: string, updates: Partial<Agent>, changedBy
     ).catch(() => {});
   }
 
-  return (await getAgent(id))!;
+  // Re-fetch with a timeout to prevent hanging the event loop if DB is slow
+  try {
+    const updated = await Promise.race([
+      getAgent(id),
+      new Promise<undefined>((_, reject) => setTimeout(() => reject(new Error('getAgent timeout')), 5000)),
+    ]);
+    return updated || existing;
+  } catch {
+    logger.warn('getAgent after update timed out, returning stale data', { agentId: id });
+    return existing;
+  }
 }
 
 export async function deleteAgent(id: string): Promise<void> {
