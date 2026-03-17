@@ -484,7 +484,7 @@ describe('Commands Module', () => {
 
       mockListAgents.mockResolvedValue([]);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
 
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
@@ -500,7 +500,7 @@ describe('Commands Module', () => {
 
       mockListAgents.mockResolvedValue([]);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
 
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
@@ -517,7 +517,7 @@ describe('Commands Module', () => {
       mockListAgents.mockResolvedValue([agent]);
       mockCanModifyAgent.mockResolvedValue(true);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
 
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
@@ -534,7 +534,7 @@ describe('Commands Module', () => {
       mockListAgents.mockResolvedValue([makeFakeAgent()]);
       mockCanModifyAgent.mockResolvedValue(true);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
 
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
@@ -549,7 +549,7 @@ describe('Commands Module', () => {
       mockListAgents.mockResolvedValue([makeFakeAgent()]);
       mockCanModifyAgent.mockResolvedValue(false);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
 
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
@@ -563,7 +563,7 @@ describe('Commands Module', () => {
 
       mockListAgents.mockResolvedValue([makeFakeAgent({ status: 'active' })]);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
 
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
@@ -577,7 +577,7 @@ describe('Commands Module', () => {
 
       mockListAgents.mockResolvedValue([makeFakeAgent({ status: 'paused' })]);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
 
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
@@ -591,7 +591,7 @@ describe('Commands Module', () => {
 
       mockListAgents.mockResolvedValue([]);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
 
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
@@ -610,7 +610,7 @@ describe('Commands Module', () => {
       ]);
       mockCanModifyAgent.mockResolvedValue(true);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
 
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
@@ -628,7 +628,7 @@ describe('Commands Module', () => {
       mockListAgents.mockResolvedValue([makeFakeAgent({ channel_ids: ['C1', 'C2'] })]);
       mockCanModifyAgent.mockResolvedValue(false);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
 
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
@@ -644,7 +644,7 @@ describe('Commands Module', () => {
       mockListAgents.mockResolvedValue([makeFakeAgent({ model: 'opus', max_turns: 25 })]);
       mockCanModifyAgent.mockResolvedValue(false);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
 
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
@@ -659,7 +659,7 @@ describe('Commands Module', () => {
 
       mockListAgents.mockResolvedValue([]);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_TARGET', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_TARGET', channel_name: 'directmessage', text: '' };
 
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
@@ -673,7 +673,7 @@ describe('Commands Module', () => {
       mockListAgents.mockResolvedValue([makeFakeAgent({ created_by: 'U_OWNER' })]);
       mockCanModifyAgent.mockResolvedValue(false);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
 
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
@@ -688,7 +688,7 @@ describe('Commands Module', () => {
       mockListAgents.mockResolvedValue([makeFakeAgent({ created_by: null })]);
       mockCanModifyAgent.mockResolvedValue(false);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
 
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
@@ -707,7 +707,7 @@ describe('Commands Module', () => {
       registerCommands(app as any);
 
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
 
       await app.handlers.command['/new-agent']({ command, ack });
 
@@ -734,7 +734,7 @@ describe('Commands Module', () => {
 
       mockPostBlocks.mockResolvedValue('thread-ts-abc');
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
 
       await app.handlers.command['/new-agent']({ command, ack });
 
@@ -758,7 +758,7 @@ describe('Commands Module', () => {
 
       mockPostBlocks.mockResolvedValue(null);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
 
       await app.handlers.command['/new-agent']({ command, ack });
 
@@ -778,7 +778,7 @@ describe('Commands Module', () => {
 
       mockListAgents.mockResolvedValue([]);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
 
       await app.handlers.command['/update-agent']({ command, ack });
 
@@ -793,7 +793,7 @@ describe('Commands Module', () => {
       mockListAgents.mockResolvedValue([makeFakeAgent()]);
       mockCanModifyAgent.mockResolvedValue(false);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
 
       await app.handlers.command['/update-agent']({ command, ack });
 
@@ -808,7 +808,7 @@ describe('Commands Module', () => {
       mockCanModifyAgent.mockResolvedValue(true);
       mockPostBlocks.mockResolvedValue('update-ts');
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
 
       await app.handlers.command['/update-agent']({ command, ack });
 
@@ -846,7 +846,7 @@ describe('Commands Module', () => {
 
       mockIsSuperadmin.mockResolvedValue(false);
       const ack = vi.fn();
-      const command = { user_id: 'U_REGULAR', channel_id: 'C_CHAN', text: '' };
+      const command = { user_id: 'U_REGULAR', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
 
       await app.handlers.command['/tools']({ command, ack, respond: mockRespond });
 
@@ -861,7 +861,7 @@ describe('Commands Module', () => {
       mockIsSuperadmin.mockResolvedValue(true);
       mockListCustomTools.mockResolvedValue([]);
       const ack = vi.fn();
-      const command = { user_id: 'U_ADMIN', channel_id: 'C_CHAN', text: '' };
+      const command = { user_id: 'U_ADMIN', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
 
       await app.handlers.command['/tools']({ command, ack, respond: mockRespond });
 
@@ -885,7 +885,7 @@ describe('Commands Module', () => {
         },
       ]);
       const ack = vi.fn();
-      const command = { user_id: 'U_ADMIN', channel_id: 'C_CHAN', text: '' };
+      const command = { user_id: 'U_ADMIN', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
 
       await app.handlers.command['/tools']({ command, ack, respond: mockRespond });
 
@@ -912,7 +912,7 @@ describe('Commands Module', () => {
         },
       ]);
       const ack = vi.fn();
-      const command = { user_id: 'U_ADMIN', channel_id: 'C_CHAN', text: '' };
+      const command = { user_id: 'U_ADMIN', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
 
       await app.handlers.command['/tools']({ command, ack, respond: mockRespond });
 
@@ -928,7 +928,7 @@ describe('Commands Module', () => {
       mockIsSuperadmin.mockResolvedValue(true);
       mockListCustomTools.mockResolvedValue([]);
       const ack = vi.fn();
-      const command = { user_id: 'U_ADMIN', channel_id: 'C_CHAN', text: '' };
+      const command = { user_id: 'U_ADMIN', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
 
       await app.handlers.command['/tools']({ command, ack, respond: mockRespond });
 
@@ -952,7 +952,7 @@ describe('Commands Module', () => {
       ]);
 
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', text: 'search test query', trigger_id: 'trig-1' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: 'search test query', trigger_id: 'trig-1' };
 
       await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
@@ -965,7 +965,7 @@ describe('Commands Module', () => {
       registerCommands(app as any);
 
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', text: 'search   ', trigger_id: 'trig-1' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: 'search   ', trigger_id: 'trig-1' };
 
       await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
@@ -978,7 +978,7 @@ describe('Commands Module', () => {
 
       mockSearchKB.mockResolvedValue([]);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', text: 'search unicorns', trigger_id: 'trig-1' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: 'search unicorns', trigger_id: 'trig-1' };
 
       await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
@@ -995,7 +995,7 @@ describe('Commands Module', () => {
       ]);
 
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', text: 'search test', trigger_id: 'trig-1' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: 'search test', trigger_id: 'trig-1' };
 
       await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
@@ -1008,7 +1008,7 @@ describe('Commands Module', () => {
       registerCommands(app as any);
 
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', text: 'add', trigger_id: 'trig-1' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: 'add', trigger_id: 'trig-1' };
 
       await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
@@ -1025,7 +1025,7 @@ describe('Commands Module', () => {
 
       mockIsSuperadmin.mockResolvedValue(false);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '', trigger_id: 'trig-1' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '', trigger_id: 'trig-1' };
 
       await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
@@ -1042,7 +1042,7 @@ describe('Commands Module', () => {
       mockGetCategories.mockResolvedValue([]);
       mockListSources.mockResolvedValue([]);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '', trigger_id: 'trig-1' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '', trigger_id: 'trig-1' };
 
       await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
@@ -1073,7 +1073,7 @@ describe('Commands Module', () => {
         },
       ]);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '', trigger_id: 'trig-1' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '', trigger_id: 'trig-1' };
 
       await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
@@ -1095,7 +1095,7 @@ describe('Commands Module', () => {
       mockGetCategories.mockResolvedValue([]);
       mockListSources.mockResolvedValue([]);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '', trigger_id: 'trig-1' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '', trigger_id: 'trig-1' };
 
       await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
@@ -1117,7 +1117,7 @@ describe('Commands Module', () => {
       mockGetCategories.mockResolvedValue([]);
       mockListSources.mockResolvedValue([]);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '', trigger_id: 'trig-1' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '', trigger_id: 'trig-1' };
 
       await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
@@ -1135,7 +1135,7 @@ describe('Commands Module', () => {
       mockGetCategories.mockResolvedValue([]);
       mockListSources.mockResolvedValue([]);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '', trigger_id: 'trig-1' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '', trigger_id: 'trig-1' };
 
       await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
@@ -3638,7 +3638,7 @@ describe('Commands Module', () => {
       mockListAgents.mockResolvedValue([makeFakeAgent({ visibility: 'private' })]);
       mockCanModifyAgent.mockResolvedValue(true);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
 
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
@@ -3654,7 +3654,7 @@ describe('Commands Module', () => {
       mockListAgents.mockResolvedValue([makeFakeAgent({ visibility: 'private' })]);
       mockCanModifyAgent.mockResolvedValue(false);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
 
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
@@ -3679,7 +3679,7 @@ describe('Commands Module', () => {
         { name: 'test-tool-write', access_level: 'read-write', language: 'docker', config_json: '{}', schema_json: '{}', approved: true },
       ]);
       const ack = vi.fn();
-      const command = { user_id: 'U_ADMIN', channel_id: 'C_CHAN', text: '' };
+      const command = { user_id: 'U_ADMIN', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
 
       await app.handlers.command['/tools']({ command, ack, respond: mockRespond });
 
@@ -3715,7 +3715,7 @@ describe('Commands Module', () => {
         },
       ]);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '', trigger_id: 'trig-1' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '', trigger_id: 'trig-1' };
 
       await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
@@ -3742,12 +3742,69 @@ describe('Commands Module', () => {
         },
       ]);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', text: '', trigger_id: 'trig-1' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '', trigger_id: 'trig-1' };
 
       await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
       const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
       expect(allText).toContain('red_circle');
+    });
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // DM-only restriction for slash commands
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  describe('DM-only restriction', () => {
+    it('/agents should reject commands not sent from a DM', async () => {
+      const app = createMockApp();
+      registerCommands(app as any);
+
+      const ack = vi.fn();
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'general', text: '' };
+
+      await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockRespond).toHaveBeenCalledWith({
+        response_type: 'ephemeral',
+        text: expect.stringContaining('Please use this command in a DM'),
+      });
+      expect(mockListAgents).not.toHaveBeenCalled();
+    });
+
+    it('/tools should reject commands not sent from a DM', async () => {
+      const app = createMockApp();
+      registerCommands(app as any);
+
+      const ack = vi.fn();
+      const command = { user_id: 'U_ADMIN', channel_id: 'C_CHAN', channel_name: 'general', text: '' };
+
+      await app.handlers.command['/tools']({ command, ack, respond: mockRespond });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockRespond).toHaveBeenCalledWith({
+        response_type: 'ephemeral',
+        text: expect.stringContaining('Please use this command in a DM'),
+      });
+      expect(mockIsSuperadmin).not.toHaveBeenCalled();
+    });
+
+    it('/kb should reject commands not sent from a DM', async () => {
+      const app = createMockApp();
+      registerCommands(app as any);
+
+      const ack = vi.fn();
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'general', text: '', trigger_id: 'trig-1' };
+
+      await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockRespond).toHaveBeenCalledWith({
+        response_type: 'ephemeral',
+        text: expect.stringContaining('Please use this command in a DM'),
+      });
+      expect(mockSearchKB).not.toHaveBeenCalled();
     });
   });
 
@@ -6091,7 +6148,7 @@ describe('Commands Module', () => {
       mockGetToolIntegrations.mockReturnValue([]);
 
       const respond = vi.fn();
-      await app.handlers.command['/tools']({ ack: vi.fn(), command: { user_id: 'U1' }, respond });
+      await app.handlers.command['/tools']({ ack: vi.fn(), command: { user_id: 'U1', channel_name: 'directmessage' }, respond });
 
       expect(respond).toHaveBeenCalledWith(expect.objectContaining({
         response_type: 'ephemeral',
@@ -6117,7 +6174,7 @@ describe('Commands Module', () => {
       ]);
 
       const respond = vi.fn();
-      await app.handlers.command['/kb']({ ack: vi.fn(), command: { user_id: 'U1', text: '' }, respond });
+      await app.handlers.command['/kb']({ ack: vi.fn(), command: { user_id: 'U1', channel_name: 'directmessage', text: '' }, respond });
 
       const responseText = JSON.stringify(respond.mock.calls[0][0]);
       expect(responseText).toContain('m ago');
@@ -6911,7 +6968,7 @@ describe('Commands Module', () => {
       mockListCustomTools.mockResolvedValue([]);
 
       const respond = vi.fn();
-      await app.handlers.command['/tools']({ ack: vi.fn(), command: { user_id: 'U1' }, respond });
+      await app.handlers.command['/tools']({ ack: vi.fn(), command: { user_id: 'U1', channel_name: 'directmessage' }, respond });
 
       expect(respond).toHaveBeenCalledWith(expect.objectContaining({
         response_type: 'ephemeral',

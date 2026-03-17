@@ -16,8 +16,18 @@ import { getToolIntegrations, getIntegration } from '../modules/tools/integratio
 const TOOL_INTEGRATIONS = getToolIntegrations();
 
 export function registerCommands(app: App): void {
+  const requireDM = async (command: any, ack: () => Promise<void>, respond: (msg: any) => Promise<void>): Promise<boolean> => {
+    if (command.channel_name !== 'directmessage') {
+      await ack();
+      await respond({ response_type: 'ephemeral', text: ':robot_face: Please use this command in a DM with me instead.' });
+      return false;
+    }
+    return true;
+  };
+
   // /agents — Consolidated interactive agent management
   app.command('/agents', async ({ command, ack, respond }) => {
+    if (!(await requireDM(command, ack, respond))) return;
     await ack();
     await initSuperadmin(command.user_id);
     const userId = command.user_id;
@@ -95,20 +105,23 @@ export function registerCommands(app: App): void {
   });
 
   // /new-agent — Alias, starts new agent flow directly
-  app.command('/new-agent', async ({ command, ack }) => {
+  app.command('/new-agent', async ({ command, ack, respond }) => {
+    if (!(await requireDM(command, ack, respond))) return;
     await ack();
     await initSuperadmin(command.user_id);
     await startNewAgentFlow(command.user_id, command.channel_id);
   });
 
   // /update-agent — Alias, shows agent selector
-  app.command('/update-agent', async ({ command, ack }) => {
+  app.command('/update-agent', async ({ command, ack, respond }) => {
+    if (!(await requireDM(command, ack, respond))) return;
     await ack();
     await startUpdateAgentFlow(command.user_id, command.channel_id);
   });
 
   // /tools — Interactive admin tool management
   app.command('/tools', async ({ command, ack, respond }) => {
+    if (!(await requireDM(command, ack, respond))) return;
     await ack();
     const userId = command.user_id;
 
@@ -197,6 +210,7 @@ export function registerCommands(app: App): void {
 
   // /kb — Interactive knowledge base management
   app.command('/kb', async ({ command, ack, respond }) => {
+    if (!(await requireDM(command, ack, respond))) return;
     await ack();
     const userId = command.user_id;
     const subcommand = command.text.trim().split(/\s+/)[0]?.toLowerCase() || '';
