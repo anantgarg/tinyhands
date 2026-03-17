@@ -2,6 +2,7 @@ import { createSlackApp } from './slack';
 import { startWebhookServer } from './server';
 import { initDb } from './db';
 import { logger } from './utils/logger';
+import { startWatchdog } from './utils/watchdog';
 import { ensureBotInAllAgentChannels } from './modules/agents';
 
 async function main(): Promise<void> {
@@ -32,6 +33,9 @@ async function main(): Promise<void> {
 
   // Start webhook server (Express)
   startWebhookServer();
+
+  // Start event loop watchdog — restarts process if main thread is blocked for >60s
+  startWatchdog();
 
   logger.info('TinyHands listener ready');
 }

@@ -6070,8 +6070,8 @@ describe('Commands Module', () => {
 
       await app.handlers.action['confirm_new_agent']({ action, ack, body });
 
-      // Wait for fire-and-forget
-      await new Promise(r => setTimeout(r, 10));
+      // Wait for fire-and-forget (withTimeout wrappers add extra microtask ticks)
+      await new Promise(r => setTimeout(r, 50));
 
       expect(mockAddAgentMembers).toHaveBeenCalledWith('agent-private', ['U_MEMBER1', 'U_MEMBER2'], 'U_CREATOR');
       // Should notify admin about write tools and new tools

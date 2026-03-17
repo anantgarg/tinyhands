@@ -59,7 +59,7 @@ export async function handleDeploy(payload: any): Promise<DeployResult> {
     const isPullBased = changedFiles.length === 0;
     if (packageJsonChanged || isPullBased) {
       logger.info('Deploy: installing dependencies');
-      execSync('npm install --production', { cwd: process.cwd(), timeout: 120000 });
+      execSync('npm install --omit=dev', { cwd: process.cwd(), timeout: 120000 });
     }
 
     // 3. Docker rebuild if Dockerfile changed

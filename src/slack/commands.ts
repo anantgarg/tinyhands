@@ -2389,6 +2389,17 @@ export function registerModalHandlers(app: App): void {
 
 // ── Confirmation Action Handlers ──
 
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  const p = Promise.resolve(promise);
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    p.then(
+      (val) => { clearTimeout(timer); resolve(val); },
+      (err) => { clearTimeout(timer); reject(err); },
+    );
+  });
+}
+
 export function registerConfirmationActions(app: App): void {
   app.action('confirm_new_agent', async ({ action, ack, body }) => {
     await ack();
@@ -2409,7 +2420,7 @@ export function registerConfirmationActions(app: App): void {
       const finalModel = selectedModel || analysis.model;
       const finalMaxTurns = selectedEffort ? (EFFORT_TO_MAX_TURNS[selectedEffort] || 25) : (analysis.max_turns || 25);
 
-      await replyToAction(body, ':gear: Creating agent...');
+      await withTimeout(replyToAction(body, ':gear: Creating agent...'), 10000, 'replyToAction');
 
       // Use existing channels or create new one
       const channelIds: string[] = existingChannelIds || (existingChannelId ? [existingChannelId] : [await createChannel(name)]);
@@ -2417,7 +2428,7 @@ export function registerConfirmationActions(app: App): void {
       // Merge builtin tools + read-only custom tools into agent's tool list
       const agentTools = [...analysis.tools, ...(analysis.custom_tools || [])];
 
-      const agent = await createAgent({
+      const agent = await withTimeout(createAgent({
         name,
         channelId: channelIds[0],
         channelIds,
@@ -2431,11 +2442,11 @@ export function registerConfirmationActions(app: App): void {
         relevanceKeywords: analysis.relevance_keywords,
         createdBy: userId,
         maxTurns: finalMaxTurns,
-      });
+      }), 15000, 'createAgent');
 
       // Add members for private agents
       if (visibility === 'private' && memberIds?.length > 0) {
-        await addAgentMembers(agent.id, memberIds, userId);
+        await withTimeout(addAgentMembers(agent.id, memberIds, userId), 10000, 'addAgentMembers');
       }
 
       const allTools = [...analysis.tools, ...(analysis.custom_tools || [])];
@@ -2453,16 +2464,16 @@ export function registerConfirmationActions(app: App): void {
       ].filter(Boolean);
 
       // Post announcement in first channel
-      await postMessage(channelIds[0], lines.join('\n'));
+      await withTimeout(postMessage(channelIds[0], lines.join('\n')), 10000, 'postMessage');
       const channelLabels = channelIds.map((c: string) => `<#${c}>`).join(', ');
-      await replyToAction(body, `✋ *${agent.name}* is live! Channels: ${channelLabels}`);
+      await withTimeout(replyToAction(body, `✋ *${agent.name}* is live! Channels: ${channelLabels}`), 10000, 'replyToAction');
 
       // Fire-and-forget: skills, triggers, and admin notifications
       // These are non-critical and should not block the user-facing confirmation
       (async () => {
         try {
           for (const skillName of analysis.skills) {
-            try { await attachSkillToAgent(agent.id, skillName, 'read', userId); }
+            try { await withTimeout(attachSkillToAgent(agent.id, skillName, 'read', userId), 10000, 'attachSkill'); }
             catch (err: any) { logger.warn('Skill attach failed', { skillName, error: err.message }); }
           }
 
@@ -2470,29 +2481,29 @@ export function registerConfirmationActions(app: App): void {
             try {
               if (trigger.type === 'schedule' && trigger.config?.timezone === 'auto') {
                 try {
-                  const userInfo = await getSlackApp().client.users.info({ user: userId });
+                  const userInfo = await withTimeout(getSlackApp().client.users.info({ user: userId }) as Promise<any>, 5000, 'users.info');
                   trigger.config.timezone = userInfo.user?.tz || 'UTC';
                 } catch { trigger.config.timezone = 'UTC'; }
               }
-              await createTrigger({
+              await withTimeout(createTrigger({
                 agentId: agent.id,
                 triggerType: trigger.type,
                 config: { ...trigger.config, description: trigger.description },
                 createdBy: userId,
-              });
+              }), 10000, 'createTrigger');
             } catch (err: any) { logger.warn('Trigger creation failed', { trigger: trigger.type, error: err.message }); }
           }
 
           if (analysis.write_tools_requested?.length > 0) {
-            await notifyAdminWriteToolRequest(agent.id, agent.name, analysis.write_tools_requested, userId);
+            await withTimeout(notifyAdminWriteToolRequest(agent.id, agent.name, analysis.write_tools_requested, userId), 10000, 'notifyAdminWriteTools');
           }
           if (analysis.new_tools_needed?.length > 0) {
-            await notifyAdminNewToolRequest(agent.id, agent.name, analysis.new_tools_needed, goal, userId);
+            await withTimeout(notifyAdminNewToolRequest(agent.id, agent.name, analysis.new_tools_needed, goal, userId), 10000, 'notifyAdminNewTools');
           }
         } catch (err: any) {
           logger.error('Post-creation background tasks failed', { agentId: agent.id, error: err.message });
         }
-      })();
+      })().catch(err => logger.error('Background task error', { error: err.message }));
 
     } catch (err: any) {
       logger.error('Agent creation failed', { error: err.message });
@@ -2535,7 +2546,7 @@ export function registerConfirmationActions(app: App): void {
 
       // Post to thread (not ephemeral to main channel)
       if (confirmChannelId && confirmThreadTs) {
-        await postMessage(confirmChannelId, ':gear: Updating agent...', confirmThreadTs);
+        await withTimeout(postMessage(confirmChannelId, ':gear: Updating agent...', confirmThreadTs), 10000, 'postMessage');
       } else {
         await respond({ text: ':gear: Updating agent...', replace_original: false });
       }
@@ -2562,12 +2573,12 @@ export function registerConfirmationActions(app: App): void {
       }
 
       logger.info('confirm_update_agent: updating DB', { agentId });
-      await updateAgent(agentId!, updates, userId);
+      await withTimeout(updateAgent(agentId!, updates, userId), 15000, 'updateAgent');
       logger.info('confirm_update_agent: DB updated', { agentId });
 
       // Reply in thread (or fallback to respond)
       if (confirmChannelId && confirmThreadTs) {
-        await postMessage(confirmChannelId, `✋ *${agent.name}* updated! High five.`, confirmThreadTs);
+        await withTimeout(postMessage(confirmChannelId, `✋ *${agent.name}* updated! High five.`, confirmThreadTs), 10000, 'postMessage');
       } else {
         await respond({ text: `✋ *${agent.name}* updated! High five.`, replace_original: false });
       }
@@ -2580,14 +2591,14 @@ export function registerConfirmationActions(app: App): void {
 
       const allUpdateTools = [...analysis.tools, ...(analysis.custom_tools || [])];
       try {
-        await postMessage(postToChannel,
+        await withTimeout(postMessage(postToChannel,
           `:arrows_counterclockwise: Agent *${agent.name}* updated by <@${userId}>\n\n` +
           `*Model:* ${analysis.model} | *Memory:* ${analysis.memory_enabled ? 'on' : 'off'}\n` +
           `*Responds to:* ${respondModeLabel(analysis)}\n` +
           `*Tools:* ${allUpdateTools.join(', ')}` +
           channelChangeNote + '\n' +
           `_${analysis.summary}_`
-        );
+        ), 10000, 'postMessage');
       } catch (err: any) {
         logger.warn('Failed to post update summary to agent channel', { agentId, channel: postToChannel, error: err.message });
       }
@@ -2598,36 +2609,36 @@ export function registerConfirmationActions(app: App): void {
       (async () => {
         try {
           for (const skillName of (analysis.skills || [])) {
-            try { await attachSkillToAgent(agentId!, skillName, 'read', userId); } catch { /* may exist */ }
+            try { await withTimeout(attachSkillToAgent(agentId!, skillName, 'read', userId), 10000, 'attachSkill'); } catch { /* may exist */ }
           }
 
           for (const trigger of (analysis.triggers || [])) {
             try {
               if (trigger.type === 'schedule' && trigger.config?.timezone === 'auto') {
                 try {
-                  const userInfo = await getSlackApp().client.users.info({ user: userId });
+                  const userInfo = await withTimeout(getSlackApp().client.users.info({ user: userId }) as Promise<any>, 5000, 'users.info');
                   trigger.config.timezone = userInfo.user?.tz || 'UTC';
                 } catch { trigger.config.timezone = 'UTC'; }
               }
-              await createTrigger({
+              await withTimeout(createTrigger({
                 agentId: agentId!,
                 triggerType: trigger.type,
                 config: { ...trigger.config, description: trigger.description },
                 createdBy: userId,
-              });
+              }), 10000, 'createTrigger');
             } catch (err: any) { logger.warn('Trigger creation failed during update', { error: err.message }); }
           }
 
           if (analysis.write_tools_requested?.length > 0) {
-            await notifyAdminWriteToolRequest(agentId!, agent.name, analysis.write_tools_requested, userId);
+            await withTimeout(notifyAdminWriteToolRequest(agentId!, agent.name, analysis.write_tools_requested, userId), 10000, 'notifyAdminWriteTools');
           }
           if (analysis.new_tools_needed?.length > 0) {
-            await notifyAdminNewToolRequest(agentId!, agent.name, analysis.new_tools_needed, row.data.goal || '', userId);
+            await withTimeout(notifyAdminNewToolRequest(agentId!, agent.name, analysis.new_tools_needed, row.data.goal || '', userId), 10000, 'notifyAdminNewTools');
           }
         } catch (err: any) {
           logger.error('Post-update background tasks failed', { agentId, error: err.message });
         }
-      })();
+      })().catch(err => logger.error('Background task error', { error: err.message }));
 
     } catch (err: any) {
       logger.error('Agent update failed', { error: err.message });
