@@ -137,28 +137,28 @@ export function registerEvents(app: App): void {
     // Thread replies are always relevant — the user is continuing a conversation
     const isThreadReply = !!msg.thread_ts;
 
-    // ── @Mention in a channel → Conversational mode (route across all accessible agents) ──
+    // ── @Mention in a channel → Route to channel-assigned agents ──
+    // Channels use only their assigned agents. DMs use all accessible agents (handled below).
     if (isMentioned && msg.channel_type !== 'im') {
       const mentionCleaned = text.replace(/<@[\w]+>/g, '').replace(/\s+/g, ' ').trim();
       const modelOverride = parseModelOverride(mentionCleaned);
       const cleanInput = modelOverride ? stripModelOverride(mentionCleaned) : mentionCleaned;
 
-      const accessible = await getAccessibleAgents(userId);
-      const activeAgents = accessible.filter((a: any) => a.status === 'active');
-
-      if (activeAgents.length === 0) {
-        await postMessage(channelId, `No agents available yet. Use \`/new-agent\` to create one.`, threadTs);
+      if (agents.length === 0) {
+        await postMessage(channelId, `No agents are assigned to this channel yet.\n\nUse \`/agents\` to see available agents, or \`/new-agent\` to create one and add it to this channel.`, threadTs);
         return;
       }
 
-      if (activeAgents.length === 1) {
-        await enqueueAgentRun(activeAgents[0], cleanInput, channelId, threadTs, userId, modelOverride, msg, isThreadReply);
+      const candidateAgents = agents;
+
+      if (candidateAgents.length === 1) {
+        await enqueueAgentRun(candidateAgents[0], cleanInput, channelId, threadTs, userId, modelOverride, msg, isThreadReply);
         return;
       }
 
       // Multiple agents → relevance check to find the right one
       const relevanceResults = await Promise.all(
-        activeAgents.map(async (agent: any) => {
+        candidateAgents.map(async (agent: any) => {
           try {
             const isRelevant = await checkMessageRelevance(
               cleanInput, agent.relevance_keywords, agent.system_prompt, agent.respond_to_all_messages
@@ -178,7 +178,7 @@ export function registerEvents(app: App): void {
       }
 
       // Unable to determine → show agent picker
-      const agentsToShow = matches.length > 1 ? matches.map(m => m.agent) : activeAgents.slice(0, 10);
+      const agentsToShow = matches.length > 1 ? matches.map(m => m.agent) : candidateAgents.slice(0, 10);
       const buttons = agentsToShow.map((a: any) => ({
         type: 'button' as const,
         text: { type: 'plain_text' as const, text: `${a.avatar_emoji} ${a.name}`.slice(0, 75) },
