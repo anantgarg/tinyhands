@@ -18,7 +18,7 @@ import type { JobData, RunRecord, RunStatus, ModelAlias, MemoryCategory } from '
 
 // ── Run Record CRUD ──
 
-export async function createRunRecord(data: JobData, jobId: string): Promise<RunRecord> {
+export async function createRunRecord(workspaceId: string, data: JobData, jobId: string): Promise<RunRecord> {
   const record: RunRecord = {
     id: uuid(),
     agent_id: data.agentId,
@@ -43,13 +43,13 @@ export async function createRunRecord(data: JobData, jobId: string): Promise<Run
   };
 
   await execute(`
-    INSERT INTO run_history (id, agent_id, channel_id, thread_ts, input, output, status,
+    INSERT INTO run_history (id, workspace_id, agent_id, channel_id, thread_ts, input, output, status,
       input_tokens, output_tokens, estimated_cost_usd, duration_ms, queue_wait_ms,
       context_tokens_injected, tool_calls_count, trace_id, job_id, model, slack_user_id,
       created_at, completed_at)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
   `, [
-    record.id, record.agent_id, record.channel_id, record.thread_ts,
+    record.id, workspaceId, record.agent_id, record.channel_id, record.thread_ts,
     record.input, record.output, record.status, record.input_tokens,
     record.output_tokens, record.estimated_cost_usd, record.duration_ms,
     record.queue_wait_ms, record.context_tokens_injected, record.tool_calls_count,
@@ -66,7 +66,7 @@ const ALLOWED_RUN_RECORD_COLUMNS = new Set([
   'model', 'completed_at',
 ]);
 
-export async function updateRunRecord(id: string, updates: Partial<RunRecord>): Promise<void> {
+export async function updateRunRecord(workspaceId: string, id: string, updates: Partial<RunRecord>): Promise<void> {
   const fields: string[] = [];
   const values: any[] = [];
   let paramIdx = 1;
@@ -80,27 +80,27 @@ export async function updateRunRecord(id: string, updates: Partial<RunRecord>): 
   }
 
   if (fields.length === 0) return;
-  values.push(id);
+  values.push(workspaceId, id);
 
-  await execute(`UPDATE run_history SET ${fields.join(', ')} WHERE id = $${paramIdx}`, values);
+  await execute(`UPDATE run_history SET ${fields.join(', ')} WHERE workspace_id = $${paramIdx++} AND id = $${paramIdx}`, values);
 }
 
-export async function getRunRecord(id: string): Promise<RunRecord | null> {
-  const row = await queryOne<RunRecord>('SELECT * FROM run_history WHERE id = $1', [id]);
+export async function getRunRecord(workspaceId: string, id: string): Promise<RunRecord | null> {
+  const row = await queryOne<RunRecord>('SELECT * FROM run_history WHERE workspace_id = $1 AND id = $2', [workspaceId, id]);
   return row || null;
 }
 
-export async function getRunsByAgent(agentId: string, limit: number = 20): Promise<RunRecord[]> {
+export async function getRunsByAgent(workspaceId: string, agentId: string, limit: number = 20): Promise<RunRecord[]> {
   return query<RunRecord>(
-    'SELECT * FROM run_history WHERE agent_id = $1 ORDER BY created_at DESC LIMIT $2',
-    [agentId, limit]
+    'SELECT * FROM run_history WHERE workspace_id = $1 AND agent_id = $2 ORDER BY created_at DESC LIMIT $3',
+    [workspaceId, agentId, limit]
   );
 }
 
-export async function getRecentRuns(limit: number = 20): Promise<RunRecord[]> {
+export async function getRecentRuns(workspaceId: string, limit: number = 20): Promise<RunRecord[]> {
   return query<RunRecord>(
-    'SELECT * FROM run_history ORDER BY created_at DESC LIMIT $1',
-    [limit]
+    'SELECT * FROM run_history WHERE workspace_id = $1 ORDER BY created_at DESC LIMIT $2',
+    [workspaceId, limit]
   );
 }
 
@@ -108,15 +108,16 @@ export async function getRecentRuns(limit: number = 20): Promise<RunRecord[]> {
 
 export async function executeAgentRun(job: Job<JobData>): Promise<string> {
   const { data } = job;
+  const workspaceId = data.workspaceId;
   const startTime = Date.now();
-  const agent = await getAgent(data.agentId);
+  const agent = await getAgent(workspaceId, data.agentId);
 
   if (!agent) throw new Error(`Agent ${data.agentId} not found`);
 
-  const runRecord = await createRunRecord(data, job.id || '');
+  const runRecord = await createRunRecord(workspaceId, data, job.id || '');
 
   // Check rate limit (TPM and RPM)
-  const rateCheck = await checkRateLimit();
+  const rateCheck = await checkRateLimit(workspaceId);
   if (!rateCheck.allowed) {
     logger.warn('Rate limit near capacity, delaying job', {
       traceId: data.traceId,
@@ -125,13 +126,13 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
     throw new Error('Rate limit exceeded, job will be retried');
   }
 
-  const rpmAllowed = await checkRequestRate();
+  const rpmAllowed = await checkRequestRate(workspaceId);
   if (!rpmAllowed) {
     throw new Error('RPM limit exceeded, job will be retried');
   }
 
   const queueWaitMs = Date.now() - new Date(runRecord.created_at).getTime();
-  await updateRunRecord(runRecord.id, { status: 'running', queue_wait_ms: queueWaitMs });
+  await updateRunRecord(workspaceId, runRecord.id, { status: 'running', queue_wait_ms: queueWaitMs });
 
   const model: ModelAlias = data.modelOverride || agent.model;
   const suppressThinking = model === 'haiku'; // Haiku: no thinking traces
@@ -191,7 +192,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
     logger.warn('Context retrieval failed', { traceId: data.traceId, error: String(err) });
   }
 
-  await updateRunRecord(runRecord.id, { context_tokens_injected: contextTokens });
+  await updateRunRecord(workspaceId, runRecord.id, { context_tokens_injected: contextTokens });
 
   // Build task prompt with system prompt + context
   const systemPrompt = agent.system_prompt || '';
@@ -214,7 +215,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
       config: JSON.parse(s.config_json),
       permission_level: s.permission_level,
     })));
-    const customTools = await listCustomTools();
+    const customTools = await listCustomTools(workspaceId);
     const agentCustomTools = customTools.filter(t => agent.tools.includes(t.name));
     const customToolEntries = [];
     for (const t of agentCustomTools) {
@@ -393,7 +394,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
     }
 
     const cost = outputData.costUsd > 0 ? outputData.costUsd : estimateCost(model, outputData.inputTokens, outputData.outputTokens);
-    await recordTokenUsage(outputData.inputTokens + outputData.outputTokens);
+    await recordTokenUsage(workspaceId, outputData.inputTokens + outputData.outputTokens);
 
     const status: RunStatus = exitCode === 0 ? 'completed' : 'failed';
     const trimmedOutput = outputData.output.trim();
@@ -405,7 +406,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
       ? trimmedOutput || 'Task completed successfully'
       : `Task failed with exit code ${exitCode}: ${outputData.output}`;
 
-    await updateRunRecord(runRecord.id, {
+    await updateRunRecord(workspaceId, runRecord.id, {
       status,
       output,
       input_tokens: outputData.inputTokens,
@@ -475,7 +476,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
     const durationMs = Date.now() - startTime;
     const isTimeout = err.message?.includes('timed out');
 
-    await updateRunRecord(runRecord.id, {
+    await updateRunRecord(workspaceId, runRecord.id, {
       status: isTimeout ? 'timeout' : 'failed',
       output: err.message || 'Unknown error',
       duration_ms: durationMs,

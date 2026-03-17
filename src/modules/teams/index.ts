@@ -11,12 +11,13 @@ const DEFAULT_MAX_DEPTH = 2;
 // ── Team Management ──
 
 export async function createTeamRun(
+  workspaceId: string,
   leadAgentId: string,
   leadRunId: string,
   maxConcurrent?: number,
   maxDepth?: number
 ): Promise<TeamRun> {
-  const agent = await getAgent(leadAgentId);
+  const agent = await getAgent(workspaceId, leadAgentId);
   if (!agent) throw new Error(`Agent ${leadAgentId} not found`);
 
   const id = uuid();
@@ -31,22 +32,22 @@ export async function createTeamRun(
   };
 
   await execute(`
-    INSERT INTO team_runs (id, lead_agent_id, lead_run_id, max_concurrent, max_depth, created_at)
-    VALUES ($1, $2, $3, $4, $5, $6)
-  `, [teamRun.id, teamRun.lead_agent_id, teamRun.lead_run_id,
+    INSERT INTO team_runs (id, workspace_id, lead_agent_id, lead_run_id, max_concurrent, max_depth, created_at)
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
+  `, [teamRun.id, workspaceId, teamRun.lead_agent_id, teamRun.lead_run_id,
     teamRun.max_concurrent, teamRun.max_depth, teamRun.created_at]);
 
   logger.info('Team run created', { teamRunId: id, leadAgentId });
   return teamRun;
 }
 
-export async function getTeamRun(id: string): Promise<TeamRun | null> {
-  const row = await queryOne<any>('SELECT * FROM team_runs WHERE id = $1', [id]);
+export async function getTeamRun(workspaceId: string, id: string): Promise<TeamRun | null> {
+  const row = await queryOne<any>('SELECT * FROM team_runs WHERE id = $1 AND workspace_id = $2', [id, workspaceId]);
   if (!row) return null;
 
   const subAgents = await query<SubAgentRun>(
-    'SELECT * FROM sub_agent_runs WHERE team_run_id = $1',
-    [id]
+    'SELECT * FROM sub_agent_runs WHERE team_run_id = $1 AND workspace_id = $2',
+    [id, workspaceId]
   );
 
   return { ...row, sub_agents: subAgents };
@@ -55,12 +56,13 @@ export async function getTeamRun(id: string): Promise<TeamRun | null> {
 // ── Sub-Agent Spawning ──
 
 export async function spawnSubAgent(
+  workspaceId: string,
   teamRunId: string,
   agentId: string,
   task: string,
   depth: number = 1
 ): Promise<SubAgentRun> {
-  const teamRun = await getTeamRun(teamRunId);
+  const teamRun = await getTeamRun(workspaceId, teamRunId);
   if (!teamRun) throw new Error(`Team run ${teamRunId} not found`);
 
   // Check depth limit
@@ -70,19 +72,19 @@ export async function spawnSubAgent(
 
   // Check concurrent limit
   const activeCount = await queryOne<any>(
-    'SELECT COUNT(*) as count FROM sub_agent_runs WHERE team_run_id = $1 AND status IN ($2, $3)',
-    [teamRunId, 'queued', 'running']
+    'SELECT COUNT(*) as count FROM sub_agent_runs WHERE team_run_id = $1 AND status IN ($2, $3) AND workspace_id = $4',
+    [teamRunId, 'queued', 'running', workspaceId]
   );
 
   if (parseInt(activeCount?.count || '0', 10) >= teamRun.max_concurrent) {
     throw new Error(`Max concurrent sub-agents (${teamRun.max_concurrent}) reached`);
   }
 
-  const agent = await getAgent(agentId);
+  const agent = await getAgent(workspaceId, agentId);
   if (!agent) throw new Error(`Agent ${agentId} not found`);
 
   // Sub-agents inherit lead's permissions but cannot elevate
-  const leadAgent = await getAgent(teamRun.lead_agent_id);
+  const leadAgent = await getAgent(workspaceId, teamRun.lead_agent_id);
   if (!leadAgent) throw new Error(`Lead agent not found`);
 
   const id = uuid();
@@ -101,13 +103,14 @@ export async function spawnSubAgent(
   };
 
   await execute(`
-    INSERT INTO sub_agent_runs (id, team_run_id, agent_id, run_id, depth, status, task, created_at)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-  `, [subAgentRun.id, subAgentRun.team_run_id, subAgentRun.agent_id,
+    INSERT INTO sub_agent_runs (id, workspace_id, team_run_id, agent_id, run_id, depth, status, task, created_at)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+  `, [subAgentRun.id, workspaceId, subAgentRun.team_run_id, subAgentRun.agent_id,
     subAgentRun.run_id, subAgentRun.depth, subAgentRun.status, subAgentRun.task]);
 
   // Enqueue the sub-agent's run
   const jobData: JobData = {
+    workspaceId,
     agentId,
     channelId: '', // Sub-agent output collected by lead
     threadTs: '',
@@ -131,16 +134,17 @@ export async function spawnSubAgent(
 // ── Sub-Agent Completion ──
 
 export async function completeSubAgent(
+  workspaceId: string,
   subAgentRunId: string,
   status: RunStatus,
   result: string
 ): Promise<void> {
   await execute(
-    'UPDATE sub_agent_runs SET status = $1, result = $2 WHERE id = $3',
-    [status, result, subAgentRunId]
+    'UPDATE sub_agent_runs SET status = $1, result = $2 WHERE id = $3 AND workspace_id = $4',
+    [status, result, subAgentRunId, workspaceId]
   );
 
-  const subRun = await queryOne<SubAgentRun>('SELECT * FROM sub_agent_runs WHERE id = $1', [subAgentRunId]);
+  const subRun = await queryOne<SubAgentRun>('SELECT * FROM sub_agent_runs WHERE id = $1 AND workspace_id = $2', [subAgentRunId, workspaceId]);
   if (!subRun) return;
 
   logger.info('Sub-agent completed', {
@@ -150,25 +154,25 @@ export async function completeSubAgent(
   });
 
   // Check if all sub-agents are done — post results to Slack
-  await checkTeamCompletion(subRun.team_run_id);
+  await checkTeamCompletion(workspaceId, subRun.team_run_id);
 }
 
-async function checkTeamCompletion(teamRunId: string): Promise<boolean> {
+async function checkTeamCompletion(workspaceId: string, teamRunId: string): Promise<boolean> {
   const pending = await queryOne<any>(
-    'SELECT COUNT(*) as count FROM sub_agent_runs WHERE team_run_id = $1 AND status IN ($2, $3)',
-    [teamRunId, 'queued', 'running']
+    'SELECT COUNT(*) as count FROM sub_agent_runs WHERE team_run_id = $1 AND status IN ($2, $3) AND workspace_id = $4',
+    [teamRunId, 'queued', 'running', workspaceId]
   );
 
   if (parseInt(pending?.count || '0', 10) === 0) {
     // All sub-agents done — post aggregated results to lead agent's thread
-    const teamRun = await getTeamRun(teamRunId);
+    const teamRun = await getTeamRun(workspaceId, teamRunId);
     if (teamRun) {
-      const leadRun = await queryOne<any>('SELECT * FROM run_history WHERE id = $1', [teamRun.lead_run_id]);
+      const leadRun = await queryOne<any>('SELECT * FROM run_history WHERE id = $1 AND workspace_id = $2', [teamRun.lead_run_id, workspaceId]);
       if (leadRun?.channel_id && leadRun?.thread_ts) {
         try {
           const { postMessage } = await import('../../slack');
-          const results = await getTeamResults(teamRunId);
-          const cost = await getTeamCost(teamRunId);
+          const results = await getTeamResults(workspaceId, teamRunId);
+          const cost = await getTeamCost(workspaceId, teamRunId);
 
           let summary = `:checkered_flag: *Team run complete*\n`;
           summary += `Completed: ${results.completed.length} | Failed: ${results.failed.length} | Cost: $${cost.toFixed(4)}\n\n`;
@@ -194,14 +198,14 @@ async function checkTeamCompletion(teamRunId: string): Promise<boolean> {
 
 // ── Results Aggregation ──
 
-export async function getTeamResults(teamRunId: string): Promise<{
+export async function getTeamResults(workspaceId: string, teamRunId: string): Promise<{
   completed: SubAgentRun[];
   failed: SubAgentRun[];
   allDone: boolean;
 }> {
   const subRuns = await query<SubAgentRun>(
-    'SELECT * FROM sub_agent_runs WHERE team_run_id = $1',
-    [teamRunId]
+    'SELECT * FROM sub_agent_runs WHERE team_run_id = $1 AND workspace_id = $2',
+    [teamRunId, workspaceId]
   );
 
   return {
@@ -213,21 +217,21 @@ export async function getTeamResults(teamRunId: string): Promise<{
 
 // ── Team Cost Attribution ──
 
-export async function getTeamCost(teamRunId: string): Promise<number> {
+export async function getTeamCost(workspaceId: string, teamRunId: string): Promise<number> {
   const result = await queryOne<any>(`
     SELECT COALESCE(SUM(rh.estimated_cost_usd), 0) as total_cost
     FROM sub_agent_runs sar
     JOIN run_history rh ON sar.run_id = rh.id
-    WHERE sar.team_run_id = $1
-  `, [teamRunId]);
+    WHERE sar.team_run_id = $1 AND sar.workspace_id = $2
+  `, [teamRunId, workspaceId]);
 
   return parseFloat(result?.total_cost || '0');
 }
 
 // ── Slack Presentation ──
 
-export async function formatTeamProgress(teamRunId: string): Promise<string> {
-  const teamRun = await getTeamRun(teamRunId);
+export async function formatTeamProgress(workspaceId: string, teamRunId: string): Promise<string> {
+  const teamRun = await getTeamRun(workspaceId, teamRunId);
   if (!teamRun) return 'Team run not found';
 
   const subAgents = teamRun.sub_agents;

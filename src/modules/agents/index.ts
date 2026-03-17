@@ -22,10 +22,10 @@ export interface CreateAgentParams {
   createdBy: string;
 }
 
-export async function createAgent(params: CreateAgentParams): Promise<Agent> {
+export async function createAgent(workspaceId: string, params: CreateAgentParams): Promise<Agent> {
   const id = uuid();
 
-  const existing = await queryOne('SELECT id FROM agents WHERE name = $1', [params.name]);
+  const existing = await queryOne('SELECT id FROM agents WHERE workspace_id = $1 AND name = $2', [workspaceId, params.name]);
   if (existing) {
     throw new Error(`Agent with name "${params.name}" already exists`);
   }
@@ -57,12 +57,12 @@ export async function createAgent(params: CreateAgentParams): Promise<Agent> {
 
   await withTransaction(async (client) => {
     await client.query(`
-      INSERT INTO agents (id, name, channel_id, channel_ids, system_prompt, tools, avatar_emoji, status,
+      INSERT INTO agents (id, workspace_id, name, channel_id, channel_ids, system_prompt, tools, avatar_emoji, status,
         model, streaming_detail, docker_image, self_evolution_mode, max_turns, memory_enabled,
         respond_to_all_messages, mentions_only, visibility, relevance_keywords, created_by, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
     `, [
-      agent.id, agent.name, agent.channel_id, agent.channel_ids,
+      agent.id, workspaceId, agent.name, agent.channel_id, agent.channel_ids,
       agent.system_prompt, JSON.stringify(agent.tools), agent.avatar_emoji, agent.status,
       agent.model, agent.streaming_detail, agent.docker_image,
       agent.self_evolution_mode, agent.max_turns, agent.memory_enabled,
@@ -95,42 +95,43 @@ export async function createAgent(params: CreateAgentParams): Promise<Agent> {
   return agent;
 }
 
-export async function getAgent(id: string): Promise<Agent | null> {
-  const row = await queryOne('SELECT * FROM agents WHERE id = $1', [id]);
+export async function getAgent(workspaceId: string, id: string): Promise<Agent | null> {
+  const row = await queryOne('SELECT * FROM agents WHERE workspace_id = $1 AND id = $2', [workspaceId, id]);
   if (!row) return null;
   return deserializeAgent(row);
 }
 
-export async function getAgentByName(name: string): Promise<Agent | null> {
-  const row = await queryOne('SELECT * FROM agents WHERE name = $1', [name]);
+export async function getAgentByName(workspaceId: string, name: string): Promise<Agent | null> {
+  const row = await queryOne('SELECT * FROM agents WHERE workspace_id = $1 AND name = $2', [workspaceId, name]);
   if (!row) return null;
   return deserializeAgent(row);
 }
 
-export async function getAgentByChannel(channelId: string): Promise<Agent | null> {
-  const row = await queryOne('SELECT * FROM agents WHERE $1 = ANY(channel_ids) AND status != $2', [channelId, 'archived']);
+export async function getAgentByChannel(workspaceId: string, channelId: string): Promise<Agent | null> {
+  const row = await queryOne('SELECT * FROM agents WHERE workspace_id = $1 AND $2 = ANY(channel_ids) AND status != $3', [workspaceId, channelId, 'archived']);
   if (!row) return null;
   return deserializeAgent(row);
 }
 
-export async function getAgentsByChannel(channelId: string): Promise<Agent[]> {
-  const rows = await query('SELECT * FROM agents WHERE $1 = ANY(channel_ids) AND status != $2', [channelId, 'archived']);
+export async function getAgentsByChannel(workspaceId: string, channelId: string): Promise<Agent[]> {
+  const rows = await query('SELECT * FROM agents WHERE workspace_id = $1 AND $2 = ANY(channel_ids) AND status != $3', [workspaceId, channelId, 'archived']);
   return rows.map(deserializeAgent);
 }
 
-export async function listAgents(): Promise<Agent[]> {
-  const rows = await query('SELECT * FROM agents WHERE status != $1 ORDER BY created_at DESC', ['archived']);
+export async function listAgents(workspaceId: string): Promise<Agent[]> {
+  const rows = await query('SELECT * FROM agents WHERE workspace_id = $1 AND status != $2 ORDER BY created_at DESC', [workspaceId, 'archived']);
   return rows.map(deserializeAgent);
 }
 
 /**
  * Ensure the bot is a member of every channel assigned to an active agent.
- * Call once at startup.
+ * Call once at startup. Queries all workspaces since this is a global startup operation.
  */
 export async function ensureBotInAllAgentChannels(): Promise<void> {
-  const agents = await listAgents();
+  const agents = await query('SELECT * FROM agents WHERE status != $1', ['archived']);
   const allChannels = new Set<string>();
-  for (const agent of agents) {
+  for (const row of agents) {
+    const agent = deserializeAgent(row);
     for (const ch of (agent.channel_ids || [])) {
       allChannels.add(ch);
     }
@@ -142,16 +143,16 @@ export async function ensureBotInAllAgentChannels(): Promise<void> {
   }
 }
 
-export async function updateAgent(id: string, updates: Partial<Agent>, changedBy: string): Promise<Agent> {
-  const existing = await getAgent(id);
+export async function updateAgent(workspaceId: string, id: string, updates: Partial<Agent>, changedBy: string): Promise<Agent> {
+  const existing = await getAgent(workspaceId, id);
   if (!existing) throw new Error(`Agent ${id} not found`);
 
   const fields: string[] = [];
-  const values: any[] = [];
-  let paramIdx = 1;
+  const values: any[] = [workspaceId];
+  let paramIdx = 2;
 
   if (updates.name !== undefined) {
-    const dup = await queryOne('SELECT id FROM agents WHERE name = $1 AND id != $2', [updates.name, id]);
+    const dup = await queryOne('SELECT id FROM agents WHERE workspace_id = $1 AND name = $2 AND id != $3', [workspaceId, updates.name, id]);
     if (dup) throw new Error(`Agent with name "${updates.name}" already exists`);
     fields.push(`name = $${paramIdx++}`);
     values.push(updates.name);
@@ -227,7 +228,7 @@ export async function updateAgent(id: string, updates: Partial<Agent>, changedBy
   values.push(id);
 
   await withTransaction(async (client) => {
-    await client.query(`UPDATE agents SET ${fields.join(', ')} WHERE id = $${paramIdx}`, values);
+    await client.query(`UPDATE agents SET ${fields.join(', ')} WHERE workspace_id = $1 AND id = $${paramIdx}`, values);
 
     if (updates.system_prompt !== undefined && updates.system_prompt !== existing.system_prompt) {
       const latestVersion = await client.query(
@@ -255,7 +256,7 @@ export async function updateAgent(id: string, updates: Partial<Agent>, changedBy
   // Re-fetch with a timeout to prevent hanging the event loop if DB is slow
   try {
     const updated = await Promise.race([
-      getAgent(id),
+      getAgent(workspaceId, id),
       new Promise<undefined>((_, reject) => setTimeout(() => reject(new Error('getAgent timeout')), 5000)),
     ]);
     return updated || existing;
@@ -265,113 +266,121 @@ export async function updateAgent(id: string, updates: Partial<Agent>, changedBy
   }
 }
 
-export async function deleteAgent(id: string): Promise<void> {
-  await execute('UPDATE agents SET status = $1 WHERE id = $2', ['archived', id]);
+export async function deleteAgent(workspaceId: string, id: string): Promise<void> {
+  await execute('UPDATE agents SET status = $1 WHERE workspace_id = $2 AND id = $3', ['archived', workspaceId, id]);
   logger.info('Agent archived', { agentId: id });
 }
 
-export async function getAgentVersions(agentId: string): Promise<AgentVersion[]> {
+export async function getAgentVersions(workspaceId: string, agentId: string): Promise<AgentVersion[]> {
   return query<AgentVersion>(
-    'SELECT * FROM agent_versions WHERE agent_id = $1 ORDER BY version DESC', [agentId]
+    `SELECT av.* FROM agent_versions av
+     JOIN agents a ON a.id = av.agent_id
+     WHERE a.workspace_id = $1 AND av.agent_id = $2
+     ORDER BY av.version DESC`,
+    [workspaceId, agentId]
   );
 }
 
-export async function getAgentVersion(agentId: string, version: number): Promise<AgentVersion | null> {
+export async function getAgentVersion(workspaceId: string, agentId: string, version: number): Promise<AgentVersion | null> {
   const row = await queryOne<AgentVersion>(
-    'SELECT * FROM agent_versions WHERE agent_id = $1 AND version = $2', [agentId, version]
+    `SELECT av.* FROM agent_versions av
+     JOIN agents a ON a.id = av.agent_id
+     WHERE a.workspace_id = $1 AND av.agent_id = $2 AND av.version = $3`,
+    [workspaceId, agentId, version]
   );
   return row || null;
 }
 
-export async function revertAgent(agentId: string, version: number, changedBy: string): Promise<Agent> {
-  const targetVersion = await getAgentVersion(agentId, version);
+export async function revertAgent(workspaceId: string, agentId: string, version: number, changedBy: string): Promise<Agent> {
+  const targetVersion = await getAgentVersion(workspaceId, agentId, version);
   if (!targetVersion) throw new Error(`Version ${version} not found for agent ${agentId}`);
-  return updateAgent(agentId, { system_prompt: targetVersion.system_prompt }, changedBy);
+  return updateAgent(workspaceId, agentId, { system_prompt: targetVersion.system_prompt }, changedBy);
 }
 
 // ── Agent Members (for private agents) ──
 
-export async function addAgentMember(agentId: string, userId: string, addedBy: string): Promise<void> {
+export async function addAgentMember(workspaceId: string, agentId: string, userId: string, addedBy: string): Promise<void> {
   await execute(
     'INSERT INTO agent_members (agent_id, user_id, added_by) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
     [agentId, userId, addedBy]
   );
 }
 
-export async function removeAgentMember(agentId: string, userId: string): Promise<void> {
+export async function removeAgentMember(workspaceId: string, agentId: string, userId: string): Promise<void> {
   await execute('DELETE FROM agent_members WHERE agent_id = $1 AND user_id = $2', [agentId, userId]);
 }
 
-export async function getAgentMembers(agentId: string): Promise<string[]> {
+export async function getAgentMembers(workspaceId: string, agentId: string): Promise<string[]> {
   const rows = await query<{ user_id: string }>('SELECT user_id FROM agent_members WHERE agent_id = $1', [agentId]);
   return rows.map(r => r.user_id);
 }
 
-export async function isAgentMember(agentId: string, userId: string): Promise<boolean> {
+export async function isAgentMember(workspaceId: string, agentId: string, userId: string): Promise<boolean> {
   const row = await queryOne('SELECT 1 FROM agent_members WHERE agent_id = $1 AND user_id = $2', [agentId, userId]);
   return !!row;
 }
 
-export async function addAgentMembers(agentId: string, userIds: string[], addedBy: string): Promise<void> {
+export async function addAgentMembers(workspaceId: string, agentId: string, userIds: string[], addedBy: string): Promise<void> {
   for (const userId of userIds) {
-    await addAgentMember(agentId, userId, addedBy);
+    await addAgentMember(workspaceId, agentId, userId, addedBy);
   }
 }
 
 // ── Agent Access Check (visibility-aware) ──
 
-export async function canAccessAgent(agentId: string, userId: string): Promise<boolean> {
-  const agent = await getAgent(agentId);
+export async function canAccessAgent(workspaceId: string, agentId: string, userId: string): Promise<boolean> {
+  const agent = await getAgent(workspaceId, agentId);
   if (!agent) return false;
   if (agent.visibility === 'public') return true;
   // Private agent: check membership, admin, or superadmin
   const { isSuperadmin } = await import('../access-control');
-  if (await isSuperadmin(userId)) return true;
+  if (await isSuperadmin(workspaceId, userId)) return true;
   const adminRow = await queryOne('SELECT 1 FROM agent_admins WHERE agent_id = $1 AND user_id = $2', [agentId, userId]);
   if (adminRow) return true;
-  return isAgentMember(agentId, userId);
+  return isAgentMember(workspaceId, agentId, userId);
 }
 
 // ── DM Conversations ──
 
-export async function createDmConversation(userId: string, agentId: string, dmChannelId: string, threadTs: string): Promise<DmConversation> {
+export async function createDmConversation(workspaceId: string, userId: string, agentId: string, dmChannelId: string, threadTs: string): Promise<DmConversation> {
   const id = uuid();
   await execute(
-    'INSERT INTO dm_conversations (id, user_id, agent_id, dm_channel_id, thread_ts) VALUES ($1, $2, $3, $4, $5)',
-    [id, userId, agentId, dmChannelId, threadTs]
+    'INSERT INTO dm_conversations (id, workspace_id, user_id, agent_id, dm_channel_id, thread_ts) VALUES ($1, $2, $3, $4, $5, $6)',
+    [id, workspaceId, userId, agentId, dmChannelId, threadTs]
   );
   return { id, user_id: userId, agent_id: agentId, dm_channel_id: dmChannelId, thread_ts: threadTs, created_at: new Date().toISOString(), last_active_at: new Date().toISOString() };
 }
 
-export async function getDmConversation(dmChannelId: string, threadTs: string): Promise<DmConversation | null> {
+export async function getDmConversation(workspaceId: string, dmChannelId: string, threadTs: string): Promise<DmConversation | null> {
   const row = await queryOne<DmConversation>(
-    'SELECT * FROM dm_conversations WHERE dm_channel_id = $1 AND thread_ts = $2',
-    [dmChannelId, threadTs]
+    'SELECT * FROM dm_conversations WHERE workspace_id = $1 AND dm_channel_id = $2 AND thread_ts = $3',
+    [workspaceId, dmChannelId, threadTs]
   );
   return row || null;
 }
 
-export async function touchDmConversation(dmChannelId: string, threadTs: string): Promise<void> {
+export async function touchDmConversation(workspaceId: string, dmChannelId: string, threadTs: string): Promise<void> {
   await execute(
-    'UPDATE dm_conversations SET last_active_at = NOW() WHERE dm_channel_id = $1 AND thread_ts = $2',
-    [dmChannelId, threadTs]
+    'UPDATE dm_conversations SET last_active_at = NOW() WHERE workspace_id = $1 AND dm_channel_id = $2 AND thread_ts = $3',
+    [workspaceId, dmChannelId, threadTs]
   );
 }
 
-export async function getAccessibleAgents(userId: string): Promise<Agent[]> {
+export async function getAccessibleAgents(workspaceId: string, userId: string): Promise<Agent[]> {
   const { isSuperadmin } = await import('../access-control');
-  if (await isSuperadmin(userId)) {
-    return listAgents();
+  if (await isSuperadmin(workspaceId, userId)) {
+    return listAgents(workspaceId);
   }
   // Public agents + private agents where user is member or admin
   const rows = await query(
     `SELECT DISTINCT a.* FROM agents a
-     LEFT JOIN agent_members m ON a.id = m.agent_id AND m.user_id = $1
-     LEFT JOIN agent_admins aa ON a.id = aa.agent_id AND aa.user_id = $1
-     WHERE a.status != 'archived'
+     LEFT JOIN agent_members m ON a.id = m.agent_id AND m.user_id = $2
+     LEFT JOIN agent_admins aa ON a.id = aa.agent_id AND aa.user_id = $2
+     WHERE a.workspace_id = $1
+       AND a.status != 'archived'
        AND (a.visibility = 'public' OR m.user_id IS NOT NULL OR aa.user_id IS NOT NULL)
      ORDER BY a.created_at DESC`,
-    [userId]
+    [workspaceId, userId]
   );
   return rows.map(deserializeAgent);
 }

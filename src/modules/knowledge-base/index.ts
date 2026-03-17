@@ -19,7 +19,7 @@ export interface CreateKBEntryParams {
   kbSourceId?: string;
 }
 
-export async function createKBEntry(params: CreateKBEntryParams): Promise<KBEntry> {
+export async function createKBEntry(workspaceId: string, params: CreateKBEntryParams): Promise<KBEntry> {
   const id = uuid();
 
   const entry: KBEntry = {
@@ -40,11 +40,11 @@ export async function createKBEntry(params: CreateKBEntryParams): Promise<KBEntr
 
   await withTransaction(async (client) => {
     await client.query(`
-      INSERT INTO kb_entries (id, title, summary, content, category, tags, access_scope,
+      INSERT INTO kb_entries (id, workspace_id, title, summary, content, category, tags, access_scope,
         source_type, contributed_by, approved, kb_source_id, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
     `, [
-      entry.id, entry.title, entry.summary, entry.content, entry.category,
+      entry.id, workspaceId, entry.title, entry.summary, entry.content, entry.category,
       JSON.stringify(entry.tags), JSON.stringify(entry.access_scope),
       entry.source_type, entry.contributed_by, entry.approved,
       entry.kb_source_id, entry.created_at, entry.updated_at
@@ -52,7 +52,7 @@ export async function createKBEntry(params: CreateKBEntryParams): Promise<KBEntr
 
     // Chunk and index content
     if (entry.approved) {
-      await indexKBEntryWithClient(entry, client);
+      await indexKBEntryWithClient(workspaceId, entry, client);
     }
   });
 
@@ -60,46 +60,47 @@ export async function createKBEntry(params: CreateKBEntryParams): Promise<KBEntr
   return entry;
 }
 
-export async function approveKBEntry(entryId: string): Promise<KBEntry> {
-  const entry = await getKBEntry(entryId);
+export async function approveKBEntry(workspaceId: string, entryId: string): Promise<KBEntry> {
+  const entry = await getKBEntry(workspaceId, entryId);
   if (!entry) throw new Error(`KB entry ${entryId} not found`);
 
-  await execute('UPDATE kb_entries SET approved = TRUE, updated_at = NOW() WHERE id = $1', [entryId]);
-  await indexKBEntry(entry);
+  await execute('UPDATE kb_entries SET approved = TRUE, updated_at = NOW() WHERE id = $1 AND workspace_id = $2', [entryId, workspaceId]);
+  await indexKBEntry(workspaceId, entry);
 
   logger.info('KB entry approved', { entryId });
   return { ...entry, approved: true };
 }
 
-export async function getKBEntry(id: string): Promise<KBEntry | null> {
-  const row = await queryOne('SELECT * FROM kb_entries WHERE id = $1', [id]);
+export async function getKBEntry(workspaceId: string, id: string): Promise<KBEntry | null> {
+  const row = await queryOne('SELECT * FROM kb_entries WHERE id = $1 AND workspace_id = $2', [id, workspaceId]);
   if (!row) return null;
   return deserializeKBEntry(row);
 }
 
-export async function listKBEntries(limit: number = 50): Promise<KBEntry[]> {
+export async function listKBEntries(workspaceId: string, limit: number = 50): Promise<KBEntry[]> {
   const rows = await query(
-    'SELECT * FROM kb_entries WHERE approved = TRUE ORDER BY created_at DESC LIMIT $1', [limit]
+    'SELECT * FROM kb_entries WHERE approved = TRUE AND workspace_id = $1 ORDER BY created_at DESC LIMIT $2', [workspaceId, limit]
   );
   return rows.map(deserializeKBEntry);
 }
 
-export async function listPendingEntries(): Promise<KBEntry[]> {
+export async function listPendingEntries(workspaceId: string): Promise<KBEntry[]> {
   const rows = await query(
-    'SELECT * FROM kb_entries WHERE approved = FALSE ORDER BY created_at DESC'
+    'SELECT * FROM kb_entries WHERE approved = FALSE AND workspace_id = $1 ORDER BY created_at DESC', [workspaceId]
   );
   return rows.map(deserializeKBEntry);
 }
 
-export async function deleteKBEntry(id: string): Promise<void> {
-  await execute('DELETE FROM kb_chunks WHERE entry_id = $1', [id]);
-  await execute('DELETE FROM kb_entries WHERE id = $1', [id]);
+export async function deleteKBEntry(workspaceId: string, id: string): Promise<void> {
+  await execute('DELETE FROM kb_chunks WHERE entry_id = $1 AND entry_id IN (SELECT id FROM kb_entries WHERE workspace_id = $2)', [id, workspaceId]);
+  await execute('DELETE FROM kb_entries WHERE id = $1 AND workspace_id = $2', [id, workspaceId]);
   logger.info('KB entry deleted', { entryId: id });
 }
 
 // ── KB Search ──
 
 export async function searchKB(
+  workspaceId: string,
   queryText: string,
   agentId?: string,
   tokenBudget: number = 4000
@@ -117,17 +118,18 @@ export async function searchKB(
     const chunkRows = await query(`
       SELECT kc.entry_id, kc.content, ts_rank(kc.search_vector, to_tsquery('english', $1)) AS rank
       FROM kb_chunks kc
-      WHERE kc.search_vector @@ to_tsquery('english', $1)
+      JOIN kb_entries ke ON ke.id = kc.entry_id
+      WHERE kc.search_vector @@ to_tsquery('english', $1) AND ke.workspace_id = $2
       ORDER BY rank DESC
       LIMIT 20
-    `, [ftsQuery]);
+    `, [ftsQuery, workspaceId]);
 
     // Get unique entries, applying access scope
     const entryIds = [...new Set(chunkRows.map(r => r.entry_id))];
     const entries: KBEntry[] = [];
 
     for (const entryId of entryIds) {
-      const entry = await getKBEntry(entryId);
+      const entry = await getKBEntry(workspaceId, entryId);
       if (!entry || !entry.approved) continue;
 
       // Check access scope
@@ -143,42 +145,42 @@ export async function searchKB(
     // Fallback
     const rows = await query(`
       SELECT * FROM kb_entries
-      WHERE approved = TRUE AND content LIKE $1
+      WHERE approved = TRUE AND workspace_id = $1 AND content LIKE $2
       LIMIT 10
-    `, [`%${queryText.slice(0, 50)}%`]);
+    `, [workspaceId, `%${queryText.slice(0, 50)}%`]);
     return rows.map(deserializeKBEntry);
   }
 }
 
 // ── Indexing ──
 
-async function indexKBEntry(entry: KBEntry): Promise<void> {
+async function indexKBEntry(workspaceId: string, entry: KBEntry): Promise<void> {
   const chunks = chunkText(entry.content, entry.title);
 
   for (const chunk of chunks) {
     await execute(`
-      INSERT INTO kb_chunks (id, entry_id, chunk_index, content, content_hash)
-      VALUES ($1, $2, $3, $4, $5)
-    `, [uuid(), entry.id, chunk.chunkIndex, chunk.content, chunk.contentHash]);
+      INSERT INTO kb_chunks (id, workspace_id, entry_id, chunk_index, content, content_hash)
+      VALUES ($1, $2, $3, $4, $5, $6)
+    `, [uuid(), workspaceId, entry.id, chunk.chunkIndex, chunk.content, chunk.contentHash]);
   }
 }
 
-async function indexKBEntryWithClient(entry: KBEntry, client: any): Promise<void> {
+async function indexKBEntryWithClient(workspaceId: string, entry: KBEntry, client: any): Promise<void> {
   const chunks = chunkText(entry.content, entry.title);
 
   for (const chunk of chunks) {
     await client.query(`
-      INSERT INTO kb_chunks (id, entry_id, chunk_index, content, content_hash)
-      VALUES ($1, $2, $3, $4, $5)
-    `, [uuid(), entry.id, chunk.chunkIndex, chunk.content, chunk.contentHash]);
+      INSERT INTO kb_chunks (id, workspace_id, entry_id, chunk_index, content, content_hash)
+      VALUES ($1, $2, $3, $4, $5, $6)
+    `, [uuid(), workspaceId, entry.id, chunk.chunkIndex, chunk.content, chunk.contentHash]);
   }
 }
 
 // ── Categories ──
 
-export async function getCategories(): Promise<string[]> {
+export async function getCategories(workspaceId: string): Promise<string[]> {
   const rows = await query<{ category: string }>(
-    'SELECT DISTINCT category FROM kb_entries WHERE approved = TRUE ORDER BY category'
+    'SELECT DISTINCT category FROM kb_entries WHERE approved = TRUE AND workspace_id = $1 ORDER BY category', [workspaceId]
   );
   return rows.map(r => r.category);
 }

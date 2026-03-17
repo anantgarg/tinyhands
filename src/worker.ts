@@ -1,6 +1,7 @@
 import { createWorker } from './modules/execution';
-import { initSlackClient } from './slack';
-import { initDb } from './db';
+import { initSlackClient, getSlackApp } from './slack';
+import { initDb, upsertWorkspace, setDefaultWorkspaceId } from './db';
+import { config } from './config';
 import { processExpiredTimers } from './modules/workflows';
 import { expireOldProposals } from './modules/self-evolution';
 import { logger } from './utils/logger';
@@ -16,6 +17,18 @@ async function main(): Promise<void> {
   // Initialize Slack Web API client only (no Socket Mode — avoids extra WebSocket connections)
   initSlackClient();
   logger.info(`Worker ${workerId} Slack client initialized`);
+
+  // Bootstrap workspace from bot token
+  const authResult = await getSlackApp().client.auth.test();
+  await upsertWorkspace({
+    id: authResult.team_id as string,
+    team_name: (authResult.team as string) || 'default',
+    bot_token: config.slack.botToken,
+    bot_user_id: authResult.user_id as string,
+    bot_id: authResult.bot_id as string,
+  });
+  setDefaultWorkspaceId(authResult.team_id as string);
+  logger.info(`Worker ${workerId} workspace bootstrapped`, { workspaceId: authResult.team_id });
 
   // Create BullMQ worker
   const worker = createWorker();

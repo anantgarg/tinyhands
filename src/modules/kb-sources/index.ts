@@ -10,24 +10,25 @@ import { syncSource } from './sync-handlers';
 
 // ── API Key Management ──
 
-export async function getApiKey(provider: KBProviderType): Promise<KBApiKey | null> {
-  const row = await queryOne<KBApiKey>('SELECT * FROM kb_api_keys WHERE provider = $1', [provider]);
+export async function getApiKey(workspaceId: string, provider: KBProviderType): Promise<KBApiKey | null> {
+  const row = await queryOne<KBApiKey>('SELECT * FROM kb_api_keys WHERE provider = $1 AND workspace_id = $2', [provider, workspaceId]);
   return row || null;
 }
 
 export async function setApiKey(
+  workspaceId: string,
   provider: KBProviderType,
   configJson: Record<string, string>,
   userId: string,
 ): Promise<KBApiKey> {
-  const existing = await getApiKey(provider);
+  const existing = await getApiKey(workspaceId, provider);
   const config = JSON.stringify(configJson);
   const setupComplete = Object.values(configJson).every(v => v && v.trim().length > 0);
 
   if (existing) {
     await execute(
-      `UPDATE kb_api_keys SET config_json = $1, setup_complete = $2, updated_at = NOW() WHERE provider = $3`,
-      [config, setupComplete, provider],
+      `UPDATE kb_api_keys SET config_json = $1, setup_complete = $2, updated_at = NOW() WHERE provider = $3 AND workspace_id = $4`,
+      [config, setupComplete, provider, workspaceId],
     );
     logger.info('KB API key updated', { provider, userId, setupComplete });
     return { ...existing, config_json: config, setup_complete: setupComplete };
@@ -35,58 +36,60 @@ export async function setApiKey(
 
   const id = uuid();
   await execute(
-    `INSERT INTO kb_api_keys (id, provider, config_json, setup_complete, created_by) VALUES ($1, $2, $3, $4, $5)`,
-    [id, provider, config, setupComplete, userId],
+    `INSERT INTO kb_api_keys (id, workspace_id, provider, config_json, setup_complete, created_by) VALUES ($1, $2, $3, $4, $5, $6)`,
+    [id, workspaceId, provider, config, setupComplete, userId],
   );
   logger.info('KB API key created', { provider, userId, setupComplete });
   return { id, provider, config_json: config, setup_complete: setupComplete, created_by: userId, created_at: new Date().toISOString(), updated_at: new Date().toISOString() };
 }
 
 export async function setApiKeyField(
+  workspaceId: string,
   provider: KBProviderType,
   key: string,
   value: string,
   userId: string,
 ): Promise<Record<string, string>> {
-  const existing = await getApiKey(provider);
+  const existing = await getApiKey(workspaceId, provider);
   const config = existing ? JSON.parse(existing.config_json) : {};
   config[key] = value;
 
-  await setApiKey(provider, config, userId);
+  await setApiKey(workspaceId, provider, config, userId);
   return config;
 }
 
 export async function removeApiKeyField(
+  workspaceId: string,
   provider: KBProviderType,
   key: string,
   userId: string,
 ): Promise<Record<string, string>> {
-  const existing = await getApiKey(provider);
+  const existing = await getApiKey(workspaceId, provider);
   if (!existing) throw new Error(`No API key configured for ${provider}`);
   const config = JSON.parse(existing.config_json);
   delete config[key];
 
-  await setApiKey(provider, config, userId);
+  await setApiKey(workspaceId, provider, config, userId);
   return config;
 }
 
-export async function isProviderConfigured(provider: KBProviderType): Promise<boolean> {
-  const key = await getApiKey(provider);
+export async function isProviderConfigured(workspaceId: string, provider: KBProviderType): Promise<boolean> {
+  const key = await getApiKey(workspaceId, provider);
   return key?.setup_complete === true;
 }
 
-export async function listApiKeys(): Promise<KBApiKey[]> {
-  return query<KBApiKey>('SELECT * FROM kb_api_keys ORDER BY provider');
+export async function listApiKeys(workspaceId: string): Promise<KBApiKey[]> {
+  return query<KBApiKey>('SELECT * FROM kb_api_keys WHERE workspace_id = $1 ORDER BY provider', [workspaceId]);
 }
 
-export async function deleteApiKey(provider: KBProviderType, userId: string): Promise<void> {
-  await execute('DELETE FROM kb_api_keys WHERE provider = $1', [provider]);
+export async function deleteApiKey(workspaceId: string, provider: KBProviderType, userId: string): Promise<void> {
+  await execute('DELETE FROM kb_api_keys WHERE provider = $1 AND workspace_id = $2', [provider, workspaceId]);
   logger.info('KB API key deleted', { provider, userId });
 }
 
 // ── Source Management ──
 
-export async function createSource(params: {
+export async function createSource(workspaceId: string, params: {
   name: string;
   sourceType: KBConnectorType;
   config: Record<string, string>;
@@ -94,7 +97,7 @@ export async function createSource(params: {
 }): Promise<KBSource> {
   const id = uuid();
   const provider = getProviderForConnector(params.sourceType);
-  const providerConfigured = await isProviderConfigured(provider);
+  const providerConfigured = await isProviderConfigured(workspaceId, provider);
 
   const source: KBSource = {
     id,
@@ -113,25 +116,25 @@ export async function createSource(params: {
   };
 
   await execute(
-    `INSERT INTO kb_sources (id, name, source_type, config_json, status, auto_sync, sync_interval_hours, created_by)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
-    [source.id, source.name, source.source_type, source.config_json, source.status, source.auto_sync, source.sync_interval_hours, source.created_by],
+    `INSERT INTO kb_sources (id, workspace_id, name, source_type, config_json, status, auto_sync, sync_interval_hours, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    [source.id, workspaceId, source.name, source.source_type, source.config_json, source.status, source.auto_sync, source.sync_interval_hours, source.created_by],
   );
 
   logger.info('KB source created', { sourceId: id, name: params.name, type: params.sourceType });
   return source;
 }
 
-export async function getSource(id: string): Promise<KBSource | null> {
-  const row = await queryOne<KBSource>('SELECT * FROM kb_sources WHERE id = $1', [id]);
+export async function getSource(workspaceId: string, id: string): Promise<KBSource | null> {
+  const row = await queryOne<KBSource>('SELECT * FROM kb_sources WHERE id = $1 AND workspace_id = $2', [id, workspaceId]);
   return row || null;
 }
 
-export async function listSources(): Promise<KBSource[]> {
-  return query<KBSource>('SELECT * FROM kb_sources ORDER BY created_at DESC');
+export async function listSources(workspaceId: string): Promise<KBSource[]> {
+  return query<KBSource>('SELECT * FROM kb_sources WHERE workspace_id = $1 ORDER BY created_at DESC', [workspaceId]);
 }
 
-export async function updateSource(id: string, updates: Partial<Pick<KBSource, 'name' | 'config_json' | 'status' | 'auto_sync' | 'sync_interval_hours' | 'error_message' | 'entry_count' | 'last_sync_at'>>): Promise<void> {
+export async function updateSource(workspaceId: string, id: string, updates: Partial<Pick<KBSource, 'name' | 'config_json' | 'status' | 'auto_sync' | 'sync_interval_hours' | 'error_message' | 'entry_count' | 'last_sync_at'>>): Promise<void> {
   const sets: string[] = [];
   const vals: any[] = [];
   let idx = 1;
@@ -147,38 +150,38 @@ export async function updateSource(id: string, updates: Partial<Pick<KBSource, '
   if (sets.length === 0) return;
 
   sets.push(`updated_at = NOW()`);
-  vals.push(id);
-  await execute(`UPDATE kb_sources SET ${sets.join(', ')} WHERE id = $${idx}`, vals);
+  vals.push(id, workspaceId);
+  await execute(`UPDATE kb_sources SET ${sets.join(', ')} WHERE id = $${idx} AND workspace_id = $${idx + 1}`, vals);
 }
 
-export async function deleteSource(id: string, userId: string): Promise<void> {
+export async function deleteSource(workspaceId: string, id: string, userId: string): Promise<void> {
   // Remove linked KB entries
-  await execute('DELETE FROM kb_chunks WHERE entry_id IN (SELECT id FROM kb_entries WHERE kb_source_id = $1)', [id]);
-  await execute('DELETE FROM kb_entries WHERE kb_source_id = $1', [id]);
-  await execute('DELETE FROM kb_sources WHERE id = $1', [id]);
+  await execute('DELETE FROM kb_chunks WHERE entry_id IN (SELECT id FROM kb_entries WHERE kb_source_id = $1 AND workspace_id = $2)', [id, workspaceId]);
+  await execute('DELETE FROM kb_entries WHERE kb_source_id = $1 AND workspace_id = $2', [id, workspaceId]);
+  await execute('DELETE FROM kb_sources WHERE id = $1 AND workspace_id = $2', [id, workspaceId]);
   logger.info('KB source deleted', { sourceId: id, userId });
 }
 
-export async function toggleAutoSync(id: string, enabled: boolean): Promise<void> {
-  await execute('UPDATE kb_sources SET auto_sync = $1, updated_at = NOW() WHERE id = $2', [enabled, id]);
+export async function toggleAutoSync(workspaceId: string, id: string, enabled: boolean): Promise<void> {
+  await execute('UPDATE kb_sources SET auto_sync = $1, updated_at = NOW() WHERE id = $2 AND workspace_id = $3', [enabled, id, workspaceId]);
   logger.info('KB source auto-sync toggled', { sourceId: id, enabled });
 }
 
-export async function updateSourceStatus(id: string, status: KBSourceStatus, errorMessage?: string): Promise<void> {
+export async function updateSourceStatus(workspaceId: string, id: string, status: KBSourceStatus, errorMessage?: string): Promise<void> {
   await execute(
-    'UPDATE kb_sources SET status = $1, error_message = $2, updated_at = NOW() WHERE id = $3',
-    [status, errorMessage || null, id],
+    'UPDATE kb_sources SET status = $1, error_message = $2, updated_at = NOW() WHERE id = $3 AND workspace_id = $4',
+    [status, errorMessage || null, id, workspaceId],
   );
 }
 
 // ── Sync Operations ──
 
-export async function startSync(sourceId: string): Promise<void> {
-  const source = await getSource(sourceId);
+export async function startSync(workspaceId: string, sourceId: string): Promise<void> {
+  const source = await getSource(workspaceId, sourceId);
   if (!source) throw new Error(`Source ${sourceId} not found`);
 
   const provider = getProviderForConnector(source.source_type);
-  const providerConfigured = await isProviderConfigured(provider);
+  const providerConfigured = await isProviderConfigured(workspaceId, provider);
   if (!providerConfigured) {
     throw new Error(`Provider ${provider} is not configured. Set up API keys first.`);
   }
@@ -189,22 +192,22 @@ export async function startSync(sourceId: string): Promise<void> {
   });
 }
 
-export async function flushAndResync(sourceId: string, userId: string): Promise<void> {
-  const source = await getSource(sourceId);
+export async function flushAndResync(workspaceId: string, sourceId: string, userId: string): Promise<void> {
+  const source = await getSource(workspaceId, sourceId);
   if (!source) throw new Error(`Source ${sourceId} not found`);
 
   // Remove all entries from this source
-  await execute('DELETE FROM kb_chunks WHERE entry_id IN (SELECT id FROM kb_entries WHERE kb_source_id = $1)', [sourceId]);
-  await execute('DELETE FROM kb_entries WHERE kb_source_id = $1', [sourceId]);
-  await updateSource(sourceId, { entry_count: 0 });
+  await execute('DELETE FROM kb_chunks WHERE entry_id IN (SELECT id FROM kb_entries WHERE kb_source_id = $1 AND workspace_id = $2)', [sourceId, workspaceId]);
+  await execute('DELETE FROM kb_entries WHERE kb_source_id = $1 AND workspace_id = $2', [sourceId, workspaceId]);
+  await updateSource(workspaceId, sourceId, { entry_count: 0 });
 
   logger.info('KB source flushed', { sourceId, userId });
 
   // Start fresh sync
-  await startSync(sourceId);
+  await startSync(workspaceId, sourceId);
 }
 
-// ── Sources Needing Auto-Sync ──
+// ── Sources Needing Auto-Sync (CROSS-WORKSPACE) ──
 
 export async function getSourcesDueForSync(): Promise<KBSource[]> {
   return query<KBSource>(`

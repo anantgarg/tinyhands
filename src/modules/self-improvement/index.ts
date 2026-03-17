@@ -80,14 +80,15 @@ Produce an improved system prompt that addresses the critique while preserving t
 }
 
 export async function applyPromptDiff(
+  workspaceId: string,
   agentId: string,
   newPrompt: string,
   changeNote: string,
   changedBy: string
 ): Promise<{ agent: Awaited<ReturnType<typeof getAgent>>; version: number }> {
-  const agent = await updateAgent(agentId, { system_prompt: newPrompt }, changedBy);
+  const agent = await updateAgent(workspaceId, agentId, { system_prompt: newPrompt }, changedBy);
 
-  const versions = await getAgentVersions(agentId);
+  const versions = await getAgentVersions(workspaceId, agentId);
   const latestVersion = versions[0]?.version || 1;
 
   logger.info('Self-improvement applied', {
@@ -100,18 +101,19 @@ export async function applyPromptDiff(
 }
 
 export async function revertToVersion(
+  workspaceId: string,
   agentId: string,
   version: number,
   changedBy: string
 ): Promise<Awaited<ReturnType<typeof getAgent>>> {
-  const agent = await revertAgent(agentId, version, changedBy);
+  const agent = await revertAgent(workspaceId, agentId, version, changedBy);
 
   logger.info('Agent reverted', { agentId, version, changedBy });
   return agent;
 }
 
-export async function checkPromptSize(agentId: string): Promise<{ tokenCount: number; warning: boolean }> {
-  const agent = await getAgent(agentId);
+export async function checkPromptSize(workspaceId: string, agentId: string): Promise<{ tokenCount: number; warning: boolean }> {
+  const agent = await getAgent(workspaceId, agentId);
   if (!agent) throw new Error(`Agent ${agentId} not found`);
 
   const tokenCount = Math.ceil(agent.system_prompt.length / 4);

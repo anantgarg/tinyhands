@@ -31,22 +31,24 @@ export interface FillOptions {
 }
 
 export async function fillFields(
+  workspaceId: string,
   fields: TemplateField[],
   options: FillOptions = {}
 ): Promise<TemplateField[]> {
   const filled: TemplateField[] = [];
   for (const field of fields) {
-    filled.push(await fillSingleField(field, options));
+    filled.push(await fillSingleField(workspaceId, field, options));
   }
   return filled;
 }
 
 async function fillSingleField(
+  workspaceId: string,
   field: TemplateField,
   options: FillOptions
 ): Promise<TemplateField> {
   // Search KB for relevant content
-  const kbResults = await searchKB(field.name, options.agentId);
+  const kbResults = await searchKB(workspaceId, field.name, options.agentId);
 
   if (kbResults.length === 0) {
     return {
@@ -150,6 +152,7 @@ export function formatGapSummary(unfilled: TemplateField[]): string {
 // ── Full Pipeline ──
 
 export async function processTemplate(
+  workspaceId: string,
   template: string,
   options: FillOptions = {}
 ): Promise<{
@@ -159,7 +162,7 @@ export async function processTemplate(
   summary: string;
 }> {
   const fields = extractFields(template);
-  const filledFields = await fillFields(fields, options);
+  const filledFields = await fillFields(workspaceId, fields, options);
   const { content, unfilled } = applyFieldsToTemplate(template, filledFields);
   const summary = formatGapSummary(unfilled);
 

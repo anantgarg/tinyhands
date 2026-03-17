@@ -7,7 +7,7 @@ import { analyzeGoal } from '../modules/agents/goal-analyzer';
 import { attachSkillToAgent } from '../modules/skills';
 import { createTrigger } from '../modules/triggers';
 import { logger } from '../utils/logger';
-import { execute, queryOne } from '../db';
+import { execute, queryOne, getDefaultWorkspaceId } from '../db';
 import { getToolIntegrations, getIntegration, getIntegrations } from '../modules/tools/integrations';
 import { getAllTemplates, getTemplateById, getTemplatesByCategory, resolveCustomTools } from '../modules/templates';
 
@@ -163,10 +163,11 @@ export function registerCommands(app: App): void {
   app.command('/agents', async ({ command, ack, respond }) => {
     if (!(await requireDM(command, ack, respond))) return;
     await ack();
-    await initSuperadmin(command.user_id);
+    const workspaceId = command.team_id || getDefaultWorkspaceId();
+    await initSuperadmin(workspaceId, command.user_id);
     const userId = command.user_id;
 
-    const agents = await getAccessibleAgents(userId);
+    const agents = await getAccessibleAgents(workspaceId, userId);
 
     const blocks: any[] = [
       { type: 'header', text: { type: 'plain_text', text: `:robot_face: Agents (${agents.length})` } },
@@ -187,7 +188,7 @@ export function registerCommands(app: App): void {
           { text: { type: 'plain_text', text: ':gear: View Config' }, value: `view_config:${a.id}` },
         ];
 
-        const canModify = await canModifyAgent(a.id, userId);
+        const canModify = await canModifyAgent(workspaceId, a.id, userId);
 
         if (canModify) {
           overflowOptions.push({ text: { type: 'plain_text', text: ':pencil: Update' }, value: `update:${a.id}` });
@@ -247,7 +248,8 @@ export function registerCommands(app: App): void {
   app.command('/new-agent', async ({ command, ack, respond }) => {
     if (!(await requireDM(command, ack, respond))) return;
     await ack();
-    await initSuperadmin(command.user_id);
+    const workspaceId = command.team_id || getDefaultWorkspaceId();
+    await initSuperadmin(workspaceId, command.user_id);
     await startNewAgentFlow(command.user_id, command.channel_id);
   });
 
@@ -255,23 +257,25 @@ export function registerCommands(app: App): void {
   app.command('/update-agent', async ({ command, ack, respond }) => {
     if (!(await requireDM(command, ack, respond))) return;
     await ack();
-    await startUpdateAgentFlow(command.user_id, command.channel_id);
+    const workspaceId = command.team_id || getDefaultWorkspaceId();
+    await startUpdateAgentFlow(workspaceId, command.user_id, command.channel_id);
   });
 
   // /tools — Interactive admin tool management
   app.command('/tools', async ({ command, ack, respond }) => {
     if (!(await requireDM(command, ack, respond))) return;
     await ack();
+    const workspaceId = command.team_id || getDefaultWorkspaceId();
     const userId = command.user_id;
 
     const { isSuperadmin } = await import('../modules/access-control');
-    if (!(await isSuperadmin(userId))) {
+    if (!(await isSuperadmin(workspaceId, userId))) {
       await respond({ response_type: 'ephemeral', text: ':lock: Only admins can manage tools. Use `/agents` to create agents with existing tools.' });
       return;
     }
 
     const { listCustomTools: listAll, getCustomTool } = await import('../modules/tools');
-    const tools = await listAll();
+    const tools = await listAll(workspaceId);
     const registeredNames = new Set(tools.map(t => t.name));
 
     const blocks: any[] = [
@@ -351,10 +355,11 @@ export function registerCommands(app: App): void {
   app.command('/kb', async ({ command, ack, respond }) => {
     if (!(await requireDM(command, ack, respond))) return;
     await ack();
+    const workspaceId = command.team_id || getDefaultWorkspaceId();
     const userId = command.user_id;
     const subcommand = command.text.trim().split(/\s+/)[0]?.toLowerCase() || '';
     const { isSuperadmin } = await import('../modules/access-control');
-    const isAdmin = await isSuperadmin(userId);
+    const isAdmin = await isSuperadmin(workspaceId, userId);
 
     if (subcommand === 'search') {
       const queryText = command.text.trim().slice('search'.length).trim();
@@ -363,7 +368,7 @@ export function registerCommands(app: App): void {
         return;
       }
       const { searchKB } = await import('../modules/knowledge-base');
-      const results = await searchKB(queryText);
+      const results = await searchKB(workspaceId, queryText);
       if (results.length === 0) {
         await respond({ text: ':mag: No KB entries found.' });
         return;
@@ -437,7 +442,7 @@ export function registerCommands(app: App): void {
     const { listKBEntries, listPendingEntries, getCategories } = await import('../modules/knowledge-base');
     const { listSources } = await import('../modules/kb-sources');
     const [entries, pending, categories, sources] = await Promise.all([
-      listKBEntries(10), listPendingEntries(), getCategories(), listSources(),
+      listKBEntries(workspaceId, 10), listPendingEntries(workspaceId), getCategories(workspaceId), listSources(workspaceId),
     ]);
 
     const blocks: any[] = [
@@ -590,8 +595,8 @@ async function startNewAgentFlow(userId: string, channelId: string): Promise<voi
   }
 }
 
-async function startUpdateAgentFlow(userId: string, channelId: string): Promise<void> {
-  const agents = await listAgents();
+async function startUpdateAgentFlow(workspaceId: string, userId: string, channelId: string): Promise<void> {
+  const agents = await listAgents(workspaceId);
   if (agents.length === 0) {
     await postMessage(channelId, 'No agents exist yet. Use `/agents` to create one.');
     return;
@@ -599,7 +604,7 @@ async function startUpdateAgentFlow(userId: string, channelId: string): Promise<
 
   const editableAgents: typeof agents = [];
   for (const a of agents) {
-    if (await canModifyAgent(a.id, userId)) editableAgents.push(a);
+    if (await canModifyAgent(workspaceId, a.id, userId)) editableAgents.push(a);
   }
   if (editableAgents.length === 0) {
     await postMessage(channelId, 'You don\'t have permission to update any agents.');
@@ -661,10 +666,11 @@ export function registerInlineActions(app: App): void {
     const userId = body.user.id;
     const channelId = body.channel?.id;
     const triggerId = (body as any).trigger_id;
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
 
     switch (actionType) {
       case 'view_config': {
-        const agent = await getAgent(agentId);
+        const agent = await getAgent(workspaceId, agentId);
         if (!agent) { if (channelId) await postMessage(channelId, ':x: Agent not found.'); return; }
         const channels = (agent.channel_ids?.length > 0 ? agent.channel_ids : [agent.channel_id]).map((c: string) => `<#${c}>`).join(', ');
         const blocks: any[] = [
@@ -688,11 +694,11 @@ export function registerInlineActions(app: App): void {
 
       case 'update': {
         if (!channelId) return;
-        if (!(await canModifyAgent(agentId, userId))) {
+        if (!(await canModifyAgent(workspaceId, agentId, userId))) {
           await postMessage(channelId, ':x: You don\'t have permission to update this agent.');
           return;
         }
-        const agent = await getAgent(agentId);
+        const agent = await getAgent(workspaceId, agentId);
         if (!agent) return;
         const currentChannels = agent.channel_ids?.length > 0 ? agent.channel_ids : [agent.channel_id];
         const channelLabels = currentChannels.map((c: string) => `<#${c}>`).join(', ');
@@ -737,8 +743,8 @@ export function registerInlineActions(app: App): void {
 
       case 'pause': {
         try {
-          await updateAgent(agentId, { status: 'paused' } as any, userId);
-          const agent = await getAgent(agentId);
+          await updateAgent(workspaceId, agentId, { status: 'paused' } as any, userId);
+          const agent = await getAgent(workspaceId, agentId);
           if (channelId) await postMessage(channelId, `:double_vertical_bar: Agent *${agent?.name || agentId}* paused.`);
         } catch (err: any) {
           if (channelId) await postMessage(channelId, `:x: ${err.message}`);
@@ -748,8 +754,8 @@ export function registerInlineActions(app: App): void {
 
       case 'resume': {
         try {
-          await updateAgent(agentId, { status: 'active' } as any, userId);
-          const agent = await getAgent(agentId);
+          await updateAgent(workspaceId, agentId, { status: 'active' } as any, userId);
+          const agent = await getAgent(workspaceId, agentId);
           if (channelId) await postMessage(channelId, `:arrow_forward: Agent *${agent?.name || agentId}* resumed.`);
         } catch (err: any) {
           if (channelId) await postMessage(channelId, `:x: ${err.message}`);
@@ -758,16 +764,16 @@ export function registerInlineActions(app: App): void {
       }
 
       case 'members': {
-        if (!(await canModifyAgent(agentId, userId))) {
+        if (!(await canModifyAgent(workspaceId, agentId, userId))) {
           if (channelId) await postMessage(channelId, ':x: You don\'t have permission to manage members.');
           return;
         }
-        const agent = await getAgent(agentId);
+        const agent = await getAgent(workspaceId, agentId);
         if (!agent || agent.visibility !== 'private') {
           if (channelId) await postMessage(channelId, ':x: This agent is not private.');
           return;
         }
-        const members = await getAgentMembers(agentId);
+        const members = await getAgentMembers(workspaceId, agentId);
         const memberList = members.length > 0
           ? members.map(m => `<@${m}>`).join(', ')
           : '_No members yet_';
@@ -782,13 +788,13 @@ export function registerInlineActions(app: App): void {
       }
 
       case 'delete': {
-        if (!(await canModifyAgent(agentId, userId))) {
+        if (!(await canModifyAgent(workspaceId, agentId, userId))) {
           if (channelId) await postMessage(channelId, ':x: You don\'t have permission to delete this agent.');
           return;
         }
         // Show confirmation
         if (channelId) {
-          const agent = await getAgent(agentId);
+          const agent = await getAgent(workspaceId, agentId);
           await postBlocks(channelId, [
             {
               type: 'section',
@@ -928,6 +934,7 @@ export function registerInlineActions(app: App): void {
   // Template activation confirmed
   app.action('template_confirm', async ({ action, ack, body }) => {
     await ack();
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
     const confirmId = (action as any).value;
     const row = await queryOne<{ data: any; expires_at: Date }>(
       `DELETE FROM pending_confirmations WHERE id = $1 RETURNING data, expires_at`, [confirmId],
@@ -972,12 +979,12 @@ export function registerInlineActions(app: App): void {
 
       // Resolve name, handle collisions
       let agentName = template.name;
-      if (await getAgentByName(agentName)) {
+      if (await getAgentByName(workspaceId, agentName)) {
         agentName = `${agentName}-${Date.now().toString(36).slice(-4)}`;
       }
 
       const agentTools = [...template.tools, ...resolvedTools];
-      const agent = await createAgent({
+      const agent = await createAgent(workspaceId, {
         name: agentName,
         channelId: selectedChannelId,
         channelIds: [selectedChannelId],
@@ -995,7 +1002,7 @@ export function registerInlineActions(app: App): void {
 
       // Attach skills
       for (const skillName of template.skills) {
-        try { await attachSkillToAgent(agent.id, skillName, 'read', userId); }
+        try { await attachSkillToAgent(workspaceId, agent.id, skillName, 'read', userId); }
         catch (err: any) { logger.warn('Template skill attach failed', { skillName, error: err.message }); }
       }
 
@@ -1028,8 +1035,9 @@ export function registerInlineActions(app: App): void {
     await ack();
     const agentId = (action as any).value;
     const userId = body.user.id;
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
     try {
-      const agent = await getAgent(agentId);
+      const agent = await getAgent(workspaceId, agentId);
       await execute('DELETE FROM agents WHERE id = $1', [agentId]);
       await replyToAction(body, `:wastebasket: Agent *${agent?.name || agentId}* deleted.`);
     } catch (err: any) {
@@ -1054,12 +1062,13 @@ export function registerInlineActions(app: App): void {
     const userId = body.user.id;
     const channelId = body.channel?.id;
     const triggerId = (body as any).trigger_id;
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
 
     const { isSuperadmin } = await import('../modules/access-control');
-    if (!(await isSuperadmin(userId))) return;
+    if (!(await isSuperadmin(workspaceId, userId))) return;
 
     const { getSource, startSync, flushAndResync, toggleAutoSync, deleteSource } = await import('../modules/kb-sources');
-    const source = await getSource(sourceId);
+    const source = await getSource(workspaceId, sourceId);
     if (!source) { if (channelId) await postMessage(channelId, ':x: Source not found.'); return; }
 
     switch (actionType) {
@@ -1099,7 +1108,7 @@ export function registerInlineActions(app: App): void {
 
       case 'sync': {
         try {
-          await startSync(sourceId);
+          await startSync(workspaceId, sourceId);
           if (channelId) await postMessage(channelId, `:arrows_counterclockwise: Sync started for *${source.name}*`);
         } catch (err: any) {
           if (channelId) {
@@ -1115,7 +1124,7 @@ export function registerInlineActions(app: App): void {
 
       case 'flush': {
         try {
-          await flushAndResync(sourceId, userId);
+          await flushAndResync(workspaceId, sourceId, userId);
           if (channelId) await postMessage(channelId, `:put_litter_in_its_place: Flushed & re-syncing *${source.name}*`);
         } catch (err: any) {
           if (channelId) await postMessage(channelId, `:x: ${err.message}`);
@@ -1125,13 +1134,13 @@ export function registerInlineActions(app: App): void {
 
       case 'toggle_sync': {
         const newState = !source.auto_sync;
-        await toggleAutoSync(sourceId, newState);
+        await toggleAutoSync(workspaceId, sourceId, newState);
         if (channelId) await postMessage(channelId, `${newState ? ':bell:' : ':no_bell:'} Auto-sync ${newState ? 'enabled' : 'disabled'} for *${source.name}*`);
         break;
       }
 
       case 'remove': {
-        await deleteSource(sourceId, userId);
+        await deleteSource(workspaceId, sourceId, userId);
         if (channelId) await postMessage(channelId, `:wastebasket: Source *${source.name}* removed.`);
         break;
       }
@@ -1188,6 +1197,7 @@ export function registerInlineActions(app: App): void {
       const channelId = body.channel?.id || body.container?.channel_id;
       const threadTs = body.message?.thread_ts || body.message?.ts;
       const triggerId = body.trigger_id;
+      const workspaceId = body.team?.id || getDefaultWorkspaceId();
       if (!channelId || !threadTs) return;
 
       // Clean up the type-selection state
@@ -1196,7 +1206,7 @@ export function registerInlineActions(app: App): void {
         [threadTs, userId],
       );
 
-      await handleSourceTypeSelected(connector.type, userId, channelId, threadTs, triggerId);
+      await handleSourceTypeSelected(workspaceId, connector.type, userId, channelId, threadTs, triggerId);
     });
   }
 
@@ -1206,10 +1216,11 @@ export function registerInlineActions(app: App): void {
     const userId = body.user.id;
     const channelId = (body as any).channel?.id || (body as any).container?.channel_id;
     if (!channelId) return;
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
 
     const { listApiKeys } = await import('../modules/kb-sources');
     const { listConnectors } = await import('../modules/kb-sources/connectors');
-    const keys = await listApiKeys();
+    const keys = await listApiKeys(workspaceId);
     const connectors = listConnectors();
 
     const providers = [...new Set(connectors.map((c: any) => c.provider))];
@@ -1255,9 +1266,10 @@ export function registerInlineActions(app: App): void {
       const channelId = body.channel?.id || body.container?.channel_id;
       const threadTs = body.message?.thread_ts || body.message?.ts;
       const triggerId = body.trigger_id;
+      const workspaceId = body.team?.id || getDefaultWorkspaceId();
       if (!channelId || !threadTs) return;
 
-      await startApiKeySetup(provider, userId, channelId, threadTs, triggerId);
+      await startApiKeySetup(workspaceId, provider, userId, channelId, threadTs, triggerId);
     });
   }
 
@@ -1267,13 +1279,14 @@ export function registerInlineActions(app: App): void {
     const provider = (action as any).value;
     const userId = body.user.id;
     const channelId = (body as any).channel?.id;
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
     if (!channelId) return;
 
     // Redirect to thread-based flow
     const ts = await postBlocks(channelId, [
       { type: 'section', text: { type: 'mrkdwn', text: `:key: *Setup ${provider} API Keys*` } },
     ], `Setup ${provider}`);
-    if (ts) await startApiKeySetup(provider, userId, channelId, ts);
+    if (ts) await startApiKeySetup(workspaceId, provider, userId, channelId, ts);
   });
 
   // ── Register tool integration ──
@@ -1282,10 +1295,11 @@ export function registerInlineActions(app: App): void {
     const integrationId = (action as any).value;
     const userId = body.user.id;
     const triggerId = (body as any).trigger_id;
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
 
     try {
       const { isSuperadmin } = await import('../modules/access-control');
-      if (!(await isSuperadmin(userId))) return;
+      if (!(await isSuperadmin(workspaceId, userId))) return;
 
       const integration = TOOL_INTEGRATIONS.find(i => i.id === integrationId);
       if (!integration) {
@@ -1391,9 +1405,10 @@ export function registerInlineActions(app: App): void {
     if (!agentId) return;
 
     const userId = body.user.id;
-    const agent = await getAgent(agentId);
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
+    const agent = await getAgent(workspaceId, agentId);
     if (!agent) return;
-    if (!(await canModifyAgent(agentId, userId))) {
+    if (!(await canModifyAgent(workspaceId, agentId, userId))) {
       const channelId = body.channel?.id;
       if (channelId) await postMessage(channelId, ':x: You don\'t have permission to update this agent.');
       return;
@@ -1452,6 +1467,7 @@ export function registerInlineActions(app: App): void {
     const channelId = body.channel?.id;
     const threadTs = (body as any).message?.thread_ts || (body as any).message?.ts;
     const userId = body.user.id;
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
     if (!channelId || !threadTs) return;
 
     // Find the pending confirmation for this thread
@@ -1474,7 +1490,7 @@ export function registerInlineActions(app: App): void {
     if (conv.flow === 'new_agent') {
       await showNewAgentConfirmation(conv.analysis, conv.agentName, conv.goal, userId, channelId, threadTs, selectedChannels);
     } else if (conv.flow === 'update_agent') {
-      await showUpdateAgentConfirmation(conv.analysis, conv.agentId, conv.goal, userId, channelId, threadTs, selectedChannels);
+      await showUpdateAgentConfirmation(workspaceId, conv.analysis, conv.agentId, conv.goal, userId, channelId, threadTs, selectedChannels);
     }
   });
 
@@ -1484,6 +1500,7 @@ export function registerInlineActions(app: App): void {
     const channelId = body.channel?.id;
     const threadTs = (body as any).message?.thread_ts || (body as any).message?.ts;
     const userId = body.user.id;
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
     if (!channelId || !threadTs) return;
 
     const row = await queryOne<{ id: string; data: any }>(
@@ -1516,6 +1533,7 @@ export function registerInlineActions(app: App): void {
     const channelId = body.channel?.id;
     const threadTs = (body as any).message?.thread_ts || (body as any).message?.ts;
     const userId = body.user.id;
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
     if (!channelId || !threadTs) return;
 
     const row = await queryOne<{ id: string; data: any }>(
@@ -1532,7 +1550,7 @@ export function registerInlineActions(app: App): void {
 
     const conv = row.data;
     await execute(`DELETE FROM pending_confirmations WHERE id = $1`, [row.id]);
-    await showUpdateAgentConfirmation(conv.analysis, conv.agentId, conv.goal, userId, channelId, threadTs, selectedChannels);
+    await showUpdateAgentConfirmation(workspaceId, conv.analysis, conv.agentId, conv.goal, userId, channelId, threadTs, selectedChannels);
   });
 
   // Handle "Keep current channel" button for update-agent
@@ -1541,6 +1559,7 @@ export function registerInlineActions(app: App): void {
     const channelId = body.channel?.id;
     const threadTs = (body as any).message?.thread_ts || (body as any).message?.ts;
     const userId = body.user.id;
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
     if (!channelId || !threadTs) return;
 
     const row = await queryOne<{ id: string; data: any }>(
@@ -1557,7 +1576,7 @@ export function registerInlineActions(app: App): void {
 
     const conv = row.data;
     await execute(`DELETE FROM pending_confirmations WHERE id = $1`, [row.id]);
-    await showUpdateAgentConfirmation(conv.analysis, conv.agentId, conv.goal, userId, channelId, threadTs, null);
+    await showUpdateAgentConfirmation(workspaceId, conv.analysis, conv.agentId, conv.goal, userId, channelId, threadTs, null);
   });
 
   // ── Tool overflow menu actions ──
@@ -1570,9 +1589,10 @@ export function registerInlineActions(app: App): void {
     const userId = body.user.id;
     const channelId = body.channel?.id;
     const triggerId = (body as any).trigger_id;
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
 
     const { isSuperadmin } = await import('../modules/access-control');
-    if (!(await isSuperadmin(userId))) return;
+    if (!(await isSuperadmin(workspaceId, userId))) return;
 
     const {
       getCustomTool, getToolConfig, approveCustomTool, deleteCustomTool,
@@ -1580,7 +1600,7 @@ export function registerInlineActions(app: App): void {
 
     switch (actionType) {
       case 'configure': {
-        const tool = await getCustomTool(toolName);
+        const tool = await getCustomTool(workspaceId, toolName);
         if (!tool) return;
         const config = JSON.parse(tool.config_json || '{}');
         const configKeys = Object.keys(config);
@@ -1630,7 +1650,7 @@ export function registerInlineActions(app: App): void {
       }
 
       case 'access': {
-        const tool = await getCustomTool(toolName);
+        const tool = await getCustomTool(workspaceId, toolName);
         if (!tool) return;
         const { openModal } = await import('./index');
         await openModal(triggerId, {
@@ -1659,7 +1679,7 @@ export function registerInlineActions(app: App): void {
       }
 
       case 'add_to_agent': {
-        const agents = await listAgents();
+        const agents = await listAgents(workspaceId);
         if (agents.length === 0) {
           if (channelId) await postMessage(channelId, ':x: No agents exist yet.');
           return;
@@ -1688,7 +1708,7 @@ export function registerInlineActions(app: App): void {
 
       case 'approve': {
         try {
-          await approveCustomTool(toolName, userId);
+          await approveCustomTool(workspaceId, toolName, userId);
           if (channelId) await postMessage(channelId, `:white_check_mark: Tool *${toolName}* approved.`);
         } catch (err: any) {
           if (channelId) await postMessage(channelId, `:x: ${err.message}`);
@@ -1698,7 +1718,7 @@ export function registerInlineActions(app: App): void {
 
       case 'delete': {
         try {
-          await deleteCustomTool(toolName, userId);
+          await deleteCustomTool(workspaceId, toolName, userId);
           if (channelId) await postMessage(channelId, `:wastebasket: Tool *${toolName}* deleted.`);
         } catch (err: any) {
           if (channelId) await postMessage(channelId, `:x: ${err.message}`);
@@ -1717,12 +1737,13 @@ export function registerInlineActions(app: App): void {
     const [actionType, entryId] = selected.split(':');
     const userId = body.user.id;
     const channelId = body.channel?.id;
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
 
     const { getKBEntry, approveKBEntry, deleteKBEntry } = await import('../modules/knowledge-base');
 
     switch (actionType) {
       case 'view': {
-        const entry = await getKBEntry(entryId);
+        const entry = await getKBEntry(workspaceId, entryId);
         if (!entry) { if (channelId) await postMessage(channelId, ':x: Entry not found.'); return; }
         const tagStr = entry.tags.length > 0 ? `\n*Tags:* ${entry.tags.join(', ')}` : '';
         const blocks: any[] = [
@@ -1736,7 +1757,7 @@ export function registerInlineActions(app: App): void {
       }
       case 'approve': {
         try {
-          const entry = await approveKBEntry(entryId);
+          const entry = await approveKBEntry(workspaceId, entryId);
           if (channelId) await postMessage(channelId, `:white_check_mark: KB entry *${entry.title}* approved and indexed.`);
         } catch (err: any) {
           if (channelId) await postMessage(channelId, `:x: ${err.message}`);
@@ -1744,9 +1765,9 @@ export function registerInlineActions(app: App): void {
         break;
       }
       case 'delete': {
-        const entry = await getKBEntry(entryId);
+        const entry = await getKBEntry(workspaceId, entryId);
         try {
-          await deleteKBEntry(entryId);
+          await deleteKBEntry(workspaceId, entryId);
           if (channelId) await postMessage(channelId, `:wastebasket: KB entry${entry ? ` *${entry.title}*` : ''} deleted.`);
         } catch (err: any) {
           if (channelId) await postMessage(channelId, `:x: ${err.message}`);
@@ -1765,6 +1786,7 @@ export function registerToolAndKBModals(app: App): void {
     await ack();
     const toolName = view.private_metadata;
     const userId = body.user.id;
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
     const vals = view.state.values;
 
     const { setToolConfigKey, removeToolConfigKey } = await import('../modules/tools');
@@ -1775,10 +1797,10 @@ export function registerToolAndKBModals(app: App): void {
 
     try {
       if (key && value) {
-        await setToolConfigKey(toolName, key, value, userId);
+        await setToolConfigKey(workspaceId, toolName, key, value, userId);
       }
       if (removeKey) {
-        await removeToolConfigKey(toolName, removeKey, userId);
+        await removeToolConfigKey(workspaceId, toolName, removeKey, userId);
       }
       // DM the user confirmation
       await sendDMBlocks(userId, [
@@ -1796,12 +1818,13 @@ export function registerToolAndKBModals(app: App): void {
     await ack();
     const toolName = view.private_metadata;
     const userId = body.user.id;
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
     const accessLevel = view.state.values.access_level?.access_select?.selected_option?.value;
 
     if (accessLevel && (accessLevel === 'read-only' || accessLevel === 'read-write')) {
       try {
         const { updateToolAccessLevel } = await import('../modules/tools');
-        await updateToolAccessLevel(toolName, accessLevel, userId);
+        await updateToolAccessLevel(workspaceId, toolName, accessLevel, userId);
         await sendDMBlocks(userId, [
           { type: 'section', text: { type: 'mrkdwn', text: `:white_check_mark: *${toolName}* access level set to \`${accessLevel}\`` } },
         ], 'Access level updated');
@@ -1818,13 +1841,14 @@ export function registerToolAndKBModals(app: App): void {
     await ack();
     const toolName = view.private_metadata;
     const userId = body.user.id;
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
     const agentId = view.state.values.agent_select_block?.agent_select?.selected_option?.value;
 
     if (agentId) {
       try {
         const { addToolToAgent } = await import('../modules/tools');
-        await addToolToAgent(agentId, toolName, userId);
-        const agent = await getAgent(agentId);
+        await addToolToAgent(workspaceId, agentId, toolName, userId);
+        const agent = await getAgent(workspaceId, agentId);
         await sendDMBlocks(userId, [
           { type: 'section', text: { type: 'mrkdwn', text: `:white_check_mark: *${toolName}* added to agent *${agent?.name || agentId}*` } },
         ], 'Tool added to agent');
@@ -1840,6 +1864,7 @@ export function registerToolAndKBModals(app: App): void {
   app.view('kb_add_modal', async ({ ack, body, view }) => {
     await ack();
     const userId = body.user.id;
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
     const vals = view.state.values;
 
     const title = vals.title_block?.title_input?.value?.trim();
@@ -1858,7 +1883,7 @@ export function registerToolAndKBModals(app: App): void {
 
     try {
       const { createKBEntry } = await import('../modules/knowledge-base');
-      const entry = await createKBEntry({
+      const entry = await createKBEntry(workspaceId, {
         title,
         summary: content.slice(0, 200),
         content,
@@ -1886,6 +1911,7 @@ export function registerToolAndKBModals(app: App): void {
   app.view('kb_add_source_modal', async ({ ack, body, view }) => {
     await ack();
     const userId = body.user.id;
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
     const vals = view.state.values;
     const name = vals.source_name_block?.source_name_input?.value?.trim();
     const sourceType = vals.source_type_block?.source_type_input?.selected_option?.value;
@@ -1903,10 +1929,10 @@ export function registerToolAndKBModals(app: App): void {
       const connectorType = sourceType as import('../types').KBConnectorType;
       const connector = getConnector(connectorType);
       const provider = getProviderForConnector(connectorType);
-      const providerReady = await isProviderConfigured(provider);
+      const providerReady = await isProviderConfigured(workspaceId, provider);
 
       // Create the source
-      const source = await createSource({
+      const source = await createSource(workspaceId, {
         name,
         sourceType: connectorType,
         config: {},
@@ -1937,6 +1963,7 @@ export function registerToolAndKBModals(app: App): void {
   app.view('kb_source_config_modal', async ({ ack, body, view }) => {
     await ack();
     const userId = body.user.id;
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
     const meta = JSON.parse(view.private_metadata);
     const { sourceId, sourceType } = meta;
     const vals = view.state.values;
@@ -1952,7 +1979,7 @@ export function registerToolAndKBModals(app: App): void {
         if (val) config[field.key] = val;
       }
 
-      await updateSource(sourceId, { config_json: JSON.stringify(config) });
+      await updateSource(workspaceId, sourceId, { config_json: JSON.stringify(config) });
 
       await sendDMBlocks(userId, [
         { type: 'section', text: { type: 'mrkdwn', text: `:white_check_mark: Source config updated.\n${Object.entries(config).map(([k, v]) => `• \`${k}\` = \`${v}\``).join('\n') || '_No fields set_'}` } },
@@ -1968,6 +1995,7 @@ export function registerToolAndKBModals(app: App): void {
   app.view('kb_api_key_save_modal', async ({ ack, body, view }) => {
     await ack();
     const userId = body.user.id;
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
     const meta = JSON.parse(view.private_metadata);
     const { provider, requiredKeys } = meta;
     const vals = view.state.values;
@@ -1981,7 +2009,7 @@ export function registerToolAndKBModals(app: App): void {
         if (val) config[key] = val;
       }
 
-      await setApiKey(provider, config, userId);
+      await setApiKey(workspaceId, provider, config, userId);
 
       const allSet = requiredKeys.every((k: string) => config[k] && config[k].length > 0);
       await sendDMBlocks(userId, [
@@ -2010,6 +2038,7 @@ export function registerToolAndKBModals(app: App): void {
   // Source API key modal (from thread-based source flow)
   app.view('kb_source_api_key_modal', async ({ ack, body, view }) => {
     await ack();
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
     const meta = JSON.parse(view.private_metadata);
     const { sourceType, provider, userId, channelId, threadTs } = meta;
     const vals = view.state.values;
@@ -2033,7 +2062,7 @@ export function registerToolAndKBModals(app: App): void {
         return;
       }
 
-      await setApiKey(provider, config, userId);
+      await setApiKey(workspaceId, provider, config, userId);
 
       await postMessage(channelId, `:white_check_mark: *${provider}* API keys saved! Now configure the source details below.`, threadTs);
 
@@ -2048,6 +2077,7 @@ export function registerToolAndKBModals(app: App): void {
   // Source details modal (name + config fields)
   app.view('kb_source_details_modal', async ({ ack, body, view }) => {
     await ack();
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
     const meta = JSON.parse(view.private_metadata);
     const { sourceType, userId, channelId, threadTs } = meta;
     const vals = view.state.values;
@@ -2076,7 +2106,7 @@ export function registerToolAndKBModals(app: App): void {
         if (val) config[field.key] = val;
       }
 
-      const source = await createSource({
+      const source = await createSource(workspaceId, {
         name: sourceName,
         sourceType: sourceType as any,
         config,
@@ -2093,7 +2123,7 @@ export function registerToolAndKBModals(app: App): void {
 
       if (source.status === 'active') {
         try {
-          await startSync(source.id);
+          await startSync(workspaceId, source.id);
           msg += '\n:arrows_counterclockwise: Sync started in background!';
         } catch (syncErr: any) {
           msg += `\n:warning: Sync failed to start: ${syncErr.message}`;
@@ -2110,6 +2140,7 @@ export function registerToolAndKBModals(app: App): void {
   app.view('register_tool_modal', async ({ ack, body, view }) => {
     await ack();
     const userId = body.user.id;
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
     const meta = JSON.parse(view.private_metadata);
     const { integrationId, requiredKeys } = meta;
     const vals = view.state.values;
@@ -2153,6 +2184,7 @@ export function registerToolAndKBModals(app: App): void {
 
 // Handle thread replies for conversational flows
 export async function handleConversationReply(
+  workspaceId: string,
   userId: string,
   channelId: string,
   threadTs: string,
@@ -2183,35 +2215,35 @@ export async function handleConversationReply(
   await execute(`DELETE FROM pending_confirmations WHERE id = $1`, [row.id]);
 
   if (conv.step === 'awaiting_update_request') {
-    await handleUpdateRequest(conv.agentId, input, userId, channelId, threadTs);
+    await handleUpdateRequest(workspaceId, conv.agentId, input, userId, channelId, threadTs);
     return true;
   }
 
   if (conv.step === 'awaiting_when' && conv.flow === 'new_agent') {
-    await handleNewAgentWhen(conv.goal, input, userId, channelId, threadTs);
+    await handleNewAgentWhen(workspaceId, conv.goal, input, userId, channelId, threadTs);
     return true;
   }
 
   // Source/API key conversation flows
   if (conv.step === 'awaiting_source_api_keys' && conv.flow === 'add_source') {
-    await handleSourceApiKeys(input, conv.sourceType, userId, channelId, threadTs);
+    await handleSourceApiKeys(workspaceId, input, conv.sourceType, userId, channelId, threadTs);
     return true;
   }
 
   if (conv.step === 'awaiting_source_details' && conv.flow === 'add_source') {
-    await handleSourceDetails(input, conv.sourceType, userId, channelId, threadTs);
+    await handleSourceDetails(workspaceId, input, conv.sourceType, userId, channelId, threadTs);
     return true;
   }
 
   if (conv.step === 'awaiting_api_keys' && conv.flow === 'api_keys') {
-    await handleApiKeysInput(input, conv.provider, userId, channelId, threadTs);
+    await handleApiKeysInput(workspaceId, input, conv.provider, userId, channelId, threadTs);
     return true;
   }
 
   if (conv.flow === 'new_agent') {
     await handleNewAgentGoal(input, userId, channelId, threadTs);
   } else if (conv.flow === 'update_agent') {
-    await handleUpdateAgentGoal(conv.agentId, input, userId, channelId, threadTs);
+    await handleUpdateAgentGoal(workspaceId, conv.agentId, input, userId, channelId, threadTs);
   }
 
   return true;
@@ -2248,7 +2280,7 @@ async function handleNewAgentGoal(goal: string, userId: string, channelId: strin
   );
 }
 
-async function handleNewAgentWhen(goal: string, whenInput: string, userId: string, channelId: string, threadTs: string): Promise<void> {
+async function handleNewAgentWhen(workspaceId: string, goal: string, whenInput: string, userId: string, channelId: string, threadTs: string): Promise<void> {
   // Combine goal + when into a unified prompt for goal analysis
   const combinedGoal = `${goal}\n\nTRIGGER/SCHEDULE: ${whenInput}`;
 
@@ -2260,12 +2292,12 @@ async function handleNewAgentWhen(goal: string, whenInput: string, userId: strin
 
     // If not feasible, queue it and notify owner
     if (!analysis.feasible) {
-      await handleInfeasibleRequest(analysis, goal, userId, channelId, threadTs);
+      await handleInfeasibleRequest(workspaceId, analysis, goal, userId, channelId, threadTs);
       return;
     }
 
     let agentName = analysis.agent_name;
-    if (await getAgentByName(agentName)) {
+    if (await getAgentByName(workspaceId, agentName)) {
       agentName = `${agentName}-${Date.now().toString(36).slice(-4)}`;
     }
 
@@ -2314,7 +2346,7 @@ async function handleNewAgentWhen(goal: string, whenInput: string, userId: strin
 }
 
 async function handleInfeasibleRequest(
-  analysis: any, goal: string, userId: string, channelId: string, threadTs: string,
+  workspaceId: string, analysis: any, goal: string, userId: string, channelId: string, threadTs: string,
 ): Promise<void> {
   const requestId = uuid();
   const blockerList = analysis.blockers.map((b: string) => `• ${b}`).join('\n');
@@ -2348,7 +2380,7 @@ async function handleInfeasibleRequest(
   }
 
   // DM the owner (first superadmin)
-  const superadmins = await listSuperadmins();
+  const superadmins = await listSuperadmins(workspaceId);
   if (superadmins.length > 0) {
     const ownerId = superadmins[0].user_id;
 
@@ -2486,8 +2518,8 @@ async function showNewAgentConfirmation(
   ], `Agent configuration ready for ${agentName}`, threadTs);
 }
 
-async function handleUpdateRequest(agentId: string, userMessage: string, userId: string, channelId: string, threadTs: string): Promise<void> {
-  const agent = await getAgent(agentId);
+async function handleUpdateRequest(workspaceId: string, agentId: string, userMessage: string, userId: string, channelId: string, threadTs: string): Promise<void> {
+  const agent = await getAgent(workspaceId, agentId);
   if (!agent) { await postMessage(channelId, ':x: Agent not found.', threadTs); return; }
 
   const currentChannels = agent.channel_ids?.length > 0 ? agent.channel_ids : [agent.channel_id];
@@ -2613,7 +2645,7 @@ Rules:
       }
 
       try {
-        await updateAgent(agentId, { channel_ids: newChannelIds } as any, userId);
+        await updateAgent(workspaceId, agentId, { channel_ids: newChannelIds } as any, userId);
         const newLabels = newChannelIds.map(c => `<#${c}>`).join(', ');
         await postMessage(channelId, `:white_check_mark: Agent *${agent.name}* channels updated to ${newLabels}`, threadTs);
       } catch (err: any) {
@@ -2656,34 +2688,34 @@ Rules:
         newChannelIds = gcToAdd.length > 0 ? gcToAdd : currentChannels;
       }
 
-      await handleUpdateAgentGoalWithChannels(agentId, goalMessage, userId, channelId, threadTs, newChannelIds);
+      await handleUpdateAgentGoalWithChannels(workspaceId, agentId, goalMessage, userId, channelId, threadTs, newChannelIds);
     } else {
-      await handleUpdateAgentGoal(agentId, goalMessage, userId, channelId, threadTs);
+      await handleUpdateAgentGoal(workspaceId, agentId, goalMessage, userId, channelId, threadTs);
     }
   } catch (err: any) {
     logger.error('Update request classification failed', { error: err.message, agentId });
     // Fallback: treat the whole message as a goal update
-    await handleUpdateAgentGoal(agentId, userMessage, userId, channelId, threadTs);
+    await handleUpdateAgentGoal(workspaceId, agentId, userMessage, userId, channelId, threadTs);
   }
 }
 
-async function handleUpdateAgentGoalWithChannels(agentId: string, newGoal: string, userId: string, channelId: string, threadTs: string, newChannelIds: string[]): Promise<void> {
-  const agent = await getAgent(agentId);
+async function handleUpdateAgentGoalWithChannels(workspaceId: string, agentId: string, newGoal: string, userId: string, channelId: string, threadTs: string, newChannelIds: string[]): Promise<void> {
+  const agent = await getAgent(workspaceId, agentId);
   if (!agent) { await postMessage(channelId, ':x: Agent not found.', threadTs); return; }
 
   await postMessage(channelId, `:gear: Analyzing updated goal for *${agent.name}*...`, threadTs);
 
   try {
     const analysis = await analyzeGoal(newGoal, agent.system_prompt, userId, agent.name);
-    await showUpdateAgentConfirmation(analysis, agentId, newGoal, userId, channelId, threadTs, newChannelIds);
+    await showUpdateAgentConfirmation(workspaceId, analysis, agentId, newGoal, userId, channelId, threadTs, newChannelIds);
   } catch (err: any) {
     logger.error('Update goal analysis failed', { error: err.message, agentId, userId });
     await postMessage(channelId, `:x: Failed to analyze updated goal: ${err.message}`, threadTs);
   }
 }
 
-async function handleUpdateAgentGoal(agentId: string, newGoal: string, userId: string, channelId: string, threadTs: string): Promise<void> {
-  const agent = await getAgent(agentId);
+async function handleUpdateAgentGoal(workspaceId: string, agentId: string, newGoal: string, userId: string, channelId: string, threadTs: string): Promise<void> {
+  const agent = await getAgent(workspaceId, agentId);
   if (!agent) {
     await postMessage(channelId, ':x: Agent not found.', threadTs);
     return;
@@ -2694,7 +2726,7 @@ async function handleUpdateAgentGoal(agentId: string, newGoal: string, userId: s
   try {
     const analysis = await analyzeGoal(newGoal, agent.system_prompt, userId, agent.name);
     const currentChannels = agent.channel_ids?.length > 0 ? agent.channel_ids : [agent.channel_id];
-    await showUpdateAgentConfirmation(analysis, agentId, newGoal, userId, channelId, threadTs, currentChannels);
+    await showUpdateAgentConfirmation(workspaceId, analysis, agentId, newGoal, userId, channelId, threadTs, currentChannels);
   } catch (err: any) {
     logger.error('Update goal analysis failed', { error: err.message, agentId, userId });
     await postMessage(channelId, `:x: Failed to analyze updated goal: ${err.message}`, threadTs);
@@ -2703,10 +2735,10 @@ async function handleUpdateAgentGoal(agentId: string, newGoal: string, userId: s
 
 
 async function showUpdateAgentConfirmation(
-  analysis: any, agentId: string, newGoal: string, userId: string,
+  workspaceId: string, analysis: any, agentId: string, newGoal: string, userId: string,
   channelId: string, threadTs: string, newChannelIds: string[] | null,
 ): Promise<void> {
-  const agent = await getAgent(agentId);
+  const agent = await getAgent(workspaceId, agentId);
   if (!agent) return;
 
   const confirmId = uuid();
@@ -2777,6 +2809,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 export function registerConfirmationActions(app: App): void {
   app.action('confirm_new_agent', async ({ action, ack, body }) => {
     await ack();
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
     const confirmId = (action as any).value;
     const row = await queryOne<{ data: any; expires_at: Date }>(
       `DELETE FROM pending_confirmations WHERE id = $1 RETURNING data, expires_at`, [confirmId],
@@ -2846,7 +2879,7 @@ export function registerConfirmationActions(app: App): void {
       // Merge builtin tools + resolved custom tools into agent's tool list
       const agentTools = [...analysis.tools, ...resolvedCustomTools];
 
-      const agent = await withTimeout(createAgent({
+      const agent = await withTimeout(createAgent(workspaceId, {
         name,
         channelId: channelIds[0],
         channelIds,
@@ -2864,7 +2897,7 @@ export function registerConfirmationActions(app: App): void {
 
       // Add members for private agents
       if (visibility === 'private' && memberIds?.length > 0) {
-        await withTimeout(addAgentMembers(agent.id, memberIds, userId), 10000, 'addAgentMembers');
+        await withTimeout(addAgentMembers(workspaceId, agent.id, memberIds, userId), 10000, 'addAgentMembers');
       }
 
       const allTools = [...analysis.tools, ...resolvedCustomTools];
@@ -2891,7 +2924,7 @@ export function registerConfirmationActions(app: App): void {
       (async () => {
         try {
           for (const skillName of analysis.skills) {
-            try { await withTimeout(attachSkillToAgent(agent.id, skillName, 'read', userId), 10000, 'attachSkill'); }
+            try { await withTimeout(attachSkillToAgent(workspaceId, agent.id, skillName, 'read', userId), 10000, 'attachSkill'); }
             catch (err: any) { logger.warn('Skill attach failed', { skillName, error: err.message }); }
           }
 
@@ -2903,7 +2936,7 @@ export function registerConfirmationActions(app: App): void {
                   trigger.config.timezone = userInfo.user?.tz || 'UTC';
                 } catch { trigger.config.timezone = 'UTC'; }
               }
-              await withTimeout(createTrigger({
+              await withTimeout(createTrigger(workspaceId, {
                 agentId: agent.id,
                 triggerType: trigger.type,
                 config: { ...trigger.config, description: trigger.description },
@@ -2913,10 +2946,10 @@ export function registerConfirmationActions(app: App): void {
           }
 
           if (analysis.write_tools_requested?.length > 0) {
-            await withTimeout(notifyAdminWriteToolRequest(agent.id, agent.name, analysis.write_tools_requested, userId), 10000, 'notifyAdminWriteTools');
+            await withTimeout(notifyAdminWriteToolRequest(workspaceId, agent.id, agent.name, analysis.write_tools_requested, userId), 10000, 'notifyAdminWriteTools');
           }
           if (analysis.new_tools_needed?.length > 0) {
-            await withTimeout(notifyAdminNewToolRequest(agent.id, agent.name, analysis.new_tools_needed, goal, userId), 10000, 'notifyAdminNewTools');
+            await withTimeout(notifyAdminNewToolRequest(workspaceId, agent.id, agent.name, analysis.new_tools_needed, goal, userId), 10000, 'notifyAdminNewTools');
           }
         } catch (err: any) {
           logger.error('Post-creation background tasks failed', { agentId: agent.id, error: err.message });
@@ -2937,6 +2970,7 @@ export function registerConfirmationActions(app: App): void {
 
   app.action('confirm_update_agent', async ({ action, ack, body, respond }) => {
     await ack();
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
     const confirmId = (action as any).value;
     logger.info('confirm_update_agent: start', { confirmId });
 
@@ -2955,7 +2989,7 @@ export function registerConfirmationActions(app: App): void {
     try {
       const { analysis, agentId, userId, newChannelIds, newChannelId, selectedModel, selectedEffort } = row.data;
       logger.info('confirm_update_agent: fetching agent', { agentId });
-      const agent = await getAgent(agentId!);
+      const agent = await getAgent(workspaceId, agentId!);
       if (!agent) throw new Error('Agent not found');
 
       // Apply user-selected model and effort overrides
@@ -2991,7 +3025,7 @@ export function registerConfirmationActions(app: App): void {
       }
 
       logger.info('confirm_update_agent: updating DB', { agentId });
-      await withTimeout(updateAgent(agentId!, updates, userId), 15000, 'updateAgent');
+      await withTimeout(updateAgent(workspaceId, agentId!, updates, userId), 15000, 'updateAgent');
       logger.info('confirm_update_agent: DB updated', { agentId });
 
       // Reply in thread (or fallback to respond)
@@ -3027,7 +3061,7 @@ export function registerConfirmationActions(app: App): void {
       (async () => {
         try {
           for (const skillName of (analysis.skills || [])) {
-            try { await withTimeout(attachSkillToAgent(agentId!, skillName, 'read', userId), 10000, 'attachSkill'); } catch { /* may exist */ }
+            try { await withTimeout(attachSkillToAgent(workspaceId, agentId!, skillName, 'read', userId), 10000, 'attachSkill'); } catch { /* may exist */ }
           }
 
           for (const trigger of (analysis.triggers || [])) {
@@ -3038,7 +3072,7 @@ export function registerConfirmationActions(app: App): void {
                   trigger.config.timezone = userInfo.user?.tz || 'UTC';
                 } catch { trigger.config.timezone = 'UTC'; }
               }
-              await withTimeout(createTrigger({
+              await withTimeout(createTrigger(workspaceId, {
                 agentId: agentId!,
                 triggerType: trigger.type,
                 config: { ...trigger.config, description: trigger.description },
@@ -3048,10 +3082,10 @@ export function registerConfirmationActions(app: App): void {
           }
 
           if (analysis.write_tools_requested?.length > 0) {
-            await withTimeout(notifyAdminWriteToolRequest(agentId!, agent.name, analysis.write_tools_requested, userId), 10000, 'notifyAdminWriteTools');
+            await withTimeout(notifyAdminWriteToolRequest(workspaceId, agentId!, agent.name, analysis.write_tools_requested, userId), 10000, 'notifyAdminWriteTools');
           }
           if (analysis.new_tools_needed?.length > 0) {
-            await withTimeout(notifyAdminNewToolRequest(agentId!, agent.name, analysis.new_tools_needed, row.data.goal || '', userId), 10000, 'notifyAdminNewTools');
+            await withTimeout(notifyAdminNewToolRequest(workspaceId, agentId!, agent.name, analysis.new_tools_needed, row.data.goal || '', userId), 10000, 'notifyAdminNewTools');
           }
         } catch (err: any) {
           logger.error('Post-update background tasks failed', { agentId, error: err.message });
@@ -3143,6 +3177,7 @@ export function registerConfirmationActions(app: App): void {
 
   app.action('retry_agent_creation', async ({ action, ack, body }) => {
     await ack();
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
     const requestId = (action as any).value;
     const row = await queryOne<{ data: any }>(
       `SELECT data FROM pending_confirmations WHERE id = $1`, [requestId],
@@ -3168,7 +3203,7 @@ export function registerConfirmationActions(app: App): void {
       }
 
       let agentName = freshAnalysis.agent_name;
-      if (await getAgentByName(agentName)) {
+      if (await getAgentByName(workspaceId, agentName)) {
         agentName = `${agentName}-${Date.now().toString(36).slice(-4)}`;
       }
 
@@ -3176,7 +3211,7 @@ export function registerConfirmationActions(app: App): void {
       const agentChannelId = await createChannel(agentName);
 
       const retryTools = [...freshAnalysis.tools, ...(freshAnalysis.custom_tools || [])];
-      const agent = await createAgent({
+      const agent = await createAgent(workspaceId, {
         name: agentName,
         channelId: agentChannelId,
         systemPrompt: freshAnalysis.system_prompt,
@@ -3190,7 +3225,7 @@ export function registerConfirmationActions(app: App): void {
       });
 
       for (const skillName of freshAnalysis.skills) {
-        try { await attachSkillToAgent(agent.id, skillName, 'read', requestedBy); }
+        try { await attachSkillToAgent(workspaceId, agent.id, skillName, 'read', requestedBy); }
         catch (err: any) { logger.warn('Skill attach failed', { skillName, error: err.message }); }
       }
 
@@ -3203,7 +3238,7 @@ export function registerConfirmationActions(app: App): void {
               trigger.config.timezone = userInfo.user?.tz || 'UTC';
             } catch { trigger.config.timezone = 'UTC'; }
           }
-          await createTrigger({
+          await createTrigger(workspaceId, {
             agentId: agent.id,
             triggerType: trigger.type,
             config: { ...trigger.config, description: trigger.description },
@@ -3214,10 +3249,10 @@ export function registerConfirmationActions(app: App): void {
 
       // If new tools or write tools were needed, notify admin
       if (freshAnalysis.new_tools_needed?.length > 0) {
-        await notifyAdminNewToolRequest(agent.id, agent.name, freshAnalysis.new_tools_needed, goal, requestedBy);
+        await notifyAdminNewToolRequest(workspaceId, agent.id, agent.name, freshAnalysis.new_tools_needed, goal, requestedBy);
       }
       if (freshAnalysis.write_tools_requested?.length > 0) {
-        await notifyAdminWriteToolRequest(agent.id, agent.name, freshAnalysis.write_tools_requested, requestedBy);
+        await notifyAdminWriteToolRequest(workspaceId, agent.id, agent.name, freshAnalysis.write_tools_requested, requestedBy);
       }
 
       // Remove the feature request
@@ -3251,6 +3286,7 @@ export function registerConfirmationActions(app: App): void {
 
   app.action('approve_write_tools', async ({ action, ack, body }) => {
     await ack();
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
     const requestId = (action as any).value;
     const row = await queryOne<{ data: any }>(
       `SELECT data FROM pending_confirmations WHERE id = $1`, [requestId],
@@ -3267,7 +3303,7 @@ export function registerConfirmationActions(app: App): void {
       const { addToolToAgent } = await import('../modules/tools');
       const adminUserId = body.user.id;
       for (const toolName of writeTools) {
-        try { await addToolToAgent(agentId, toolName, adminUserId); }
+        try { await addToolToAgent(workspaceId, agentId, toolName, adminUserId); }
         catch (err: any) { logger.warn('Write tool attach failed', { toolName, error: err.message }); }
       }
 
@@ -3275,7 +3311,7 @@ export function registerConfirmationActions(app: App): void {
       await replyToAction(body, `:white_check_mark: Write tools (${writeTools.join(', ')}) approved and added to *${agentName}*!`);
 
       // Notify the requesting user
-      const agentObj = await getAgent(agentId);
+      const agentObj = await getAgent(workspaceId, agentId);
       if (agentObj) {
         const postChannel = agentObj.channel_ids?.[0] || agentObj.channel_id;
         await postMessage(postChannel,
@@ -3305,6 +3341,7 @@ export function registerConfirmationActions(app: App): void {
   app.action('configure_unconfigured_tool', async ({ action, ack, body }) => {
     await ack();
     const triggerId = (body as any).trigger_id;
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
     if (!triggerId) return;
 
     let parsed: { toolName: string; requestId: string };
@@ -3315,7 +3352,7 @@ export function registerConfirmationActions(app: App): void {
     }
 
     const { getCustomTool } = await import('../modules/tools');
-    const tool = await getCustomTool(parsed.toolName);
+    const tool = await getCustomTool(workspaceId, parsed.toolName);
     if (!tool) {
       await replyToAction(body, `:x: Tool \`${parsed.toolName}\` not found.`);
       return;
@@ -3551,9 +3588,9 @@ function buildConfigSummary(name: string, analysis: any, goal: string, existingA
 }
 
 async function notifyAdminWriteToolRequest(
-  agentId: string, agentName: string, writeTools: string[], requestedBy: string,
+  workspaceId: string, agentId: string, agentName: string, writeTools: string[], requestedBy: string,
 ): Promise<void> {
-  const superadmins = await listSuperadmins();
+  const superadmins = await listSuperadmins(workspaceId);
   if (superadmins.length === 0) return;
 
   const requestId = uuid();
@@ -3603,11 +3640,11 @@ async function notifyAdminWriteToolRequest(
 }
 
 async function notifyAdminNewToolRequest(
-  agentId: string, agentName: string,
+  workspaceId: string, agentId: string, agentName: string,
   newTools: Array<{ name: string; description: string }>,
   goal: string, requestedBy: string,
 ): Promise<void> {
-  const superadmins = await listSuperadmins();
+  const superadmins = await listSuperadmins(workspaceId);
   if (superadmins.length === 0) return;
 
   const requestId = uuid();
@@ -3653,13 +3690,13 @@ async function notifyAdminNewToolRequest(
 // ── Thread-based Source & API Key Flows ──
 
 async function handleSourceTypeSelected(
-  sourceType: string, userId: string, channelId: string, threadTs: string, triggerId?: string,
+  workspaceId: string, sourceType: string, userId: string, channelId: string, threadTs: string, triggerId?: string,
 ): Promise<void> {
   const { getConnector } = await import('../modules/kb-sources/connectors');
   const { isProviderConfigured } = await import('../modules/kb-sources');
   const connector = getConnector(sourceType);
 
-  const providerReady = await isProviderConfigured(connector.provider);
+  const providerReady = await isProviderConfigured(workspaceId, connector.provider);
 
   if (!providerReady) {
     if (triggerId) {
@@ -3826,7 +3863,7 @@ async function askForSourceDetails(
 }
 
 async function handleSourceApiKeys(
-  text: string, sourceType: string, userId: string, channelId: string, threadTs: string,
+  workspaceId: string, text: string, sourceType: string, userId: string, channelId: string, threadTs: string,
 ): Promise<void> {
   const { getConnector } = await import('../modules/kb-sources/connectors');
   const { setApiKey } = await import('../modules/kb-sources');
@@ -3871,7 +3908,7 @@ async function handleSourceApiKeys(
   }
 
   try {
-    await setApiKey(connector.provider, config, userId);
+    await setApiKey(workspaceId, connector.provider, config, userId);
     await postMessage(channelId, `:white_check_mark: *${connector.provider}* API keys saved!`, threadTs);
 
     // Now ask for source details
@@ -3882,7 +3919,7 @@ async function handleSourceApiKeys(
 }
 
 async function handleSourceDetails(
-  text: string, sourceType: string, userId: string, channelId: string, threadTs: string,
+  workspaceId: string, text: string, sourceType: string, userId: string, channelId: string, threadTs: string,
 ): Promise<void> {
   const { getConnector } = await import('../modules/kb-sources/connectors');
   const { createSource, startSync } = await import('../modules/kb-sources');
@@ -3936,7 +3973,7 @@ async function handleSourceDetails(
   }
 
   try {
-    const source = await createSource({
+    const source = await createSource(workspaceId, {
       name: sourceName,
       sourceType: sourceType as any,
       config,
@@ -3953,7 +3990,7 @@ async function handleSourceDetails(
 
     if (source.status === 'active') {
       try {
-        await startSync(source.id);
+        await startSync(workspaceId, source.id);
         msg += '\n:arrows_counterclockwise: Sync started in background!';
       } catch (syncErr: any) {
         msg += `\n:warning: Sync failed to start: ${syncErr.message}`;
@@ -3967,7 +4004,7 @@ async function handleSourceDetails(
 }
 
 async function startApiKeySetup(
-  provider: string, userId: string, channelId: string, threadTs: string, triggerId?: string,
+  workspaceId: string, provider: string, userId: string, channelId: string, threadTs: string, triggerId?: string,
 ): Promise<void> {
   const { getApiKey } = await import('../modules/kb-sources');
   const { CONNECTORS } = await import('../modules/kb-sources/connectors');
@@ -3976,7 +4013,7 @@ async function startApiKeySetup(
   if (!connector) return;
 
   if (triggerId) {
-    const existingKey = await getApiKey(provider as any);
+    const existingKey = await getApiKey(workspaceId, provider as any);
     const existingConfig = existingKey ? JSON.parse(existingKey.config_json) : {};
 
     const blocks: any[] = [
@@ -4009,7 +4046,7 @@ async function startApiKeySetup(
   }
 
   // Fallback: thread-based flow when triggerId is not available
-  const existingKey = await getApiKey(provider as any);
+  const existingKey = await getApiKey(workspaceId, provider as any);
   const existingConfig = existingKey ? JSON.parse(existingKey.config_json) : {};
 
   let msg = `:key: *Setup ${provider} API credentials*\n\n`
@@ -4048,7 +4085,7 @@ async function startApiKeySetup(
 }
 
 async function handleApiKeysInput(
-  text: string, provider: string, userId: string, channelId: string, threadTs: string,
+  workspaceId: string, text: string, provider: string, userId: string, channelId: string, threadTs: string,
 ): Promise<void> {
   const { setApiKey, getApiKey } = await import('../modules/kb-sources');
   const { CONNECTORS } = await import('../modules/kb-sources/connectors');
@@ -4057,7 +4094,7 @@ async function handleApiKeysInput(
   if (!connector) return;
 
   // Get existing config to preserve unchanged values
-  const existingKey = await getApiKey(provider as any);
+  const existingKey = await getApiKey(workspaceId, provider as any);
   const existingConfig = existingKey ? JSON.parse(existingKey.config_json) : {};
 
   // Parse key: value pairs
@@ -4097,7 +4134,7 @@ async function handleApiKeysInput(
   }
 
   try {
-    await setApiKey(provider as any, config, userId);
+    await setApiKey(workspaceId, provider as any, config, userId);
     await postMessage(
       channelId,
       `:white_check_mark: *${provider}* API keys saved and verified!\n`

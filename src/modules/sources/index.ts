@@ -16,7 +16,7 @@ export interface ConnectSourceParams {
   label: string;
 }
 
-export async function connectSource(params: ConnectSourceParams): Promise<Source> {
+export async function connectSource(workspaceId: string, params: ConnectSourceParams): Promise<Source> {
   const id = uuid();
 
   const source: Source = {
@@ -33,44 +33,46 @@ export async function connectSource(params: ConnectSourceParams): Promise<Source
   };
 
   await execute(`
-    INSERT INTO sources (id, agent_id, source_type, uri, label, status, last_sync_at, chunk_count, error_message, created_at)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-  `, [source.id, source.agent_id, source.source_type, source.uri, source.label,
+    INSERT INTO sources (id, workspace_id, agent_id, source_type, uri, label, status, last_sync_at, chunk_count, error_message, created_at)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+  `, [source.id, workspaceId, source.agent_id, source.source_type, source.uri, source.label,
     source.status, source.last_sync_at, source.chunk_count, source.error_message, source.created_at]);
 
   logger.info('Source connected', { sourceId: id, agentId: params.agentId, type: params.sourceType });
   return source;
 }
 
-export async function disconnectSource(sourceId: string): Promise<void> {
-  await execute('DELETE FROM source_chunks WHERE source_id = $1', [sourceId]);
-  await execute('DELETE FROM sources WHERE id = $1', [sourceId]);
+export async function disconnectSource(workspaceId: string, sourceId: string): Promise<void> {
+  await execute('DELETE FROM source_chunks WHERE source_id = $1 AND source_id IN (SELECT id FROM sources WHERE workspace_id = $2)', [sourceId, workspaceId]);
+  await execute('DELETE FROM sources WHERE id = $1 AND workspace_id = $2', [sourceId, workspaceId]);
   logger.info('Source disconnected', { sourceId });
 }
 
-export async function getAgentSources(agentId: string): Promise<Source[]> {
-  return query<Source>('SELECT * FROM sources WHERE agent_id = $1', [agentId]);
+export async function getAgentSources(workspaceId: string, agentId: string): Promise<Source[]> {
+  return query<Source>('SELECT * FROM sources WHERE agent_id = $1 AND workspace_id = $2', [agentId, workspaceId]);
 }
 
-export async function getSource(id: string): Promise<Source | null> {
-  const row = await queryOne<Source>('SELECT * FROM sources WHERE id = $1', [id]);
+export async function getSource(workspaceId: string, id: string): Promise<Source | null> {
+  const row = await queryOne<Source>('SELECT * FROM sources WHERE id = $1 AND workspace_id = $2', [id, workspaceId]);
   return row || null;
 }
 
 export async function updateSourceStatus(
+  workspaceId: string,
   sourceId: string,
   status: SourceStatus,
   errorMessage?: string
 ): Promise<void> {
   await execute(
-    'UPDATE sources SET status = $1, error_message = $2, last_sync_at = NOW() WHERE id = $3',
-    [status, errorMessage || null, sourceId]
+    'UPDATE sources SET status = $1, error_message = $2, last_sync_at = NOW() WHERE id = $3 AND workspace_id = $4',
+    [status, errorMessage || null, sourceId, workspaceId]
   );
 }
 
 // ── Ingestion ──
 
 export async function ingestContent(
+  workspaceId: string,
   sourceId: string,
   agentId: string,
   files: Array<{ path: string; content: string }>
@@ -96,9 +98,9 @@ export async function ingestContent(
           );
 
           await client.query(`
-            INSERT INTO source_chunks (id, source_id, agent_id, file_path, chunk_index, content, content_hash, metadata_json)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-          `, [uuid(), sourceId, agentId, chunk.filePath, chunk.chunkIndex, chunk.content, chunk.contentHash, '{}']);
+            INSERT INTO source_chunks (id, workspace_id, source_id, agent_id, file_path, chunk_index, content, content_hash, metadata_json)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          `, [uuid(), workspaceId, sourceId, agentId, chunk.filePath, chunk.chunkIndex, chunk.content, chunk.contentHash, '{}']);
         }
 
         totalChunks++;
@@ -112,8 +114,8 @@ export async function ingestContent(
     const count = parseInt(countResult.rows[0].count, 10);
 
     await client.query(
-      'UPDATE sources SET chunk_count = $1, last_sync_at = NOW(), status = $2 WHERE id = $3',
-      [count, 'active', sourceId]
+      'UPDATE sources SET chunk_count = $1, last_sync_at = NOW(), status = $2 WHERE id = $3 AND workspace_id = $4',
+      [count, 'active', sourceId, workspaceId]
     );
   });
 
@@ -124,6 +126,7 @@ export async function ingestContent(
 // ── Retrieval ──
 
 export async function retrieveContext(
+  workspaceId: string,
   agentId: string,
   queryText: string,
   tokenBudget: number = DEFAULT_TOKEN_BUDGET
@@ -136,10 +139,10 @@ export async function retrieveContext(
     const chunks = await query<SourceChunk & { rank: number }>(`
       SELECT sc.*, ts_rank(sc.search_vector, to_tsquery('english', $1)) AS rank
       FROM source_chunks sc
-      WHERE sc.search_vector @@ to_tsquery('english', $1) AND sc.agent_id = $2
+      WHERE sc.search_vector @@ to_tsquery('english', $1) AND sc.agent_id = $2 AND sc.workspace_id = $3
       ORDER BY rank DESC
-      LIMIT $3
-    `, [ftsQuery, agentId, MAX_CHUNKS_RETRIEVED]);
+      LIMIT $4
+    `, [ftsQuery, agentId, workspaceId, MAX_CHUNKS_RETRIEVED]);
 
     // Deduplicate by file path and apply token budget
     const seen = new Set<string>();
@@ -161,19 +164,19 @@ export async function retrieveContext(
     return result;
   } catch (err) {
     logger.warn('tsvector query failed, falling back to LIKE search', { error: String(err) });
-    return fallbackSearch(agentId, queryText, tokenBudget);
+    return fallbackSearch(workspaceId, agentId, queryText, tokenBudget);
   }
 }
 
-async function fallbackSearch(agentId: string, queryText: string, tokenBudget: number): Promise<SourceChunk[]> {
+async function fallbackSearch(workspaceId: string, agentId: string, queryText: string, tokenBudget: number): Promise<SourceChunk[]> {
   const words = queryText.split(/\s+/).slice(0, 5);
   const pattern = `%${words.join('%')}%`;
 
   const chunks = await query<SourceChunk>(`
     SELECT * FROM source_chunks
-    WHERE agent_id = $1 AND content LIKE $2
-    LIMIT $3
-  `, [agentId, pattern, MAX_CHUNKS_RETRIEVED]);
+    WHERE agent_id = $1 AND workspace_id = $2 AND content LIKE $3
+    LIMIT $4
+  `, [agentId, workspaceId, pattern, MAX_CHUNKS_RETRIEVED]);
 
   let tokensUsed = 0;
   return chunks.filter(chunk => {
@@ -203,7 +206,7 @@ export function detectSourceType(input: string): SourceType {
   return 'slack_upload';
 }
 
-// ── Sync ──
+// ── Sync (CROSS-WORKSPACE) ──
 
 export async function getSourcesDueForSync(): Promise<Source[]> {
   return query<Source>(`

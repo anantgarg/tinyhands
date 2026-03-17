@@ -17,6 +17,7 @@ export interface WorkflowStep {
 }
 
 export async function createWorkflowDefinition(
+  workspaceId: string,
   name: string,
   agentId: string,
   steps: WorkflowStep[],
@@ -34,24 +35,24 @@ export async function createWorkflowDefinition(
   };
 
   await execute(`
-    INSERT INTO workflow_definitions (id, name, agent_id, steps_json, created_by, created_at)
-    VALUES ($1, $2, $3, $4, $5, $6)
-  `, [definition.id, definition.name, definition.agent_id,
+    INSERT INTO workflow_definitions (id, workspace_id, name, agent_id, steps_json, created_by, created_at)
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
+  `, [definition.id, workspaceId, definition.name, definition.agent_id,
     definition.steps_json, definition.created_by, definition.created_at]);
 
   logger.info('Workflow definition created', { workflowId: id, name, agentId });
   return definition;
 }
 
-export async function getWorkflowDefinition(id: string): Promise<WorkflowDefinition | null> {
-  const row = await queryOne<WorkflowDefinition>('SELECT * FROM workflow_definitions WHERE id = $1', [id]);
+export async function getWorkflowDefinition(workspaceId: string, id: string): Promise<WorkflowDefinition | null> {
+  const row = await queryOne<WorkflowDefinition>('SELECT * FROM workflow_definitions WHERE id = $1 AND workspace_id = $2', [id, workspaceId]);
   return row || null;
 }
 
 // ── Workflow Execution ──
 
-export async function startWorkflow(workflowId: string): Promise<WorkflowRun> {
-  const definition = await getWorkflowDefinition(workflowId);
+export async function startWorkflow(workspaceId: string, workflowId: string): Promise<WorkflowRun> {
+  const definition = await getWorkflowDefinition(workspaceId, workflowId);
   if (!definition) throw new Error(`Workflow ${workflowId} not found`);
 
   const id = uuid();
@@ -71,23 +72,23 @@ export async function startWorkflow(workflowId: string): Promise<WorkflowRun> {
   };
 
   await execute(`
-    INSERT INTO workflow_runs (id, workflow_id, run_id, current_step, step_state,
+    INSERT INTO workflow_runs (id, workspace_id, workflow_id, run_id, current_step, step_state,
       waiting_for, wait_until, status, created_at, updated_at)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-  `, [run.id, run.workflow_id, run.run_id, run.current_step,
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+  `, [run.id, workspaceId, run.workflow_id, run.run_id, run.current_step,
     run.step_state, run.waiting_for, run.wait_until, run.status,
     run.created_at, run.updated_at]);
 
   logger.info('Workflow started', { workflowRunId: id, workflowId });
 
   // Execute first step
-  await executeStep(run);
+  await executeStep(workspaceId, run);
 
   return run;
 }
 
-export async function getWorkflowRun(id: string): Promise<WorkflowRun | null> {
-  const row = await queryOne<WorkflowRun>('SELECT * FROM workflow_runs WHERE id = $1', [id]);
+export async function getWorkflowRun(workspaceId: string, id: string): Promise<WorkflowRun | null> {
+  const row = await queryOne<WorkflowRun>('SELECT * FROM workflow_runs WHERE id = $1 AND workspace_id = $2', [id, workspaceId]);
   return row || null;
 }
 
@@ -98,19 +99,19 @@ export async function getActiveWorkflowRuns(): Promise<WorkflowRun[]> {
   );
 }
 
-export async function executeStep(run: WorkflowRun): Promise<void> {
-  const definition = await getWorkflowDefinition(run.workflow_id);
+export async function executeStep(workspaceId: string, run: WorkflowRun): Promise<void> {
+  const definition = await getWorkflowDefinition(workspaceId, run.workflow_id);
   if (!definition) throw new Error(`Workflow ${run.workflow_id} not found`);
 
   const steps: WorkflowStep[] = JSON.parse(definition.steps_json);
 
   if (run.current_step >= steps.length) {
-    await completeWorkflow(run.id);
+    await completeWorkflow(workspaceId, run.id);
     return;
   }
 
   if (run.current_step >= MAX_WORKFLOW_STEPS) {
-    await failWorkflow(run.id, 'Max step count exceeded');
+    await failWorkflow(workspaceId, run.id, 'Max step count exceeded');
     return;
   }
 
@@ -120,6 +121,7 @@ export async function executeStep(run: WorkflowRun): Promise<void> {
     case 'agent_run': {
       const traceId = uuid();
       const jobData: JobData = {
+        workspaceId,
         agentId: definition.agent_id,
         channelId: step.config.channel_id || '',
         threadTs: step.config.thread_ts || '',
@@ -137,7 +139,7 @@ export async function executeStep(run: WorkflowRun): Promise<void> {
       const delayMs = step.config.delay_ms || 60000;
       const waitUntil = new Date(Date.now() + delayMs).toISOString();
 
-      await updateWorkflowRun(run.id, {
+      await updateWorkflowRun(workspaceId, run.id, {
         waiting_for: 'timer',
         wait_until: waitUntil,
         status: 'waiting',
@@ -146,7 +148,7 @@ export async function executeStep(run: WorkflowRun): Promise<void> {
     }
 
     case 'human_action': {
-      await updateWorkflowRun(run.id, {
+      await updateWorkflowRun(workspaceId, run.id, {
         waiting_for: 'human_action',
         status: 'waiting',
       });
@@ -164,14 +166,14 @@ export async function executeStep(run: WorkflowRun): Promise<void> {
       if (nextStep) {
         const stepIdx = steps.findIndex(s => s.id === nextStep);
         if (stepIdx >= 0) {
-          await updateWorkflowRun(run.id, { current_step: stepIdx });
-          const updatedRun = await getWorkflowRun(run.id);
-          if (updatedRun) await executeStep(updatedRun);
+          await updateWorkflowRun(workspaceId, run.id, { current_step: stepIdx });
+          const updatedRun = await getWorkflowRun(workspaceId, run.id);
+          if (updatedRun) await executeStep(workspaceId, updatedRun);
           return;
         }
       }
 
-      await advanceWorkflow(run.id);
+      await advanceWorkflow(workspaceId, run.id);
       break;
     }
   }
@@ -179,27 +181,28 @@ export async function executeStep(run: WorkflowRun): Promise<void> {
 
 // ── Workflow Lifecycle ──
 
-export async function advanceWorkflow(workflowRunId: string): Promise<void> {
-  const run = await getWorkflowRun(workflowRunId);
+export async function advanceWorkflow(workspaceId: string, workflowRunId: string): Promise<void> {
+  const run = await getWorkflowRun(workspaceId, workflowRunId);
   if (!run) return;
 
   const nextStep = run.current_step + 1;
-  await updateWorkflowRun(workflowRunId, {
+  await updateWorkflowRun(workspaceId, workflowRunId, {
     current_step: nextStep,
     waiting_for: null,
     wait_until: null,
     status: 'running',
   });
 
-  const updatedRun = await getWorkflowRun(workflowRunId);
-  if (updatedRun) await executeStep(updatedRun);
+  const updatedRun = await getWorkflowRun(workspaceId, workflowRunId);
+  if (updatedRun) await executeStep(workspaceId, updatedRun);
 }
 
 export async function resolveHumanAction(
+  workspaceId: string,
   workflowRunId: string,
   actionData: Record<string, any>
 ): Promise<void> {
-  const run = await getWorkflowRun(workflowRunId);
+  const run = await getWorkflowRun(workspaceId, workflowRunId);
   if (!run || run.waiting_for !== 'human_action') {
     throw new Error('Workflow is not waiting for human action');
   }
@@ -207,21 +210,21 @@ export async function resolveHumanAction(
   const currentState = JSON.parse(run.step_state);
   const newState = { ...currentState, ...actionData };
 
-  await updateWorkflowRun(workflowRunId, { step_state: JSON.stringify(newState) });
-  await advanceWorkflow(workflowRunId);
+  await updateWorkflowRun(workspaceId, workflowRunId, { step_state: JSON.stringify(newState) });
+  await advanceWorkflow(workspaceId, workflowRunId);
 }
 
-export async function completeWorkflow(workflowRunId: string): Promise<void> {
-  await updateWorkflowRun(workflowRunId, { status: 'completed' });
+export async function completeWorkflow(workspaceId: string, workflowRunId: string): Promise<void> {
+  await updateWorkflowRun(workspaceId, workflowRunId, { status: 'completed' });
   logger.info('Workflow completed', { workflowRunId });
 }
 
-export async function failWorkflow(workflowRunId: string, reason: string): Promise<void> {
-  await updateWorkflowRun(workflowRunId, { status: 'failed' });
+export async function failWorkflow(workspaceId: string, workflowRunId: string, reason: string): Promise<void> {
+  await updateWorkflowRun(workspaceId, workflowRunId, { status: 'failed' });
   logger.error('Workflow failed', { workflowRunId, reason });
 }
 
-async function updateWorkflowRun(id: string, updates: Partial<WorkflowRun>): Promise<void> {
+async function updateWorkflowRun(workspaceId: string, id: string, updates: Partial<WorkflowRun>): Promise<void> {
   const fields: string[] = [];
   const values: any[] = [];
   let paramIdx = 1;
@@ -234,13 +237,15 @@ async function updateWorkflowRun(id: string, updates: Partial<WorkflowRun>): Pro
   fields.push(`updated_at = $${paramIdx++}`);
   values.push(new Date().toISOString());
   values.push(id);
+  values.push(workspaceId);
 
-  await execute(`UPDATE workflow_runs SET ${fields.join(', ')} WHERE id = $${paramIdx}`, values);
+  await execute(`UPDATE workflow_runs SET ${fields.join(', ')} WHERE id = $${paramIdx} AND workspace_id = $${paramIdx + 1}`, values);
 }
 
 // ── Side Effects Idempotency ──
 
 export async function recordSideEffect(
+  workspaceId: string,
   workflowRunId: string,
   stepId: string,
   effectType: string,
@@ -249,8 +254,8 @@ export async function recordSideEffect(
 ): Promise<boolean> {
   // Check if this side effect was already recorded
   const existing = await queryOne(
-    'SELECT id FROM side_effects_log WHERE workflow_run_id = $1 AND step_id = $2 AND effect_type = $3',
-    [workflowRunId, stepId, effectType]
+    'SELECT id FROM side_effects_log WHERE workflow_run_id = $1 AND step_id = $2 AND effect_type = $3 AND workspace_id = $4',
+    [workflowRunId, stepId, effectType, workspaceId]
   );
 
   if (existing) {
@@ -259,9 +264,9 @@ export async function recordSideEffect(
   }
 
   await execute(`
-    INSERT INTO side_effects_log (id, workflow_run_id, step_id, attempt_number, effect_type, effect_data)
-    VALUES ($1, $2, $3, $4, $5, $6)
-  `, [uuid(), workflowRunId, stepId, attemptNumber, effectType, JSON.stringify(effectData)]);
+    INSERT INTO side_effects_log (id, workspace_id, workflow_run_id, step_id, attempt_number, effect_type, effect_data)
+    VALUES ($1, $2, $3, $4, $5, $6, $7)
+  `, [uuid(), workspaceId, workflowRunId, stepId, attemptNumber, effectType, JSON.stringify(effectData)]);
 
   return true;
 }
@@ -281,7 +286,7 @@ export async function getExpiredTimers(): Promise<WorkflowRun[]> {
 export async function processExpiredTimers(): Promise<number> {
   const expired = await getExpiredTimers();
   for (const run of expired) {
-    await advanceWorkflow(run.id);
+    await advanceWorkflow((run as any).workspace_id, run.id);
   }
   return expired.length;
 }

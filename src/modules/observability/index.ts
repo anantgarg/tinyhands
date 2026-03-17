@@ -29,7 +29,7 @@ export interface AlertResult {
   message: string;
 }
 
-export async function checkAlerts(): Promise<AlertResult[]> {
+export async function checkAlerts(workspaceId: string): Promise<AlertResult[]> {
   const results: AlertResult[] = [];
 
   // Error rate (rolling 1hr)
@@ -38,8 +38,8 @@ export async function checkAlerts(): Promise<AlertResult[]> {
     SELECT
       COUNT(*) as total,
       SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed
-    FROM run_history WHERE created_at >= $1
-  `, [oneHourAgo]);
+    FROM run_history WHERE created_at >= $1 AND workspace_id = $2
+  `, [oneHourAgo, workspaceId]);
 
   if (hourStats && parseInt(hourStats.total, 10) > 0) {
     const total = parseInt(hourStats.total, 10);
@@ -58,9 +58,9 @@ export async function checkAlerts(): Promise<AlertResult[]> {
   const expensiveRun = await queryOne<any>(`
     SELECT id, agent_id, estimated_cost_usd
     FROM run_history
-    WHERE estimated_cost_usd > $1 AND created_at >= $2
+    WHERE estimated_cost_usd > $1 AND created_at >= $2 AND workspace_id = $3
     ORDER BY estimated_cost_usd DESC LIMIT 1
-  `, [5.0, oneHourAgo]);
+  `, [5.0, oneHourAgo, workspaceId]);
 
   if (expensiveRun) {
     results.push({
@@ -76,8 +76,8 @@ export async function checkAlerts(): Promise<AlertResult[]> {
   const today = new Date().toISOString().split('T')[0];
   const dailySpend = await queryOne<any>(`
     SELECT COALESCE(SUM(estimated_cost_usd), 0) as total
-    FROM run_history WHERE created_at >= $1
-  `, [today]);
+    FROM run_history WHERE created_at >= $1 AND workspace_id = $2
+  `, [today, workspaceId]);
 
   const dailyTotal = parseFloat(dailySpend?.total || '0');
   results.push({
@@ -92,9 +92,9 @@ export async function checkAlerts(): Promise<AlertResult[]> {
   const longRun = await queryOne<any>(`
     SELECT id, agent_id, duration_ms
     FROM run_history
-    WHERE duration_ms > $1 AND created_at >= $2
+    WHERE duration_ms > $1 AND created_at >= $2 AND workspace_id = $3
     ORDER BY duration_ms DESC LIMIT 1
-  `, [600000, oneHourAgo]);
+  `, [600000, oneHourAgo, workspaceId]);
 
   if (longRun) {
     results.push({
@@ -111,7 +111,7 @@ export async function checkAlerts(): Promise<AlertResult[]> {
 
 // ── Per-Agent Error Rate ──
 
-export async function getAgentErrorRates(): Promise<Array<{ agentId: string; name: string; errorRate: number; total: number }>> {
+export async function getAgentErrorRates(workspaceId: string): Promise<Array<{ agentId: string; name: string; errorRate: number; total: number }>> {
   const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
 
   const rows = await query<any>(`
@@ -122,11 +122,11 @@ export async function getAgentErrorRates(): Promise<Array<{ agentId: string; nam
       SUM(CASE WHEN rh.status = 'failed' THEN 1 ELSE 0 END) as failed
     FROM run_history rh
     JOIN agents a ON rh.agent_id = a.id
-    WHERE rh.created_at >= $1
+    WHERE rh.created_at >= $1 AND rh.workspace_id = $2
     GROUP BY rh.agent_id, a.name
     HAVING COUNT(*) > 0
     ORDER BY (SUM(CASE WHEN rh.status = 'failed' THEN 1 ELSE 0 END)::float / COUNT(*)) DESC
-  `, [oneHourAgo]);
+  `, [oneHourAgo, workspaceId]);
 
   return rows.map((r: any) => ({
     agentId: r.agent_id,
@@ -138,7 +138,7 @@ export async function getAgentErrorRates(): Promise<Array<{ agentId: string; nam
 
 // ── Daily Digest ──
 
-export async function generateDailyDigest(): Promise<string> {
+export async function generateDailyDigest(workspaceId: string): Promise<string> {
   const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split('T')[0];
   const today = new Date().toISOString().split('T')[0];
 
@@ -149,24 +149,24 @@ export async function generateDailyDigest(): Promise<string> {
       COALESCE(SUM(estimated_cost_usd), 0) as cost,
       COALESCE(SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END), 0) as failures
     FROM run_history
-    WHERE created_at >= $1 AND created_at < $2
-  `, [yesterday, today]);
+    WHERE created_at >= $1 AND created_at < $2 AND workspace_id = $3
+  `, [yesterday, today, workspaceId]);
 
   // Top agent by runs
   const topAgent = await queryOne<any>(`
     SELECT a.name, COUNT(*) as runs
     FROM run_history rh JOIN agents a ON rh.agent_id = a.id
-    WHERE rh.created_at >= $1 AND rh.created_at < $2
+    WHERE rh.created_at >= $1 AND rh.created_at < $2 AND rh.workspace_id = $3
     GROUP BY rh.agent_id, a.name ORDER BY runs DESC LIMIT 1
-  `, [yesterday, today]);
+  `, [yesterday, today, workspaceId]);
 
   // Top user
   const topUser = await queryOne<any>(`
     SELECT slack_user_id, COUNT(*) as runs
     FROM run_history
-    WHERE created_at >= $1 AND created_at < $2 AND slack_user_id IS NOT NULL
+    WHERE created_at >= $1 AND created_at < $2 AND slack_user_id IS NOT NULL AND workspace_id = $3
     GROUP BY slack_user_id ORDER BY runs DESC LIMIT 1
-  `, [yesterday, today]);
+  `, [yesterday, today, workspaceId]);
 
   // Agents with high error rates
   const errorAgents = await query<any>(`
@@ -174,10 +174,10 @@ export async function generateDailyDigest(): Promise<string> {
       COUNT(*) as total,
       SUM(CASE WHEN rh.status = 'failed' THEN 1 ELSE 0 END) as failed
     FROM run_history rh JOIN agents a ON rh.agent_id = a.id
-    WHERE rh.created_at >= $1 AND rh.created_at < $2
+    WHERE rh.created_at >= $1 AND rh.created_at < $2 AND rh.workspace_id = $3
     GROUP BY rh.agent_id, a.name
     HAVING SUM(CASE WHEN rh.status = 'failed' THEN 1 ELSE 0 END)::float / COUNT(*) > 0.1 AND COUNT(*) >= 3
-  `, [yesterday, today]);
+  `, [yesterday, today, workspaceId]);
 
   // Anomalous cost agents (>2x 7-day average)
   const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
@@ -186,11 +186,11 @@ export async function generateDailyDigest(): Promise<string> {
       SUM(CASE WHEN rh.created_at >= $1 THEN rh.estimated_cost_usd ELSE 0 END) as yesterday_cost,
       AVG(rh.estimated_cost_usd) * COUNT(DISTINCT date(rh.created_at)) / 7.0 as avg_daily_cost
     FROM run_history rh JOIN agents a ON rh.agent_id = a.id
-    WHERE rh.created_at >= $2
+    WHERE rh.created_at >= $2 AND rh.workspace_id = $3
     GROUP BY rh.agent_id, a.name
     HAVING SUM(CASE WHEN rh.created_at >= $1 THEN rh.estimated_cost_usd ELSE 0 END) > AVG(rh.estimated_cost_usd) * COUNT(DISTINCT date(rh.created_at)) / 7.0 * 2
       AND SUM(CASE WHEN rh.created_at >= $1 THEN rh.estimated_cost_usd ELSE 0 END) > 1
-  `, [yesterday, sevenDaysAgo]);
+  `, [yesterday, sevenDaysAgo, workspaceId]);
 
   const runCount = parseInt(stats?.run_count || '0', 10);
   const tokens = parseInt(stats?.tokens || '0', 10);
@@ -223,6 +223,6 @@ export async function generateDailyDigest(): Promise<string> {
 
 // ── Trace ID Correlation ──
 
-export async function getRunByTraceId(traceId: string): Promise<any> {
-  return queryOne('SELECT * FROM run_history WHERE trace_id = $1', [traceId]);
+export async function getRunByTraceId(workspaceId: string, traceId: string): Promise<any> {
+  return queryOne('SELECT * FROM run_history WHERE trace_id = $1 AND workspace_id = $2', [traceId, workspaceId]);
 }
