@@ -8,12 +8,146 @@ import { attachSkillToAgent } from '../modules/skills';
 import { createTrigger } from '../modules/triggers';
 import { logger } from '../utils/logger';
 import { execute, queryOne } from '../db';
-import { getToolIntegrations, getIntegration } from '../modules/tools/integrations';
+import { getToolIntegrations, getIntegration, getIntegrations } from '../modules/tools/integrations';
+import { getAllTemplates, getTemplateById, getTemplatesByCategory, resolveCustomTools } from '../modules/templates';
 
 // ── Available Tool Integrations ──
 // Auto-discovered from src/modules/tools/integrations/*/index.ts
 
 const TOOL_INTEGRATIONS = getToolIntegrations();
+
+// ── Template Helpers ──
+
+/** Given a tool name (e.g. "serpapi-read"), find which integration provides it. */
+function findIntegrationForTool(toolName: string): string | undefined {
+  for (const manifest of getIntegrations()) {
+    if (manifest.tools.some(t => t.name === toolName)) {
+      return manifest.id;
+    }
+  }
+  return undefined;
+}
+
+/** Classify a tool as unconfigured (integration exists) or unavailable (doesn't exist). */
+function classifyTool(tool: string): { type: 'unconfigured'; tool: string; integration: string } | { type: 'unavailable'; tool: string } {
+  const integrationId = findIntegrationForTool(tool);
+  if (integrationId) {
+    return { type: 'unconfigured', tool, integration: integrationId };
+  }
+  return { type: 'unavailable', tool };
+}
+
+/** Build Slack blocks showing missing tool groups with action guidance. */
+function buildMissingToolsBlocks(header: string, missingGroups: string[][]): any[] {
+  const blocks: any[] = [
+    { type: 'section', text: { type: 'mrkdwn', text: `:warning: *${header}*` } },
+  ];
+
+  const unconfiguredGroups: string[][] = [];
+  const unavailableGroups: string[][] = [];
+
+  for (const group of missingGroups) {
+    // Classify each tool in the group
+    const unconfiguredInGroup: string[] = [];
+    const unavailableInGroup: string[] = [];
+    for (const tool of group) {
+      const classified = classifyTool(tool);
+      if (classified.type === 'unconfigured') {
+        unconfiguredInGroup.push(tool);
+      } else {
+        unavailableInGroup.push(tool);
+      }
+    }
+    if (unconfiguredInGroup.length > 0) unconfiguredGroups.push(unconfiguredInGroup);
+    if (unavailableInGroup.length > 0) unavailableGroups.push(unavailableInGroup);
+  }
+
+  if (unconfiguredGroups.length > 0) {
+    const lines = unconfiguredGroups.map(group =>
+      group.length > 1
+        ? `• Configure at least one of: ${group.map(t => `\`${t}\``).join(', ')}`
+        : `• \`${group[0]}\``
+    );
+    blocks.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `:wrench: *Needs configuration* — Ask a workspace admin to configure via \`/tools\`:\n${lines.join('\n')}`,
+      },
+    });
+  }
+
+  if (unavailableGroups.length > 0) {
+    const allUnavailable = unavailableGroups.flat();
+    const lines = unavailableGroups.map(group =>
+      group.length > 1
+        ? `• At least one of: ${group.map(t => `\`${t}\``).join(', ')}`
+        : `• \`${group[0]}\``
+    );
+    blocks.push({
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: `:x: *Not available on this platform:*\n${lines.join('\n')}`,
+      },
+    });
+    // GitHub request buttons for unavailable tools (cap at 5)
+    const elements = allUnavailable.slice(0, 5).map(tool => ({
+      type: 'button',
+      text: { type: 'plain_text', text: `:link: Request ${tool}`.slice(0, 75) },
+      url: `https://github.com/anantgarg/tinyhands/issues/new?title=${encodeURIComponent('Tool request: ' + tool)}&body=${encodeURIComponent('Requesting support for tool: ' + tool)}&labels=tool-request`,
+    }));
+    if (elements.length > 0) {
+      blocks.push({ type: 'actions', elements });
+    }
+  }
+
+  return blocks;
+}
+
+/** Build Slack blocks showing templates grouped by category. */
+function buildTemplateListingBlocks(): any[] {
+  const categories = getTemplatesByCategory();
+  const blocks: any[] = [
+    { type: 'header', text: { type: 'plain_text', text: ':books: Agent Templates' } },
+    { type: 'section', text: { type: 'mrkdwn', text: '_Ready-to-use agent configurations. Pick a template and deploy in seconds._' } },
+  ];
+
+  for (const [category, templates] of Object.entries(categories)) {
+    if (templates.length === 0) continue;
+
+    blocks.push({ type: 'divider' });
+    blocks.push({
+      type: 'section',
+      text: { type: 'mrkdwn', text: `*${category}*` },
+    });
+
+    for (const t of templates) {
+      blocks.push({
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `${t.emoji} *${t.name}*\n${t.description}`,
+        },
+        accessory: {
+          type: 'button',
+          text: { type: 'plain_text', text: 'Use Template' },
+          action_id: 'template_activate',
+          value: t.id,
+        },
+      });
+    }
+  }
+
+  if (getAllTemplates().length === 0) {
+    blocks.push({
+      type: 'section',
+      text: { type: 'mrkdwn', text: '_No templates available._' },
+    });
+  }
+
+  return blocks;
+}
 
 export function registerCommands(app: App): void {
   const requireDM = async (command: any, ack: () => Promise<void>, respond: (msg: any) => Promise<void>): Promise<boolean> => {
@@ -97,6 +231,11 @@ export function registerCommands(app: App): void {
           text: { type: 'plain_text', text: ':heavy_plus_sign: New Agent' },
           style: 'primary',
           action_id: 'agents_new_agent',
+        },
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: ':books: Templates' },
+          action_id: 'agents_browse_templates',
         },
       ],
     });
@@ -401,6 +540,15 @@ export function registerCommands(app: App): void {
 
     await respond({ blocks, text: 'Knowledge Base' });
   });
+
+  // /templates — Browse and activate agent templates
+  app.command('/templates', async ({ command, ack, respond }) => {
+    if (!(await requireDM(command, ack, respond))) return;
+    await ack();
+
+    const templateBlocks = buildTemplateListingBlocks();
+    await respond({ response_type: 'in_channel', blocks: templateBlocks, text: 'Agent Templates' });
+  });
 }
 
 // ── Helper: start new/update agent flows ──
@@ -677,6 +825,202 @@ export function registerInlineActions(app: App): void {
     const channelId = body.channel?.id;
     if (!channelId) return;
     await startNewAgentFlow(body.user.id, channelId);
+  });
+
+  // "Templates" button from /agents dashboard
+  app.action('agents_browse_templates', async ({ ack, body }) => {
+    await ack();
+    const channelId = body.channel?.id;
+    if (!channelId) return;
+    const templateBlocks = buildTemplateListingBlocks();
+    await postBlocks(channelId, templateBlocks, 'Agent Templates');
+  });
+
+  // "Use Template" button — start template activation flow
+  app.action('template_activate', async ({ action, ack, body }) => {
+    await ack();
+    const templateId = (action as any).value;
+    const template = getTemplateById(templateId);
+    if (!template) {
+      await replyToAction(body, ':x: Template not found.');
+      return;
+    }
+
+    const channelId = body.channel?.id;
+    const userId = body.user.id;
+    if (!channelId) return;
+
+    const confirmId = uuid();
+    await execute(
+      `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
+      [confirmId, JSON.stringify({
+        type: 'template_activation',
+        templateId,
+        userId,
+        channelId,
+      })],
+    );
+
+    await postBlocks(channelId, [
+      { type: 'header', text: { type: 'plain_text', text: `${template.emoji} ${template.name}` } },
+      { type: 'section', text: { type: 'mrkdwn', text: `${template.description}\n\n*Model:* ${template.model} | *Memory:* ${template.memory_enabled ? 'on' : 'off'} | *Tools:* ${[...template.tools, ...template.custom_tools].join(', ') || 'none'}\n${template.skills.length > 0 ? `*Skills:* ${template.skills.join(', ')}\n` : ''}` } },
+      { type: 'divider' },
+      {
+        type: 'section',
+        text: { type: 'mrkdwn', text: '*Where should this agent live?*' },
+      },
+      {
+        type: 'actions',
+        elements: [
+          {
+            type: 'conversations_select',
+            action_id: 'template_channel_select',
+            placeholder: { type: 'plain_text', text: 'Select a channel...' },
+            filter: { include: ['public', 'private'], exclude_bot_users: true },
+          },
+        ],
+      },
+      {
+        type: 'actions',
+        elements: [
+          {
+            type: 'button',
+            text: { type: 'plain_text', text: ':heavy_check_mark: Activate' },
+            style: 'primary',
+            action_id: 'template_confirm',
+            value: confirmId,
+          },
+          {
+            type: 'button',
+            text: { type: 'plain_text', text: ':x: Cancel' },
+            action_id: 'template_cancel',
+            value: confirmId,
+          },
+        ],
+      },
+    ], `Activate template: ${template.name}`);
+  });
+
+  // Template channel selection (updates pending confirmation)
+  app.action('template_channel_select', async ({ action, ack, body }) => {
+    await ack();
+    const selectedChannel = (action as any).selected_conversation;
+    if (!selectedChannel) return;
+
+    const userId = body.user.id;
+    // Find pending template activation for this user
+    const row = await queryOne<{ id: string; data: any }>(
+      `SELECT id, data FROM pending_confirmations
+       WHERE data->>'type' = 'template_activation'
+         AND data->>'userId' = $1
+         AND expires_at > NOW()
+       ORDER BY expires_at DESC LIMIT 1`,
+      [userId],
+    );
+    if (!row) return;
+
+    await execute(
+      `UPDATE pending_confirmations SET data = jsonb_set(data, '{selectedChannelId}', $1::jsonb) WHERE id = $2`,
+      [JSON.stringify(selectedChannel), row.id],
+    );
+  });
+
+  // Template activation confirmed
+  app.action('template_confirm', async ({ action, ack, body }) => {
+    await ack();
+    const confirmId = (action as any).value;
+    const row = await queryOne<{ data: any; expires_at: Date }>(
+      `DELETE FROM pending_confirmations WHERE id = $1 RETURNING data, expires_at`, [confirmId],
+    );
+
+    if (!row || new Date(row.expires_at) < new Date()) {
+      await replyToAction(body, ':x: This confirmation has expired. Please run `/templates` and try again.');
+      return;
+    }
+
+    const { templateId, userId, selectedChannelId } = row.data;
+    if (!selectedChannelId) {
+      await replyToAction(body, ':x: Please select a channel first.');
+      return;
+    }
+
+    const template = getTemplateById(templateId);
+    if (!template) {
+      await replyToAction(body, ':x: Template not found.');
+      return;
+    }
+
+    try {
+      // Check custom tool availability
+      const toolExists = async (name: string) => {
+        const tool = await queryOne('SELECT id FROM custom_tools WHERE name = $1', [name]);
+        return !!tool;
+      };
+
+      const { resolvedTools, missingGroups } = await resolveCustomTools(template.custom_tools, toolExists);
+
+      if (missingGroups.length > 0) {
+        const channelId = body.channel?.id;
+        if (channelId) {
+          const missingBlocks = buildMissingToolsBlocks('Cannot activate template — missing tools', missingGroups);
+          await postBlocks(channelId, missingBlocks, 'Missing tools');
+        }
+        return;
+      }
+
+      await replyToAction(body, ':gear: Creating agent from template...');
+
+      // Resolve name, handle collisions
+      let agentName = template.name;
+      if (await getAgentByName(agentName)) {
+        agentName = `${agentName}-${Date.now().toString(36).slice(-4)}`;
+      }
+
+      const agentTools = [...template.tools, ...resolvedTools];
+      const agent = await createAgent({
+        name: agentName,
+        channelId: selectedChannelId,
+        channelIds: [selectedChannelId],
+        systemPrompt: template.systemPrompt,
+        tools: agentTools,
+        avatarEmoji: template.emoji,
+        model: template.model as any,
+        memoryEnabled: template.memory_enabled,
+        respondToAllMessages: template.respond_to_all_messages,
+        mentionsOnly: template.mentions_only,
+        relevanceKeywords: template.relevance_keywords,
+        maxTurns: template.max_turns,
+        createdBy: userId,
+      });
+
+      // Attach skills
+      for (const skillName of template.skills) {
+        try { await attachSkillToAgent(agent.id, skillName, 'read', userId); }
+        catch (err: any) { logger.warn('Template skill attach failed', { skillName, error: err.message }); }
+      }
+
+      // Post announcement in channel
+      const toolList = agentTools.join(', ') || 'none';
+      await postMessage(selectedChannelId,
+        `${template.emoji} Meet *${agentName}*! Deployed from the *${template.name}* template by <@${userId}>.\n\n` +
+        `*Model:* ${template.model} | *Memory:* ${template.memory_enabled ? 'on' : 'off'}\n` +
+        `*Tools:* ${toolList}\n` +
+        (template.skills.length > 0 ? `*Skills:* ${template.skills.join(', ')}\n` : '') +
+        `_${template.description}_`
+      );
+
+      await replyToAction(body, `${template.emoji} *${agentName}* is live in <#${selectedChannelId}>!`);
+    } catch (err: any) {
+      logger.error('Template activation failed', { templateId, error: err.message, stack: err.stack });
+      await replyToAction(body, `:x: Failed to activate template: ${err.message}`);
+    }
+  });
+
+  // Template cancel
+  app.action('template_cancel', async ({ action, ack, body }) => {
+    await ack();
+    await execute(`DELETE FROM pending_confirmations WHERE id = $1`, [(action as any).value]);
+    await replyToAction(body, ':x: Template activation cancelled.');
   });
 
   // Confirm/cancel delete agent
@@ -2481,8 +2825,26 @@ export function registerConfirmationActions(app: App): void {
         }
       }
 
-      // Merge builtin tools + read-only custom tools into agent's tool list
-      const agentTools = [...analysis.tools, ...(analysis.custom_tools || [])];
+      // Resolve custom tools — check which ones are actually available
+      const toolExistsFn = async (toolName: string) => {
+        const tool = await queryOne('SELECT id FROM custom_tools WHERE name = $1', [toolName]);
+        return !!tool;
+      };
+      const { resolvedTools: resolvedCustomTools, missingGroups } = await resolveCustomTools(
+        analysis.custom_tools || [], toolExistsFn,
+      );
+
+      if (missingGroups.length > 0) {
+        const channelIdForMsg = body.channel?.id;
+        if (channelIdForMsg) {
+          const missingBlocks = buildMissingToolsBlocks('Cannot create agent — missing custom tools', missingGroups);
+          await postBlocks(channelIdForMsg, missingBlocks, 'Missing tools');
+        }
+        return;
+      }
+
+      // Merge builtin tools + resolved custom tools into agent's tool list
+      const agentTools = [...analysis.tools, ...resolvedCustomTools];
 
       const agent = await withTimeout(createAgent({
         name,
@@ -2505,7 +2867,7 @@ export function registerConfirmationActions(app: App): void {
         await withTimeout(addAgentMembers(agent.id, memberIds, userId), 10000, 'addAgentMembers');
       }
 
-      const allTools = [...analysis.tools, ...(analysis.custom_tools || [])];
+      const allTools = [...analysis.tools, ...resolvedCustomTools];
       const visibilityLabel = visibility === 'private' ? ':lock: Private' : 'Public';
       const lines = [
         `✋ Meet *${agent.name}*! Deployed by <@${userId}> and ready to get to work. It's small, but it's ready.`,

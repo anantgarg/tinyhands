@@ -41,6 +41,8 @@ Slack (Socket Mode) → Listener (src/index.ts)
 ## Project Structure
 
 ```
+skills/                                             # Skill definitions (Markdown + YAML frontmatter)
+templates/                                          # Agent template definitions (Markdown + YAML frontmatter)
 src/
 ├── index.ts, worker.ts, scheduler.ts, sync.ts    # Process entry points
 ├── server.ts                                       # Express routes (webhooks, internal APIs)
@@ -67,7 +69,7 @@ src/
 │   ├── triggers/            # Trigger types: slack, linear, zendesk, intercom, webhook, schedule
 │   ├── workflows/           # Multi-step stateful workflows (DAG of steps)
 │   ├── teams/               # Multi-agent orchestration
-│   ├── skills/              # MCP integrations + prompt template skills
+│   ├── skills/              # Skill registry + builtins loader (reads /skills/*.md)
 │   ├── self-evolution/      # Agent improvement proposals + approval
 │   ├── self-improvement/    # Critique detection, prompt refinement
 │   ├── self-authoring/      # Agent-created tools, code artifacts, MCPs
@@ -121,9 +123,8 @@ Use `/add-tool <service name>` to get guided instructions, or follow this patter
 
 1. Create `src/modules/tools/integrations/<name>/index.ts`
 2. Export a `manifest` satisfying the `ToolManifest` interface from `../manifest.ts`
-3. Add one import + array entry in `src/modules/tools/integrations/index.ts`
 
-No other files need editing. The manifest includes schema, code, display names, and registration logic. See any existing integration for the full pattern.
+No other files need editing — the system auto-discovers all integration folders. The manifest includes schema, code, display names, and registration logic. See any existing integration for the full pattern.
 
 Key constraints for tool code (the `code` string in manifests):
 - Runs inside Docker with only Node.js built-ins (no npm packages)
@@ -131,6 +132,42 @@ Key constraints for tool code (the `code` string in manifests):
 - Inputs available via global `input` variable
 - Output via `console.log(JSON.stringify(result))`
 - 30-second timeout on all HTTP requests
+
+## Skills
+
+Skills are Markdown files in `skills/` at the repo root. YAML frontmatter has metadata; for prompt template skills, the markdown body IS the template.
+
+### Adding a new skill
+
+1. Create `skills/<name>.md`
+2. Add YAML frontmatter with required fields
+3. For prompt template skills, write the template as the markdown body
+
+No other files need editing — the system auto-discovers all `.md` files in the skills directory.
+
+**Prompt template example** (`skills/my-analysis.md`):
+```markdown
+---
+id: my-analysis
+name: My Analysis
+skillType: prompt_template
+description: Analyze data and provide insights
+---
+
+Analyze the provided {{topic}} data and return: key findings, trends, anomalies, and recommendations.
+```
+
+**MCP skill example** (`skills/my-service.md`):
+```markdown
+---
+id: my-service
+name: My Service
+skillType: mcp
+capabilities:
+  - Read data
+  - Update records
+---
+```
 
 ## Agent Execution Flow
 

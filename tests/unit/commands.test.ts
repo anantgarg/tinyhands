@@ -104,7 +104,7 @@ vi.mock('uuid', () => ({
   v4: () => 'test-uuid-1234',
 }));
 
-const { mockRegister, mockGetToolIntegrations, mockGetIntegration } = vi.hoisted(() => {
+const { mockRegister, mockGetToolIntegrations, mockGetIntegration, mockGetIntegrations } = vi.hoisted(() => {
   const mockRegister = vi.fn().mockResolvedValue(undefined);
   const mockGetToolIntegrations = vi.fn().mockReturnValue([
     {
@@ -128,12 +128,37 @@ const { mockRegister, mockGetToolIntegrations, mockGetIntegration } = vi.hoisted
     setupGuide: 'Go to https://example.com to get your API key',
     register: (...args: any[]) => mockRegister(...args),
   });
-  return { mockRegister, mockGetToolIntegrations, mockGetIntegration };
+  const mockGetIntegrations = vi.fn().mockReturnValue([
+    {
+      id: 'test-integration',
+      tools: [{ name: 'test-tool-read' }, { name: 'test-tool-write' }],
+    },
+  ]);
+  return { mockRegister, mockGetToolIntegrations, mockGetIntegration, mockGetIntegrations };
 });
 
 vi.mock('../../src/modules/tools/integrations', () => ({
   getToolIntegrations: (...args: any[]) => mockGetToolIntegrations(...args),
   getIntegration: (...args: any[]) => mockGetIntegration(...args),
+  getIntegrations: (...args: any[]) => mockGetIntegrations(...args),
+}));
+
+const mockGetAllTemplates = vi.fn().mockReturnValue([]);
+const mockGetTemplateById = vi.fn();
+const mockGetTemplatesByCategory = vi.fn().mockReturnValue({
+  'Content & SEO': [],
+  'Social Media': [],
+  'Competitive Intelligence': [],
+  'Analytics & Reporting': [],
+  'Customer & Community': [],
+});
+const mockResolveCustomTools = vi.fn().mockResolvedValue({ resolvedTools: [], missingGroups: [] });
+
+vi.mock('../../src/modules/templates', () => ({
+  getAllTemplates: (...args: any[]) => mockGetAllTemplates(...args),
+  getTemplateById: (...args: any[]) => mockGetTemplateById(...args),
+  getTemplatesByCategory: (...args: any[]) => mockGetTemplatesByCategory(...args),
+  resolveCustomTools: (...args: any[]) => mockResolveCustomTools(...args),
 }));
 
 // Mock dynamic imports used inside command handlers
@@ -444,6 +469,22 @@ describe('Commands Module', () => {
       setupGuide: 'Go to https://example.com to get your API key',
       register: (...args: any[]) => mockRegister(...args),
     });
+    mockGetIntegrations.mockReturnValue([
+      {
+        id: 'test-integration',
+        tools: [{ name: 'test-tool-read' }, { name: 'test-tool-write' }],
+      },
+    ]);
+    mockGetAllTemplates.mockReturnValue([]);
+    mockGetTemplateById.mockReturnValue(undefined);
+    mockGetTemplatesByCategory.mockReturnValue({
+      'Content & SEO': [],
+      'Social Media': [],
+      'Competitive Intelligence': [],
+      'Analytics & Reporting': [],
+      'Customer & Community': [],
+    });
+    mockResolveCustomTools.mockResolvedValue({ resolvedTools: [], missingGroups: [] });
     mockGetSlackApp.mockReturnValue({
       client: {
         auth: { test: vi.fn().mockResolvedValue({ user_id: 'UBOT' }) },
@@ -470,7 +511,7 @@ describe('Commands Module', () => {
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   describe('registerCommands', () => {
-    it('should register /agents, /new-agent, /update-agent, /tools, /kb commands', () => {
+    it('should register /agents, /new-agent, /update-agent, /tools, /kb, /templates commands', () => {
       const app = createMockApp();
       registerCommands(app as any);
 
@@ -479,7 +520,8 @@ describe('Commands Module', () => {
       expect(app.command).toHaveBeenCalledWith('/update-agent', expect.any(Function));
       expect(app.command).toHaveBeenCalledWith('/tools', expect.any(Function));
       expect(app.command).toHaveBeenCalledWith('/kb', expect.any(Function));
-      expect(app.command).toHaveBeenCalledTimes(5);
+      expect(app.command).toHaveBeenCalledWith('/templates', expect.any(Function));
+      expect(app.command).toHaveBeenCalledTimes(6);
     });
   });
 
@@ -608,6 +650,21 @@ describe('Commands Module', () => {
       const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
       expect(allText).toContain('agents_new_agent');
       expect(allText).toContain('New Agent');
+    });
+
+    it('should include a Templates button in the dashboard', async () => {
+      const app = createMockApp();
+      registerCommands(app as any);
+
+      mockListAgents.mockResolvedValue([]);
+      const ack = vi.fn();
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
+
+      await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
+
+      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
+      expect(allText).toContain('agents_browse_templates');
+      expect(allText).toContain('Templates');
     });
 
     it('should render multiple agents with correct status icons', async () => {
@@ -3683,10 +3740,10 @@ describe('Commands Module', () => {
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   describe('handler registration counts', () => {
-    it('registerCommands should register exactly 5 commands', () => {
+    it('registerCommands should register exactly 6 commands', () => {
       const app = createMockApp();
       registerCommands(app as any);
-      expect(app.command).toHaveBeenCalledTimes(5);
+      expect(app.command).toHaveBeenCalledTimes(6);
     });
 
     it('registerModalHandlers should register exactly 5 view handlers', () => {
@@ -3715,7 +3772,7 @@ describe('Commands Module', () => {
       registerToolAndKBModals(app as any);
       registerToolAndKBModals(app as any);
 
-      expect(app.command).toHaveBeenCalledTimes(10);
+      expect(app.command).toHaveBeenCalledTimes(12);
     });
   });
 
@@ -7754,6 +7811,544 @@ describe('Commands Module', () => {
 
       expect(ack).toHaveBeenCalled();
       expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('cancelled'), 'msg-ts');
+    });
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // /templates command
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  describe('/templates command', () => {
+    it('should render template listing blocks', async () => {
+      const app = createMockApp();
+      registerCommands(app as any);
+
+      mockGetTemplatesByCategory.mockReturnValue({
+        'Content & SEO': [
+          { id: 'seo-monitor', name: 'SEO Monitor', emoji: ':mag:', description: 'Tracks SEO', tools: [], custom_tools: [], skills: [], relevance_keywords: [] },
+        ],
+        'Social Media': [],
+        'Competitive Intelligence': [],
+        'Analytics & Reporting': [],
+        'Customer & Community': [],
+      });
+      mockGetAllTemplates.mockReturnValue([
+        { id: 'seo-monitor', name: 'SEO Monitor', emoji: ':mag:', description: 'Tracks SEO' },
+      ]);
+
+      const ack = vi.fn();
+      const command = { user_id: 'U123', channel_id: 'C1', channel_name: 'directmessage', text: '' };
+
+      await app.handlers.command['/templates']({ command, ack, respond: mockRespond });
+
+      expect(ack).toHaveBeenCalled();
+      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
+      expect(allText).toContain('Agent Templates');
+      expect(allText).toContain('SEO Monitor');
+      expect(allText).toContain('template_activate');
+      expect(allText).toContain('seo-monitor');
+    });
+
+    it('should reject non-DM usage', async () => {
+      const app = createMockApp();
+      registerCommands(app as any);
+
+      const ack = vi.fn();
+      const command = { user_id: 'U123', channel_id: 'C1', channel_name: 'general', text: '' };
+
+      await app.handlers.command['/templates']({ command, ack, respond: mockRespond });
+
+      expect(ack).toHaveBeenCalled();
+      const text = mockRespond.mock.calls[0][0].text;
+      expect(text).toContain('DM');
+    });
+
+    it('should show empty state when no templates exist', async () => {
+      const app = createMockApp();
+      registerCommands(app as any);
+
+      mockGetAllTemplates.mockReturnValue([]);
+
+      const ack = vi.fn();
+      const command = { user_id: 'U123', channel_id: 'C1', channel_name: 'directmessage', text: '' };
+
+      await app.handlers.command['/templates']({ command, ack, respond: mockRespond });
+
+      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
+      expect(allText).toContain('No templates available');
+    });
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // Template action handlers
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  describe('agents_browse_templates action', () => {
+    it('should send template listing blocks', async () => {
+      const app = createMockApp();
+      await safeRegisterInlineActions(app);
+
+      mockGetTemplatesByCategory.mockReturnValue({
+        'Content & SEO': [
+          { id: 'seo-monitor', name: 'SEO Monitor', emoji: ':mag:', description: 'Tracks SEO', tools: [], custom_tools: [], skills: [], relevance_keywords: [] },
+        ],
+        'Social Media': [],
+        'Competitive Intelligence': [],
+        'Analytics & Reporting': [],
+        'Customer & Community': [],
+      });
+      mockGetAllTemplates.mockReturnValue([
+        { id: 'seo-monitor', name: 'SEO Monitor', emoji: ':mag:', description: 'Tracks SEO' },
+      ]);
+
+      const ack = vi.fn();
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' } };
+
+      await app.handlers.action['agents_browse_templates']({ ack, body });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockPostBlocks).toHaveBeenCalledWith('C1', expect.any(Array), 'Agent Templates');
+      const allText = JSON.stringify(mockPostBlocks.mock.calls[0][1]);
+      expect(allText).toContain('SEO Monitor');
+      expect(allText).toContain('template_activate');
+    });
+  });
+
+  describe('template_activate action', () => {
+    it('should show channel picker and confirmation for valid template', async () => {
+      const app = createMockApp();
+      await safeRegisterInlineActions(app);
+
+      const fakeTemplate = {
+        id: 'seo-monitor',
+        name: 'SEO Monitor',
+        emoji: ':mag:',
+        description: 'Tracks SEO',
+        model: 'sonnet',
+        memory_enabled: true,
+        tools: ['WebSearch'],
+        custom_tools: ['serpapi-read'],
+        skills: ['company-research'],
+        relevance_keywords: ['seo'],
+      };
+      mockGetTemplateById.mockReturnValue(fakeTemplate);
+
+      const ack = vi.fn();
+      const action = { value: 'seo-monitor' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' } };
+
+      await app.handlers.action['template_activate']({ action, ack, body });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockExecute).toHaveBeenCalledWith(
+        expect.stringContaining('INSERT INTO pending_confirmations'),
+        expect.any(Array),
+      );
+      expect(mockPostBlocks).toHaveBeenCalledWith('C1', expect.any(Array), expect.stringContaining('SEO Monitor'));
+      const allText = JSON.stringify(mockPostBlocks.mock.calls[0][1]);
+      expect(allText).toContain('template_confirm');
+      expect(allText).toContain('template_cancel');
+      expect(allText).toContain('template_channel_select');
+    });
+
+    it('should show error for invalid template', async () => {
+      const app = createMockApp();
+      await safeRegisterInlineActions(app);
+
+      mockGetTemplateById.mockReturnValue(undefined);
+
+      const ack = vi.fn();
+      const action = { value: 'nonexistent' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+
+      await app.handlers.action['template_activate']({ action, ack, body });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('not found'), 'msg-ts');
+    });
+  });
+
+  describe('template_confirm action', () => {
+    it('should create agent when all tools are available', async () => {
+      const app = createMockApp();
+      await safeRegisterInlineActions(app);
+
+      const fakeTemplate = {
+        id: 'content-strategist',
+        name: 'Content Strategist',
+        emoji: ':memo:',
+        description: 'Plans content',
+        model: 'opus',
+        memory_enabled: true,
+        mentions_only: false,
+        respond_to_all_messages: false,
+        max_turns: 25,
+        tools: ['WebSearch', 'Read'],
+        custom_tools: [],
+        skills: ['company-research'],
+        relevance_keywords: ['content'],
+        systemPrompt: 'You are a content strategist.',
+      };
+      mockGetTemplateById.mockReturnValue(fakeTemplate);
+      mockResolveCustomTools.mockResolvedValue({ resolvedTools: [], missingGroups: [] });
+      mockGetAgentByName.mockResolvedValue(null);
+      mockCreateAgent.mockResolvedValue({
+        id: 'agent-tmpl-1',
+        name: 'Content Strategist',
+        channel_id: 'C_TARGET',
+        channel_ids: ['C_TARGET'],
+      });
+
+      const futureDate = new Date();
+      futureDate.setHours(futureDate.getHours() + 1);
+      mockQueryOne.mockResolvedValue({
+        data: {
+          type: 'template_activation',
+          templateId: 'content-strategist',
+          userId: 'U1',
+          selectedChannelId: 'C_TARGET',
+        },
+        expires_at: futureDate,
+      });
+
+      const ack = vi.fn();
+      const action = { value: 'confirm-id' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+
+      await app.handlers.action['template_confirm']({ action, ack, body });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockCreateAgent).toHaveBeenCalledWith(expect.objectContaining({
+        name: 'Content Strategist',
+        channelId: 'C_TARGET',
+        systemPrompt: 'You are a content strategist.',
+        tools: ['WebSearch', 'Read'],
+        model: 'opus',
+      }));
+      expect(mockAttachSkillToAgent).toHaveBeenCalledWith('agent-tmpl-1', 'company-research', 'read', 'U1');
+      expect(mockPostMessage).toHaveBeenCalledWith('C_TARGET', expect.stringContaining('Content Strategist'));
+    });
+
+    it('should block creation when custom tools are missing', async () => {
+      const app = createMockApp();
+      await safeRegisterInlineActions(app);
+
+      const fakeTemplate = {
+        id: 'seo-monitor',
+        name: 'SEO Monitor',
+        emoji: ':mag:',
+        description: 'Tracks SEO',
+        model: 'sonnet',
+        memory_enabled: true,
+        mentions_only: false,
+        respond_to_all_messages: false,
+        max_turns: 25,
+        tools: ['WebSearch'],
+        custom_tools: ['serpapi-read'],
+        skills: [],
+        relevance_keywords: ['seo'],
+        systemPrompt: 'You are an SEO specialist.',
+      };
+      mockGetTemplateById.mockReturnValue(fakeTemplate);
+      mockResolveCustomTools.mockResolvedValue({
+        resolvedTools: [],
+        missingGroups: [['serpapi-read']],
+      });
+
+      const futureDate = new Date();
+      futureDate.setHours(futureDate.getHours() + 1);
+      mockQueryOne.mockResolvedValue({
+        data: {
+          type: 'template_activation',
+          templateId: 'seo-monitor',
+          userId: 'U1',
+          selectedChannelId: 'C_TARGET',
+        },
+        expires_at: futureDate,
+      });
+
+      const ack = vi.fn();
+      const action = { value: 'confirm-id' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+
+      await app.handlers.action['template_confirm']({ action, ack, body });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockCreateAgent).not.toHaveBeenCalled();
+      expect(mockPostBlocks).toHaveBeenCalledWith('C1', expect.any(Array), 'Missing tools');
+    });
+
+    it('should show error when no channel is selected', async () => {
+      const app = createMockApp();
+      await safeRegisterInlineActions(app);
+
+      const futureDate = new Date();
+      futureDate.setHours(futureDate.getHours() + 1);
+      mockQueryOne.mockResolvedValue({
+        data: {
+          type: 'template_activation',
+          templateId: 'seo-monitor',
+          userId: 'U1',
+          // no selectedChannelId
+        },
+        expires_at: futureDate,
+      });
+
+      const ack = vi.fn();
+      const action = { value: 'confirm-id' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+
+      await app.handlers.action['template_confirm']({ action, ack, body });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockCreateAgent).not.toHaveBeenCalled();
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('select a channel'), 'msg-ts');
+    });
+
+    it('should show error when confirmation is expired', async () => {
+      const app = createMockApp();
+      await safeRegisterInlineActions(app);
+
+      const pastDate = new Date();
+      pastDate.setHours(pastDate.getHours() - 1);
+      mockQueryOne.mockResolvedValue({
+        data: { type: 'template_activation', templateId: 'seo-monitor', userId: 'U1' },
+        expires_at: pastDate,
+      });
+
+      const ack = vi.fn();
+      const action = { value: 'confirm-id' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+
+      await app.handlers.action['template_confirm']({ action, ack, body });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockCreateAgent).not.toHaveBeenCalled();
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('expired'), 'msg-ts');
+    });
+
+    it('should handle name collision by appending suffix', async () => {
+      const app = createMockApp();
+      await safeRegisterInlineActions(app);
+
+      const fakeTemplate = {
+        id: 'seo-monitor',
+        name: 'SEO Monitor',
+        emoji: ':mag:',
+        description: 'Tracks SEO',
+        model: 'sonnet',
+        memory_enabled: true,
+        mentions_only: false,
+        respond_to_all_messages: false,
+        max_turns: 25,
+        tools: ['WebSearch'],
+        custom_tools: [],
+        skills: [],
+        relevance_keywords: ['seo'],
+        systemPrompt: 'You are an SEO specialist.',
+      };
+      mockGetTemplateById.mockReturnValue(fakeTemplate);
+      mockResolveCustomTools.mockResolvedValue({ resolvedTools: [], missingGroups: [] });
+      mockGetAgentByName.mockResolvedValue({ id: 'existing-agent' }); // Name collision
+      mockCreateAgent.mockResolvedValue({
+        id: 'agent-tmpl-2',
+        name: 'SEO Monitor-abc1',
+        channel_id: 'C_TARGET',
+        channel_ids: ['C_TARGET'],
+      });
+
+      const futureDate = new Date();
+      futureDate.setHours(futureDate.getHours() + 1);
+      mockQueryOne.mockResolvedValue({
+        data: {
+          type: 'template_activation',
+          templateId: 'seo-monitor',
+          userId: 'U1',
+          selectedChannelId: 'C_TARGET',
+        },
+        expires_at: futureDate,
+      });
+
+      const ack = vi.fn();
+      const action = { value: 'confirm-id' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+
+      await app.handlers.action['template_confirm']({ action, ack, body });
+
+      expect(mockCreateAgent).toHaveBeenCalledWith(expect.objectContaining({
+        name: expect.stringContaining('SEO Monitor-'),
+      }));
+    });
+
+    it('should handle creation error gracefully', async () => {
+      const app = createMockApp();
+      await safeRegisterInlineActions(app);
+
+      const fakeTemplate = {
+        id: 'seo-monitor',
+        name: 'SEO Monitor',
+        emoji: ':mag:',
+        description: 'Tracks SEO',
+        model: 'sonnet',
+        memory_enabled: true,
+        mentions_only: false,
+        respond_to_all_messages: false,
+        max_turns: 25,
+        tools: ['WebSearch'],
+        custom_tools: [],
+        skills: [],
+        relevance_keywords: ['seo'],
+        systemPrompt: 'You are an SEO specialist.',
+      };
+      mockGetTemplateById.mockReturnValue(fakeTemplate);
+      mockResolveCustomTools.mockResolvedValue({ resolvedTools: [], missingGroups: [] });
+      mockGetAgentByName.mockResolvedValue(null);
+      mockCreateAgent.mockRejectedValue(new Error('DB error'));
+
+      const futureDate = new Date();
+      futureDate.setHours(futureDate.getHours() + 1);
+      mockQueryOne.mockResolvedValue({
+        data: {
+          type: 'template_activation',
+          templateId: 'seo-monitor',
+          userId: 'U1',
+          selectedChannelId: 'C_TARGET',
+        },
+        expires_at: futureDate,
+      });
+
+      const ack = vi.fn();
+      const action = { value: 'confirm-id' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+
+      await app.handlers.action['template_confirm']({ action, ack, body });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('Failed to activate template'), 'msg-ts');
+    });
+  });
+
+  describe('template_cancel action', () => {
+    it('should clean up pending confirmation', async () => {
+      const app = createMockApp();
+      await safeRegisterInlineActions(app);
+
+      const ack = vi.fn();
+      const action = { value: 'confirm-id' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+
+      await app.handlers.action['template_cancel']({ action, ack, body });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockExecute).toHaveBeenCalledWith(
+        expect.stringContaining('DELETE FROM pending_confirmations'),
+        ['confirm-id'],
+      );
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('cancelled'), 'msg-ts');
+    });
+  });
+
+  describe('confirm_new_agent - missing custom tools', () => {
+    it('should block agent creation when custom tools are missing', async () => {
+      const app = createMockApp();
+      registerConfirmationActions(app as any);
+
+      const futureDate = new Date();
+      futureDate.setHours(futureDate.getHours() + 1);
+
+      mockQueryOne.mockResolvedValue({
+        data: {
+          analysis: makeFakeAnalysis({ custom_tools: ['missing-tool'] }),
+          name: 'My Agent',
+          goal: 'Answer questions',
+          userId: 'U_CREATOR',
+          existingChannelIds: ['C_EXISTING'],
+        },
+        expires_at: futureDate,
+      });
+
+      // resolveCustomTools reports the tool as missing
+      mockResolveCustomTools.mockResolvedValue({
+        resolvedTools: [],
+        missingGroups: [['missing-tool']],
+      });
+
+      const ack = vi.fn();
+      const action = { value: 'confirm-id-missing' };
+      const body = { user: { id: 'U_CREATOR' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+
+      await app.handlers.action['confirm_new_agent']({ action, ack, body });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockCreateAgent).not.toHaveBeenCalled();
+      expect(mockPostBlocks).toHaveBeenCalledWith('C1', expect.any(Array), 'Missing tools');
+    });
+
+    it('should proceed when all custom tools are available', async () => {
+      const app = createMockApp();
+      registerConfirmationActions(app as any);
+
+      const futureDate = new Date();
+      futureDate.setHours(futureDate.getHours() + 1);
+
+      mockQueryOne.mockResolvedValue({
+        data: {
+          analysis: makeFakeAnalysis({ custom_tools: ['serpapi-read'] }),
+          name: 'My Agent',
+          goal: 'Answer questions',
+          userId: 'U_CREATOR',
+          existingChannelIds: ['C_EXISTING'],
+        },
+        expires_at: futureDate,
+      });
+
+      // resolveCustomTools reports the tool as available
+      mockResolveCustomTools.mockResolvedValue({
+        resolvedTools: ['serpapi-read'],
+        missingGroups: [],
+      });
+
+      mockCreateAgent.mockResolvedValue({
+        id: 'agent-new',
+        name: 'My Agent',
+        channel_id: 'C_EXISTING',
+        channel_ids: ['C_EXISTING'],
+      });
+
+      const ack = vi.fn();
+      const action = { value: 'confirm-id-ok' };
+      const body = { user: { id: 'U_CREATOR' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+
+      await app.handlers.action['confirm_new_agent']({ action, ack, body });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockCreateAgent).toHaveBeenCalledWith(expect.objectContaining({
+        tools: ['web-search', 'serpapi-read'],
+      }));
+    });
+  });
+
+  describe('template_channel_select action', () => {
+    it('should update pending confirmation with selected channel', async () => {
+      const app = createMockApp();
+      await safeRegisterInlineActions(app);
+
+      mockQueryOne.mockResolvedValue({
+        id: 'pending-1',
+        data: { type: 'template_activation', userId: 'U1' },
+      });
+
+      const ack = vi.fn();
+      const action = { selected_conversation: 'C_TARGET' };
+      const body = { user: { id: 'U1' } };
+
+      await app.handlers.action['template_channel_select']({ action, ack, body });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockExecute).toHaveBeenCalledWith(
+        expect.stringContaining('UPDATE pending_confirmations'),
+        [JSON.stringify('C_TARGET'), 'pending-1'],
+      );
     });
   });
 });

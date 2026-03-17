@@ -540,10 +540,14 @@ Focus on: user preferences, corrections, entities mentioned, procedures learned.
       }],
     });
 
-    const text = response.content
+    let text = response.content
       .filter((b: any) => b.type === 'text')
       .map((b: any) => b.text)
       .join('');
+
+    // Strip markdown code fences if present (e.g. ```json ... ```)
+    const fenceMatch = text.match(/```(?:json)?\s*([\s\S]*?)```/);
+    if (fenceMatch) text = fenceMatch[1].trim();
 
     const facts = JSON.parse(text) as Array<{ fact: string; category: string }>;
     if (Array.isArray(facts) && facts.length > 0) {

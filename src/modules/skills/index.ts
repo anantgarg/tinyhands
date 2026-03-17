@@ -3,61 +3,32 @@ import { query, queryOne, execute } from '../../db';
 import { canModifyAgent } from '../access-control';
 import type { Skill, SkillType, AgentSkill, IntegrationAccess } from '../../types';
 import { logger } from '../../utils/logger';
+import { getBuiltinSkills } from './builtins';
+import type { McpSkillManifest, PromptSkillManifest } from './manifest';
 
-// ── Built-in MCP Skills ──
+// ── Built-in skill lookups (loaded from /skills/*.md) ──
 
-const BUILTIN_MCP_SKILLS: Record<string, { name: string; capabilities: string[] }> = {
-  linear: {
-    name: 'Linear',
-    capabilities: ['Read issues', 'Create issues', 'Update status'],
-  },
-  zendesk: {
-    name: 'Zendesk',
-    capabilities: ['Read tickets', 'Post replies', 'Update fields'],
-  },
-  notion: {
-    name: 'Notion',
-    capabilities: ['Read/write pages and databases'],
-  },
-  slack: {
-    name: 'Slack',
-    capabilities: ['Post to channels', 'Read message history'],
-  },
-  github: {
-    name: 'GitHub',
-    capabilities: ['Create PRs', 'Comment on issues', 'Read code'],
-  },
-};
+function getBuiltinMcpSkills(): Record<string, { name: string; capabilities: string[] }> {
+  const result: Record<string, { name: string; capabilities: string[] }> = {};
+  for (const skill of getBuiltinSkills()) {
+    if (skill.skillType === 'mcp') {
+      const mcp = skill as McpSkillManifest;
+      result[mcp.id] = { name: mcp.name, capabilities: mcp.capabilities };
+    }
+  }
+  return result;
+}
 
-// ── Built-in Prompt Template Skills ──
-
-const BUILTIN_PROMPT_SKILLS: Record<string, { name: string; description: string; template: string }> = {
-  'company-research': {
-    name: 'Company Research',
-    description: 'Research a company and return a structured summary',
-    template: 'Research the company {{company}} and provide: overview, key products, recent news, competitive landscape, and funding history.',
-  },
-  'ticket-triage': {
-    name: 'Ticket Triage',
-    description: 'Classify severity, extract info, suggest routing',
-    template: 'Analyze this support ticket and provide: severity (P0-P3), category, key entities, suggested routing team, and recommended response.',
-  },
-  'code-review': {
-    name: 'Code Review',
-    description: 'Check patterns, security, style',
-    template: 'Review this code for: correctness, security vulnerabilities, performance issues, style consistency, and suggest improvements.',
-  },
-  'lead-enrichment': {
-    name: 'Lead Enrichment',
-    description: 'Pull public data, summarize for sales',
-    template: 'Enrich this lead with public data: company info, role context, social presence, recent activity, and sales talking points.',
-  },
-  'document-filling': {
-    name: 'Document Filling',
-    description: 'Fill template from KB + agent knowledge',
-    template: 'Fill this template by searching the knowledge base for each field. Flag any fields you cannot confidently fill.',
-  },
-};
+function getBuiltinPromptSkills(): Record<string, { name: string; description: string; template: string }> {
+  const result: Record<string, { name: string; description: string; template: string }> = {};
+  for (const skill of getBuiltinSkills()) {
+    if (skill.skillType === 'prompt_template') {
+      const prompt = skill as PromptSkillManifest;
+      result[prompt.id] = { name: prompt.name, description: prompt.description, template: prompt.template };
+    }
+  }
+  return result;
+}
 
 // ── Skill Registry ──
 
@@ -134,13 +105,13 @@ export async function attachSkillToAgent(
   let skill = await getSkillByName(skillName);
   if (!skill) {
     // Check if it's a built-in MCP skill
-    const builtinMcp = BUILTIN_MCP_SKILLS[skillName.toLowerCase()];
+    const builtinMcp = getBuiltinMcpSkills()[skillName.toLowerCase()];
     if (builtinMcp) {
       skill = await registerSkill(skillName, 'mcp', { builtin: true, ...builtinMcp });
     }
 
     // Check if it's a built-in prompt skill
-    const builtinPrompt = BUILTIN_PROMPT_SKILLS[skillName.toLowerCase()];
+    const builtinPrompt = getBuiltinPromptSkills()[skillName.toLowerCase()];
     if (builtinPrompt) {
       skill = await registerSkill(skillName, 'prompt_template', { builtin: true, ...builtinPrompt });
     }
@@ -194,8 +165,8 @@ export function getAvailableSkills(): {
   prompt: Array<{ name: string; description: string }>;
 } {
   return {
-    mcp: Object.entries(BUILTIN_MCP_SKILLS).map(([key, val]) => ({ ...val, name: key })),
-    prompt: Object.entries(BUILTIN_PROMPT_SKILLS).map(([key, val]) => ({
+    mcp: Object.entries(getBuiltinMcpSkills()).map(([key, val]) => ({ ...val, name: key })),
+    prompt: Object.entries(getBuiltinPromptSkills()).map(([key, val]) => ({
       name: key,
       description: val.description,
     })),
