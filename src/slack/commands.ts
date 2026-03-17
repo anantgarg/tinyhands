@@ -2425,6 +2425,32 @@ export function registerConfirmationActions(app: App): void {
       // Use existing channels or create new one
       const channelIds: string[] = existingChannelIds || (existingChannelId ? [existingChannelId] : [await createChannel(name)]);
 
+      // Ensure bot can access all selected channels before creating the agent.
+      // For private channels the bot isn't in yet, try to invite it automatically.
+      const slackClient = getSlackApp().client;
+      const botAuth = await slackClient.auth.test();
+      const botUserId = botAuth.user_id as string;
+      for (const chId of channelIds) {
+        try {
+          await slackClient.conversations.info({ channel: chId });
+        } catch (chErr: any) {
+          const code = chErr.data?.error || chErr.message;
+          if (code === 'channel_not_found') {
+            // Bot can't see this channel — try inviting it (works for private channels if the caller has groups:write scope)
+            try {
+              await slackClient.conversations.invite({ channel: chId, users: botUserId });
+              logger.info('Bot invited itself to private channel', { channelId: chId });
+            } catch (invErr: any) {
+              const invCode = invErr.data?.error || invErr.message;
+              logger.warn('Could not auto-invite bot to channel', { channelId: chId, error: invCode });
+              throw new Error(`I can't access <#${chId}>. Please invite <@${botUserId}> to the channel first, then try again.`);
+            }
+          } else {
+            throw chErr;
+          }
+        }
+      }
+
       // Merge builtin tools + read-only custom tools into agent's tool list
       const agentTools = [...analysis.tools, ...(analysis.custom_tools || [])];
 

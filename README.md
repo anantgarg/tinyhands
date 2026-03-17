@@ -313,7 +313,7 @@ This starts:
    - `users:read`
    - `reactions:read`, `reactions:write`
    - `files:read`
-   - `groups:history` (for private channel support)
+   - `groups:history`, `groups:write` (for private channel support)
    - `im:history`, `im:write` (for superadmin DM commands)
 4. Under **Slash Commands**, create:
    - `/agents` — Manage AI agents

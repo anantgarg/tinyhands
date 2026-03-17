@@ -444,6 +444,16 @@ describe('Commands Module', () => {
       setupGuide: 'Go to https://example.com to get your API key',
       register: (...args: any[]) => mockRegister(...args),
     });
+    mockGetSlackApp.mockReturnValue({
+      client: {
+        auth: { test: vi.fn().mockResolvedValue({ user_id: 'UBOT' }) },
+        conversations: {
+          info: vi.fn().mockResolvedValue({ channel: { id: 'C_EXISTING' } }),
+          invite: vi.fn().mockResolvedValue({ ok: true }),
+        },
+        users: { info: vi.fn().mockResolvedValue({ user: { tz: 'UTC' } }) },
+      },
+    });
     mockAnthropicCreate.mockResolvedValue({
       content: [{ type: 'text', text: JSON.stringify({
         intent: 'goal_update',
@@ -1418,6 +1428,89 @@ describe('Commands Module', () => {
       await app.handlers.action['confirm_new_agent']({ action, ack, body });
 
       expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('DB write failed'), 'msg-ts');
+    });
+
+    it('confirm_new_agent should auto-invite bot to private channel when conversations.info fails', async () => {
+      const app = createMockApp();
+      registerConfirmationActions(app as any);
+
+      const futureDate = new Date();
+      futureDate.setHours(futureDate.getHours() + 1);
+
+      const mockConvInfo = vi.fn().mockRejectedValueOnce({ data: { error: 'channel_not_found' }, message: 'channel_not_found' });
+      const mockConvInvite = vi.fn().mockResolvedValue({ ok: true });
+      mockGetSlackApp.mockReturnValue({
+        client: {
+          auth: { test: vi.fn().mockResolvedValue({ user_id: 'UBOT' }) },
+          conversations: { info: mockConvInfo, invite: mockConvInvite },
+          users: { info: vi.fn().mockResolvedValue({ user: { tz: 'UTC' } }) },
+        },
+      });
+
+      mockQueryOne.mockResolvedValue({
+        data: {
+          analysis: makeFakeAnalysis(),
+          name: 'Private Agent',
+          goal: 'Help in private',
+          userId: 'U1',
+          existingChannelIds: ['C_PRIVATE'],
+        },
+        expires_at: futureDate,
+      });
+
+      mockCreateAgent.mockResolvedValue({
+        id: 'agent-priv',
+        name: 'Private Agent',
+        channel_id: 'C_PRIVATE',
+        channel_ids: ['C_PRIVATE'],
+      });
+
+      const ack = vi.fn();
+      const action = { value: 'confirm-priv' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+
+      await app.handlers.action['confirm_new_agent']({ action, ack, body });
+
+      expect(mockConvInvite).toHaveBeenCalledWith({ channel: 'C_PRIVATE', users: 'UBOT' });
+      expect(mockCreateAgent).toHaveBeenCalledWith(expect.objectContaining({ name: 'Private Agent' }));
+    });
+
+    it('confirm_new_agent should show friendly error when bot cannot access private channel', async () => {
+      const app = createMockApp();
+      registerConfirmationActions(app as any);
+
+      const futureDate = new Date();
+      futureDate.setHours(futureDate.getHours() + 1);
+
+      const mockConvInfo = vi.fn().mockRejectedValueOnce({ data: { error: 'channel_not_found' }, message: 'channel_not_found' });
+      const mockConvInvite = vi.fn().mockRejectedValueOnce({ data: { error: 'not_in_channel' }, message: 'not_in_channel' });
+      mockGetSlackApp.mockReturnValue({
+        client: {
+          auth: { test: vi.fn().mockResolvedValue({ user_id: 'UBOT' }) },
+          conversations: { info: mockConvInfo, invite: mockConvInvite },
+          users: { info: vi.fn().mockResolvedValue({ user: { tz: 'UTC' } }) },
+        },
+      });
+
+      mockQueryOne.mockResolvedValue({
+        data: {
+          analysis: makeFakeAnalysis(),
+          name: 'Private Agent',
+          goal: 'Help in private',
+          userId: 'U1',
+          existingChannelIds: ['C_PRIVATE'],
+        },
+        expires_at: futureDate,
+      });
+
+      const ack = vi.fn();
+      const action = { value: 'confirm-priv' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+
+      await app.handlers.action['confirm_new_agent']({ action, ack, body });
+
+      expect(mockCreateAgent).not.toHaveBeenCalled();
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('invite'), 'msg-ts');
     });
 
     it('dismiss_feature_request should delete confirmation', async () => {
@@ -6093,6 +6186,11 @@ describe('Commands Module', () => {
 
       mockGetSlackApp.mockReturnValue({
         client: {
+          auth: { test: vi.fn().mockResolvedValue({ user_id: 'UBOT' }) },
+          conversations: {
+            info: vi.fn().mockResolvedValue({ channel: { id: 'C_EXISTING' } }),
+            invite: vi.fn().mockResolvedValue({ ok: true }),
+          },
           users: {
             info: vi.fn().mockResolvedValue({ user: { tz: 'America/New_York' } }),
           },
