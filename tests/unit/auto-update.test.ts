@@ -165,8 +165,7 @@ describe('Auto-Update Module', () => {
       expect(calls).not.toContainEqual(expect.stringContaining('npm install'));
       expect(calls).toContainEqual('npm run build');
       expect(calls).toContainEqual('npm run migrate');
-      expect(calls).toContainEqual(expect.stringContaining('pm2 restart tinyhands-worker'));
-      expect(calls).toContainEqual('pm2 restart tinyhands-listener');
+      expect(calls).toContainEqual('pm2 startOrRestart ecosystem.config.js');
     });
 
     it('should run npm install when package.json is modified', async () => {
@@ -268,7 +267,7 @@ describe('Auto-Update Module', () => {
 
     it('should return failure result when PM2 restart fails', async () => {
       mockExecSync.mockImplementation((cmd: string) => {
-        if (cmd.includes('pm2 restart')) throw new Error('PM2 not found');
+        if (cmd.includes('pm2 startOrRestart')) throw new Error('PM2 not found');
         return Buffer.from('');
       });
 
@@ -309,14 +308,12 @@ describe('Auto-Update Module', () => {
       expect(result.commitHash).toBe('unknown');
     });
 
-    it('should restart workers before listener', async () => {
+    it('should use startOrRestart to pick up env changes', async () => {
       const result = await handleDeploy(makePushPayload());
       expect(result.success).toBe(true);
 
       const calls = mockExecSync.mock.calls.map((c: any[]) => c[0]);
-      const workerIdx = calls.findIndex((c: string) => c.includes('tinyhands-worker'));
-      const listenerIdx = calls.findIndex((c: string) => c.includes('tinyhands-listener'));
-      expect(workerIdx).toBeLessThan(listenerIdx);
+      expect(calls).toContainEqual('pm2 startOrRestart ecosystem.config.js');
     });
 
     it('should report restartTime in the result', async () => {
