@@ -71,6 +71,7 @@ export interface RunRecord {
 }
 
 export interface JobData {
+  workspaceId: string;
   agentId: string;
   channelId: string;
   threadTs: string;
@@ -91,6 +92,7 @@ export type SourceStatus = 'active' | 'error' | 'syncing';
 
 export interface Source {
   id: string;
+  workspace_id: string;
   agent_id: string;
   source_type: SourceType;
   uri: string;
@@ -186,6 +188,7 @@ export type TriggerStatus = 'active' | 'paused';
 
 export interface Trigger {
   id: string;
+  workspace_id: string;
   agent_id: string;
   trigger_type: TriggerType;
   config_json: string;
