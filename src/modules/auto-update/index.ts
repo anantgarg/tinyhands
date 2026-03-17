@@ -56,11 +56,12 @@ export async function handleDeploy(payload: any): Promise<DeployResult> {
     execSync('git pull origin main', { cwd: process.cwd(), timeout: 30000 });
 
     // 2. npm install if package.json changed or pull-based (no changedFiles info)
-    // Full install (including devDeps) is needed because tsc requires @types/* packages
+    // --include=dev is required because NODE_ENV=production (from .env) causes npm
+    // to skip devDependencies, but tsc needs @types/* packages to compile
     const isPullBased = changedFiles.length === 0;
     if (packageJsonChanged || isPullBased) {
       logger.info('Deploy: installing dependencies');
-      execSync('npm install', { cwd: process.cwd(), timeout: 120000 });
+      execSync('npm install --include=dev', { cwd: process.cwd(), timeout: 120000 });
     }
 
     // 3. Docker rebuild if Dockerfile changed
