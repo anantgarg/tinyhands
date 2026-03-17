@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
+const TEST_WORKSPACE_ID = 'W_TEST_123';
+
 // Mock dependencies
 const mockQuery = vi.fn();
 const mockQueryOne = vi.fn();
@@ -53,7 +55,7 @@ describe('Teams Module', () => {
         name: 'lead-agent',
       });
 
-      const teamRun = await createTeamRun('agent-1', 'run-1');
+      const teamRun = await createTeamRun(TEST_WORKSPACE_ID, 'agent-1', 'run-1');
 
       expect(teamRun).toBeDefined();
       expect(teamRun.id).toBeDefined();
@@ -66,7 +68,7 @@ describe('Teams Module', () => {
       expect(mockExecute).toHaveBeenCalledTimes(1);
       expect(mockExecute).toHaveBeenCalledWith(
         expect.stringContaining('INSERT INTO team_runs'),
-        expect.arrayContaining([teamRun.id, 'agent-1', 'run-1', 3, 2]),
+        expect.arrayContaining([teamRun.id, TEST_WORKSPACE_ID, 'agent-1', 'run-1', 3, 2]),
       );
     });
 
@@ -75,7 +77,7 @@ describe('Teams Module', () => {
         id: 'agent-1',
       });
 
-      const teamRun = await createTeamRun('agent-1', 'run-1', 5, 4);
+      const teamRun = await createTeamRun(TEST_WORKSPACE_ID, 'agent-1', 'run-1', 5, 4);
 
       expect(teamRun.max_concurrent).toBe(5);
       expect(teamRun.max_depth).toBe(4);
@@ -84,7 +86,7 @@ describe('Teams Module', () => {
     it('should throw if agent is not found', async () => {
       mockGetAgent.mockResolvedValueOnce(null);
 
-      await expect(createTeamRun('missing-agent', 'run-1'))
+      await expect(createTeamRun(TEST_WORKSPACE_ID, 'missing-agent', 'run-1'))
         .rejects.toThrow('Agent missing-agent not found');
     });
 
@@ -94,7 +96,7 @@ describe('Teams Module', () => {
       });
 
       // 0 is falsy, so || will use default
-      const teamRun = await createTeamRun('agent-1', 'run-1', 0);
+      const teamRun = await createTeamRun(TEST_WORKSPACE_ID, 'agent-1', 'run-1', 0);
       expect(teamRun.max_concurrent).toBe(3);
     });
 
@@ -103,7 +105,7 @@ describe('Teams Module', () => {
         id: 'agent-1',
       });
 
-      const teamRun = await createTeamRun('agent-1', 'run-1', undefined, 0);
+      const teamRun = await createTeamRun(TEST_WORKSPACE_ID, 'agent-1', 'run-1', undefined, 0);
       expect(teamRun.max_depth).toBe(2);
     });
   });
@@ -125,7 +127,7 @@ describe('Teams Module', () => {
         { id: 'sub-2', team_run_id: 'team-1', agent_id: 'agent-3', status: 'running', task: 'task2', result: null },
       ]);
 
-      const teamRun = await getTeamRun('team-1');
+      const teamRun = await getTeamRun(TEST_WORKSPACE_ID, 'team-1');
 
       expect(teamRun).toBeDefined();
       expect(teamRun!.id).toBe('team-1');
@@ -137,7 +139,7 @@ describe('Teams Module', () => {
     it('should return null if team run not found', async () => {
       mockQueryOne.mockResolvedValueOnce(null);
 
-      const teamRun = await getTeamRun('nonexistent');
+      const teamRun = await getTeamRun(TEST_WORKSPACE_ID, 'nonexistent');
       expect(teamRun).toBeNull();
     });
 
@@ -151,7 +153,7 @@ describe('Teams Module', () => {
       });
       mockQuery.mockResolvedValueOnce([]);
 
-      const teamRun = await getTeamRun('team-1');
+      const teamRun = await getTeamRun(TEST_WORKSPACE_ID, 'team-1');
       expect(teamRun!.sub_agents).toEqual([]);
     });
   });
@@ -192,7 +194,7 @@ describe('Teams Module', () => {
     it('should spawn a sub-agent at default depth 1', async () => {
       setupSpawnMocks();
 
-      const subRun = await spawnSubAgent('team-1', 'agent-2', 'Analyze data');
+      const subRun = await spawnSubAgent(TEST_WORKSPACE_ID, 'team-1', 'agent-2', 'Analyze data');
 
       expect(subRun).toBeDefined();
       expect(subRun.team_run_id).toBe('team-1');
@@ -207,6 +209,7 @@ describe('Teams Module', () => {
       );
       expect(mockEnqueueRun).toHaveBeenCalledWith(
         expect.objectContaining({
+          workspaceId: TEST_WORKSPACE_ID,
           agentId: 'agent-2',
           input: 'Analyze data',
           channelId: '',
@@ -220,14 +223,14 @@ describe('Teams Module', () => {
     it('should spawn a sub-agent at a custom depth', async () => {
       setupSpawnMocks();
 
-      const subRun = await spawnSubAgent('team-1', 'agent-2', 'task', 2);
+      const subRun = await spawnSubAgent(TEST_WORKSPACE_ID, 'team-1', 'agent-2', 'task', 2);
       expect(subRun.depth).toBe(2);
     });
 
     it('should throw if team run not found', async () => {
       mockQueryOne.mockResolvedValueOnce(null); // team run not found
 
-      await expect(spawnSubAgent('nonexistent', 'agent-2', 'task'))
+      await expect(spawnSubAgent(TEST_WORKSPACE_ID, 'nonexistent', 'agent-2', 'task'))
         .rejects.toThrow('Team run nonexistent not found');
     });
 
@@ -241,7 +244,7 @@ describe('Teams Module', () => {
       });
       mockQuery.mockResolvedValueOnce([]);
 
-      await expect(spawnSubAgent('team-1', 'agent-2', 'task', 3))
+      await expect(spawnSubAgent(TEST_WORKSPACE_ID, 'team-1', 'agent-2', 'task', 3))
         .rejects.toThrow('Max spawn depth (2) exceeded. Cannot spawn at depth 3.');
     });
 
@@ -254,7 +257,7 @@ describe('Teams Module', () => {
       });
       mockQuery.mockResolvedValueOnce([]);
 
-      await expect(spawnSubAgent('team-1', 'agent-2', 'task', 2))
+      await expect(spawnSubAgent(TEST_WORKSPACE_ID, 'team-1', 'agent-2', 'task', 2))
         .rejects.toThrow('Max spawn depth (1) exceeded');
     });
 
@@ -274,7 +277,7 @@ describe('Teams Module', () => {
       // getAgent for lead
       mockGetAgent.mockResolvedValueOnce({ id: 'lead-1' });
 
-      const subRun = await spawnSubAgent('team-1', 'agent-2', 'task', 2);
+      const subRun = await spawnSubAgent(TEST_WORKSPACE_ID, 'team-1', 'agent-2', 'task', 2);
       expect(subRun.depth).toBe(2);
     });
 
@@ -290,7 +293,7 @@ describe('Teams Module', () => {
       // active count = 2, which matches max_concurrent
       mockQueryOne.mockResolvedValueOnce({ count: '2' });
 
-      await expect(spawnSubAgent('team-1', 'agent-2', 'task'))
+      await expect(spawnSubAgent(TEST_WORKSPACE_ID, 'team-1', 'agent-2', 'task'))
         .rejects.toThrow('Max concurrent sub-agents (2) reached');
     });
 
@@ -308,7 +311,7 @@ describe('Teams Module', () => {
       mockGetAgent.mockResolvedValueOnce({ id: 'agent-2' });
       mockGetAgent.mockResolvedValueOnce({ id: 'lead-1' });
 
-      const subRun = await spawnSubAgent('team-1', 'agent-2', 'task');
+      const subRun = await spawnSubAgent(TEST_WORKSPACE_ID, 'team-1', 'agent-2', 'task');
       expect(subRun).toBeDefined();
     });
 
@@ -325,7 +328,7 @@ describe('Teams Module', () => {
       // getAgent returns null for the sub-agent
       mockGetAgent.mockResolvedValueOnce(null);
 
-      await expect(spawnSubAgent('team-1', 'missing-agent', 'task'))
+      await expect(spawnSubAgent(TEST_WORKSPACE_ID, 'team-1', 'missing-agent', 'task'))
         .rejects.toThrow('Agent missing-agent not found');
     });
 
@@ -343,7 +346,7 @@ describe('Teams Module', () => {
       // lead agent not found
       mockGetAgent.mockResolvedValueOnce(null);
 
-      await expect(spawnSubAgent('team-1', 'agent-2', 'task'))
+      await expect(spawnSubAgent(TEST_WORKSPACE_ID, 'team-1', 'agent-2', 'task'))
         .rejects.toThrow('Lead agent not found');
     });
 
@@ -361,7 +364,7 @@ describe('Teams Module', () => {
       mockGetAgent.mockResolvedValueOnce({ id: 'agent-2' });
       mockGetAgent.mockResolvedValueOnce({ id: 'lead-1' });
 
-      const subRun = await spawnSubAgent('team-1', 'agent-2', 'task');
+      const subRun = await spawnSubAgent(TEST_WORKSPACE_ID, 'team-1', 'agent-2', 'task');
       // null count defaults to 0 via || '0', so spawn succeeds
       expect(subRun).toBeDefined();
     });
@@ -369,10 +372,11 @@ describe('Teams Module', () => {
     it('should enqueue the sub-agent job with correct data', async () => {
       setupSpawnMocks();
 
-      await spawnSubAgent('team-1', 'agent-2', 'Do analysis');
+      await spawnSubAgent(TEST_WORKSPACE_ID, 'team-1', 'agent-2', 'Do analysis');
 
       expect(mockEnqueueRun).toHaveBeenCalledTimes(1);
       const jobData = mockEnqueueRun.mock.calls[0][0];
+      expect(jobData.workspaceId).toBe(TEST_WORKSPACE_ID);
       expect(jobData.agentId).toBe('agent-2');
       expect(jobData.input).toBe('Do analysis');
       expect(jobData.channelId).toBe('');
@@ -399,11 +403,11 @@ describe('Teams Module', () => {
       // checkTeamCompletion: count of pending
       mockQueryOne.mockResolvedValueOnce({ count: '1' });
 
-      await completeSubAgent('sub-1', 'completed', 'Analysis complete');
+      await completeSubAgent(TEST_WORKSPACE_ID, 'sub-1', 'completed', 'Analysis complete');
 
       expect(mockExecute).toHaveBeenCalledWith(
         expect.stringContaining('UPDATE sub_agent_runs SET status'),
-        ['completed', 'Analysis complete', 'sub-1'],
+        ['completed', 'Analysis complete', 'sub-1', TEST_WORKSPACE_ID],
       );
     });
 
@@ -417,11 +421,11 @@ describe('Teams Module', () => {
       // checkTeamCompletion: still pending
       mockQueryOne.mockResolvedValueOnce({ count: '1' });
 
-      await completeSubAgent('sub-1', 'failed', 'Error occurred');
+      await completeSubAgent(TEST_WORKSPACE_ID, 'sub-1', 'failed', 'Error occurred');
 
       expect(mockExecute).toHaveBeenCalledWith(
         expect.stringContaining('UPDATE sub_agent_runs'),
-        ['failed', 'Error occurred', 'sub-1'],
+        ['failed', 'Error occurred', 'sub-1', TEST_WORKSPACE_ID],
       );
     });
 
@@ -430,7 +434,7 @@ describe('Teams Module', () => {
       mockQueryOne.mockResolvedValueOnce(null); // sub-run not found
 
       // Should not throw
-      await completeSubAgent('nonexistent', 'completed', 'result');
+      await completeSubAgent(TEST_WORKSPACE_ID, 'nonexistent', 'completed', 'result');
     });
 
     it('should trigger team completion check when all sub-agents done', async () => {
@@ -464,7 +468,7 @@ describe('Teams Module', () => {
       // getTeamCost query
       mockQueryOne.mockResolvedValueOnce({ total_cost: '0.0123' });
 
-      await completeSubAgent('sub-1', 'completed', 'done');
+      await completeSubAgent(TEST_WORKSPACE_ID, 'sub-1', 'completed', 'done');
 
       // Should have attempted to post message
       const { postMessage } = await import('../../src/slack');
@@ -482,7 +486,7 @@ describe('Teams Module', () => {
         { id: 'sub-3', status: 'completed', task: 'task3', result: 'done2' },
       ]);
 
-      const results = await getTeamResults('team-1');
+      const results = await getTeamResults(TEST_WORKSPACE_ID, 'team-1');
 
       expect(results.completed).toHaveLength(2);
       expect(results.failed).toHaveLength(1);
@@ -495,7 +499,7 @@ describe('Teams Module', () => {
         { id: 'sub-2', status: 'running', task: 'task2' },
       ]);
 
-      const results = await getTeamResults('team-1');
+      const results = await getTeamResults(TEST_WORKSPACE_ID, 'team-1');
 
       expect(results.completed).toHaveLength(1);
       expect(results.failed).toHaveLength(0);
@@ -507,7 +511,7 @@ describe('Teams Module', () => {
         { id: 'sub-1', status: 'queued', task: 'task1' },
       ]);
 
-      const results = await getTeamResults('team-1');
+      const results = await getTeamResults(TEST_WORKSPACE_ID, 'team-1');
 
       expect(results.completed).toHaveLength(0);
       expect(results.failed).toHaveLength(0);
@@ -517,7 +521,7 @@ describe('Teams Module', () => {
     it('should return empty arrays and allDone true when no sub-agents', async () => {
       mockQuery.mockResolvedValueOnce([]);
 
-      const results = await getTeamResults('team-1');
+      const results = await getTeamResults(TEST_WORKSPACE_ID, 'team-1');
 
       expect(results.completed).toEqual([]);
       expect(results.failed).toEqual([]);
@@ -530,7 +534,7 @@ describe('Teams Module', () => {
         { id: 'sub-2', status: 'failed', task: 'task2', result: 'err2' },
       ]);
 
-      const results = await getTeamResults('team-1');
+      const results = await getTeamResults(TEST_WORKSPACE_ID, 'team-1');
 
       expect(results.completed).toHaveLength(0);
       expect(results.failed).toHaveLength(2);
@@ -542,7 +546,7 @@ describe('Teams Module', () => {
         { id: 'sub-1', status: 'timeout', task: 'task1' },
       ]);
 
-      const results = await getTeamResults('team-1');
+      const results = await getTeamResults(TEST_WORKSPACE_ID, 'team-1');
 
       expect(results.completed).toHaveLength(0);
       expect(results.failed).toHaveLength(0);
@@ -557,40 +561,40 @@ describe('Teams Module', () => {
     it('should return total cost from sub-agent runs', async () => {
       mockQueryOne.mockResolvedValueOnce({ total_cost: '1.2345' });
 
-      const cost = await getTeamCost('team-1');
+      const cost = await getTeamCost(TEST_WORKSPACE_ID, 'team-1');
 
       expect(cost).toBe(1.2345);
       expect(mockQueryOne).toHaveBeenCalledWith(
         expect.stringContaining('SUM'),
-        ['team-1'],
+        ['team-1', TEST_WORKSPACE_ID],
       );
     });
 
     it('should return 0 when no cost data', async () => {
       mockQueryOne.mockResolvedValueOnce({ total_cost: '0' });
 
-      const cost = await getTeamCost('team-1');
+      const cost = await getTeamCost(TEST_WORKSPACE_ID, 'team-1');
       expect(cost).toBe(0);
     });
 
     it('should return 0 when result is null', async () => {
       mockQueryOne.mockResolvedValueOnce(null);
 
-      const cost = await getTeamCost('team-1');
+      const cost = await getTeamCost(TEST_WORKSPACE_ID, 'team-1');
       expect(cost).toBe(0);
     });
 
     it('should return 0 when total_cost is undefined', async () => {
       mockQueryOne.mockResolvedValueOnce({});
 
-      const cost = await getTeamCost('team-1');
+      const cost = await getTeamCost(TEST_WORKSPACE_ID, 'team-1');
       expect(cost).toBe(0);
     });
 
     it('should handle fractional costs', async () => {
       mockQueryOne.mockResolvedValueOnce({ total_cost: '0.000042' });
 
-      const cost = await getTeamCost('team-1');
+      const cost = await getTeamCost(TEST_WORKSPACE_ID, 'team-1');
       expect(cost).toBeCloseTo(0.000042);
     });
   });
@@ -601,7 +605,7 @@ describe('Teams Module', () => {
     it('should return "Team run not found" if team run does not exist', async () => {
       mockQueryOne.mockResolvedValueOnce(null); // getTeamRun returns null
 
-      const result = await formatTeamProgress('nonexistent');
+      const result = await formatTeamProgress(TEST_WORKSPACE_ID, 'nonexistent');
       expect(result).toBe('Team run not found');
     });
 
@@ -612,7 +616,7 @@ describe('Teams Module', () => {
       });
       mockQuery.mockResolvedValueOnce([]);
 
-      const result = await formatTeamProgress('team-1');
+      const result = await formatTeamProgress(TEST_WORKSPACE_ID, 'team-1');
       expect(result).toBe('No sub-agents spawned yet');
     });
 
@@ -625,7 +629,7 @@ describe('Teams Module', () => {
         { id: 'sub-1', agent_id: 'abcdefgh-1234', depth: 1, status: 'completed', task: 'Analyze data', result: 'Data analyzed' },
       ]);
 
-      const result = await formatTeamProgress('team-1');
+      const result = await formatTeamProgress(TEST_WORKSPACE_ID, 'team-1');
 
       expect(result).toContain('*Team Progress:*');
       expect(result).toContain(':white_check_mark:');
@@ -641,7 +645,7 @@ describe('Teams Module', () => {
         { id: 'sub-1', agent_id: 'abcdefgh', depth: 1, status: 'failed', task: 'task1', result: 'error' },
       ]);
 
-      const result = await formatTeamProgress('team-1');
+      const result = await formatTeamProgress(TEST_WORKSPACE_ID, 'team-1');
       expect(result).toContain(':x:');
     });
 
@@ -651,7 +655,7 @@ describe('Teams Module', () => {
         { id: 'sub-1', agent_id: 'abcdefgh', depth: 1, status: 'running', task: 'task1', result: null },
       ]);
 
-      const result = await formatTeamProgress('team-1');
+      const result = await formatTeamProgress(TEST_WORKSPACE_ID, 'team-1');
       expect(result).toContain(':hourglass:');
     });
 
@@ -661,7 +665,7 @@ describe('Teams Module', () => {
         { id: 'sub-1', agent_id: 'abcdefgh', depth: 1, status: 'queued', task: 'task1', result: null },
       ]);
 
-      const result = await formatTeamProgress('team-1');
+      const result = await formatTeamProgress(TEST_WORKSPACE_ID, 'team-1');
       expect(result).toContain(':clock1:');
     });
 
@@ -672,7 +676,7 @@ describe('Teams Module', () => {
         { id: 'sub-1', agent_id: 'abcdefgh', depth: 1, status: 'running', task: longTask, result: null },
       ]);
 
-      const result = await formatTeamProgress('team-1');
+      const result = await formatTeamProgress(TEST_WORKSPACE_ID, 'team-1');
       // The task should be sliced to 60 chars
       expect(result).toContain('A'.repeat(60));
       expect(result).not.toContain('A'.repeat(61));
@@ -685,7 +689,7 @@ describe('Teams Module', () => {
         { id: 'sub-1', agent_id: 'abcdefgh', depth: 1, status: 'completed', task: 'task', result: longResult },
       ]);
 
-      const result = await formatTeamProgress('team-1');
+      const result = await formatTeamProgress(TEST_WORKSPACE_ID, 'team-1');
       expect(result).toContain('B'.repeat(100));
       expect(result).not.toContain('B'.repeat(101));
     });
@@ -696,7 +700,7 @@ describe('Teams Module', () => {
         { id: 'sub-1', agent_id: 'abcdefgh', depth: 1, status: 'queued', task: 'task1', result: null },
       ]);
 
-      const result = await formatTeamProgress('team-1');
+      const result = await formatTeamProgress(TEST_WORKSPACE_ID, 'team-1');
       expect(result).not.toContain('_Result:');
     });
 
@@ -709,7 +713,7 @@ describe('Teams Module', () => {
         { id: 'sub-4', agent_id: 'dddddddd', depth: 1, status: 'queued', task: 'task4', result: null },
       ]);
 
-      const result = await formatTeamProgress('team-1');
+      const result = await formatTeamProgress(TEST_WORKSPACE_ID, 'team-1');
 
       expect(result).toContain(':white_check_mark:');
       expect(result).toContain(':hourglass:');
@@ -724,7 +728,7 @@ describe('Teams Module', () => {
         { id: 'sub-1', agent_id: '12345678-abcd-efgh', depth: 1, status: 'completed', task: 'task', result: null },
       ]);
 
-      const result = await formatTeamProgress('team-1');
+      const result = await formatTeamProgress(TEST_WORKSPACE_ID, 'team-1');
       expect(result).toContain('*12345678*');
       expect(result).not.toContain('12345678-');
     });
@@ -766,7 +770,7 @@ describe('Teams Module', () => {
       // getTeamCost query
       mockQueryOne.mockResolvedValueOnce({ total_cost: '0.0500' });
 
-      await completeSubAgent('sub-1', 'completed', 'done');
+      await completeSubAgent(TEST_WORKSPACE_ID, 'sub-1', 'completed', 'done');
 
       const { postMessage } = await import('../../src/slack');
       expect(postMessage).toHaveBeenCalled();
@@ -814,7 +818,7 @@ describe('Teams Module', () => {
       (postMessage as any).mockRejectedValueOnce(new Error('Slack API error'));
 
       // Should not throw — error is caught and logged
-      await completeSubAgent('sub-1', 'completed', 'done');
+      await completeSubAgent(TEST_WORKSPACE_ID, 'sub-1', 'completed', 'done');
 
       const { logger } = await import('../../src/utils/logger');
       expect(logger.warn).toHaveBeenCalledWith(
@@ -855,7 +859,7 @@ describe('Teams Module', () => {
       // getTeamCost
       mockQueryOne.mockResolvedValueOnce({ total_cost: '0.01' });
 
-      await completeSubAgent('sub-1', 'completed', 'done');
+      await completeSubAgent(TEST_WORKSPACE_ID, 'sub-1', 'completed', 'done');
 
       const { postMessage } = await import('../../src/slack');
       expect(postMessage).toHaveBeenCalled();
@@ -888,7 +892,7 @@ describe('Teams Module', () => {
         thread_ts: null,
       });
 
-      await completeSubAgent('sub-1', 'completed', 'done');
+      await completeSubAgent(TEST_WORKSPACE_ID, 'sub-1', 'completed', 'done');
       // Should not throw — null count defaults to 0
     });
 
@@ -914,7 +918,7 @@ describe('Teams Module', () => {
         thread_ts: null,
       });
 
-      await completeSubAgent('sub-1', 'completed', 'done');
+      await completeSubAgent(TEST_WORKSPACE_ID, 'sub-1', 'completed', 'done');
 
       const { postMessage } = await import('../../src/slack');
       // postMessage should NOT have been called for this specific test

@@ -140,6 +140,8 @@ import {
   updateAuthoredSkillTemplate,
 } from '../../src/modules/self-authoring';
 
+const TEST_WORKSPACE_ID = 'W_TEST_123';
+
 // ══════════════════════════════════════════════════
 //  Code Validation (static analysis)
 // ══════════════════════════════════════════════════
@@ -905,19 +907,19 @@ describe('Self-Authoring Module (source imports)', () => {
   describe('getToolExecutionScript', () => {
     it('should return null when tool not found', async () => {
       mockGetCustomTool.mockResolvedValueOnce(null);
-      const result = await getToolExecutionScript('nonexistent');
+      const result = await getToolExecutionScript(TEST_WORKSPACE_ID, 'nonexistent');
       expect(result).toBeNull();
     });
 
     it('should return null when tool has no script_code', async () => {
       mockGetCustomTool.mockResolvedValueOnce({ name: 'tool', script_code: null, approved: true });
-      const result = await getToolExecutionScript('tool');
+      const result = await getToolExecutionScript(TEST_WORKSPACE_ID, 'tool');
       expect(result).toBeNull();
     });
 
     it('should return null when tool is not approved', async () => {
       mockGetCustomTool.mockResolvedValueOnce({ name: 'tool', script_code: 'code', approved: false });
-      const result = await getToolExecutionScript('tool');
+      const result = await getToolExecutionScript(TEST_WORKSPACE_ID, 'tool');
       expect(result).toBeNull();
     });
 
@@ -925,7 +927,7 @@ describe('Self-Authoring Module (source imports)', () => {
       mockGetCustomTool.mockResolvedValueOnce({
         name: 'my-tool', script_code: 'console.log("hi")', language: 'javascript', approved: true,
       });
-      const result = await getToolExecutionScript('my-tool');
+      const result = await getToolExecutionScript(TEST_WORKSPACE_ID, 'my-tool');
       expect(result).toContain('#!/usr/bin/env node');
       expect(result).toContain("'use strict'");
       expect(result).toContain('Agent-authored tool: my-tool');
@@ -936,7 +938,7 @@ describe('Self-Authoring Module (source imports)', () => {
       mockGetCustomTool.mockResolvedValueOnce({
         name: 'py-tool', script_code: 'print("hi")', language: 'python', approved: true,
       });
-      const result = await getToolExecutionScript('py-tool');
+      const result = await getToolExecutionScript(TEST_WORKSPACE_ID, 'py-tool');
       expect(result).toContain('#!/usr/bin/env python3');
       expect(result).toContain('import os, json');
     });
@@ -945,7 +947,7 @@ describe('Self-Authoring Module (source imports)', () => {
       mockGetCustomTool.mockResolvedValueOnce({
         name: 'sh-tool', script_code: 'echo hi', language: 'bash', approved: true,
       });
-      const result = await getToolExecutionScript('sh-tool');
+      const result = await getToolExecutionScript(TEST_WORKSPACE_ID, 'sh-tool');
       expect(result).toContain('#!/usr/bin/env bash');
       expect(result).toContain('set -euo pipefail');
     });
@@ -954,7 +956,7 @@ describe('Self-Authoring Module (source imports)', () => {
       mockGetCustomTool.mockResolvedValueOnce({
         name: 'other-tool', script_code: 'code', language: 'rust', approved: true,
       });
-      const result = await getToolExecutionScript('other-tool');
+      const result = await getToolExecutionScript(TEST_WORKSPACE_ID, 'other-tool');
       expect(result).toContain('#!/usr/bin/env node');
       // The code is returned as-is without wrapping for unknown language
       expect(result).toContain('code');
@@ -965,7 +967,7 @@ describe('Self-Authoring Module (source imports)', () => {
 
   describe('recordToolRun', () => {
     it('should insert a tool run record', async () => {
-      await recordToolRun('my-tool', 'agent-1', true, 100, null);
+      await recordToolRun(TEST_WORKSPACE_ID, 'my-tool', 'agent-1', true, 100, null);
       expect(mockExecute).toHaveBeenCalledWith(
         expect.stringContaining('tool_runs'),
         expect.arrayContaining(['my-tool', 'agent-1', true, 100, null])
@@ -973,7 +975,7 @@ describe('Self-Authoring Module (source imports)', () => {
     });
 
     it('should record failed tool runs with error message', async () => {
-      await recordToolRun('my-tool', 'agent-1', false, 50, 'ReferenceError');
+      await recordToolRun(TEST_WORKSPACE_ID, 'my-tool', 'agent-1', false, 50, 'ReferenceError');
       expect(mockExecute).toHaveBeenCalledWith(
         expect.stringContaining('tool_runs'),
         expect.arrayContaining([false, 50, 'ReferenceError'])
@@ -989,7 +991,7 @@ describe('Self-Authoring Module (source imports)', () => {
         .mockResolvedValueOnce({ total_runs: '10', successes: '8', avg_duration: '150.5', last_used: '2025-01-01' })
         .mockResolvedValueOnce({ error: 'some error' });
 
-      const analytics = await getToolAnalytics('my-tool');
+      const analytics = await getToolAnalytics(TEST_WORKSPACE_ID, 'my-tool');
 
       expect(analytics.toolName).toBe('my-tool');
       expect(analytics.totalRuns).toBe(10);
@@ -1004,7 +1006,7 @@ describe('Self-Authoring Module (source imports)', () => {
         .mockResolvedValueOnce({ total_runs: '0', successes: '0', avg_duration: '0', last_used: null })
         .mockResolvedValueOnce(null);
 
-      const analytics = await getToolAnalytics('empty-tool');
+      const analytics = await getToolAnalytics(TEST_WORKSPACE_ID, 'empty-tool');
       expect(analytics.totalRuns).toBe(0);
       expect(analytics.successRate).toBe(0);
       expect(analytics.lastUsed).toBeNull();
@@ -1016,7 +1018,7 @@ describe('Self-Authoring Module (source imports)', () => {
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(null);
 
-      const analytics = await getToolAnalytics('null-tool');
+      const analytics = await getToolAnalytics(TEST_WORKSPACE_ID, 'null-tool');
       expect(analytics.totalRuns).toBe(0);
       expect(analytics.successRate).toBe(0);
       expect(analytics.avgDurationMs).toBe(0);
@@ -1034,7 +1036,7 @@ describe('Self-Authoring Module (source imports)', () => {
         .mockResolvedValueOnce({ total_runs: '3', successes: '1', avg_duration: '200', last_used: '2025-01-02' })
         .mockResolvedValueOnce({ error: 'oops' }); // last error for tool-b
 
-      const allAnalytics = await getAllToolAnalytics();
+      const allAnalytics = await getAllToolAnalytics(TEST_WORKSPACE_ID);
       expect(allAnalytics).toHaveLength(2);
     });
 
@@ -1044,11 +1046,11 @@ describe('Self-Authoring Module (source imports)', () => {
         .mockResolvedValueOnce({ total_runs: '1', successes: '1', avg_duration: '50', last_used: null })
         .mockResolvedValueOnce(null);
 
-      const analytics = await getAllToolAnalytics('agent-1');
+      const analytics = await getAllToolAnalytics(TEST_WORKSPACE_ID, 'agent-1');
       expect(analytics).toHaveLength(1);
       expect(mockQuery).toHaveBeenCalledWith(
         expect.stringContaining('agent_id'),
-        ['agent-1']
+        expect.arrayContaining(['agent-1', TEST_WORKSPACE_ID])
       );
     });
   });
@@ -1062,7 +1064,7 @@ describe('Self-Authoring Module (source imports)', () => {
         { version: 1, changed_by: 'user1', created_at: '2025-01-01' },
       ]);
 
-      const versions = await getToolVersions('my-tool');
+      const versions = await getToolVersions(TEST_WORKSPACE_ID, 'my-tool');
       expect(versions).toHaveLength(2);
     });
   });
@@ -1072,12 +1074,12 @@ describe('Self-Authoring Module (source imports)', () => {
   describe('updateToolCode', () => {
     it('should throw when tool not found', async () => {
       mockGetCustomTool.mockResolvedValueOnce(null);
-      await expect(updateToolCode('nonexistent', 'code', 'javascript', 'user1')).rejects.toThrow('not found');
+      await expect(updateToolCode(TEST_WORKSPACE_ID, 'nonexistent', 'code', 'javascript', 'user1')).rejects.toThrow('not found');
     });
 
     it('should throw when code contains forbidden patterns', async () => {
       mockGetCustomTool.mockResolvedValueOnce({ name: 'tool', script_code: 'old', language: 'javascript' });
-      await expect(updateToolCode('tool', 'process.exit(1)', 'javascript', 'user1')).rejects.toThrow('forbidden pattern');
+      await expect(updateToolCode(TEST_WORKSPACE_ID, 'tool', 'process.exit(1)', 'javascript', 'user1')).rejects.toThrow('forbidden pattern');
     });
 
     it('should update tool code with versioning', async () => {
@@ -1088,7 +1090,7 @@ describe('Self-Authoring Module (source imports)', () => {
       const fakeClient = { query: vi.fn() };
       mockWithTransaction.mockImplementation(async (fn: any) => fn(fakeClient));
 
-      await updateToolCode('my-tool', 'const x = 1;', 'javascript', 'user1');
+      await updateToolCode(TEST_WORKSPACE_ID, 'my-tool', 'const x = 1;', 'javascript', 'user1');
 
       expect(fakeClient.query).toHaveBeenCalledTimes(2); // insert version + update tool
     });
@@ -1099,7 +1101,7 @@ describe('Self-Authoring Module (source imports)', () => {
   describe('rollbackTool', () => {
     it('should throw when version not found', async () => {
       mockQueryOne.mockResolvedValueOnce(null);
-      await expect(rollbackTool('my-tool', 99, 'user1')).rejects.toThrow('not found');
+      await expect(rollbackTool(TEST_WORKSPACE_ID, 'my-tool', 99, 'user1')).rejects.toThrow('not found');
     });
 
     it('should rollback to specified version', async () => {
@@ -1109,7 +1111,7 @@ describe('Self-Authoring Module (source imports)', () => {
       const fakeClient = { query: vi.fn() };
       mockWithTransaction.mockImplementation(async (fn: any) => fn(fakeClient));
 
-      await rollbackTool('my-tool', 1, 'user1');
+      await rollbackTool(TEST_WORKSPACE_ID, 'my-tool', 1, 'user1');
       expect(fakeClient.query).toHaveBeenCalled();
     });
   });
@@ -1119,18 +1121,18 @@ describe('Self-Authoring Module (source imports)', () => {
   describe('shareToolWithAgent', () => {
     it('should throw when tool not found', async () => {
       mockGetCustomTool.mockResolvedValueOnce(null);
-      await expect(shareToolWithAgent('nonexistent', 'agent-1', 'agent-2')).rejects.toThrow('not found');
+      await expect(shareToolWithAgent(TEST_WORKSPACE_ID, 'nonexistent', 'agent-1', 'agent-2')).rejects.toThrow('not found');
     });
 
     it('should throw when agent does not own tool', async () => {
       mockGetCustomTool.mockResolvedValueOnce({ name: 'tool', registered_by: 'agent-other' });
-      await expect(shareToolWithAgent('tool', 'agent-1', 'agent-2')).rejects.toThrow('does not own');
+      await expect(shareToolWithAgent(TEST_WORKSPACE_ID, 'tool', 'agent-1', 'agent-2')).rejects.toThrow('does not own');
     });
 
     it('should throw when target agent not found', async () => {
       mockGetCustomTool.mockResolvedValueOnce({ name: 'tool', registered_by: 'agent-1' });
       mockGetAgent.mockResolvedValueOnce(null);
-      await expect(shareToolWithAgent('tool', 'agent-1', 'agent-2')).rejects.toThrow('not found');
+      await expect(shareToolWithAgent(TEST_WORKSPACE_ID, 'tool', 'agent-1', 'agent-2')).rejects.toThrow('not found');
     });
 
     it('should add tool to target agent tools list', async () => {
@@ -1138,15 +1140,15 @@ describe('Self-Authoring Module (source imports)', () => {
       mockGetAgent.mockResolvedValueOnce({ id: 'agent-2', tools: ['Read', 'Write'] });
       mockUpdateAgent.mockResolvedValueOnce({});
 
-      await shareToolWithAgent('shared-tool', 'agent-1', 'agent-2');
-      expect(mockUpdateAgent).toHaveBeenCalledWith('agent-2', { tools: ['Read', 'Write', 'shared-tool'] }, 'agent-1');
+      await shareToolWithAgent(TEST_WORKSPACE_ID, 'shared-tool', 'agent-1', 'agent-2');
+      expect(mockUpdateAgent).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 'agent-2', { tools: ['Read', 'Write', 'shared-tool'] }, 'agent-1');
     });
 
     it('should not duplicate tool in target agent tools list', async () => {
       mockGetCustomTool.mockResolvedValueOnce({ name: 'shared-tool', registered_by: 'agent-1' });
       mockGetAgent.mockResolvedValueOnce({ id: 'agent-2', tools: ['Read', 'shared-tool'] });
 
-      await shareToolWithAgent('shared-tool', 'agent-1', 'agent-2');
+      await shareToolWithAgent(TEST_WORKSPACE_ID, 'shared-tool', 'agent-1', 'agent-2');
       expect(mockUpdateAgent).not.toHaveBeenCalled();
     });
   });
@@ -1160,7 +1162,7 @@ describe('Self-Authoring Module (source imports)', () => {
         { name: 'json-tool', schema_json: '{}' },
       ]);
 
-      const results = await discoverTools('csv');
+      const results = await discoverTools(TEST_WORKSPACE_ID, 'csv');
       expect(results).toHaveLength(1);
       expect(results[0].name).toBe('csv-parser');
     });
@@ -1171,7 +1173,7 @@ describe('Self-Authoring Module (source imports)', () => {
         { name: 'tool-b', schema_json: '{"description":"sends emails"}' },
       ]);
 
-      const results = await discoverTools('csv');
+      const results = await discoverTools(TEST_WORKSPACE_ID, 'csv');
       expect(results).toHaveLength(1);
     });
 
@@ -1182,7 +1184,7 @@ describe('Self-Authoring Module (source imports)', () => {
         { name: 'unrelated', schema_json: '{}' },
       ]);
 
-      const results = await discoverTools('csv');
+      const results = await discoverTools(TEST_WORKSPACE_ID, 'csv');
       expect(results).toHaveLength(2);
     });
   });
@@ -1193,7 +1195,7 @@ describe('Self-Authoring Module (source imports)', () => {
     it('should throw when pipeline references unknown tool', async () => {
       mockGetCustomTool.mockResolvedValueOnce(null);
 
-      await expect(createToolPipeline('agent-1', {
+      await expect(createToolPipeline(TEST_WORKSPACE_ID, 'agent-1', {
         name: 'test-pipe',
         description: 'test',
         steps: [{ toolName: 'nonexistent', inputMapping: {} }],
@@ -1208,7 +1210,7 @@ describe('Self-Authoring Module (source imports)', () => {
 
       mockRegisterCustomTool.mockResolvedValueOnce({ name: 'my-pipeline' });
 
-      const result = await createToolPipeline('agent-1', {
+      const result = await createToolPipeline(TEST_WORKSPACE_ID, 'agent-1', {
         name: 'my-pipeline',
         description: 'A pipeline',
         steps: [
@@ -1228,7 +1230,7 @@ describe('Self-Authoring Module (source imports)', () => {
 
       mockRegisterCustomTool.mockResolvedValueOnce({ name: 'pipe' });
 
-      await createToolPipeline('agent-1', {
+      await createToolPipeline(TEST_WORKSPACE_ID, 'agent-1', {
         name: 'pipe',
         description: 'test',
         steps: [{ toolName: 'step1', inputMapping: {} }],
@@ -1236,6 +1238,7 @@ describe('Self-Authoring Module (source imports)', () => {
 
       // Should use empty schema when firstTool is null
       expect(mockRegisterCustomTool).toHaveBeenCalledWith(
+        TEST_WORKSPACE_ID,
         'pipe',
         expect.any(String),
         null,
@@ -1250,7 +1253,7 @@ describe('Self-Authoring Module (source imports)', () => {
   describe('authorTool', () => {
     it('should throw when agent not found', async () => {
       mockGetAgent.mockResolvedValueOnce(null);
-      await expect(authorTool('nonexistent', 'build a tool')).rejects.toThrow('not found');
+      await expect(authorTool(TEST_WORKSPACE_ID, 'nonexistent', 'build a tool')).rejects.toThrow('not found');
     });
 
     it('should generate, validate, test and register a tool', async () => {
@@ -1288,7 +1291,7 @@ describe('Self-Authoring Module (source imports)', () => {
       });
       mockCreateProposal.mockResolvedValueOnce(undefined);
 
-      const result = await authorTool('agent-1', 'build a calculator');
+      const result = await authorTool(TEST_WORKSPACE_ID, 'agent-1', 'build a calculator');
 
       expect(result.tool.name).toBe('calc-tool');
       expect(result.requiresApproval).toBe(false);
@@ -1348,7 +1351,7 @@ describe('Self-Authoring Module (source imports)', () => {
       mockRegisterCustomTool.mockResolvedValueOnce({ name: 'broken-tool', approved: false });
       mockCreateProposal.mockResolvedValueOnce(undefined);
 
-      const result = await authorTool('agent-1', 'build a broken tool');
+      const result = await authorTool(TEST_WORKSPACE_ID, 'agent-1', 'build a broken tool');
 
       expect(result.requiresApproval).toBe(true);
       expect(result.testResult!.passed).toBe(true);
@@ -1384,7 +1387,7 @@ describe('Self-Authoring Module (source imports)', () => {
       mockRegisterCustomTool.mockResolvedValueOnce({ name: 'test-tool', approved: true });
       mockCreateProposal.mockResolvedValueOnce(undefined);
 
-      const result = await authorTool('agent-1', 'build a test tool');
+      const result = await authorTool(TEST_WORKSPACE_ID, 'agent-1', 'build a test tool');
 
       // sandboxTest catches docker errors internally and returns failed result
       expect(result.testResult).toBeDefined();
@@ -1419,7 +1422,7 @@ describe('Self-Authoring Module (source imports)', () => {
       mockRegisterCustomTool.mockResolvedValueOnce({ name: 'rust-tool', approved: true });
       mockCreateProposal.mockResolvedValueOnce(undefined);
 
-      const result = await authorTool('agent-1', 'build a rust tool');
+      const result = await authorTool(TEST_WORKSPACE_ID, 'agent-1', 'build a rust tool');
 
       expect(result.testResult).toBeDefined();
       expect(result.testResult!.passed).toBe(false);
@@ -1462,7 +1465,7 @@ describe('Self-Authoring Module (source imports)', () => {
       mockRegisterCustomTool.mockResolvedValueOnce({ name: 'wait-fail-tool', approved: true });
       mockCreateProposal.mockResolvedValueOnce(undefined);
 
-      const result = await authorTool('agent-1', 'build tool');
+      const result = await authorTool(TEST_WORKSPACE_ID, 'agent-1', 'build tool');
 
       expect(result.testResult).toBeDefined();
       expect(result.testResult!.passed).toBe(false);
@@ -1505,7 +1508,7 @@ describe('Self-Authoring Module (source imports)', () => {
       mockRegisterCustomTool.mockResolvedValueOnce({ name: 'cleanup-tool', approved: true });
       mockCreateProposal.mockResolvedValueOnce(undefined);
 
-      const result = await authorTool('agent-1', 'build cleanup tool');
+      const result = await authorTool(TEST_WORKSPACE_ID, 'agent-1', 'build cleanup tool');
 
       expect(result.testResult).toBeDefined();
       expect(result.testResult!.passed).toBe(false);
@@ -1547,7 +1550,7 @@ describe('Self-Authoring Module (source imports)', () => {
       mockRegisterCustomTool.mockResolvedValueOnce({ name: 'fs-tool', approved: true });
       mockCreateProposal.mockResolvedValueOnce(undefined);
 
-      const result = await authorTool('agent-1', 'build fs tool');
+      const result = await authorTool(TEST_WORKSPACE_ID, 'agent-1', 'build fs tool');
 
       // When sandboxTest throws, testResult is null
       expect(result.testResult).toBeNull();
@@ -1589,7 +1592,7 @@ describe('Self-Authoring Module (source imports)', () => {
       mockRegisterCustomTool.mockResolvedValueOnce({ name: 'bad-tool', approved: true });
       mockCreateProposal.mockResolvedValueOnce(undefined);
 
-      const result = await authorTool('agent-1', 'build a tool');
+      const result = await authorTool(TEST_WORKSPACE_ID, 'agent-1', 'build a tool');
 
       // Should use original code despite auto-fix failure
       expect(result.testResult).toBeDefined();
@@ -1602,7 +1605,7 @@ describe('Self-Authoring Module (source imports)', () => {
   describe('authorSkill', () => {
     it('should throw when agent not found', async () => {
       mockGetAgent.mockResolvedValueOnce(null);
-      await expect(authorSkill('nonexistent', 'create a skill')).rejects.toThrow('not found');
+      await expect(authorSkill(TEST_WORKSPACE_ID, 'nonexistent', 'create a skill')).rejects.toThrow('not found');
     });
 
     it('should generate and register a skill', async () => {
@@ -1625,7 +1628,7 @@ describe('Self-Authoring Module (source imports)', () => {
       mockAttachSkillToAgent.mockResolvedValueOnce(undefined);
       mockCreateProposal.mockResolvedValueOnce(undefined);
 
-      const skill = await authorSkill('agent-1', 'create email summary skill');
+      const skill = await authorSkill(TEST_WORKSPACE_ID, 'agent-1', 'create email summary skill');
 
       expect(skill.name).toBe('email-summary');
       expect(skill.skill_type).toBe('prompt_template');
@@ -1654,7 +1657,7 @@ describe('Self-Authoring Module (source imports)', () => {
       mockAttachSkillToAgent.mockResolvedValueOnce(undefined);
       mockCreateProposal.mockResolvedValueOnce(undefined);
 
-      const skill = await authorSkill('agent-1', 'create skill');
+      const skill = await authorSkill(TEST_WORKSPACE_ID, 'agent-1', 'create skill');
       expect(skill.approved).toBe(false);
     });
   });
@@ -1667,7 +1670,7 @@ describe('Self-Authoring Module (source imports)', () => {
         { id: 'mcp1', agent_id: 'agent-1', name: 'linear' },
       ]);
 
-      const configs = await getMcpConfigs('agent-1');
+      const configs = await getMcpConfigs(TEST_WORKSPACE_ID, 'agent-1');
       expect(configs).toHaveLength(1);
     });
   });
@@ -1677,23 +1680,23 @@ describe('Self-Authoring Module (source imports)', () => {
   describe('approveMcpConfig', () => {
     it('should throw when config not found', async () => {
       mockQueryOne.mockResolvedValueOnce(null);
-      await expect(approveMcpConfig('nonexistent', 'user1')).rejects.toThrow('not found');
+      await expect(approveMcpConfig(TEST_WORKSPACE_ID, 'nonexistent', 'user1')).rejects.toThrow('not found');
     });
 
     it('should throw when user lacks permissions', async () => {
       mockQueryOne.mockResolvedValueOnce({ id: 'mcp1', agent_id: 'agent-1' });
       mockCanModifyAgent.mockResolvedValueOnce(false);
-      await expect(approveMcpConfig('mcp1', 'user1')).rejects.toThrow('Insufficient permissions');
+      await expect(approveMcpConfig(TEST_WORKSPACE_ID, 'mcp1', 'user1')).rejects.toThrow('Insufficient permissions');
     });
 
     it('should approve config when authorized', async () => {
       mockQueryOne.mockResolvedValueOnce({ id: 'mcp1', agent_id: 'agent-1' });
       mockCanModifyAgent.mockResolvedValueOnce(true);
 
-      await approveMcpConfig('mcp1', 'user1');
+      await approveMcpConfig(TEST_WORKSPACE_ID, 'mcp1', 'user1');
       expect(mockExecute).toHaveBeenCalledWith(
         expect.stringContaining('approved = TRUE'),
-        ['mcp1']
+        expect.arrayContaining(['mcp1'])
       );
     });
   });
@@ -1706,7 +1709,7 @@ describe('Self-Authoring Module (source imports)', () => {
         { id: 'art1', agent_id: 'agent-1', file_path: '/src/helper.ts' },
       ]);
 
-      const artifacts = await getCodeArtifacts('agent-1');
+      const artifacts = await getCodeArtifacts(TEST_WORKSPACE_ID, 'agent-1');
       expect(artifacts).toHaveLength(1);
     });
   });
@@ -1717,13 +1720,13 @@ describe('Self-Authoring Module (source imports)', () => {
         id: 'art1', agent_id: 'agent-1', file_path: '/src/helper.ts',
       });
 
-      const artifact = await getCodeArtifact('agent-1', '/src/helper.ts');
+      const artifact = await getCodeArtifact(TEST_WORKSPACE_ID, 'agent-1', '/src/helper.ts');
       expect(artifact).toBeDefined();
     });
 
     it('should return null when not found', async () => {
       mockQueryOne.mockResolvedValueOnce(null);
-      const artifact = await getCodeArtifact('agent-1', '/nonexistent');
+      const artifact = await getCodeArtifact(TEST_WORKSPACE_ID, 'agent-1', '/nonexistent');
       expect(artifact).toBeNull();
     });
   });
@@ -1736,7 +1739,7 @@ describe('Self-Authoring Module (source imports)', () => {
         { id: 's1', agent_id: 'agent-1', name: 'skill1' },
       ]);
 
-      const skills = await getAuthoredSkills('agent-1');
+      const skills = await getAuthoredSkills(TEST_WORKSPACE_ID, 'agent-1');
       expect(skills).toHaveLength(1);
     });
   });
@@ -1744,13 +1747,13 @@ describe('Self-Authoring Module (source imports)', () => {
   describe('getAuthoredSkill', () => {
     it('should return skill when found', async () => {
       mockQueryOne.mockResolvedValueOnce({ id: 's1', name: 'skill1' });
-      const skill = await getAuthoredSkill('s1');
+      const skill = await getAuthoredSkill(TEST_WORKSPACE_ID, 's1');
       expect(skill).toBeDefined();
     });
 
     it('should return null when not found', async () => {
       mockQueryOne.mockResolvedValueOnce(null);
-      const skill = await getAuthoredSkill('nonexistent');
+      const skill = await getAuthoredSkill(TEST_WORKSPACE_ID, 'nonexistent');
       expect(skill).toBeNull();
     });
   });
@@ -1760,23 +1763,23 @@ describe('Self-Authoring Module (source imports)', () => {
   describe('approveAuthoredSkill', () => {
     it('should throw when skill not found', async () => {
       mockQueryOne.mockResolvedValueOnce(null);
-      await expect(approveAuthoredSkill('nonexistent', 'user1')).rejects.toThrow('not found');
+      await expect(approveAuthoredSkill(TEST_WORKSPACE_ID, 'nonexistent', 'user1')).rejects.toThrow('not found');
     });
 
     it('should throw when user lacks permissions', async () => {
       mockQueryOne.mockResolvedValueOnce({ id: 's1', agent_id: 'agent-1' });
       mockCanModifyAgent.mockResolvedValueOnce(false);
-      await expect(approveAuthoredSkill('s1', 'user1')).rejects.toThrow('Insufficient permissions');
+      await expect(approveAuthoredSkill(TEST_WORKSPACE_ID, 's1', 'user1')).rejects.toThrow('Insufficient permissions');
     });
 
     it('should approve skill when authorized', async () => {
       mockQueryOne.mockResolvedValueOnce({ id: 's1', agent_id: 'agent-1' });
       mockCanModifyAgent.mockResolvedValueOnce(true);
 
-      await approveAuthoredSkill('s1', 'user1');
+      await approveAuthoredSkill(TEST_WORKSPACE_ID, 's1', 'user1');
       expect(mockExecute).toHaveBeenCalledWith(
         expect.stringContaining('approved = TRUE'),
-        ['s1']
+        expect.arrayContaining(['s1'])
       );
     });
   });
@@ -1786,23 +1789,23 @@ describe('Self-Authoring Module (source imports)', () => {
   describe('updateAuthoredSkillTemplate', () => {
     it('should throw when skill not found', async () => {
       mockQueryOne.mockResolvedValueOnce(null);
-      await expect(updateAuthoredSkillTemplate('nonexistent', 'template', 'user1')).rejects.toThrow('not found');
+      await expect(updateAuthoredSkillTemplate(TEST_WORKSPACE_ID, 'nonexistent', 'template', 'user1')).rejects.toThrow('not found');
     });
 
     it('should throw when user lacks permissions', async () => {
       mockQueryOne.mockResolvedValueOnce({ id: 's1', agent_id: 'agent-1', version: 1 });
       mockCanModifyAgent.mockResolvedValueOnce(false);
-      await expect(updateAuthoredSkillTemplate('s1', 'template', 'user1')).rejects.toThrow('Insufficient permissions');
+      await expect(updateAuthoredSkillTemplate(TEST_WORKSPACE_ID, 's1', 'template', 'user1')).rejects.toThrow('Insufficient permissions');
     });
 
     it('should update template when authorized', async () => {
       mockQueryOne.mockResolvedValueOnce({ id: 's1', agent_id: 'agent-1', version: 1 });
       mockCanModifyAgent.mockResolvedValueOnce(true);
 
-      await updateAuthoredSkillTemplate('s1', 'new template', 'user1');
+      await updateAuthoredSkillTemplate(TEST_WORKSPACE_ID, 's1', 'new template', 'user1');
       expect(mockExecute).toHaveBeenCalledWith(
         expect.stringContaining('template'),
-        ['new template', 's1']
+        expect.arrayContaining(['new template', 's1'])
       );
     });
   });

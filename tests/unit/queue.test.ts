@@ -73,8 +73,11 @@ import type { JobData } from '../../src/types';
 
 // ── Helpers ──
 
+const TEST_WORKSPACE_ID = 'W_TEST_123';
+
 function makeJobData(overrides: Partial<JobData> = {}): JobData {
   return {
+    workspaceId: TEST_WORKSPACE_ID,
     agentId: 'agent-1',
     channelId: 'C123',
     threadTs: '1234567890.123456',
@@ -198,7 +201,7 @@ describe('Queue Module', () => {
       mockRedisGet.mockResolvedValueOnce('10000');  // actual usage
       mockRedisGet.mockResolvedValueOnce('5000');   // inflight estimate
 
-      const result = await checkRateLimit();
+      const result = await checkRateLimit(TEST_WORKSPACE_ID);
 
       // totalUsage = 15000, limit = 80000, ratio = 0.1875
       expect(result.allowed).toBe(true);
@@ -209,7 +212,7 @@ describe('Queue Module', () => {
       mockRedisGet.mockResolvedValueOnce('70000');  // actual usage
       mockRedisGet.mockResolvedValueOnce('5000');   // inflight estimate
 
-      const result = await checkRateLimit();
+      const result = await checkRateLimit(TEST_WORKSPACE_ID);
 
       // totalUsage = 75000, limit = 80000, ratio = 0.9375
       expect(result.allowed).toBe(false);
@@ -220,7 +223,7 @@ describe('Queue Module', () => {
       mockRedisGet.mockResolvedValueOnce(null);
       mockRedisGet.mockResolvedValueOnce(null);
 
-      const result = await checkRateLimit();
+      const result = await checkRateLimit(TEST_WORKSPACE_ID);
 
       expect(result.allowed).toBe(true);
       expect(result.usage).toBe(0);
@@ -230,7 +233,7 @@ describe('Queue Module', () => {
       mockRedisGet.mockResolvedValueOnce('0');      // actual usage
       mockRedisGet.mockResolvedValueOnce('72001');  // inflight estimate >90% of 80000
 
-      const result = await checkRateLimit();
+      const result = await checkRateLimit(TEST_WORKSPACE_ID);
 
       expect(result.allowed).toBe(false);
     });
@@ -240,7 +243,7 @@ describe('Queue Module', () => {
       mockRedisGet.mockResolvedValueOnce('71200');
       mockRedisGet.mockResolvedValueOnce('0');
 
-      const result = await checkRateLimit();
+      const result = await checkRateLimit(TEST_WORKSPACE_ID);
 
       expect(result.allowed).toBe(true);
       expect(result.usage).toBeCloseTo(0.89, 2);
@@ -251,7 +254,7 @@ describe('Queue Module', () => {
       mockRedisGet.mockResolvedValueOnce('72000');
       mockRedisGet.mockResolvedValueOnce('0');
 
-      const result = await checkRateLimit();
+      const result = await checkRateLimit(TEST_WORKSPACE_ID);
 
       expect(result.allowed).toBe(false);
       expect(result.usage).toBeCloseTo(0.9, 2);
@@ -265,14 +268,14 @@ describe('Queue Module', () => {
     it('increments TPM key and sets TTL', async () => {
       mockRedisGet.mockResolvedValueOnce('100'); // remaining inflight > 0
 
-      await recordTokenUsage(500);
+      await recordTokenUsage(TEST_WORKSPACE_ID, 500);
 
       expect(mockRedisIncrby).toHaveBeenCalledWith(
-        expect.stringContaining('tinyhands:rate_limiter:tpm:'),
+        expect.stringContaining(`tinyhands:${TEST_WORKSPACE_ID}:rate_limiter:tpm:`),
         500,
       );
       expect(mockRedisExpire).toHaveBeenCalledWith(
-        expect.stringContaining('tinyhands:rate_limiter:tpm:'),
+        expect.stringContaining(`tinyhands:${TEST_WORKSPACE_ID}:rate_limiter:tpm:`),
         120,
       );
     });
@@ -280,33 +283,33 @@ describe('Queue Module', () => {
     it('decreases inflight estimate by the recorded tokens', async () => {
       mockRedisGet.mockResolvedValueOnce('1000'); // remaining inflight
 
-      await recordTokenUsage(300);
+      await recordTokenUsage(TEST_WORKSPACE_ID, 300);
 
-      expect(mockRedisDecrby).toHaveBeenCalledWith('tinyhands:inflight_tokens', 300);
+      expect(mockRedisDecrby).toHaveBeenCalledWith(`tinyhands:${TEST_WORKSPACE_ID}:inflight_tokens`, 300);
     });
 
     it('resets inflight to 0 when remaining goes negative', async () => {
       mockRedisGet.mockResolvedValueOnce('-50'); // negative remaining
 
-      await recordTokenUsage(100);
+      await recordTokenUsage(TEST_WORKSPACE_ID, 100);
 
-      expect(mockRedisSet).toHaveBeenCalledWith('tinyhands:inflight_tokens', '0');
+      expect(mockRedisSet).toHaveBeenCalledWith(`tinyhands:${TEST_WORKSPACE_ID}:inflight_tokens`, '0');
     });
 
     it('does not reset inflight when remaining is positive', async () => {
       mockRedisGet.mockResolvedValueOnce('200'); // positive remaining
 
-      await recordTokenUsage(100);
+      await recordTokenUsage(TEST_WORKSPACE_ID, 100);
 
-      expect(mockRedisSet).not.toHaveBeenCalledWith('tinyhands:inflight_tokens', '0');
+      expect(mockRedisSet).not.toHaveBeenCalledWith(`tinyhands:${TEST_WORKSPACE_ID}:inflight_tokens`, '0');
     });
 
     it('does not reset inflight when remaining is null', async () => {
       mockRedisGet.mockResolvedValueOnce(null);
 
-      await recordTokenUsage(100);
+      await recordTokenUsage(TEST_WORKSPACE_ID, 100);
 
-      expect(mockRedisSet).not.toHaveBeenCalledWith('tinyhands:inflight_tokens', '0');
+      expect(mockRedisSet).not.toHaveBeenCalledWith(`tinyhands:${TEST_WORKSPACE_ID}:inflight_tokens`, '0');
     });
   });
 
@@ -315,10 +318,10 @@ describe('Queue Module', () => {
   // ────────────────────────────────────────────────
   describe('estimateInflightUsage', () => {
     it('increments inflight key and sets TTL', async () => {
-      await estimateInflightUsage(2000);
+      await estimateInflightUsage(TEST_WORKSPACE_ID, 2000);
 
-      expect(mockRedisIncrby).toHaveBeenCalledWith('tinyhands:inflight_tokens', 2000);
-      expect(mockRedisExpire).toHaveBeenCalledWith('tinyhands:inflight_tokens', 300);
+      expect(mockRedisIncrby).toHaveBeenCalledWith(`tinyhands:${TEST_WORKSPACE_ID}:inflight_tokens`, 2000);
+      expect(mockRedisExpire).toHaveBeenCalledWith(`tinyhands:${TEST_WORKSPACE_ID}:inflight_tokens`, 300);
     });
   });
 
@@ -329,14 +332,14 @@ describe('Queue Module', () => {
     it('returns true when under RPM limit', async () => {
       mockRedisIncr.mockResolvedValueOnce(50);
 
-      const result = await checkRequestRate();
+      const result = await checkRequestRate(TEST_WORKSPACE_ID);
 
       expect(result).toBe(true);
       expect(mockRedisIncr).toHaveBeenCalledWith(
-        expect.stringContaining('tinyhands:rate_limiter:rpm:'),
+        expect.stringContaining(`tinyhands:${TEST_WORKSPACE_ID}:rate_limiter:rpm:`),
       );
       expect(mockRedisExpire).toHaveBeenCalledWith(
-        expect.stringContaining('tinyhands:rate_limiter:rpm:'),
+        expect.stringContaining(`tinyhands:${TEST_WORKSPACE_ID}:rate_limiter:rpm:`),
         120,
       );
     });
@@ -344,7 +347,7 @@ describe('Queue Module', () => {
     it('returns true when exactly at RPM limit', async () => {
       mockRedisIncr.mockResolvedValueOnce(1000); // exactly at rpmLimit
 
-      const result = await checkRequestRate();
+      const result = await checkRequestRate(TEST_WORKSPACE_ID);
 
       expect(result).toBe(true);
     });
@@ -352,7 +355,7 @@ describe('Queue Module', () => {
     it('returns false when over RPM limit', async () => {
       mockRedisIncr.mockResolvedValueOnce(1001); // over rpmLimit of 1000
 
-      const result = await checkRequestRate();
+      const result = await checkRequestRate(TEST_WORKSPACE_ID);
 
       expect(result).toBe(false);
     });
@@ -363,10 +366,10 @@ describe('Queue Module', () => {
   // ────────────────────────────────────────────────
   describe('handleRateLimitResponse', () => {
     it('sets rate_limited flag with EX TTL', async () => {
-      await handleRateLimitResponse(30);
+      await handleRateLimitResponse(TEST_WORKSPACE_ID, 30);
 
       expect(mockRedisSet).toHaveBeenCalledWith(
-        'tinyhands:rate_limited',
+        `tinyhands:${TEST_WORKSPACE_ID}:rate_limited`,
         '1',
         'EX',
         30,
@@ -374,10 +377,10 @@ describe('Queue Module', () => {
     });
 
     it('sets correct TTL from retryAfterSec param', async () => {
-      await handleRateLimitResponse(120);
+      await handleRateLimitResponse(TEST_WORKSPACE_ID, 120);
 
       expect(mockRedisSet).toHaveBeenCalledWith(
-        'tinyhands:rate_limited',
+        `tinyhands:${TEST_WORKSPACE_ID}:rate_limited`,
         '1',
         'EX',
         120,
@@ -392,7 +395,7 @@ describe('Queue Module', () => {
     it('returns true when rate_limited key is set to "1"', async () => {
       mockRedisGet.mockResolvedValueOnce('1');
 
-      const result = await isRateLimited();
+      const result = await isRateLimited(TEST_WORKSPACE_ID);
 
       expect(result).toBe(true);
     });
@@ -400,7 +403,7 @@ describe('Queue Module', () => {
     it('returns false when rate_limited key does not exist', async () => {
       mockRedisGet.mockResolvedValueOnce(null);
 
-      const result = await isRateLimited();
+      const result = await isRateLimited(TEST_WORKSPACE_ID);
 
       expect(result).toBe(false);
     });
@@ -408,7 +411,7 @@ describe('Queue Module', () => {
     it('returns false when rate_limited key has unexpected value', async () => {
       mockRedisGet.mockResolvedValueOnce('0');
 
-      const result = await isRateLimited();
+      const result = await isRateLimited(TEST_WORKSPACE_ID);
 
       expect(result).toBe(false);
     });
@@ -458,11 +461,11 @@ describe('Queue Module', () => {
     it('returns false (not a duplicate) when SET NX succeeds', async () => {
       mockRedisSet.mockResolvedValueOnce('OK'); // key was newly set
 
-      const result = await isDuplicateEvent('event-123');
+      const result = await isDuplicateEvent(TEST_WORKSPACE_ID, 'event-123');
 
       expect(result).toBe(false);
       expect(mockRedisSet).toHaveBeenCalledWith(
-        'tinyhands:dedup:event-123',
+        `tinyhands:${TEST_WORKSPACE_ID}:dedup:event-123`,
         '1',
         'EX',
         300,
@@ -473,7 +476,7 @@ describe('Queue Module', () => {
     it('returns true (is a duplicate) when SET NX fails (key already exists)', async () => {
       mockRedisSet.mockResolvedValueOnce(null); // key already existed
 
-      const result = await isDuplicateEvent('event-123');
+      const result = await isDuplicateEvent(TEST_WORKSPACE_ID, 'event-123');
 
       expect(result).toBe(true);
     });
@@ -481,10 +484,10 @@ describe('Queue Module', () => {
     it('uses the provided idempotency key in the Redis key', async () => {
       mockRedisSet.mockResolvedValueOnce('OK');
 
-      await isDuplicateEvent('webhook:my-agent:req-456');
+      await isDuplicateEvent(TEST_WORKSPACE_ID, 'webhook:my-agent:req-456');
 
       expect(mockRedisSet).toHaveBeenCalledWith(
-        'tinyhands:dedup:webhook:my-agent:req-456',
+        `tinyhands:${TEST_WORKSPACE_ID}:dedup:webhook:my-agent:req-456`,
         '1',
         'EX',
         300,
@@ -495,7 +498,7 @@ describe('Queue Module', () => {
     it('uses 5-minute (300s) TTL for dedup window', async () => {
       mockRedisSet.mockResolvedValueOnce('OK');
 
-      await isDuplicateEvent('any-key');
+      await isDuplicateEvent(TEST_WORKSPACE_ID, 'any-key');
 
       expect(mockRedisSet).toHaveBeenCalledWith(
         expect.any(String),

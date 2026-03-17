@@ -185,6 +185,7 @@ vi.mock('../../src/db', () => ({
   queryOne: (...args: any[]) => mockQueryOne(...args),
   query: vi.fn().mockResolvedValue([]),
   execute: vi.fn(),
+  getDefaultWorkspaceId: () => 'W_TEST_123',
 }));
 
 import { registerEvents } from '../../src/slack/events';
@@ -329,7 +330,7 @@ describe('Slack Events -- registerEvents', () => {
     it('should skip message_changed subtypes', async () => {
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ subtype: 'message_changed' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockGetAgentsByChannel).not.toHaveBeenCalled();
     });
@@ -337,7 +338,7 @@ describe('Slack Events -- registerEvents', () => {
     it('should skip message_deleted subtypes', async () => {
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ subtype: 'message_deleted' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockGetAgentsByChannel).not.toHaveBeenCalled();
     });
@@ -345,7 +346,7 @@ describe('Slack Events -- registerEvents', () => {
     it('should skip channel_join subtypes', async () => {
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ subtype: 'channel_join' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockGetAgentsByChannel).not.toHaveBeenCalled();
     });
@@ -353,7 +354,7 @@ describe('Slack Events -- registerEvents', () => {
     it('should skip channel_leave subtypes', async () => {
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ subtype: 'channel_leave' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockGetAgentsByChannel).not.toHaveBeenCalled();
     });
@@ -361,7 +362,7 @@ describe('Slack Events -- registerEvents', () => {
     it('should allow bot_message subtype', async () => {
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ subtype: 'bot_message', bot_id: 'B_OTHER' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockGetAgentsByChannel).toHaveBeenCalled();
     });
@@ -369,7 +370,7 @@ describe('Slack Events -- registerEvents', () => {
     it('should allow messages with no subtype', async () => {
       registerEvents(mockApp as any);
       const event = makeMessageEvent();
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockGetAgentsByChannel).toHaveBeenCalled();
     });
@@ -381,7 +382,7 @@ describe('Slack Events -- registerEvents', () => {
     it('should skip messages from own bot_id', async () => {
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ bot_id: 'B_BOT', user: 'U_OTHER' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockGetAgentsByChannel).not.toHaveBeenCalled();
     });
@@ -389,7 +390,7 @@ describe('Slack Events -- registerEvents', () => {
     it('should skip messages from own bot user_id', async () => {
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ bot_id: 'B_SOMETHING', user: 'U_BOT' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockGetAgentsByChannel).not.toHaveBeenCalled();
     });
@@ -397,7 +398,7 @@ describe('Slack Events -- registerEvents', () => {
     it('should allow messages from other bots', async () => {
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ bot_id: 'B_OTHER', user: 'U_OTHER', subtype: 'bot_message' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockGetAgentsByChannel).toHaveBeenCalled();
     });
@@ -414,7 +415,7 @@ describe('Slack Events -- registerEvents', () => {
       registerEvents(mockApp as any);
       const event = makeMessageEvent();
       // Should not throw
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockGetAgentsByChannel).toHaveBeenCalled();
     });
@@ -422,7 +423,7 @@ describe('Slack Events -- registerEvents', () => {
     it('should use bot_id from message when user field is missing', async () => {
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ user: undefined, bot_id: 'B_EXTERNAL', subtype: 'bot_message' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       // bot_id is B_EXTERNAL, not our bot, so should proceed
       expect(mockGetAgentsByChannel).toHaveBeenCalled();
@@ -438,7 +439,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent();
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockHandleWizardMessage).toHaveBeenCalledWith('U_USER', 'C_AGENT', 'hello agent');
       expect(mockPostMessage).toHaveBeenCalledWith('C_AGENT', 'Wizard response', event.ts);
@@ -450,7 +451,7 @@ describe('Slack Events -- registerEvents', () => {
       mockHandleWizardMessage.mockResolvedValue(null);
 
       registerEvents(mockApp as any);
-      await mockApp._trigger('message', { event: makeMessageEvent(), client: {} });
+      await mockApp._trigger('message', { event: makeMessageEvent(), client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).not.toHaveBeenCalled();
     });
@@ -461,7 +462,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ thread_ts: '1700000000.000001' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       // threadTs = msg.thread_ts || msg.ts, so should use thread_ts
       expect(mockPostMessage).toHaveBeenCalledWith('C_AGENT', 'Wizard thread response', '1700000000.000001');
@@ -476,10 +477,10 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ thread_ts: '1700000000.000001' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockHandleConversationReply).toHaveBeenCalledWith(
-        'U_USER', 'C_AGENT', '1700000000.000001', 'hello agent'
+        'W_TEST_123', 'U_USER', 'C_AGENT', '1700000000.000001', 'hello agent'
       );
       expect(mockGetAgentsByChannel).not.toHaveBeenCalled();
     });
@@ -489,7 +490,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ thread_ts: '1700000000.000001' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockGetAgentsByChannel).toHaveBeenCalled();
     });
@@ -499,7 +500,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ thread_ts: '1700000000.000001' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       // Should NOT continue to agent check — instead post error and return
       expect(mockGetAgentsByChannel).not.toHaveBeenCalled();
@@ -513,7 +514,7 @@ describe('Slack Events -- registerEvents', () => {
     it('should not call handleConversationReply for non-thread messages', async () => {
       registerEvents(mockApp as any);
       const event = makeMessageEvent(); // no thread_ts
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockHandleConversationReply).not.toHaveBeenCalled();
     });
@@ -529,7 +530,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent();
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockEnqueueRun).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -550,7 +551,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent();
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockEnqueueRun).not.toHaveBeenCalled();
     });
@@ -566,7 +567,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'deploy to production' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockCheckMessageRelevance).toHaveBeenCalledWith(
         'deploy to production',
@@ -582,7 +583,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ thread_ts: '1700000000.000001' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockEnqueueRun).not.toHaveBeenCalled();
     });
@@ -594,7 +595,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: '<@U_BOT> follow up', thread_ts: '1700000000.000001' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockEnqueueRun).toHaveBeenCalled();
     });
@@ -607,7 +608,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: '<@U_BOT> follow up', thread_ts: '1700000000.000001' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockEnqueueRun).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -631,7 +632,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: '<@U_BOT> follow up', thread_ts: '1700000000.000001' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockEnqueueRun).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -647,7 +648,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent();
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostBlocks).toHaveBeenCalledWith(
         'C_AGENT',
@@ -667,7 +668,7 @@ describe('Slack Events -- registerEvents', () => {
       mockPostBlocks.mockResolvedValue('status-msg-ts');
 
       registerEvents(mockApp as any);
-      await mockApp._trigger('message', { event: makeMessageEvent(), client: {} });
+      await mockApp._trigger('message', { event: makeMessageEvent(), client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockEnqueueRun).toHaveBeenCalledWith(
         expect.objectContaining({ statusMessageTs: 'status-msg-ts' }),
@@ -681,7 +682,7 @@ describe('Slack Events -- registerEvents', () => {
       mockPostBlocks.mockResolvedValue(null);
 
       registerEvents(mockApp as any);
-      await mockApp._trigger('message', { event: makeMessageEvent(), client: {} });
+      await mockApp._trigger('message', { event: makeMessageEvent(), client: {}, context: { teamId: 'W_TEST_123' } });
 
       const jobData = mockEnqueueRun.mock.calls[0][0];
       expect(jobData.statusMessageTs).toBeUndefined();
@@ -694,7 +695,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: undefined });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockEnqueueRun).toHaveBeenCalledWith(
         expect.objectContaining({ input: '' }),
@@ -709,7 +710,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ ts: '1700000000.999', thread_ts: undefined });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockEnqueueRun).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -730,7 +731,7 @@ describe('Slack Events -- registerEvents', () => {
       mockCheckMessageRelevance.mockResolvedValue(true);
 
       registerEvents(mockApp as any);
-      await mockApp._trigger('message', { event: makeMessageEvent(), client: {} });
+      await mockApp._trigger('message', { event: makeMessageEvent(), client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockEnqueueRun).toHaveBeenCalledTimes(2);
       expect(mockEnqueueRun).toHaveBeenCalledWith(
@@ -752,7 +753,7 @@ describe('Slack Events -- registerEvents', () => {
         .mockResolvedValueOnce(false); // second agent not relevant
 
       registerEvents(mockApp as any);
-      await mockApp._trigger('message', { event: makeMessageEvent(), client: {} });
+      await mockApp._trigger('message', { event: makeMessageEvent(), client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockEnqueueRun).toHaveBeenCalledTimes(1);
       expect(mockEnqueueRun).toHaveBeenCalledWith(
@@ -768,7 +769,7 @@ describe('Slack Events -- registerEvents', () => {
       mockCheckMessageRelevance.mockResolvedValue(true);
 
       registerEvents(mockApp as any);
-      await mockApp._trigger('message', { event: makeMessageEvent(), client: {} });
+      await mockApp._trigger('message', { event: makeMessageEvent(), client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostBlocks).toHaveBeenCalledTimes(2);
       expect(mockPostBlocks).toHaveBeenCalledWith(
@@ -791,7 +792,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'do the thing [use opus]' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockParseModelOverride).toHaveBeenCalledWith('do the thing [use opus]');
       expect(mockEnqueueRun).toHaveBeenCalledWith(
@@ -809,7 +810,7 @@ describe('Slack Events -- registerEvents', () => {
       mockParseModelOverride.mockReturnValue(null);
 
       registerEvents(mockApp as any);
-      await mockApp._trigger('message', { event: makeMessageEvent(), client: {} });
+      await mockApp._trigger('message', { event: makeMessageEvent(), client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockEnqueueRun).toHaveBeenCalledWith(
         expect.objectContaining({ modelOverride: undefined }),
@@ -826,7 +827,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'help me with billing [use opus]' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockCheckMessageRelevance).toHaveBeenCalledWith(
         'help me with billing',
@@ -852,7 +853,7 @@ describe('Slack Events -- registerEvents', () => {
       const event = makeMessageEvent({
         text: 'You should be more concise',
       });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       // Non-thread messages skip the critique check (msg.thread_ts is falsy)
       expect(mockEnqueueRun).toHaveBeenCalled();
@@ -872,7 +873,7 @@ describe('Slack Events -- registerEvents', () => {
       const event = makeMessageEvent({
         text: 'Be more concise',
       });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       // No thread_ts → critique check (msg.thread_ts) is falsy, so it enqueues normally
       expect(mockEnqueueRun).toHaveBeenCalled();
@@ -886,7 +887,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'You should be more concise' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockEnqueueRun).toHaveBeenCalled();
     });
@@ -898,7 +899,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ thread_ts: '1700000000.000001', text: 'bad response' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       // Thread reply without @mention — agent should not respond at all
       expect(mockEnqueueRun).not.toHaveBeenCalled();
@@ -916,7 +917,7 @@ describe('Slack Events -- registerEvents', () => {
       registerEvents(mockApp as any);
 
       const mentionEvent = makeMessageEvent({ text: 'hey <@U_BOT> help me' });
-      await mockApp._trigger('message', { event: mentionEvent, client: {} });
+      await mockApp._trigger('message', { event: mentionEvent, client: {}, context: { teamId: 'W_TEST_123' } });
 
       // Single agent — no relevance check needed, enqueue directly
       expect(mockCheckMessageRelevance).not.toHaveBeenCalled();
@@ -932,7 +933,7 @@ describe('Slack Events -- registerEvents', () => {
       registerEvents(mockApp as any);
 
       const mentionEvent = makeMessageEvent({ text: 'hey <@U_BOT> help me' });
-      await mockApp._trigger('message', { event: mentionEvent, client: {} });
+      await mockApp._trigger('message', { event: mentionEvent, client: {}, context: { teamId: 'W_TEST_123' } });
 
       // Should route to the channel agent, NOT use all accessible agents
       expect(mockGetAccessibleAgents).not.toHaveBeenCalled();
@@ -948,7 +949,7 @@ describe('Slack Events -- registerEvents', () => {
       registerEvents(mockApp as any);
 
       const mentionEvent = makeMessageEvent({ text: 'hey <@U_BOT> help me' });
-      await mockApp._trigger('message', { event: mentionEvent, client: {} });
+      await mockApp._trigger('message', { event: mentionEvent, client: {}, context: { teamId: 'W_TEST_123' } });
 
       // No channel agents — should NOT fall back to accessible agents
       expect(mockGetAccessibleAgents).not.toHaveBeenCalled();
@@ -967,7 +968,7 @@ describe('Slack Events -- registerEvents', () => {
       registerEvents(mockApp as any);
 
       const mentionEvent = makeMessageEvent({ text: 'hey <@U_BOT> help me' });
-      await mockApp._trigger('message', { event: mentionEvent, client: {} });
+      await mockApp._trigger('message', { event: mentionEvent, client: {}, context: { teamId: 'W_TEST_123' } });
 
       // Input should have mention stripped
       expect(mockEnqueueRun).toHaveBeenCalledWith(
@@ -984,7 +985,7 @@ describe('Slack Events -- registerEvents', () => {
       registerEvents(mockApp as any);
 
       const mentionEvent = makeMessageEvent({ text: 'hey <@U_OTHER_USER> check this' });
-      await mockApp._trigger('message', { event: mentionEvent, client: {} });
+      await mockApp._trigger('message', { event: mentionEvent, client: {}, context: { teamId: 'W_TEST_123' } });
 
       // Not our bot mentioned — falls through to normal channel processing
       expect(mockCheckMessageRelevance).toHaveBeenCalled();
@@ -999,7 +1000,7 @@ describe('Slack Events -- registerEvents', () => {
 
       // DM channel — should NOT trigger conversational mode, should use channel agent processing
       const mentionEvent = makeMessageEvent({ text: 'hey <@U_BOT> help', channel_type: 'im', channel: 'D_DM' });
-      await mockApp._trigger('message', { event: mentionEvent, client: {} });
+      await mockApp._trigger('message', { event: mentionEvent, client: {}, context: { teamId: 'W_TEST_123' } });
 
       // Should go through channel agent processing (not conversational mode)
       expect(mockGetAccessibleAgents).not.toHaveBeenCalled();
@@ -1018,10 +1019,11 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ channel: 'C_NO_AGENT' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockFireTrigger).toHaveBeenCalledTimes(2);
       expect(mockFireTrigger).toHaveBeenCalledWith(
+        'W_TEST_123',
         expect.objectContaining({
           triggerId: 'trig-1',
           idempotencyKey: expect.stringContaining('slack:C_NO_AGENT:'),
@@ -1036,9 +1038,10 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ channel: 'C_TRIG', ts: '1700000000.500' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockFireTrigger).toHaveBeenCalledWith(
+        'W_TEST_123',
         expect.objectContaining({
           sourceChannel: 'C_TRIG',
           sourceThreadTs: '1700000000.500',
@@ -1050,7 +1053,7 @@ describe('Slack Events -- registerEvents', () => {
       mockGetAgentsByChannel.mockResolvedValue([makeAgent()]);
 
       registerEvents(mockApp as any);
-      await mockApp._trigger('message', { event: makeMessageEvent(), client: {} });
+      await mockApp._trigger('message', { event: makeMessageEvent(), client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockFindSlackChannelTriggers).not.toHaveBeenCalled();
     });
@@ -1060,7 +1063,7 @@ describe('Slack Events -- registerEvents', () => {
       mockFindSlackChannelTriggers.mockResolvedValue([]);
 
       registerEvents(mockApp as any);
-      await mockApp._trigger('message', { event: makeMessageEvent(), client: {} });
+      await mockApp._trigger('message', { event: makeMessageEvent(), client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockFireTrigger).not.toHaveBeenCalled();
     });
@@ -1073,7 +1076,7 @@ describe('Slack Events -- registerEvents', () => {
       mockGetAgentByChannel.mockResolvedValue(makeAgent());
 
       registerEvents(mockApp as any);
-      await mockApp._trigger('file_shared', { event: { channel_id: 'C_AGENT' } });
+      await mockApp._trigger('file_shared', { event: { channel_id: 'C_AGENT' }, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -1085,7 +1088,7 @@ describe('Slack Events -- registerEvents', () => {
       mockGetAgentByChannel.mockResolvedValue(null);
 
       registerEvents(mockApp as any);
-      await mockApp._trigger('file_shared', { event: { channel_id: 'C_NONE' } });
+      await mockApp._trigger('file_shared', { event: { channel_id: 'C_NONE' }, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).not.toHaveBeenCalled();
     });
@@ -1097,7 +1100,7 @@ describe('Slack Events -- registerEvents', () => {
       registerEvents(mockApp as any);
       // Should not throw
       await expect(
-        mockApp._trigger('file_shared', { event: { channel_id: 'C_AGENT' } })
+        mockApp._trigger('file_shared', { event: { channel_id: 'C_AGENT' }, context: { teamId: 'W_TEST_123' } })
       ).resolves.not.toThrow();
     });
   });
@@ -1116,9 +1119,10 @@ describe('Slack Events -- registerEvents', () => {
           text: 'hello',
           ts: '1700000000.100',
         },
+        context: { teamId: 'W_TEST_123' },
       });
 
-      expect(mockInitSuperadmin).toHaveBeenCalledWith('U_DM_USER');
+      expect(mockInitSuperadmin).toHaveBeenCalledWith('W_TEST_123', 'U_DM_USER');
     });
 
     it('should handle "add @user as superadmin" command in DMs', async () => {
@@ -1132,10 +1136,11 @@ describe('Slack Events -- registerEvents', () => {
           text: 'add <@U_NEW_ADMIN> as superadmin',
           ts: '1700000000.100',
         },
+        context: { teamId: 'W_TEST_123' },
       });
 
-      expect(mockInitSuperadmin).toHaveBeenCalledWith('U_ADMIN');
-      expect(mockAddSuperadmin).toHaveBeenCalledWith('U_NEW_ADMIN', 'U_ADMIN');
+      expect(mockInitSuperadmin).toHaveBeenCalledWith('W_TEST_123', 'U_ADMIN');
+      expect(mockAddSuperadmin).toHaveBeenCalledWith('W_TEST_123', 'U_NEW_ADMIN', 'U_ADMIN');
     });
 
     it('should handle superadmin add errors gracefully', async () => {
@@ -1151,6 +1156,7 @@ describe('Slack Events -- registerEvents', () => {
           text: 'add <@U_SOMEONE> as superadmin',
           ts: '1700000000.100',
         },
+        context: { teamId: 'W_TEST_123' },
       });
 
       expect(mockPostMessage).toHaveBeenCalledWith('D_DM_CHAN', expect.stringContaining('Not authorized'));
@@ -1167,6 +1173,7 @@ describe('Slack Events -- registerEvents', () => {
           text: 'just a normal DM',
           ts: '1700000000.100',
         },
+        context: { teamId: 'W_TEST_123' },
       });
 
       expect(mockInitSuperadmin).toHaveBeenCalled();
@@ -1182,7 +1189,7 @@ describe('Slack Events -- registerEvents', () => {
       mockBuildDashboardBlocks.mockResolvedValue(blocks);
 
       registerEvents(mockApp as any);
-      await mockApp._trigger('app_home_opened', { event: { user: 'U_HOME' } });
+      await mockApp._trigger('app_home_opened', { event: { user: 'U_HOME' }, context: { teamId: 'W_TEST_123' } });
 
       expect(mockBuildDashboardBlocks).toHaveBeenCalled();
       expect(mockPublishHomeTab).toHaveBeenCalledWith('U_HOME', blocks);
@@ -1194,7 +1201,7 @@ describe('Slack Events -- registerEvents', () => {
       registerEvents(mockApp as any);
       // Should not crash
       await expect(
-        mockApp._trigger('app_home_opened', { event: { user: 'U_HOME' } })
+        mockApp._trigger('app_home_opened', { event: { user: 'U_HOME' }, context: { teamId: 'W_TEST_123' } })
       ).rejects.toThrow('DB down');
     });
   });
@@ -1207,7 +1214,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       await expect(
-        mockApp._trigger('message', { event: makeMessageEvent(), client: {} })
+        mockApp._trigger('message', { event: makeMessageEvent(), client: {}, context: { teamId: 'W_TEST_123' } })
       ).resolves.not.toThrow();
     });
 
@@ -1220,7 +1227,7 @@ describe('Slack Events -- registerEvents', () => {
       registerEvents(mockApp as any);
       // The error is inside the try-catch in the handler, so it should not propagate
       await expect(
-        mockApp._trigger('message', { event: makeMessageEvent(), client: {} })
+        mockApp._trigger('message', { event: makeMessageEvent(), client: {}, context: { teamId: 'W_TEST_123' } })
       ).resolves.not.toThrow();
     });
   });
@@ -1234,7 +1241,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'add to kb' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -1251,7 +1258,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'add to knowledge base' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -1267,7 +1274,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'create a tool that sends emails' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -1286,7 +1293,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'show tools' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockEnqueueRun).not.toHaveBeenCalled();
       expect(mockPostMessage).toHaveBeenCalledWith(
@@ -1305,7 +1312,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'tool stats' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockEnqueueRun).not.toHaveBeenCalled();
       expect(mockPostMessage).toHaveBeenCalledWith(
@@ -1322,7 +1329,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'tool stats' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -1339,10 +1346,10 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'connect to acme/api' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockEnqueueRun).not.toHaveBeenCalled();
-      expect(mockConnectSource).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockConnectSource).toHaveBeenCalledWith('W_TEST_123', expect.objectContaining({
         agentId: 'agent-1',
         sourceType: 'github',
       }));
@@ -1361,7 +1368,7 @@ describe('Slack Events -- registerEvents', () => {
       registerEvents(mockApp as any);
       // Text must match the GitHub regex (owner/repo format) for the handler to fire
       const event = makeMessageEvent({ text: 'connect to some/invalid-repo' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -1378,7 +1385,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'connect to acme/api' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -1394,7 +1401,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'approve tool my-tool' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -1411,7 +1418,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'add nonexistent skill' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -1428,10 +1435,10 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'trigger this agent when a new message arrives' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockEnqueueRun).not.toHaveBeenCalled();
-      expect(mockCreateTrigger).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateTrigger).toHaveBeenCalledWith('W_TEST_123', expect.objectContaining({
         agentId: 'agent-1',
         triggerType: 'slack_channel',
       }));
@@ -1449,9 +1456,9 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'trigger when a new linear issue is created' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
-      expect(mockCreateTrigger).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateTrigger).toHaveBeenCalledWith('W_TEST_123', expect.objectContaining({
         triggerType: 'linear',
       }));
     });
@@ -1463,9 +1470,9 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'trigger when a new ticket is created' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
-      expect(mockCreateTrigger).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateTrigger).toHaveBeenCalledWith('W_TEST_123', expect.objectContaining({
         triggerType: 'zendesk',
       }));
     });
@@ -1477,10 +1484,10 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'add linear skill' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockEnqueueRun).not.toHaveBeenCalled();
-      expect(mockAttachSkillToAgent).toHaveBeenCalledWith('agent-1', 'linear', 'read', 'U_USER');
+      expect(mockAttachSkillToAgent).toHaveBeenCalledWith('W_TEST_123', 'agent-1', 'linear', 'read', 'U_USER');
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
         expect.stringContaining('linear'),
@@ -1495,9 +1502,9 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'add zendesk skill with write' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
-      expect(mockAttachSkillToAgent).toHaveBeenCalledWith('agent-1', 'zendesk', 'write', 'U_USER');
+      expect(mockAttachSkillToAgent).toHaveBeenCalledWith('W_TEST_123', 'agent-1', 'zendesk', 'write', 'U_USER');
     });
 
     it('should handle "add @user as admin" command', async () => {
@@ -1507,10 +1514,10 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'add <@U_NEW_ADMIN> as admin' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockEnqueueRun).not.toHaveBeenCalled();
-      expect(mockAddAgentAdmin).toHaveBeenCalledWith('agent-1', 'U_NEW_ADMIN', 'admin', 'U_USER');
+      expect(mockAddAgentAdmin).toHaveBeenCalledWith('W_TEST_123', 'agent-1', 'U_NEW_ADMIN', 'admin', 'U_USER');
     });
 
     it('should handle "forget about X" command when memory is enabled', async () => {
@@ -1520,10 +1527,10 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'forget about old deployments' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockEnqueueRun).not.toHaveBeenCalled();
-      expect(mockForgetMemory).toHaveBeenCalledWith('agent-1', 'old deployments');
+      expect(mockForgetMemory).toHaveBeenCalledWith('W_TEST_123', 'agent-1', 'old deployments');
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
         expect.stringContaining('Forgot 3'),
@@ -1538,7 +1545,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'forget about unicorns' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -1554,7 +1561,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'forget about old data' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       // Should not call forgetMemory, should proceed to normal enqueue
       expect(mockForgetMemory).not.toHaveBeenCalled();
@@ -1567,7 +1574,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'create a skill that does something' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -1586,9 +1593,9 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'approve tool my-tool' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
-      expect(mockApproveCustomTool).toHaveBeenCalledWith('my-tool', 'U_USER');
+      expect(mockApproveCustomTool).toHaveBeenCalledWith('W_TEST_123', 'my-tool', 'U_USER');
       expect(mockEnqueueRun).not.toHaveBeenCalled();
     });
 
@@ -1602,9 +1609,9 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'tool versions my-tool' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
-      expect(mockGetToolVersions).toHaveBeenCalledWith('my-tool');
+      expect(mockGetToolVersions).toHaveBeenCalledWith('W_TEST_123', 'my-tool');
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
         expect.stringContaining('Versions'),
@@ -1622,9 +1629,9 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'find tool web' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
-      expect(mockDiscoverTools).toHaveBeenCalledWith('web');
+      expect(mockDiscoverTools).toHaveBeenCalledWith('W_TEST_123', 'web');
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
         expect.stringContaining('web-search'),
@@ -1640,7 +1647,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'find tool unicorn' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -1656,9 +1663,9 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'share tool web-search with other-bot' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
-      expect(mockShareToolWithAgent).toHaveBeenCalledWith('web-search', 'agent-1', 'other-bot');
+      expect(mockShareToolWithAgent).toHaveBeenCalledWith('W_TEST_123', 'web-search', 'agent-1', 'other-bot');
       expect(mockEnqueueRun).not.toHaveBeenCalled();
     });
 
@@ -1669,9 +1676,9 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'rollback tool my-tool to version 2' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
-      expect(mockRollbackTool).toHaveBeenCalledWith('my-tool', 2, 'U_USER');
+      expect(mockRollbackTool).toHaveBeenCalledWith('W_TEST_123', 'my-tool', 2, 'U_USER');
       expect(mockEnqueueRun).not.toHaveBeenCalled();
     });
 
@@ -1682,7 +1689,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'rollback tool my-tool to version 99' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -1698,7 +1705,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'share tool my-tool with other-agent' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -1714,7 +1721,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'add <@U_SOMEONE> as admin' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -1730,7 +1737,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'trigger this agent when something happens' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -1746,9 +1753,9 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'trigger when a new conversation is started' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
-      expect(mockCreateTrigger).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateTrigger).toHaveBeenCalledWith('W_TEST_123', expect.objectContaining({
         triggerType: 'intercom',
       }));
     });
@@ -1760,9 +1767,9 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'trigger when a deployment finishes' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
-      expect(mockCreateTrigger).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateTrigger).toHaveBeenCalledWith('W_TEST_123', expect.objectContaining({
         triggerType: 'webhook',
       }));
     });
@@ -1774,7 +1781,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'forget about old stuff' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -1790,7 +1797,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'tool versions my-tool' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -1809,7 +1816,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'show tools' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -1825,7 +1832,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'show tools' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -1841,7 +1848,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'tool stats' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -1857,7 +1864,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'find tool something' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -1873,7 +1880,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'tool versions my-tool' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -1888,7 +1895,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'add to knowledge base' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -1905,7 +1912,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'my tools' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -1921,7 +1928,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'list tools' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -1937,7 +1944,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'tool analytics' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -1955,7 +1962,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'hey <@U_BOT> help me', channel: 'C_NO_AGENT' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_NO_AGENT',
@@ -1973,7 +1980,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'hey <@U_BOT> help me', channel: 'C_NO_AGENT' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       // Should show "no agents assigned" message, NOT fall back to accessible agents
       expect(mockEnqueueRun).not.toHaveBeenCalled();
@@ -1990,7 +1997,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'hello world', channel: 'C_NO_AGENT' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).not.toHaveBeenCalled();
       expect(mockFindSlackChannelTriggers).toHaveBeenCalled();
@@ -2001,7 +2008,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: '<@U_BOT> do something', thread_ts: '1700000000.000001', channel: 'C_NO_AGENT' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_NO_AGENT',
@@ -2022,7 +2029,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'hey <@U_BOT> help me with billing' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       // Should show picker, not enqueue
       expect(mockEnqueueRun).not.toHaveBeenCalled();
@@ -2045,7 +2052,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'hey <@U_BOT> do something' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockEnqueueRun).not.toHaveBeenCalled();
       expect(mockPostBlocks).toHaveBeenCalledWith(
@@ -2068,7 +2075,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'hey <@U_BOT> help with billing' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       // Should enqueue directly for the matching agent
       expect(mockEnqueueRun).toHaveBeenCalledTimes(1);
@@ -2084,7 +2091,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'hey <@U_BOT> do something' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       // Should proceed to normal processing (enqueue directly)
       expect(mockEnqueueRun).toHaveBeenCalledTimes(1);
@@ -2103,7 +2110,7 @@ describe('Slack Events -- registerEvents', () => {
       registerEvents(mockApp as any);
       // No @mention — should behave as before
       const event = makeMessageEvent({ text: 'hello everyone' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockEnqueueRun).toHaveBeenCalledTimes(2);
     });
@@ -2118,7 +2125,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'hey <@U_BOT> help' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       // Zero matches due to errors — show picker with all agents
       expect(mockEnqueueRun).not.toHaveBeenCalled();
@@ -2140,7 +2147,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'hey <@U_BOT> help me' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       const blocksCall = mockPostBlocks.mock.calls[0];
       const actionsBlock = blocksCall[1].find((b: any) => b.type === 'actions');
@@ -2401,7 +2408,7 @@ describe('Slack Events -- registerEvents', () => {
       await mockApp._triggerAction('dm_pick_agent:a1', actionPayload);
 
       expect(actionPayload.ack).toHaveBeenCalled();
-      expect(mockCreateDmConversation).toHaveBeenCalledWith('U_USER', 'a1', 'D_DM_CHAN', expect.any(String));
+      expect(mockCreateDmConversation).toHaveBeenCalledWith('W_TEST_123', 'U_USER', 'a1', 'D_DM_CHAN', expect.any(String));
       expect(mockEnqueueRun).toHaveBeenCalledWith(
         expect.objectContaining({
           agentId: 'a1',
@@ -2483,7 +2490,7 @@ describe('Slack Events -- registerEvents', () => {
 
       await mockApp._triggerAction('dm_pick_agent:a1', actionPayload);
 
-      expect(mockCreateDmConversation).toHaveBeenCalledWith('U_USER', 'a1', 'D_DM_CHAN', '1700000000.500');
+      expect(mockCreateDmConversation).toHaveBeenCalledWith('W_TEST_123', 'U_USER', 'a1', 'D_DM_CHAN', '1700000000.500');
     });
 
     it('should use Date.now fallback when statusTs is null and no message ts', async () => {
@@ -2509,7 +2516,7 @@ describe('Slack Events -- registerEvents', () => {
       await mockApp._triggerAction('dm_pick_agent:a1', actionPayload);
 
       // Should use Date.now().toString() as fallback
-      expect(mockCreateDmConversation).toHaveBeenCalledWith('U_USER', 'a1', 'D_DM_CHAN', expect.any(String));
+      expect(mockCreateDmConversation).toHaveBeenCalledWith('W_TEST_123', 'U_USER', 'a1', 'D_DM_CHAN', expect.any(String));
     });
 
     it('should handle errors gracefully without crashing', async () => {
@@ -2552,6 +2559,7 @@ describe('Slack Events -- registerEvents', () => {
           text: 'Let\'s build a new hand!',
           ts: '1700000000.100',
         },
+        context: { teamId: 'W_TEST_123' },
       });
 
       expect(mockGetAccessibleAgents).not.toHaveBeenCalled();
@@ -2573,6 +2581,7 @@ describe('Slack Events -- registerEvents', () => {
           text: 'some bot message',
           ts: '1700000000.100',
         },
+        context: { teamId: 'W_TEST_123' },
       });
 
       expect(mockGetAccessibleAgents).not.toHaveBeenCalled();
@@ -2594,9 +2603,10 @@ describe('Slack Events -- registerEvents', () => {
           text: 'help me with something',
           ts: '1700000000.100',
         },
+        context: { teamId: 'W_TEST_123' },
       });
 
-      expect(mockCreateDmConversation).toHaveBeenCalledWith('U_USER', 'a1', 'D_DM_CHAN', expect.any(String));
+      expect(mockCreateDmConversation).toHaveBeenCalledWith('W_TEST_123', 'U_USER', 'a1', 'D_DM_CHAN', expect.any(String));
       expect(mockEnqueueRun).toHaveBeenCalledWith(
         expect.objectContaining({
           agentId: 'a1',
@@ -2621,9 +2631,10 @@ describe('Slack Events -- registerEvents', () => {
           text: 'hello',
           ts: '1700000000.100',
         },
+        context: { teamId: 'W_TEST_123' },
       });
 
-      expect(mockCreateDmConversation).toHaveBeenCalledWith('U_USER', 'a1', 'D_DM_CHAN', 'status-reply-ts');
+      expect(mockCreateDmConversation).toHaveBeenCalledWith('W_TEST_123', 'U_USER', 'a1', 'D_DM_CHAN', 'status-reply-ts');
     });
 
     it('should use msg.ts as fallback when postBlocks returns null for single agent', async () => {
@@ -2641,9 +2652,10 @@ describe('Slack Events -- registerEvents', () => {
           text: 'hello',
           ts: '1700000000.100',
         },
+        context: { teamId: 'W_TEST_123' },
       });
 
-      expect(mockCreateDmConversation).toHaveBeenCalledWith('U_USER', 'a1', 'D_DM_CHAN', '1700000000.100');
+      expect(mockCreateDmConversation).toHaveBeenCalledWith('W_TEST_123', 'U_USER', 'a1', 'D_DM_CHAN', '1700000000.100');
     });
 
     it('should post no-agents message when no accessible agents', async () => {
@@ -2659,6 +2671,7 @@ describe('Slack Events -- registerEvents', () => {
           text: 'hello',
           ts: '1700000000.100',
         },
+        context: { teamId: 'W_TEST_123' },
       });
 
       expect(mockPostMessage).toHaveBeenCalledWith('D_DM_CHAN', expect.stringContaining('No agents available'));
@@ -2679,10 +2692,11 @@ describe('Slack Events -- registerEvents', () => {
           text: 'hello',
           ts: '1700000000.100',
         },
+        context: { teamId: 'W_TEST_123' },
       });
 
       // Only 1 active agent, so should auto-route
-      expect(mockCreateDmConversation).toHaveBeenCalledWith('U_USER', 'a1', 'D_DM_CHAN', expect.any(String));
+      expect(mockCreateDmConversation).toHaveBeenCalledWith('W_TEST_123', 'U_USER', 'a1', 'D_DM_CHAN', expect.any(String));
     });
 
     it('should show picker when multiple agents and no relevance matches', async () => {
@@ -2701,6 +2715,7 @@ describe('Slack Events -- registerEvents', () => {
           text: 'hello',
           ts: '1700000000.100',
         },
+        context: { teamId: 'W_TEST_123' },
       });
 
       expect(mockPostBlocks).toHaveBeenCalledWith(
@@ -2729,6 +2744,7 @@ describe('Slack Events -- registerEvents', () => {
           text: 'hello',
           ts: '1700000000.100',
         },
+        context: { teamId: 'W_TEST_123' },
       });
 
       // Multiple matches → picker
@@ -2759,9 +2775,10 @@ describe('Slack Events -- registerEvents', () => {
           text: 'help with billing',
           ts: '1700000000.100',
         },
+        context: { teamId: 'W_TEST_123' },
       });
 
-      expect(mockCreateDmConversation).toHaveBeenCalledWith('U_USER', 'a1', 'D_DM_CHAN', expect.any(String));
+      expect(mockCreateDmConversation).toHaveBeenCalledWith('W_TEST_123', 'U_USER', 'a1', 'D_DM_CHAN', expect.any(String));
       expect(mockEnqueueRun).toHaveBeenCalledWith(
         expect.objectContaining({ agentId: 'a1' }),
         'high'
@@ -2786,6 +2803,7 @@ describe('Slack Events -- registerEvents', () => {
           text: 'hello',
           ts: '1700000000.100',
         },
+        context: { teamId: 'W_TEST_123' },
       });
 
       // Zero matches due to errors — show picker with all agents
@@ -2814,6 +2832,7 @@ describe('Slack Events -- registerEvents', () => {
           text: 'hello',
           ts: '1700000000.100',
         },
+        context: { teamId: 'W_TEST_123' },
       });
 
       const blocksCall = mockPostBlocks.mock.calls[0];
@@ -2841,6 +2860,7 @@ describe('Slack Events -- registerEvents', () => {
           text: 'hello',
           ts: '1700000000.100',
         },
+        context: { teamId: 'W_TEST_123' },
       });
 
       expect(mockPostMessage).toHaveBeenCalledWith('D_DM_CHAN', expect.stringContaining('Something went wrong'));
@@ -2863,6 +2883,7 @@ describe('Slack Events -- registerEvents', () => {
           text: 'hello',
           ts: '1700000000.100',
         },
+        context: { teamId: 'W_TEST_123' },
       });
 
       const blocksCall = mockPostBlocks.mock.calls[0];
@@ -2890,10 +2911,11 @@ describe('Slack Events -- registerEvents', () => {
           thread_ts: '1700000000.100',
           ts: '1700000000.200',
         },
+        context: { teamId: 'W_TEST_123' },
       });
 
-      expect(mockGetDmConversation).toHaveBeenCalledWith('D_DM_CHAN', '1700000000.100');
-      expect(mockTouchDmConversation).toHaveBeenCalledWith('D_DM_CHAN', '1700000000.100');
+      expect(mockGetDmConversation).toHaveBeenCalledWith('W_TEST_123', 'D_DM_CHAN', '1700000000.100');
+      expect(mockTouchDmConversation).toHaveBeenCalledWith('W_TEST_123', 'D_DM_CHAN', '1700000000.100');
       expect(mockEnqueueRun).toHaveBeenCalledWith(
         expect.objectContaining({
           agentId: 'a1',
@@ -2918,6 +2940,7 @@ describe('Slack Events -- registerEvents', () => {
           thread_ts: '1700000000.100',
           ts: '1700000000.200',
         },
+        context: { teamId: 'W_TEST_123' },
       });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
@@ -2942,6 +2965,7 @@ describe('Slack Events -- registerEvents', () => {
           thread_ts: '1700000000.100',
           ts: '1700000000.200',
         },
+        context: { teamId: 'W_TEST_123' },
       });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
@@ -2966,6 +2990,7 @@ describe('Slack Events -- registerEvents', () => {
           thread_ts: '1700000000.100',
           ts: '1700000000.200',
         },
+        context: { teamId: 'W_TEST_123' },
       });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
@@ -2988,7 +3013,7 @@ describe('Slack Events -- registerEvents', () => {
       mockCheckMessageRelevance.mockResolvedValue(true);
 
       registerEvents(mockApp as any);
-      await mockApp._trigger('message', { event: makeMessageEvent(), client: {} });
+      await mockApp._trigger('message', { event: makeMessageEvent(), client: {}, context: { teamId: 'W_TEST_123' } });
 
       // Only the public agent should get enqueued, private is filtered out
       expect(mockEnqueueRun).toHaveBeenCalledTimes(1);
@@ -3005,7 +3030,7 @@ describe('Slack Events -- registerEvents', () => {
       mockCheckMessageRelevance.mockResolvedValue(true);
 
       registerEvents(mockApp as any);
-      await mockApp._trigger('message', { event: makeMessageEvent(), client: {} });
+      await mockApp._trigger('message', { event: makeMessageEvent(), client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockEnqueueRun).toHaveBeenCalledTimes(1);
     });
@@ -3020,7 +3045,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'hello everyone' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockEnqueueRun).not.toHaveBeenCalled();
     });
@@ -3032,7 +3057,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'hey <@U_BOT> help' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockEnqueueRun).toHaveBeenCalledTimes(1);
     });
@@ -3043,7 +3068,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'follow up', thread_ts: '1700000000.000001' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockEnqueueRun).not.toHaveBeenCalled();
     });
@@ -3055,7 +3080,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: '<@U_BOT> what do you think?', thread_ts: '1700000000.000001' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockEnqueueRun).toHaveBeenCalledTimes(1);
     });
@@ -3067,7 +3092,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'hey <@U_BOT> help' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       // Single accessible agent — no relevance check needed
       expect(mockCheckMessageRelevance).not.toHaveBeenCalled();
@@ -3089,9 +3114,9 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'connect to https://drive.google.com/?id=abcdef123456789' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
-      expect(mockConnectSource).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockConnectSource).toHaveBeenCalledWith('W_TEST_123', expect.objectContaining({
         agentId: 'agent-1',
         sourceType: 'google_drive',
       }));
@@ -3111,9 +3136,9 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'connect to https://docs.google.com/?id=docfile123456789' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
-      expect(mockConnectSource).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockConnectSource).toHaveBeenCalledWith('W_TEST_123', expect.objectContaining({
         sourceType: 'google_drive',
       }));
       expect(mockPostMessage).toHaveBeenCalledWith(
@@ -3130,7 +3155,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'connect to https://drive.google.com/?invalid' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -3147,7 +3172,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'connect to https://drive.google.com/?id=abcdef123456789' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -3168,10 +3193,10 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'add member <@U_NEW_MEMBER>' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
-      expect(mockCanModifyAgent).toHaveBeenCalledWith('agent-1', 'U_USER');
-      expect(mockAddAgentMember).toHaveBeenCalledWith('agent-1', 'U_NEW_MEMBER', 'U_USER');
+      expect(mockCanModifyAgent).toHaveBeenCalledWith('W_TEST_123', 'agent-1', 'U_USER');
+      expect(mockAddAgentMember).toHaveBeenCalledWith('W_TEST_123', 'agent-1', 'U_NEW_MEMBER', 'U_USER');
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
         expect.stringContaining('U_NEW_MEMBER'),
@@ -3187,7 +3212,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'add member <@U_NEW_MEMBER>' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -3205,7 +3230,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'add member <@U_NEW_MEMBER>' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -3222,10 +3247,10 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'remove member <@U_OLD_MEMBER>' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
-      expect(mockCanModifyAgent).toHaveBeenCalledWith('agent-1', 'U_USER');
-      expect(mockRemoveAgentMember).toHaveBeenCalledWith('agent-1', 'U_OLD_MEMBER');
+      expect(mockCanModifyAgent).toHaveBeenCalledWith('W_TEST_123', 'agent-1', 'U_USER');
+      expect(mockRemoveAgentMember).toHaveBeenCalledWith('W_TEST_123', 'agent-1', 'U_OLD_MEMBER');
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
         expect.stringContaining('U_OLD_MEMBER'),
@@ -3241,7 +3266,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'remove member <@U_OLD_MEMBER>' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -3259,7 +3284,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'remove member <@U_OLD_MEMBER>' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -3283,7 +3308,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'hey <@U_BOT> billing help', thread_ts: '1700000000.000001' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockEnqueueRun).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -3304,7 +3329,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'hey <@U_BOT> billing help', thread_ts: '1700000000.000001' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       // Mention is stripped in conversational mode
       expect(mockEnqueueRun).toHaveBeenCalledWith(
@@ -3334,6 +3359,7 @@ describe('Slack Events -- registerEvents', () => {
           text: 'follow up question',
           ts: '1700000000.100',
         },
+        context: { teamId: 'W_TEST_123' },
       });
 
       expect(mockEnqueueRun).toHaveBeenCalledWith(
@@ -3365,6 +3391,7 @@ describe('Slack Events -- registerEvents', () => {
           text: 'hello dm',
           ts: '1700000000.100',
         },
+        context: { teamId: 'W_TEST_123' },
       });
 
       expect(mockEnqueueRun).toHaveBeenCalledWith(
@@ -3389,6 +3416,7 @@ describe('Slack Events -- registerEvents', () => {
           text: 'hello',
           ts: '1700000000.100',
         },
+        context: { teamId: 'W_TEST_123' },
       });
 
       // First call is the DM routing status, second is routeDmToAgent status
@@ -3420,6 +3448,7 @@ describe('Slack Events -- registerEvents', () => {
           text: 'hello',
           ts: '1700000000.100',
         },
+        context: { teamId: 'W_TEST_123' },
       });
 
       expect(mockEnqueueRun).toHaveBeenCalledWith(
@@ -3445,6 +3474,7 @@ describe('Slack Events -- registerEvents', () => {
           text: 'hello',
           ts: '1700000000.100',
         },
+        context: { teamId: 'W_TEST_123' },
       });
 
       const jobData = mockEnqueueRun.mock.calls[0][0];
@@ -3464,7 +3494,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'tool stats' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -3486,7 +3516,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'connect to acme/api' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       // Should still post success message (clone error is non-fatal)
       expect(mockPostMessage).toHaveBeenCalledWith(
@@ -3509,7 +3539,7 @@ describe('Slack Events -- registerEvents', () => {
 
       // Should not throw even though both the handler and the error notification fail
       await expect(
-        mockApp._trigger('message', { event, client: {} })
+        mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } })
       ).resolves.not.toThrow();
     });
   });
@@ -3534,6 +3564,7 @@ describe('Slack Events -- registerEvents', () => {
           thread_ts: '1700000000.100',
           ts: '1700000000.200',
         },
+        context: { teamId: 'W_TEST_123' },
       });
 
       expect(mockEnqueueRun).toHaveBeenCalledWith(
@@ -3565,7 +3596,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ bot_id: 'B_OTHER', user: 'U_OTHER', subtype: 'bot_message' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       // Should still proceed since B_OTHER is not our bot
       expect(mockGetAgentsByChannel).toHaveBeenCalled();
@@ -3582,9 +3613,9 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'add trigger a deployment finishes' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
-      expect(mockCreateTrigger).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateTrigger).toHaveBeenCalledWith('W_TEST_123', expect.objectContaining({
         agentId: 'agent-1',
         triggerType: 'webhook',
       }));
@@ -3607,9 +3638,9 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'connect to https://github.com/org/project' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
-      expect(mockConnectSource).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockConnectSource).toHaveBeenCalledWith('W_TEST_123', expect.objectContaining({
         agentId: 'agent-1',
         sourceType: 'github',
         uri: 'https://github.com/org/project',
@@ -3626,7 +3657,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'write a tool that deploys code' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -3644,7 +3675,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'build a skill for deploying code' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -3661,7 +3692,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'make a tool to send emails' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -3685,9 +3716,9 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'search tool email' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
-      expect(mockDiscoverTools).toHaveBeenCalledWith('email');
+      expect(mockDiscoverTools).toHaveBeenCalledWith('W_TEST_123', 'email');
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
         expect.stringContaining('email-sender'),
@@ -3702,9 +3733,9 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'discover tools api' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
-      expect(mockDiscoverTools).toHaveBeenCalledWith('api');
+      expect(mockDiscoverTools).toHaveBeenCalledWith('W_TEST_123', 'api');
     });
 
     it('should show "[pending]" for unapproved tools in find tool results', async () => {
@@ -3716,7 +3747,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'find tool pending' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -3736,9 +3767,9 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'rollback tool my-tool to v3' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
-      expect(mockRollbackTool).toHaveBeenCalledWith('my-tool', 3, 'U_USER');
+      expect(mockRollbackTool).toHaveBeenCalledWith('W_TEST_123', 'my-tool', 3, 'U_USER');
     });
   });
 
@@ -3754,9 +3785,9 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'tool version my-tool' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
-      expect(mockGetToolVersions).toHaveBeenCalledWith('my-tool');
+      expect(mockGetToolVersions).toHaveBeenCalledWith('W_TEST_123', 'my-tool');
     });
   });
 
@@ -3773,7 +3804,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'show tools' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -3792,7 +3823,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'show tools' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -3811,7 +3842,7 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'show tools' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
@@ -3831,9 +3862,9 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'forget old data' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
-      expect(mockForgetMemory).toHaveBeenCalledWith('agent-1', 'old data');
+      expect(mockForgetMemory).toHaveBeenCalledWith('W_TEST_123', 'agent-1', 'old data');
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
         expect.stringContaining('Forgot 2'),
@@ -3852,9 +3883,9 @@ describe('Slack Events -- registerEvents', () => {
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'add linear skill with admin' });
-      await mockApp._trigger('message', { event, client: {} });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
-      expect(mockAttachSkillToAgent).toHaveBeenCalledWith('agent-1', 'linear', 'admin', 'U_USER');
+      expect(mockAttachSkillToAgent).toHaveBeenCalledWith('W_TEST_123', 'agent-1', 'linear', 'admin', 'U_USER');
     });
   });
 
@@ -3882,9 +3913,10 @@ describe('Slack Events -- registerEvents', () => {
           text: 'billing question',
           ts: '1700000000.100',
         },
+        context: { teamId: 'W_TEST_123' },
       });
 
-      expect(mockCreateDmConversation).toHaveBeenCalledWith('U_USER', 'a1', 'D_DM_CHAN', 'match-status-ts');
+      expect(mockCreateDmConversation).toHaveBeenCalledWith('W_TEST_123', 'U_USER', 'a1', 'D_DM_CHAN', 'match-status-ts');
     });
 
     it('should use msg.ts as fallback when statusTs is null for single match', async () => {
@@ -3906,9 +3938,10 @@ describe('Slack Events -- registerEvents', () => {
           text: 'billing question',
           ts: '1700000000.100',
         },
+        context: { teamId: 'W_TEST_123' },
       });
 
-      expect(mockCreateDmConversation).toHaveBeenCalledWith('U_USER', 'a1', 'D_DM_CHAN', '1700000000.100');
+      expect(mockCreateDmConversation).toHaveBeenCalledWith('W_TEST_123', 'U_USER', 'a1', 'D_DM_CHAN', '1700000000.100');
     });
   });
 });

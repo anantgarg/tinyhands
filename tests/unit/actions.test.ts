@@ -11,6 +11,10 @@ const mockDeleteKBEntry = vi.fn();
 const mockPauseTrigger = vi.fn();
 const mockResumeTrigger = vi.fn();
 
+vi.mock('../../src/db', () => ({
+  getDefaultWorkspaceId: () => 'W_TEST_123',
+}));
+
 vi.mock('../../src/slack/index', () => ({
   postMessage: (...args: any[]) => mockPostMessage(...args),
 }));
@@ -71,6 +75,7 @@ function makeBody(userId: string, channelId: string): any {
   return {
     user: { id: userId },
     channel: { id: channelId },
+    team: { id: 'W_TEST_123' },
   };
 }
 
@@ -118,7 +123,7 @@ describe('Slack actions module', () => {
       await handlers.kb_approve({ action, ack, body });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockApproveContribution).toHaveBeenCalledWith('entry-123');
+      expect(mockApproveContribution).toHaveBeenCalledWith('W_TEST_123', 'entry-123');
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C001',
         expect.stringContaining('How to Reset Password'),
@@ -148,7 +153,7 @@ describe('Slack actions module', () => {
     it('should use empty string for channel if body.channel is missing', async () => {
       mockApproveContribution.mockResolvedValue({ title: 'Test' });
       const ack = makeAck();
-      const body = { user: { id: 'U001' } }; // no channel
+      const body = { user: { id: 'U001' }, team: { id: 'W_TEST_123' } }; // no channel
 
       await handlers.kb_approve({ action: makeAction('entry-1'), ack, body });
 
@@ -171,7 +176,7 @@ describe('Slack actions module', () => {
       await handlers.kb_reject({ action, ack, body });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockDeleteKBEntry).toHaveBeenCalledWith('entry-456');
+      expect(mockDeleteKBEntry).toHaveBeenCalledWith('W_TEST_123', 'entry-456');
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C002',
         expect.stringContaining('rejected'),
@@ -195,7 +200,7 @@ describe('Slack actions module', () => {
       await handlers.evolution_approve({ action, ack, body });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockApproveProposal).toHaveBeenCalledWith('proposal-789', 'U003');
+      expect(mockApproveProposal).toHaveBeenCalledWith('W_TEST_123', 'proposal-789', 'U003');
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C003',
         expect.stringContaining('Add caching layer'),
@@ -232,7 +237,7 @@ describe('Slack actions module', () => {
       await handlers.evolution_reject({ action, ack, body });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockRejectProposal).toHaveBeenCalledWith('proposal-111', 'U004');
+      expect(mockRejectProposal).toHaveBeenCalledWith('W_TEST_123', 'proposal-111', 'U004');
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C004',
         expect.stringContaining('rejected'),
@@ -275,7 +280,7 @@ describe('Slack actions module', () => {
       await handlers.workflow_action({ action, ack, body });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockResolveHumanAction).toHaveBeenCalledWith('run-123', { choice: 'approved' });
+      expect(mockResolveHumanAction).toHaveBeenCalledWith('W_TEST_123', 'run-123', { choice: 'approved' });
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C005',
         expect.stringContaining('Workflow resumed'),
@@ -327,7 +332,7 @@ describe('Slack actions module', () => {
       await handlers.trigger_pause({ action, ack, body });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockPauseTrigger).toHaveBeenCalledWith('trigger-abc', 'U006');
+      expect(mockPauseTrigger).toHaveBeenCalledWith('W_TEST_123', 'trigger-abc', 'U006');
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C006',
         expect.stringContaining('Trigger paused'),
@@ -363,7 +368,7 @@ describe('Slack actions module', () => {
       await handlers.trigger_resume({ action, ack, body });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockResumeTrigger).toHaveBeenCalledWith('trigger-xyz', 'U007');
+      expect(mockResumeTrigger).toHaveBeenCalledWith('W_TEST_123', 'trigger-xyz', 'U007');
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C007',
         expect.stringContaining('Trigger resumed'),
@@ -411,7 +416,7 @@ describe('Slack actions module', () => {
     it('should handle missing body.user gracefully in kb_approve', async () => {
       mockApproveContribution.mockResolvedValue({ title: 'Test' });
       const ack = makeAck();
-      const body = { channel: { id: 'C001' } }; // no user
+      const body = { channel: { id: 'C001' }, team: { id: 'W_TEST_123' } }; // no user
 
       await handlers.kb_approve({ action: makeAction('entry-1'), ack, body });
 

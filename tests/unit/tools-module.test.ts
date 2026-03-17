@@ -53,6 +53,8 @@ import {
   getAgentToolSummary,
 } from '../../src/modules/tools';
 
+const TEST_WORKSPACE_ID = 'W_TEST_123';
+
 // ── Helpers ──
 
 function makeFakeAgent(overrides: Record<string, any> = {}) {
@@ -147,7 +149,7 @@ describe('Tools Module', () => {
       mockGetAgent.mockResolvedValue(makeFakeAgent({ tools: ['Read'] }));
       mockUpdateAgent.mockResolvedValue(undefined);
 
-      const result = await addToolToAgent('agent-1', 'Bash', 'user-1');
+      const result = await addToolToAgent(TEST_WORKSPACE_ID, 'agent-1', 'Bash', 'user-1');
 
       expect(result).toEqual(['Read', 'Bash']);
       expect(mockUpdateAgent).toHaveBeenCalledWith('agent-1', { tools: ['Read', 'Bash'] }, 'user-1');
@@ -160,7 +162,7 @@ describe('Tools Module', () => {
       mockQueryOne.mockResolvedValueOnce(makeFakeCustomTool({ name: 'my-tool' }));
       mockUpdateAgent.mockResolvedValue(undefined);
 
-      const result = await addToolToAgent('agent-1', 'my-tool', 'user-1');
+      const result = await addToolToAgent(TEST_WORKSPACE_ID, 'agent-1', 'my-tool', 'user-1');
 
       expect(result).toEqual(['my-tool']);
       expect(mockUpdateAgent).toHaveBeenCalled();
@@ -170,7 +172,7 @@ describe('Tools Module', () => {
       mockCanModifyAgent.mockResolvedValue(true);
       mockGetAgent.mockResolvedValue(makeFakeAgent({ tools: ['Bash', 'Read'] }));
 
-      const result = await addToolToAgent('agent-1', 'Bash', 'user-1');
+      const result = await addToolToAgent(TEST_WORKSPACE_ID, 'agent-1', 'Bash', 'user-1');
 
       expect(result).toEqual(['Bash', 'Read']);
       expect(mockUpdateAgent).not.toHaveBeenCalled();
@@ -179,7 +181,7 @@ describe('Tools Module', () => {
     it('throws when user lacks permission', async () => {
       mockCanModifyAgent.mockResolvedValue(false);
 
-      await expect(addToolToAgent('agent-1', 'Bash', 'user-x'))
+      await expect(addToolToAgent(TEST_WORKSPACE_ID, 'agent-1', 'Bash', 'user-x'))
         .rejects.toThrow('Insufficient permissions to modify agent tools');
     });
 
@@ -187,7 +189,7 @@ describe('Tools Module', () => {
       mockCanModifyAgent.mockResolvedValue(true);
       mockGetAgent.mockResolvedValue(null);
 
-      await expect(addToolToAgent('missing-agent', 'Bash', 'user-1'))
+      await expect(addToolToAgent(TEST_WORKSPACE_ID, 'missing-agent', 'Bash', 'user-1'))
         .rejects.toThrow('Agent missing-agent not found');
     });
 
@@ -197,7 +199,7 @@ describe('Tools Module', () => {
       // getCustomTool returns null
       mockQueryOne.mockResolvedValueOnce(null);
 
-      await expect(addToolToAgent('agent-1', 'nonexistent-tool', 'user-1'))
+      await expect(addToolToAgent(TEST_WORKSPACE_ID, 'agent-1', 'nonexistent-tool', 'user-1'))
         .rejects.toThrow('Tool "nonexistent-tool" not found');
     });
 
@@ -207,7 +209,7 @@ describe('Tools Module', () => {
       mockGetAgent.mockResolvedValue(makeFakeAgent({ tools: originalTools }));
       mockUpdateAgent.mockResolvedValue(undefined);
 
-      await addToolToAgent('agent-1', 'Bash', 'user-1');
+      await addToolToAgent(TEST_WORKSPACE_ID, 'agent-1', 'Bash', 'user-1');
 
       // The original array should not have been mutated
       expect(originalTools).toEqual(['Read']);
@@ -223,7 +225,7 @@ describe('Tools Module', () => {
       mockGetAgent.mockResolvedValue(makeFakeAgent({ tools: ['Bash', 'Read', 'Write'] }));
       mockUpdateAgent.mockResolvedValue(undefined);
 
-      const result = await removeToolFromAgent('agent-1', 'Read', 'user-1');
+      const result = await removeToolFromAgent(TEST_WORKSPACE_ID, 'agent-1', 'Read', 'user-1');
 
       expect(result).toEqual(['Bash', 'Write']);
       expect(mockUpdateAgent).toHaveBeenCalledWith('agent-1', { tools: ['Bash', 'Write'] }, 'user-1');
@@ -234,7 +236,7 @@ describe('Tools Module', () => {
       mockGetAgent.mockResolvedValue(makeFakeAgent({ tools: ['Bash'] }));
       mockUpdateAgent.mockResolvedValue(undefined);
 
-      const result = await removeToolFromAgent('agent-1', 'NotThere', 'user-1');
+      const result = await removeToolFromAgent(TEST_WORKSPACE_ID, 'agent-1', 'NotThere', 'user-1');
 
       expect(result).toEqual(['Bash']);
       // updateAgent is still called (filters and saves)
@@ -244,7 +246,7 @@ describe('Tools Module', () => {
     it('throws when user lacks permission', async () => {
       mockCanModifyAgent.mockResolvedValue(false);
 
-      await expect(removeToolFromAgent('agent-1', 'Bash', 'user-x'))
+      await expect(removeToolFromAgent(TEST_WORKSPACE_ID, 'agent-1', 'Bash', 'user-x'))
         .rejects.toThrow('Insufficient permissions to modify agent tools');
     });
 
@@ -252,7 +254,7 @@ describe('Tools Module', () => {
       mockCanModifyAgent.mockResolvedValue(true);
       mockGetAgent.mockResolvedValue(null);
 
-      await expect(removeToolFromAgent('gone', 'Bash', 'user-1'))
+      await expect(removeToolFromAgent(TEST_WORKSPACE_ID, 'gone', 'Bash', 'user-1'))
         .rejects.toThrow('Agent gone not found');
     });
   });
@@ -266,6 +268,7 @@ describe('Tools Module', () => {
       mockExecute.mockResolvedValue(undefined);
 
       const result = await registerCustomTool(
+        TEST_WORKSPACE_ID,
         'my-tool',
         '{"type":"object"}',
         '/scripts/my-tool.js',
@@ -293,6 +296,7 @@ describe('Tools Module', () => {
       mockExecute.mockResolvedValue(undefined);
 
       const result = await registerCustomTool(
+        TEST_WORKSPACE_ID,
         'code-tool',
         '{}',
         null,
@@ -310,6 +314,7 @@ describe('Tools Module', () => {
       mockExecute.mockResolvedValue(undefined);
 
       const result = await registerCustomTool(
+        TEST_WORKSPACE_ID,
         'unapproved',
         '{}',
         null,
@@ -325,6 +330,7 @@ describe('Tools Module', () => {
       mockExecute.mockResolvedValue(undefined);
 
       const result = await registerCustomTool(
+        TEST_WORKSPACE_ID,
         'rw-tool',
         '{}',
         null,
@@ -340,6 +346,7 @@ describe('Tools Module', () => {
       mockExecute.mockResolvedValue(undefined);
 
       const result = await registerCustomTool(
+        TEST_WORKSPACE_ID,
         'config-tool',
         '{}',
         null,
@@ -354,7 +361,7 @@ describe('Tools Module', () => {
       mockQueryOne.mockResolvedValueOnce({ id: 'existing-id' });
 
       await expect(
-        registerCustomTool('dup', '{}', null, 'user-1'),
+        registerCustomTool(TEST_WORKSPACE_ID, 'dup', '{}', null, 'user-1'),
       ).rejects.toThrow('Tool "dup" already registered');
       expect(mockExecute).not.toHaveBeenCalled();
     });
@@ -364,6 +371,7 @@ describe('Tools Module', () => {
       mockExecute.mockResolvedValue(undefined);
 
       const result = await registerCustomTool(
+        TEST_WORKSPACE_ID,
         'path-tool',
         '{}',
         '/usr/local/tools/mytool.sh',
@@ -381,6 +389,7 @@ describe('Tools Module', () => {
       mockExecute.mockResolvedValue(undefined);
 
       const result = await registerCustomTool(
+        TEST_WORKSPACE_ID,
         'code-over-path',
         '{}',
         '/some/path.js',
@@ -401,17 +410,17 @@ describe('Tools Module', () => {
       mockQueryOne.mockResolvedValueOnce({ user_id: 'admin-1' }); // superadmin check
       mockExecute.mockResolvedValue(undefined);
 
-      await expect(approveCustomTool('my-tool', 'admin-1')).resolves.toBeUndefined();
+      await expect(approveCustomTool(TEST_WORKSPACE_ID, 'my-tool', 'admin-1')).resolves.toBeUndefined();
       expect(mockExecute).toHaveBeenCalledWith(
-        'UPDATE custom_tools SET approved = TRUE WHERE name = $1',
-        ['my-tool'],
+        'UPDATE custom_tools SET approved = TRUE WHERE workspace_id = $1 AND name = $2',
+        [TEST_WORKSPACE_ID, 'my-tool'],
       );
     });
 
     it('throws when caller is not a superadmin', async () => {
       mockQueryOne.mockResolvedValueOnce(null);
 
-      await expect(approveCustomTool('my-tool', 'user-x'))
+      await expect(approveCustomTool(TEST_WORKSPACE_ID, 'my-tool', 'user-x'))
         .rejects.toThrow('Only admins can approve tools');
       expect(mockExecute).not.toHaveBeenCalled();
     });
@@ -427,7 +436,7 @@ describe('Tools Module', () => {
         language: 'javascript',
       }));
 
-      const result = await getToolCode('my-tool');
+      const result = await getToolCode(TEST_WORKSPACE_ID, 'my-tool');
       expect(result).toEqual({ code: 'console.log("hi")', language: 'javascript' });
     });
 
@@ -436,14 +445,14 @@ describe('Tools Module', () => {
         script_code: null,
       }));
 
-      const result = await getToolCode('my-tool');
+      const result = await getToolCode(TEST_WORKSPACE_ID, 'my-tool');
       expect(result).toBeNull();
     });
 
     it('returns null when tool does not exist', async () => {
       mockQueryOne.mockResolvedValueOnce(null);
 
-      const result = await getToolCode('nonexistent');
+      const result = await getToolCode(TEST_WORKSPACE_ID, 'nonexistent');
       expect(result).toBeNull();
     });
   });
@@ -456,18 +465,18 @@ describe('Tools Module', () => {
       const fakeTool = makeFakeCustomTool();
       mockQueryOne.mockResolvedValueOnce(fakeTool);
 
-      const result = await getCustomTool('my-tool');
+      const result = await getCustomTool(TEST_WORKSPACE_ID, 'my-tool');
       expect(result).toEqual(fakeTool);
       expect(mockQueryOne).toHaveBeenCalledWith(
-        'SELECT * FROM custom_tools WHERE name = $1',
-        ['my-tool'],
+        'SELECT * FROM custom_tools WHERE workspace_id = $1 AND name = $2',
+        [TEST_WORKSPACE_ID, 'my-tool'],
       );
     });
 
     it('returns null when tool is not found', async () => {
       mockQueryOne.mockResolvedValueOnce(undefined);
 
-      const result = await getCustomTool('missing');
+      const result = await getCustomTool(TEST_WORKSPACE_ID, 'missing');
       expect(result).toBeNull();
     });
   });
@@ -480,15 +489,15 @@ describe('Tools Module', () => {
       const tools = [makeFakeCustomTool({ name: 'a' }), makeFakeCustomTool({ name: 'b' })];
       mockQuery.mockResolvedValueOnce(tools);
 
-      const result = await listCustomTools();
+      const result = await listCustomTools(TEST_WORKSPACE_ID);
       expect(result).toEqual(tools);
-      expect(mockQuery).toHaveBeenCalledWith('SELECT * FROM custom_tools ORDER BY name');
+      expect(mockQuery).toHaveBeenCalledWith('SELECT * FROM custom_tools WHERE workspace_id = $1 ORDER BY name', [TEST_WORKSPACE_ID]);
     });
 
     it('returns empty array when no tools exist', async () => {
       mockQuery.mockResolvedValueOnce([]);
 
-      const result = await listCustomTools();
+      const result = await listCustomTools(TEST_WORKSPACE_ID);
       expect(result).toEqual([]);
     });
   });
@@ -501,17 +510,18 @@ describe('Tools Module', () => {
       const tools = [makeFakeCustomTool({ approved: true, access_level: 'read-only' })];
       mockQuery.mockResolvedValueOnce(tools);
 
-      const result = await listUserAvailableTools();
+      const result = await listUserAvailableTools(TEST_WORKSPACE_ID);
       expect(result).toEqual(tools);
       expect(mockQuery).toHaveBeenCalledWith(
         expect.stringContaining("approved = TRUE AND access_level = 'read-only'"),
+        [TEST_WORKSPACE_ID],
       );
     });
 
     it('returns empty array when no approved read-only tools exist', async () => {
       mockQuery.mockResolvedValueOnce([]);
 
-      const result = await listUserAvailableTools();
+      const result = await listUserAvailableTools(TEST_WORKSPACE_ID);
       expect(result).toEqual([]);
     });
   });
@@ -524,17 +534,18 @@ describe('Tools Module', () => {
       const tools = [makeFakeCustomTool({ access_level: 'read-write' })];
       mockQuery.mockResolvedValueOnce(tools);
 
-      const result = await listWriteTools();
+      const result = await listWriteTools(TEST_WORKSPACE_ID);
       expect(result).toEqual(tools);
       expect(mockQuery).toHaveBeenCalledWith(
         expect.stringContaining("approved = TRUE AND access_level = 'read-write'"),
+        [TEST_WORKSPACE_ID],
       );
     });
 
     it('returns empty array when no write tools exist', async () => {
       mockQuery.mockResolvedValueOnce([]);
 
-      const result = await listWriteTools();
+      const result = await listWriteTools(TEST_WORKSPACE_ID);
       expect(result).toEqual([]);
     });
   });
@@ -547,17 +558,17 @@ describe('Tools Module', () => {
       mockQueryOne.mockResolvedValueOnce({ user_id: 'admin-1' });
       mockExecute.mockResolvedValue(undefined);
 
-      await expect(deleteCustomTool('my-tool', 'admin-1')).resolves.toBeUndefined();
+      await expect(deleteCustomTool(TEST_WORKSPACE_ID, 'my-tool', 'admin-1')).resolves.toBeUndefined();
       expect(mockExecute).toHaveBeenCalledWith(
-        'DELETE FROM custom_tools WHERE name = $1',
-        ['my-tool'],
+        'DELETE FROM custom_tools WHERE workspace_id = $1 AND name = $2',
+        [TEST_WORKSPACE_ID, 'my-tool'],
       );
     });
 
     it('throws when caller is not a superadmin', async () => {
       mockQueryOne.mockResolvedValueOnce(null);
 
-      await expect(deleteCustomTool('my-tool', 'user-x'))
+      await expect(deleteCustomTool(TEST_WORKSPACE_ID, 'my-tool', 'user-x'))
         .rejects.toThrow('Only admins can delete custom tools');
       expect(mockExecute).not.toHaveBeenCalled();
     });
@@ -574,19 +585,19 @@ describe('Tools Module', () => {
       mockExecute.mockResolvedValue(undefined);
 
       await expect(
-        updateToolConfig('my-tool', '{"key":"val"}', 'admin-1'),
+        updateToolConfig(TEST_WORKSPACE_ID, 'my-tool', '{"key":"val"}', 'admin-1'),
       ).resolves.toBeUndefined();
 
       expect(mockExecute).toHaveBeenCalledWith(
-        'UPDATE custom_tools SET config_json = $1 WHERE name = $2',
-        ['{"key":"val"}', 'my-tool'],
+        'UPDATE custom_tools SET config_json = $1 WHERE workspace_id = $2 AND name = $3',
+        ['{"key":"val"}', TEST_WORKSPACE_ID, 'my-tool'],
       );
     });
 
     it('throws when caller is not superadmin', async () => {
       mockQueryOne.mockResolvedValueOnce(null);
 
-      await expect(updateToolConfig('my-tool', '{}', 'user-x'))
+      await expect(updateToolConfig(TEST_WORKSPACE_ID, 'my-tool', '{}', 'user-x'))
         .rejects.toThrow('Only admins can update tool config');
     });
 
@@ -595,7 +606,7 @@ describe('Tools Module', () => {
         .mockResolvedValueOnce({ user_id: 'admin-1' })
         .mockResolvedValueOnce(null); // getCustomTool returns null
 
-      await expect(updateToolConfig('ghost', '{}', 'admin-1'))
+      await expect(updateToolConfig(TEST_WORKSPACE_ID, 'ghost', '{}', 'admin-1'))
         .rejects.toThrow('Tool "ghost" not found');
     });
   });
@@ -610,12 +621,12 @@ describe('Tools Module', () => {
         .mockResolvedValueOnce(makeFakeCustomTool({ config_json: '{"existing":"value"}' }));
       mockExecute.mockResolvedValue(undefined);
 
-      const result = await setToolConfigKey('my-tool', 'newKey', 'newVal', 'admin-1');
+      const result = await setToolConfigKey(TEST_WORKSPACE_ID, 'my-tool', 'newKey', 'newVal', 'admin-1');
 
       expect(result).toEqual({ existing: 'value', newKey: 'newVal' });
       expect(mockExecute).toHaveBeenCalledWith(
-        'UPDATE custom_tools SET config_json = $1 WHERE name = $2',
-        ['{"existing":"value","newKey":"newVal"}', 'my-tool'],
+        'UPDATE custom_tools SET config_json = $1 WHERE workspace_id = $2 AND name = $3',
+        ['{"existing":"value","newKey":"newVal"}', TEST_WORKSPACE_ID, 'my-tool'],
       );
     });
 
@@ -625,7 +636,7 @@ describe('Tools Module', () => {
         .mockResolvedValueOnce(makeFakeCustomTool({ config_json: '{"key":"old"}' }));
       mockExecute.mockResolvedValue(undefined);
 
-      const result = await setToolConfigKey('my-tool', 'key', 'new', 'admin-1');
+      const result = await setToolConfigKey(TEST_WORKSPACE_ID, 'my-tool', 'key', 'new', 'admin-1');
       expect(result).toEqual({ key: 'new' });
     });
 
@@ -636,14 +647,14 @@ describe('Tools Module', () => {
       mockExecute.mockResolvedValue(undefined);
 
       // config_json is null → JSON.parse(null || '{}') → {}
-      const result = await setToolConfigKey('my-tool', 'k', 'v', 'admin-1');
+      const result = await setToolConfigKey(TEST_WORKSPACE_ID, 'my-tool', 'k', 'v', 'admin-1');
       expect(result).toEqual({ k: 'v' });
     });
 
     it('throws when caller is not superadmin', async () => {
       mockQueryOne.mockResolvedValueOnce(null);
 
-      await expect(setToolConfigKey('my-tool', 'k', 'v', 'user-x'))
+      await expect(setToolConfigKey(TEST_WORKSPACE_ID, 'my-tool', 'k', 'v', 'user-x'))
         .rejects.toThrow('Only admins can update tool config');
     });
 
@@ -652,7 +663,7 @@ describe('Tools Module', () => {
         .mockResolvedValueOnce({ user_id: 'admin-1' })
         .mockResolvedValueOnce(null);
 
-      await expect(setToolConfigKey('ghost', 'k', 'v', 'admin-1'))
+      await expect(setToolConfigKey(TEST_WORKSPACE_ID, 'ghost', 'k', 'v', 'admin-1'))
         .rejects.toThrow('Tool "ghost" not found');
     });
   });
@@ -667,12 +678,12 @@ describe('Tools Module', () => {
         .mockResolvedValueOnce(makeFakeCustomTool({ config_json: '{"a":"1","b":"2"}' }));
       mockExecute.mockResolvedValue(undefined);
 
-      const result = await removeToolConfigKey('my-tool', 'a', 'admin-1');
+      const result = await removeToolConfigKey(TEST_WORKSPACE_ID, 'my-tool', 'a', 'admin-1');
 
       expect(result).toEqual({ b: '2' });
       expect(mockExecute).toHaveBeenCalledWith(
-        'UPDATE custom_tools SET config_json = $1 WHERE name = $2',
-        ['{"b":"2"}', 'my-tool'],
+        'UPDATE custom_tools SET config_json = $1 WHERE workspace_id = $2 AND name = $3',
+        ['{"b":"2"}', TEST_WORKSPACE_ID, 'my-tool'],
       );
     });
 
@@ -682,7 +693,7 @@ describe('Tools Module', () => {
         .mockResolvedValueOnce(makeFakeCustomTool({ config_json: '{"a":"1"}' }));
       mockExecute.mockResolvedValue(undefined);
 
-      const result = await removeToolConfigKey('my-tool', 'nonexistent', 'admin-1');
+      const result = await removeToolConfigKey(TEST_WORKSPACE_ID, 'my-tool', 'nonexistent', 'admin-1');
 
       expect(result).toEqual({ a: '1' });
     });
@@ -690,7 +701,7 @@ describe('Tools Module', () => {
     it('throws when caller is not superadmin', async () => {
       mockQueryOne.mockResolvedValueOnce(null);
 
-      await expect(removeToolConfigKey('my-tool', 'k', 'user-x'))
+      await expect(removeToolConfigKey(TEST_WORKSPACE_ID, 'my-tool', 'k', 'user-x'))
         .rejects.toThrow('Only admins can update tool config');
     });
 
@@ -699,7 +710,7 @@ describe('Tools Module', () => {
         .mockResolvedValueOnce({ user_id: 'admin-1' })
         .mockResolvedValueOnce(null);
 
-      await expect(removeToolConfigKey('ghost', 'k', 'admin-1'))
+      await expect(removeToolConfigKey(TEST_WORKSPACE_ID, 'ghost', 'k', 'admin-1'))
         .rejects.toThrow('Tool "ghost" not found');
     });
   });
@@ -713,7 +724,7 @@ describe('Tools Module', () => {
         .mockResolvedValueOnce({ user_id: 'admin-1' })
         .mockResolvedValueOnce(makeFakeCustomTool({ config_json: '{"apiKey":"secret"}' }));
 
-      const result = await getToolConfig('my-tool', 'admin-1');
+      const result = await getToolConfig(TEST_WORKSPACE_ID, 'my-tool', 'admin-1');
       expect(result).toEqual({ apiKey: 'secret' });
     });
 
@@ -722,7 +733,7 @@ describe('Tools Module', () => {
         .mockResolvedValueOnce({ user_id: 'admin-1' })
         .mockResolvedValueOnce(makeFakeCustomTool({ config_json: null }));
 
-      const result = await getToolConfig('my-tool', 'admin-1');
+      const result = await getToolConfig(TEST_WORKSPACE_ID, 'my-tool', 'admin-1');
       expect(result).toEqual({});
     });
 
@@ -731,14 +742,14 @@ describe('Tools Module', () => {
         .mockResolvedValueOnce({ user_id: 'admin-1' })
         .mockResolvedValueOnce(makeFakeCustomTool({ config_json: '' }));
 
-      const result = await getToolConfig('my-tool', 'admin-1');
+      const result = await getToolConfig(TEST_WORKSPACE_ID, 'my-tool', 'admin-1');
       expect(result).toEqual({});
     });
 
     it('throws when caller is not superadmin', async () => {
       mockQueryOne.mockResolvedValueOnce(null);
 
-      await expect(getToolConfig('my-tool', 'user-x'))
+      await expect(getToolConfig(TEST_WORKSPACE_ID, 'my-tool', 'user-x'))
         .rejects.toThrow('Only admins can view tool config');
     });
 
@@ -747,7 +758,7 @@ describe('Tools Module', () => {
         .mockResolvedValueOnce({ user_id: 'admin-1' })
         .mockResolvedValueOnce(null);
 
-      await expect(getToolConfig('ghost', 'admin-1'))
+      await expect(getToolConfig(TEST_WORKSPACE_ID, 'ghost', 'admin-1'))
         .rejects.toThrow('Tool "ghost" not found');
     });
   });
@@ -763,12 +774,12 @@ describe('Tools Module', () => {
       mockExecute.mockResolvedValue(undefined);
 
       await expect(
-        updateToolAccessLevel('my-tool', 'read-write', 'admin-1'),
+        updateToolAccessLevel(TEST_WORKSPACE_ID, 'my-tool', 'read-write', 'admin-1'),
       ).resolves.toBeUndefined();
 
       expect(mockExecute).toHaveBeenCalledWith(
-        'UPDATE custom_tools SET access_level = $1 WHERE name = $2',
-        ['read-write', 'my-tool'],
+        'UPDATE custom_tools SET access_level = $1 WHERE workspace_id = $2 AND name = $3',
+        ['read-write', TEST_WORKSPACE_ID, 'my-tool'],
       );
     });
 
@@ -778,18 +789,18 @@ describe('Tools Module', () => {
         .mockResolvedValueOnce(makeFakeCustomTool({ access_level: 'read-write' }));
       mockExecute.mockResolvedValue(undefined);
 
-      await updateToolAccessLevel('my-tool', 'read-only', 'admin-1');
+      await updateToolAccessLevel(TEST_WORKSPACE_ID, 'my-tool', 'read-only', 'admin-1');
 
       expect(mockExecute).toHaveBeenCalledWith(
-        'UPDATE custom_tools SET access_level = $1 WHERE name = $2',
-        ['read-only', 'my-tool'],
+        'UPDATE custom_tools SET access_level = $1 WHERE workspace_id = $2 AND name = $3',
+        ['read-only', TEST_WORKSPACE_ID, 'my-tool'],
       );
     });
 
     it('throws when caller is not superadmin', async () => {
       mockQueryOne.mockResolvedValueOnce(null);
 
-      await expect(updateToolAccessLevel('my-tool', 'read-write', 'user-x'))
+      await expect(updateToolAccessLevel(TEST_WORKSPACE_ID, 'my-tool', 'read-write', 'user-x'))
         .rejects.toThrow('Only admins can change tool access level');
     });
 
@@ -798,7 +809,7 @@ describe('Tools Module', () => {
         .mockResolvedValueOnce({ user_id: 'admin-1' })
         .mockResolvedValueOnce(null);
 
-      await expect(updateToolAccessLevel('ghost', 'read-write', 'admin-1'))
+      await expect(updateToolAccessLevel(TEST_WORKSPACE_ID, 'ghost', 'read-write', 'admin-1'))
         .rejects.toThrow('Tool "ghost" not found');
     });
   });
@@ -817,7 +828,7 @@ describe('Tools Module', () => {
       // 'mcp-server::tool' -> not found
       mockQueryOne.mockResolvedValueOnce(null);
 
-      const result = await getAgentToolSummary('agent-1');
+      const result = await getAgentToolSummary(TEST_WORKSPACE_ID, 'agent-1');
 
       expect(result).toEqual({
         builtin: ['Bash', 'Read'],
@@ -829,7 +840,7 @@ describe('Tools Module', () => {
     it('returns empty arrays when agent has no tools', async () => {
       mockGetAgent.mockResolvedValue(makeFakeAgent({ tools: [] }));
 
-      const result = await getAgentToolSummary('agent-1');
+      const result = await getAgentToolSummary(TEST_WORKSPACE_ID, 'agent-1');
 
       expect(result).toEqual({ builtin: [], custom: [], mcp: [] });
     });
@@ -839,7 +850,7 @@ describe('Tools Module', () => {
         tools: ['Bash', 'Grep', 'Glob'],
       }));
 
-      const result = await getAgentToolSummary('agent-1');
+      const result = await getAgentToolSummary(TEST_WORKSPACE_ID, 'agent-1');
 
       expect(result).toEqual({
         builtin: ['Bash', 'Grep', 'Glob'],
@@ -857,7 +868,7 @@ describe('Tools Module', () => {
       mockQueryOne.mockResolvedValueOnce(null); // slack::post
       mockQueryOne.mockResolvedValueOnce(null); // github::create-issue
 
-      const result = await getAgentToolSummary('agent-1');
+      const result = await getAgentToolSummary(TEST_WORKSPACE_ID, 'agent-1');
 
       expect(result).toEqual({
         builtin: [],
@@ -869,7 +880,7 @@ describe('Tools Module', () => {
     it('throws when agent is not found', async () => {
       mockGetAgent.mockResolvedValue(null);
 
-      await expect(getAgentToolSummary('missing'))
+      await expect(getAgentToolSummary(TEST_WORKSPACE_ID, 'missing'))
         .rejects.toThrow('Agent missing not found');
     });
   });

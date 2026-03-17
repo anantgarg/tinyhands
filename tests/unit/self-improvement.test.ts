@@ -27,6 +27,8 @@ import {
   checkPromptSize,
 } from '../../src/modules/self-improvement';
 
+const TEST_WORKSPACE_ID = 'W_TEST_123';
+
 // ══════════════════════════════════════════════════
 //  detectCritique
 // ══════════════════════════════════════════════════
@@ -286,18 +288,18 @@ describe('applyPromptDiff', () => {
       { version: 2, changed_by: 'user-1', created_at: '2025-01-02' },
     ]);
 
-    const result = await applyPromptDiff('agent-1', 'New prompt', 'Bug fix', 'user-1');
+    const result = await applyPromptDiff(TEST_WORKSPACE_ID, 'agent-1', 'New prompt', 'Bug fix', 'user-1');
 
     expect(result.agent).toEqual(updatedAgent);
     expect(result.version).toBe(3);
-    expect(mockUpdateAgent).toHaveBeenCalledWith('agent-1', { system_prompt: 'New prompt' }, 'user-1');
+    expect(mockUpdateAgent).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 'agent-1', { system_prompt: 'New prompt' }, 'user-1');
   });
 
   it('should default to version 1 when no versions exist', async () => {
     mockUpdateAgent.mockResolvedValueOnce({ id: 'agent-1' });
     mockGetAgentVersions.mockResolvedValueOnce([]);
 
-    const result = await applyPromptDiff('agent-1', 'Prompt', 'Initial', 'user-1');
+    const result = await applyPromptDiff(TEST_WORKSPACE_ID, 'agent-1', 'Prompt', 'Initial', 'user-1');
 
     expect(result.version).toBe(1);
   });
@@ -305,7 +307,7 @@ describe('applyPromptDiff', () => {
   it('should propagate updateAgent errors', async () => {
     mockUpdateAgent.mockRejectedValueOnce(new Error('DB error'));
 
-    await expect(applyPromptDiff('agent-1', 'New prompt', 'note', 'user-1'))
+    await expect(applyPromptDiff(TEST_WORKSPACE_ID, 'agent-1', 'New prompt', 'note', 'user-1'))
       .rejects.toThrow('DB error');
   });
 });
@@ -323,16 +325,16 @@ describe('revertToVersion', () => {
     const revertedAgent = { id: 'agent-1', system_prompt: 'Old prompt v2' };
     mockRevertAgent.mockResolvedValueOnce(revertedAgent);
 
-    const result = await revertToVersion('agent-1', 2, 'user-1');
+    const result = await revertToVersion(TEST_WORKSPACE_ID, 'agent-1', 2, 'user-1');
 
     expect(result).toEqual(revertedAgent);
-    expect(mockRevertAgent).toHaveBeenCalledWith('agent-1', 2, 'user-1');
+    expect(mockRevertAgent).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 'agent-1', 2, 'user-1');
   });
 
   it('should propagate errors from revertAgent', async () => {
     mockRevertAgent.mockRejectedValueOnce(new Error('Version not found'));
 
-    await expect(revertToVersion('agent-1', 99, 'user-1'))
+    await expect(revertToVersion(TEST_WORKSPACE_ID, 'agent-1', 99, 'user-1'))
       .rejects.toThrow('Version not found');
   });
 });
@@ -352,7 +354,7 @@ describe('checkPromptSize', () => {
       system_prompt: 'Short prompt',
     });
 
-    const result = await checkPromptSize('agent-1');
+    const result = await checkPromptSize(TEST_WORKSPACE_ID, 'agent-1');
 
     expect(result.tokenCount).toBe(Math.ceil('Short prompt'.length / 4));
     expect(result.warning).toBe(false);
@@ -366,7 +368,7 @@ describe('checkPromptSize', () => {
       system_prompt: longPrompt,
     });
 
-    const result = await checkPromptSize('agent-1');
+    const result = await checkPromptSize(TEST_WORKSPACE_ID, 'agent-1');
 
     expect(result.tokenCount).toBe(Math.ceil(longPrompt.length / 4));
     expect(result.warning).toBe(true);
@@ -380,7 +382,7 @@ describe('checkPromptSize', () => {
       system_prompt: prompt,
     });
 
-    const result = await checkPromptSize('agent-1');
+    const result = await checkPromptSize(TEST_WORKSPACE_ID, 'agent-1');
 
     expect(result.tokenCount).toBe(4000);
     expect(result.warning).toBe(false);
@@ -389,14 +391,14 @@ describe('checkPromptSize', () => {
   it('should throw if agent not found', async () => {
     mockGetAgent.mockResolvedValueOnce(null);
 
-    await expect(checkPromptSize('nonexistent'))
+    await expect(checkPromptSize(TEST_WORKSPACE_ID, 'nonexistent'))
       .rejects.toThrow('Agent nonexistent not found');
   });
 
   it('should propagate getAgent errors', async () => {
     mockGetAgent.mockRejectedValueOnce(new Error('DB unavailable'));
 
-    await expect(checkPromptSize('agent-1'))
+    await expect(checkPromptSize(TEST_WORKSPACE_ID, 'agent-1'))
       .rejects.toThrow('DB unavailable');
   });
 });

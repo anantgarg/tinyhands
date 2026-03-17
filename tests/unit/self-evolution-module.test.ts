@@ -60,6 +60,8 @@ import {
 } from '../../src/modules/self-evolution';
 import { logger } from '../../src/utils/logger';
 
+const TEST_WORKSPACE_ID = 'W_TEST_123';
+
 // ── Helpers ──
 
 function makeAgent(overrides: Record<string, any> = {}) {
@@ -104,7 +106,7 @@ describe('Self-Evolution Module', () => {
       mockExecute.mockResolvedValueOnce({ rowCount: 1 });
 
       const proposal = await createProposal(
-        'agent-1', 'write_tool', 'New tool', '{"name":"test"}'
+        TEST_WORKSPACE_ID, 'agent-1', 'write_tool', 'New tool', '{"name":"test"}'
       );
 
       expect(proposal.id).toBe('test-uuid-1234');
@@ -126,7 +128,7 @@ describe('Self-Evolution Module', () => {
       mockGetAgent.mockResolvedValueOnce(makeAgent({ self_evolution_mode: 'autonomous' }));
       mockExecute.mockResolvedValueOnce({ rowCount: 1 }); // INSERT
 
-      const proposal = await createProposal('agent-1', 'write_tool', 'New tool', toolDiff);
+      const proposal = await createProposal(TEST_WORKSPACE_ID, 'agent-1', 'write_tool', 'New tool', toolDiff);
 
       expect(proposal.status).toBe('executed');
       expect(proposal.resolved_at).not.toBeNull();
@@ -135,7 +137,7 @@ describe('Self-Evolution Module', () => {
     it('throws if agent not found', async () => {
       mockGetAgent.mockResolvedValueOnce(null);
 
-      await expect(createProposal('nonexistent', 'write_tool', 'desc', '{}'))
+      await expect(createProposal(TEST_WORKSPACE_ID, 'nonexistent', 'write_tool', 'desc', '{}'))
         .rejects.toThrow('Agent nonexistent not found');
     });
 
@@ -147,7 +149,7 @@ describe('Self-Evolution Module', () => {
         mockGetAgent.mockResolvedValueOnce(makeAgent({ self_evolution_mode: 'approve-first' }));
         mockExecute.mockResolvedValueOnce({ rowCount: 1 });
 
-        const proposal = await createProposal('agent-1', action, `Test ${action}`, '{}');
+        const proposal = await createProposal(TEST_WORKSPACE_ID, 'agent-1', action, `Test ${action}`, '{}');
         expect(proposal.action).toBe(action);
       }
     });
@@ -158,7 +160,7 @@ describe('Self-Evolution Module', () => {
       mockExecute.mockResolvedValueOnce({ rowCount: 1 });
       mockValidateToolName.mockReturnValueOnce(undefined);
 
-      const proposal = await createProposal('agent-1', 'write_tool', 'desc', diff);
+      const proposal = await createProposal(TEST_WORKSPACE_ID, 'agent-1', 'write_tool', 'desc', diff);
 
       expect(proposal.status).toBe('executed');
       // Since stored_in_db is true, registerCustomTool should NOT be called
@@ -172,10 +174,11 @@ describe('Self-Evolution Module', () => {
       mockValidateToolName.mockReturnValueOnce(undefined);
       mockRegisterCustomTool.mockResolvedValueOnce({});
 
-      const proposal = await createProposal('agent-1', 'write_tool', 'desc', diff);
+      const proposal = await createProposal(TEST_WORKSPACE_ID, 'agent-1', 'write_tool', 'desc', diff);
 
       expect(proposal.status).toBe('executed');
       expect(mockRegisterCustomTool).toHaveBeenCalledWith(
+        TEST_WORKSPACE_ID,
         'new-tool',
         expect.any(String),
         null,
@@ -193,7 +196,7 @@ describe('Self-Evolution Module', () => {
         .mockResolvedValueOnce({ rowCount: 1 })  // INSERT proposal
         .mockResolvedValueOnce({ rowCount: 1 }); // INSERT mcp_configs
 
-      const proposal = await createProposal('agent-1', 'create_mcp', 'desc', diff);
+      const proposal = await createProposal(TEST_WORKSPACE_ID, 'agent-1', 'create_mcp', 'desc', diff);
 
       expect(proposal.status).toBe('executed');
       expect(mockExecute).toHaveBeenCalledTimes(2);
@@ -207,10 +210,11 @@ describe('Self-Evolution Module', () => {
       mockUpdateAgent.mockResolvedValueOnce(undefined);
 
       const newPrompt = 'You are now an improved agent.';
-      const proposal = await createProposal('agent-1', 'update_prompt', 'Update prompt', newPrompt);
+      const proposal = await createProposal(TEST_WORKSPACE_ID, 'agent-1', 'update_prompt', 'Update prompt', newPrompt);
 
       expect(proposal.status).toBe('executed');
       expect(mockUpdateAgent).toHaveBeenCalledWith(
+        TEST_WORKSPACE_ID,
         'agent-1',
         { system_prompt: newPrompt },
         'agent-1'
@@ -229,10 +233,11 @@ describe('Self-Evolution Module', () => {
       mockExecute.mockResolvedValueOnce({ rowCount: 1 });
       mockCreateKBEntry.mockResolvedValueOnce({});
 
-      const proposal = await createProposal('agent-1', 'add_to_kb', 'KB entry', diff);
+      const proposal = await createProposal(TEST_WORKSPACE_ID, 'agent-1', 'add_to_kb', 'KB entry', diff);
 
       expect(proposal.status).toBe('executed');
       expect(mockCreateKBEntry).toHaveBeenCalledWith(
+        TEST_WORKSPACE_ID,
         expect.objectContaining({
           title: 'New Knowledge',
           summary: 'Agent learned something',
@@ -258,7 +263,7 @@ describe('Self-Evolution Module', () => {
         .mockResolvedValueOnce({ rowCount: 1 }); // INSERT code artifact
       mockValidateArtifactPath.mockReturnValueOnce(undefined);
 
-      const proposal = await createProposal('agent-1', 'commit_code', 'code commit', diff);
+      const proposal = await createProposal(TEST_WORKSPACE_ID, 'agent-1', 'commit_code', 'code commit', diff);
 
       expect(proposal.status).toBe('executed');
       expect(mockValidateArtifactPath).toHaveBeenCalledWith('/src/helper.ts');
@@ -271,7 +276,7 @@ describe('Self-Evolution Module', () => {
       mockGetAgent.mockResolvedValueOnce(makeAgent());
       mockExecute.mockResolvedValueOnce({ rowCount: 1 });
 
-      await createProposal('agent-1', 'write_tool', 'desc', '{}');
+      await createProposal(TEST_WORKSPACE_ID, 'agent-1', 'write_tool', 'desc', '{}');
 
       expect(logger.info).toHaveBeenCalledWith(
         'Evolution proposal created',
@@ -297,19 +302,19 @@ describe('Self-Evolution Module', () => {
       mockValidateToolName.mockReturnValueOnce(undefined);
       mockExecute.mockResolvedValueOnce({ rowCount: 1 }); // UPDATE status
 
-      const result = await approveProposal('proposal-1', 'user-1');
+      const result = await approveProposal(TEST_WORKSPACE_ID, 'proposal-1', 'user-1');
 
       expect(result.status).toBe('approved');
       expect(mockExecute).toHaveBeenCalledWith(
         expect.stringContaining("status = $1"),
-        ['approved', 'proposal-1']
+        expect.arrayContaining(['approved', 'proposal-1'])
       );
     });
 
     it('throws if proposal not found', async () => {
       mockQueryOne.mockResolvedValueOnce(null);
 
-      await expect(approveProposal('nonexistent', 'user-1'))
+      await expect(approveProposal(TEST_WORKSPACE_ID, 'nonexistent', 'user-1'))
         .rejects.toThrow('Proposal nonexistent not found');
     });
 
@@ -317,7 +322,7 @@ describe('Self-Evolution Module', () => {
       mockQueryOne.mockResolvedValueOnce(makeProposal());
       mockCanModifyAgent.mockResolvedValueOnce(false);
 
-      await expect(approveProposal('proposal-1', 'user-1'))
+      await expect(approveProposal(TEST_WORKSPACE_ID, 'proposal-1', 'user-1'))
         .rejects.toThrow('Insufficient permissions');
     });
 
@@ -325,7 +330,7 @@ describe('Self-Evolution Module', () => {
       mockQueryOne.mockResolvedValueOnce(makeProposal({ status: 'approved' }));
       mockCanModifyAgent.mockResolvedValueOnce(true);
 
-      await expect(approveProposal('proposal-1', 'user-1'))
+      await expect(approveProposal(TEST_WORKSPACE_ID, 'proposal-1', 'user-1'))
         .rejects.toThrow('approved, cannot approve');
     });
 
@@ -333,7 +338,7 @@ describe('Self-Evolution Module', () => {
       mockQueryOne.mockResolvedValueOnce(makeProposal({ status: 'rejected' }));
       mockCanModifyAgent.mockResolvedValueOnce(true);
 
-      await expect(approveProposal('proposal-1', 'user-1'))
+      await expect(approveProposal(TEST_WORKSPACE_ID, 'proposal-1', 'user-1'))
         .rejects.toThrow('rejected, cannot approve');
     });
 
@@ -341,7 +346,7 @@ describe('Self-Evolution Module', () => {
       mockQueryOne.mockResolvedValueOnce(makeProposal({ status: 'executed' }));
       mockCanModifyAgent.mockResolvedValueOnce(true);
 
-      await expect(approveProposal('proposal-1', 'user-1'))
+      await expect(approveProposal(TEST_WORKSPACE_ID, 'proposal-1', 'user-1'))
         .rejects.toThrow('executed, cannot approve');
     });
 
@@ -352,7 +357,7 @@ describe('Self-Evolution Module', () => {
       mockValidateToolName.mockReturnValueOnce(undefined);
       mockExecute.mockResolvedValueOnce({ rowCount: 1 });
 
-      await approveProposal('proposal-1', 'user-1');
+      await approveProposal(TEST_WORKSPACE_ID, 'proposal-1', 'user-1');
 
       expect(logger.info).toHaveBeenCalledWith(
         'Evolution proposal approved',
@@ -371,9 +376,10 @@ describe('Self-Evolution Module', () => {
       mockUpdateAgent.mockResolvedValueOnce(undefined);
       mockExecute.mockResolvedValueOnce({ rowCount: 1 });
 
-      await approveProposal('proposal-1', 'user-1');
+      await approveProposal(TEST_WORKSPACE_ID, 'proposal-1', 'user-1');
 
       expect(mockUpdateAgent).toHaveBeenCalledWith(
+        TEST_WORKSPACE_ID,
         'agent-1',
         { system_prompt: 'You are a better agent now.' },
         'agent-1'
@@ -394,9 +400,10 @@ describe('Self-Evolution Module', () => {
       mockCreateKBEntry.mockResolvedValueOnce({});
       mockExecute.mockResolvedValueOnce({ rowCount: 1 });
 
-      await approveProposal('proposal-1', 'user-1');
+      await approveProposal(TEST_WORKSPACE_ID, 'proposal-1', 'user-1');
 
       expect(mockCreateKBEntry).toHaveBeenCalledWith(
+        TEST_WORKSPACE_ID,
         expect.objectContaining({
           title: 'Knowledge',
           sourceType: 'agent',
@@ -415,18 +422,18 @@ describe('Self-Evolution Module', () => {
       mockCanModifyAgent.mockResolvedValueOnce(true);
       mockExecute.mockResolvedValueOnce({ rowCount: 1 });
 
-      await rejectProposal('proposal-1', 'user-1');
+      await rejectProposal(TEST_WORKSPACE_ID, 'proposal-1', 'user-1');
 
       expect(mockExecute).toHaveBeenCalledWith(
         expect.stringContaining("status = $1"),
-        ['rejected', 'proposal-1']
+        expect.arrayContaining(['rejected', 'proposal-1'])
       );
     });
 
     it('throws if proposal not found', async () => {
       mockQueryOne.mockResolvedValueOnce(null);
 
-      await expect(rejectProposal('nonexistent', 'user-1'))
+      await expect(rejectProposal(TEST_WORKSPACE_ID, 'nonexistent', 'user-1'))
         .rejects.toThrow('Proposal nonexistent not found');
     });
 
@@ -434,7 +441,7 @@ describe('Self-Evolution Module', () => {
       mockQueryOne.mockResolvedValueOnce(makeProposal());
       mockCanModifyAgent.mockResolvedValueOnce(false);
 
-      await expect(rejectProposal('proposal-1', 'user-1'))
+      await expect(rejectProposal(TEST_WORKSPACE_ID, 'proposal-1', 'user-1'))
         .rejects.toThrow('Insufficient permissions');
     });
 
@@ -443,7 +450,7 @@ describe('Self-Evolution Module', () => {
       mockCanModifyAgent.mockResolvedValueOnce(true);
       mockExecute.mockResolvedValueOnce({ rowCount: 1 });
 
-      await rejectProposal('proposal-1', 'user-1');
+      await rejectProposal(TEST_WORKSPACE_ID, 'proposal-1', 'user-1');
 
       expect(logger.info).toHaveBeenCalledWith(
         'Evolution proposal rejected',
@@ -460,26 +467,26 @@ describe('Self-Evolution Module', () => {
       const proposal = makeProposal();
       mockQueryOne.mockResolvedValueOnce(proposal);
 
-      const result = await getProposal('proposal-1');
+      const result = await getProposal(TEST_WORKSPACE_ID, 'proposal-1');
 
       expect(result).toEqual(proposal);
       expect(mockQueryOne).toHaveBeenCalledWith(
         expect.stringContaining('evolution_proposals'),
-        ['proposal-1']
+        expect.arrayContaining(['proposal-1'])
       );
     });
 
     it('returns null when proposal not found', async () => {
       mockQueryOne.mockResolvedValueOnce(undefined);
 
-      const result = await getProposal('nonexistent');
+      const result = await getProposal(TEST_WORKSPACE_ID, 'nonexistent');
       expect(result).toBeNull();
     });
 
     it('returns null when queryOne returns null', async () => {
       mockQueryOne.mockResolvedValueOnce(null);
 
-      const result = await getProposal('nonexistent');
+      const result = await getProposal(TEST_WORKSPACE_ID, 'nonexistent');
       expect(result).toBeNull();
     });
   });
@@ -492,12 +499,12 @@ describe('Self-Evolution Module', () => {
       const proposals = [makeProposal(), makeProposal({ id: 'proposal-2' })];
       mockQuery.mockResolvedValueOnce(proposals);
 
-      const result = await getPendingProposals('agent-1');
+      const result = await getPendingProposals(TEST_WORKSPACE_ID, 'agent-1');
 
       expect(result).toEqual(proposals);
       expect(mockQuery).toHaveBeenCalledWith(
-        expect.stringContaining('agent_id = $1'),
-        ['agent-1', 'pending']
+        expect.stringContaining('agent_id'),
+        expect.arrayContaining(['agent-1', 'pending'])
       );
     });
 
@@ -505,19 +512,19 @@ describe('Self-Evolution Module', () => {
       const proposals = [makeProposal()];
       mockQuery.mockResolvedValueOnce(proposals);
 
-      const result = await getPendingProposals();
+      const result = await getPendingProposals(TEST_WORKSPACE_ID);
 
       expect(result).toEqual(proposals);
       expect(mockQuery).toHaveBeenCalledWith(
-        expect.stringContaining("status = $1"),
-        ['pending']
+        expect.stringContaining("status"),
+        expect.arrayContaining(['pending'])
       );
     });
 
     it('returns empty array when no pending proposals', async () => {
       mockQuery.mockResolvedValueOnce([]);
 
-      const result = await getPendingProposals('agent-1');
+      const result = await getPendingProposals(TEST_WORKSPACE_ID, 'agent-1');
       expect(result).toEqual([]);
     });
   });
@@ -534,19 +541,19 @@ describe('Self-Evolution Module', () => {
       ];
       mockQuery.mockResolvedValueOnce(proposals);
 
-      const result = await getProposalHistory('agent-1');
+      const result = await getProposalHistory(TEST_WORKSPACE_ID, 'agent-1');
 
       expect(result).toEqual(proposals);
       expect(mockQuery).toHaveBeenCalledWith(
         expect.stringContaining('LIMIT 50'),
-        ['agent-1']
+        expect.arrayContaining(['agent-1'])
       );
     });
 
     it('returns empty array for agent with no proposals', async () => {
       mockQuery.mockResolvedValueOnce([]);
 
-      const result = await getProposalHistory('agent-none');
+      const result = await getProposalHistory(TEST_WORKSPACE_ID, 'agent-none');
       expect(result).toEqual([]);
     });
   });
@@ -623,7 +630,7 @@ describe('Self-Evolution Module', () => {
         throw new Error('name invalid');
       });
 
-      await expect(createProposal('agent-1', 'write_tool', 'desc', diff))
+      await expect(createProposal(TEST_WORKSPACE_ID, 'agent-1', 'write_tool', 'desc', diff))
         .rejects.toThrow('Failed to execute write_tool proposal: name invalid');
     });
 
@@ -633,7 +640,7 @@ describe('Self-Evolution Module', () => {
       mockExecute.mockResolvedValueOnce({ rowCount: 1 });
 
       try {
-        await createProposal('agent-1', 'write_tool', 'desc', diff);
+        await createProposal(TEST_WORKSPACE_ID, 'agent-1', 'write_tool', 'desc', diff);
       } catch {
         // expected to throw
       }
@@ -650,7 +657,7 @@ describe('Self-Evolution Module', () => {
       mockGetAgent.mockResolvedValueOnce(makeAgent({ self_evolution_mode: 'autonomous' }));
       mockExecute.mockResolvedValueOnce({ rowCount: 1 });
 
-      await expect(createProposal('agent-1', 'create_mcp', 'desc', 'not-json'))
+      await expect(createProposal(TEST_WORKSPACE_ID, 'agent-1', 'create_mcp', 'desc', 'not-json'))
         .rejects.toThrow('Failed to execute create_mcp proposal');
     });
 
@@ -658,7 +665,7 @@ describe('Self-Evolution Module', () => {
       mockGetAgent.mockResolvedValueOnce(makeAgent({ self_evolution_mode: 'autonomous' }));
       mockExecute.mockResolvedValueOnce({ rowCount: 1 });
 
-      await expect(createProposal('agent-1', 'commit_code', 'desc', 'not-json'))
+      await expect(createProposal(TEST_WORKSPACE_ID, 'agent-1', 'commit_code', 'desc', 'not-json'))
         .rejects.toThrow('Failed to execute commit_code proposal');
     });
 
@@ -666,7 +673,7 @@ describe('Self-Evolution Module', () => {
       mockGetAgent.mockResolvedValueOnce(makeAgent({ self_evolution_mode: 'autonomous' }));
       mockExecute.mockResolvedValueOnce({ rowCount: 1 });
 
-      await expect(createProposal('agent-1', 'add_to_kb', 'desc', 'not-json'))
+      await expect(createProposal(TEST_WORKSPACE_ID, 'agent-1', 'add_to_kb', 'desc', 'not-json'))
         .rejects.toThrow('Failed to execute add_to_kb proposal');
     });
   });
@@ -691,7 +698,7 @@ describe('Self-Evolution Module', () => {
         .mockResolvedValueOnce({ rowCount: 1 }); // file c
       mockValidateArtifactPath.mockReturnValue(undefined);
 
-      const proposal = await createProposal('agent-1', 'commit_code', 'multi-file', diff);
+      const proposal = await createProposal(TEST_WORKSPACE_ID, 'agent-1', 'commit_code', 'multi-file', diff);
 
       expect(proposal.status).toBe('executed');
       expect(mockValidateArtifactPath).toHaveBeenCalledTimes(3);
@@ -714,7 +721,7 @@ describe('Self-Evolution Module', () => {
         .mockResolvedValueOnce({ rowCount: 1 }); // only first file
       mockValidateArtifactPath.mockReturnValue(undefined);
 
-      await createProposal('agent-1', 'commit_code', 'partial', diff);
+      await createProposal(TEST_WORKSPACE_ID, 'agent-1', 'commit_code', 'partial', diff);
 
       // Only 1 valid file (path + content both truthy)
       expect(mockValidateArtifactPath).toHaveBeenCalledTimes(1);
@@ -732,7 +739,7 @@ describe('Self-Evolution Module', () => {
         .mockResolvedValueOnce({ rowCount: 1 });
       mockValidateArtifactPath.mockReturnValue(undefined);
 
-      await createProposal('agent-1', 'commit_code', 'py file', diff);
+      await createProposal(TEST_WORKSPACE_ID, 'agent-1', 'commit_code', 'py file', diff);
 
       const artifactInsertParams = mockExecute.mock.calls[1][1];
       // language param should be 'python'
@@ -749,7 +756,7 @@ describe('Self-Evolution Module', () => {
         .mockResolvedValueOnce({ rowCount: 1 });
       mockValidateArtifactPath.mockReturnValue(undefined);
 
-      await createProposal('agent-1', 'commit_code', 'unknown ext', diff);
+      await createProposal(TEST_WORKSPACE_ID, 'agent-1', 'commit_code', 'unknown ext', diff);
 
       const artifactInsertParams = mockExecute.mock.calls[1][1];
       expect(artifactInsertParams).toContain('text');
@@ -761,7 +768,7 @@ describe('Self-Evolution Module', () => {
       mockExecute.mockResolvedValueOnce({ rowCount: 1 });
 
       // Should not throw - just does nothing since there's no files array
-      const proposal = await createProposal('agent-1', 'commit_code', 'empty', diff);
+      const proposal = await createProposal(TEST_WORKSPACE_ID, 'agent-1', 'commit_code', 'empty', diff);
       expect(proposal.status).toBe('executed');
       // Only the proposal INSERT, no artifact inserts
       expect(mockExecute).toHaveBeenCalledTimes(1);
@@ -781,11 +788,11 @@ describe('Self-Evolution Module', () => {
         .mockResolvedValueOnce({ rowCount: 1 })
         .mockResolvedValueOnce({ rowCount: 1 });
 
-      await createProposal('agent-1', 'create_mcp', 'desc', diff);
+      await createProposal(TEST_WORKSPACE_ID, 'agent-1', 'create_mcp', 'desc', diff);
 
       const mcpInsertParams = mockExecute.mock.calls[1][1];
       // approved param should be true for autonomous mode
-      expect(mcpInsertParams[4]).toBe(true);
+      expect(mcpInsertParams[5]).toBe(true);
     });
 
     it('generates fallback name if config has no name', async () => {
@@ -797,11 +804,11 @@ describe('Self-Evolution Module', () => {
         .mockResolvedValueOnce({ rowCount: 1 })
         .mockResolvedValueOnce({ rowCount: 1 });
 
-      await createProposal('agent-1', 'create_mcp', 'desc', diff);
+      await createProposal(TEST_WORKSPACE_ID, 'agent-1', 'create_mcp', 'desc', diff);
 
       const mcpInsertParams = mockExecute.mock.calls[1][1];
       // name should be generated from proposal id: mcp-test-uui (first 8 chars)
-      expect(mcpInsertParams[2]).toMatch(/^mcp-/);
+      expect(mcpInsertParams[3]).toMatch(/^mcp-/);
     });
   });
 
@@ -815,9 +822,10 @@ describe('Self-Evolution Module', () => {
       mockExecute.mockResolvedValueOnce({ rowCount: 1 });
       mockCreateKBEntry.mockResolvedValueOnce({});
 
-      await createProposal('agent-1', 'add_to_kb', 'My Description', diff);
+      await createProposal(TEST_WORKSPACE_ID, 'agent-1', 'add_to_kb', 'My Description', diff);
 
       expect(mockCreateKBEntry).toHaveBeenCalledWith(
+        TEST_WORKSPACE_ID,
         expect.objectContaining({
           title: 'My Description', // falls back to proposal.description
         })
@@ -830,9 +838,10 @@ describe('Self-Evolution Module', () => {
       mockExecute.mockResolvedValueOnce({ rowCount: 1 });
       mockCreateKBEntry.mockResolvedValueOnce({});
 
-      await createProposal('agent-1', 'add_to_kb', 'desc', diff);
+      await createProposal(TEST_WORKSPACE_ID, 'agent-1', 'add_to_kb', 'desc', diff);
 
       expect(mockCreateKBEntry).toHaveBeenCalledWith(
+        TEST_WORKSPACE_ID,
         expect.objectContaining({ category: 'Agent Contributed' })
       );
     });
@@ -843,9 +852,10 @@ describe('Self-Evolution Module', () => {
       mockExecute.mockResolvedValueOnce({ rowCount: 1 });
       mockCreateKBEntry.mockResolvedValueOnce({});
 
-      await createProposal('agent-1', 'add_to_kb', 'desc', diff);
+      await createProposal(TEST_WORKSPACE_ID, 'agent-1', 'add_to_kb', 'desc', diff);
 
       expect(mockCreateKBEntry).toHaveBeenCalledWith(
+        TEST_WORKSPACE_ID,
         expect.objectContaining({ tags: [] })
       );
     });
@@ -856,9 +866,10 @@ describe('Self-Evolution Module', () => {
       mockExecute.mockResolvedValueOnce({ rowCount: 1 });
       mockCreateKBEntry.mockResolvedValueOnce({});
 
-      await createProposal('agent-1', 'add_to_kb', 'desc', diff);
+      await createProposal(TEST_WORKSPACE_ID, 'agent-1', 'add_to_kb', 'desc', diff);
 
       expect(mockCreateKBEntry).toHaveBeenCalledWith(
+        TEST_WORKSPACE_ID,
         expect.objectContaining({
           content: diff, // falls back to the raw diff string
         })

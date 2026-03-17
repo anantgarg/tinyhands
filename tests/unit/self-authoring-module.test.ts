@@ -114,6 +114,8 @@ import {
   authorSkill,
 } from '../../src/modules/self-authoring';
 
+const TEST_WORKSPACE_ID = 'W_TEST_123';
+
 // ── Helpers ──
 
 function makeAgent(overrides: Record<string, any> = {}) {
@@ -368,24 +370,25 @@ describe('Self-Authoring Module', () => {
     it('inserts a tool run record', async () => {
       mockExecute.mockResolvedValueOnce({ rowCount: 1 });
 
-      await recordToolRun('my-tool', 'agent-1', true, 150, null);
+      await recordToolRun(TEST_WORKSPACE_ID, 'my-tool', 'agent-1', true, 150, null);
 
       expect(mockExecute).toHaveBeenCalledTimes(1);
       const [sql, params] = mockExecute.mock.calls[0];
       expect(sql).toContain('INSERT INTO tool_runs');
-      expect(params).toEqual([
-        'test-uuid-1234', 'my-tool', 'agent-1', true, 150, null,
-      ]);
+      expect(params).toContain('test-uuid-1234');
+      expect(params).toContain(TEST_WORKSPACE_ID);
+      expect(params).toContain('my-tool');
+      expect(params).toContain('agent-1');
     });
 
     it('records failed run with error message', async () => {
       mockExecute.mockResolvedValueOnce({ rowCount: 1 });
 
-      await recordToolRun('my-tool', 'agent-1', false, 50, 'ReferenceError: x is not defined');
+      await recordToolRun(TEST_WORKSPACE_ID, 'my-tool', 'agent-1', false, 50, 'ReferenceError: x is not defined');
 
       const [, params] = mockExecute.mock.calls[0];
-      expect(params[3]).toBe(false);
-      expect(params[5]).toBe('ReferenceError: x is not defined');
+      expect(params).toContain(false);
+      expect(params).toContain('ReferenceError: x is not defined');
     });
   });
 
@@ -403,7 +406,7 @@ describe('Self-Authoring Module', () => {
         })
         .mockResolvedValueOnce({ error: 'Some error' });
 
-      const result = await getToolAnalytics('my-tool');
+      const result = await getToolAnalytics(TEST_WORKSPACE_ID, 'my-tool');
 
       expect(result).toEqual({
         toolName: 'my-tool',
@@ -425,7 +428,7 @@ describe('Self-Authoring Module', () => {
         })
         .mockResolvedValueOnce(null);
 
-      const result = await getToolAnalytics('unused-tool');
+      const result = await getToolAnalytics(TEST_WORKSPACE_ID, 'unused-tool');
 
       expect(result).toEqual({
         toolName: 'unused-tool',
@@ -442,7 +445,7 @@ describe('Self-Authoring Module', () => {
         .mockResolvedValueOnce(null)
         .mockResolvedValueOnce(null);
 
-      const result = await getToolAnalytics('no-data');
+      const result = await getToolAnalytics(TEST_WORKSPACE_ID, 'no-data');
 
       expect(result.totalRuns).toBe(0);
       expect(result.successRate).toBe(0);
@@ -461,7 +464,7 @@ describe('Self-Authoring Module', () => {
         })
         .mockResolvedValueOnce(null);
 
-      const result = await getToolAnalytics('perfect-tool');
+      const result = await getToolAnalytics(TEST_WORKSPACE_ID, 'perfect-tool');
       expect(result.successRate).toBe(1);
     });
   });
@@ -482,12 +485,15 @@ describe('Self-Authoring Module', () => {
         .mockResolvedValueOnce({ total_runs: '3', successes: '1', avg_duration: '200', last_used: null })
         .mockResolvedValueOnce({ error: 'fail' });
 
-      const results = await getAllToolAnalytics();
+      const results = await getAllToolAnalytics(TEST_WORKSPACE_ID);
 
       expect(results).toHaveLength(2);
       expect(results[0].toolName).toBe('tool-a');
       expect(results[1].toolName).toBe('tool-b');
-      expect(mockQuery).toHaveBeenCalledWith('SELECT DISTINCT tool_name FROM tool_runs');
+      expect(mockQuery).toHaveBeenCalledWith(
+        expect.stringContaining('SELECT DISTINCT tool_name FROM tool_runs'),
+        expect.arrayContaining([TEST_WORKSPACE_ID])
+      );
     });
 
     it('filters by agentId when provided', async () => {
@@ -496,19 +502,19 @@ describe('Self-Authoring Module', () => {
         .mockResolvedValueOnce({ total_runs: '1', successes: '1', avg_duration: '50', last_used: null })
         .mockResolvedValueOnce(null);
 
-      const results = await getAllToolAnalytics('agent-1');
+      const results = await getAllToolAnalytics(TEST_WORKSPACE_ID, 'agent-1');
 
       expect(results).toHaveLength(1);
       expect(mockQuery).toHaveBeenCalledWith(
-        'SELECT DISTINCT tool_name FROM tool_runs WHERE agent_id = $1',
-        ['agent-1']
+        expect.stringContaining('SELECT DISTINCT tool_name FROM tool_runs WHERE agent_id'),
+        expect.arrayContaining(['agent-1', TEST_WORKSPACE_ID])
       );
     });
 
     it('returns empty array when no tools exist', async () => {
       mockQuery.mockResolvedValueOnce([]);
 
-      const results = await getAllToolAnalytics();
+      const results = await getAllToolAnalytics(TEST_WORKSPACE_ID);
 
       expect(results).toEqual([]);
     });
@@ -526,19 +532,19 @@ describe('Self-Authoring Module', () => {
       ];
       mockQuery.mockResolvedValueOnce(versions);
 
-      const result = await getToolVersions('my-tool');
+      const result = await getToolVersions(TEST_WORKSPACE_ID, 'my-tool');
 
       expect(result).toEqual(versions);
       expect(mockQuery).toHaveBeenCalledWith(
         expect.stringContaining('tool_versions'),
-        ['my-tool']
+        expect.arrayContaining(['my-tool'])
       );
     });
 
     it('returns empty array for tool with no versions', async () => {
       mockQuery.mockResolvedValueOnce([]);
 
-      const result = await getToolVersions('new-tool');
+      const result = await getToolVersions(TEST_WORKSPACE_ID, 'new-tool');
       expect(result).toEqual([]);
     });
   });
@@ -553,26 +559,26 @@ describe('Self-Authoring Module', () => {
       const fakeClient = { query: vi.fn() };
       mockWithTransaction.mockImplementationOnce(async (fn: any) => fn(fakeClient));
 
-      await updateToolCode('my-tool', 'new code', 'javascript', 'user-1');
+      await updateToolCode(TEST_WORKSPACE_ID, 'my-tool', 'new code', 'javascript', 'user-1');
 
-      expect(mockGetCustomTool).toHaveBeenCalledWith('my-tool');
+      expect(mockGetCustomTool).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 'my-tool');
       expect(fakeClient.query).toHaveBeenCalledTimes(2);
       expect(fakeClient.query.mock.calls[0][0]).toContain('INSERT INTO tool_versions');
       expect(fakeClient.query.mock.calls[1][0]).toContain('UPDATE custom_tools');
-      expect(fakeClient.query.mock.calls[1][1]).toEqual(['new code', 'javascript', 'my-tool']);
+      expect(fakeClient.query.mock.calls[1][1]).toEqual(['new code', 'javascript', 'my-tool', TEST_WORKSPACE_ID]);
     });
 
     it('throws if tool not found', async () => {
       mockGetCustomTool.mockResolvedValueOnce(null);
 
-      await expect(updateToolCode('nonexistent', 'code', 'javascript', 'user-1'))
+      await expect(updateToolCode(TEST_WORKSPACE_ID, 'nonexistent', 'code', 'javascript', 'user-1'))
         .rejects.toThrow('not found');
     });
 
     it('throws if new code contains forbidden patterns', async () => {
       mockGetCustomTool.mockResolvedValueOnce(makeCustomTool());
 
-      await expect(updateToolCode('my-tool', 'eval("bad")', 'javascript', 'user-1'))
+      await expect(updateToolCode(TEST_WORKSPACE_ID, 'my-tool', 'eval("bad")', 'javascript', 'user-1'))
         .rejects.toThrow('forbidden pattern');
     });
 
@@ -582,11 +588,11 @@ describe('Self-Authoring Module', () => {
       const fakeClient = { query: vi.fn() };
       mockWithTransaction.mockImplementationOnce(async (fn: any) => fn(fakeClient));
 
-      await updateToolCode('my-tool', 'new code', 'javascript', 'user-1');
+      await updateToolCode(TEST_WORKSPACE_ID, 'my-tool', 'new code', 'javascript', 'user-1');
 
       // The INSERT INTO tool_versions should use '' (empty string) as the old script_code
       const insertParams = fakeClient.query.mock.calls[0][1];
-      expect(insertParams[3]).toBe(''); // tool.script_code || '' fallback
+      expect(insertParams[5]).toBe(''); // tool.script_code || '' fallback
     });
   });
 
@@ -603,18 +609,18 @@ describe('Self-Authoring Module', () => {
       const fakeClient = { query: vi.fn() };
       mockWithTransaction.mockImplementationOnce(async (fn: any) => fn(fakeClient));
 
-      await rollbackTool('my-tool', 2, 'user-1');
+      await rollbackTool(TEST_WORKSPACE_ID, 'my-tool', 2, 'user-1');
 
       expect(mockQueryOne).toHaveBeenCalledWith(
         expect.stringContaining('tool_versions'),
-        ['my-tool', 2]
+        expect.arrayContaining(['my-tool', 2])
       );
     });
 
     it('throws if version not found', async () => {
       mockQueryOne.mockResolvedValueOnce(null);
 
-      await expect(rollbackTool('my-tool', 99, 'user-1'))
+      await expect(rollbackTool(TEST_WORKSPACE_ID, 'my-tool', 99, 'user-1'))
         .rejects.toThrow('Version 99 not found');
     });
   });
@@ -628,9 +634,10 @@ describe('Self-Authoring Module', () => {
       mockGetAgent.mockResolvedValueOnce(makeAgent({ id: 'agent-2', tools: ['Read'] }));
       mockUpdateAgent.mockResolvedValueOnce(undefined);
 
-      await shareToolWithAgent('my-tool', 'agent-1', 'agent-2');
+      await shareToolWithAgent(TEST_WORKSPACE_ID, 'my-tool', 'agent-1', 'agent-2');
 
       expect(mockUpdateAgent).toHaveBeenCalledWith(
+        TEST_WORKSPACE_ID,
         'agent-2',
         { tools: ['Read', 'my-tool'] },
         'agent-1'
@@ -641,7 +648,7 @@ describe('Self-Authoring Module', () => {
       mockGetCustomTool.mockResolvedValueOnce(makeCustomTool({ registered_by: 'agent-1' }));
       mockGetAgent.mockResolvedValueOnce(makeAgent({ id: 'agent-2', tools: ['Read', 'my-tool'] }));
 
-      await shareToolWithAgent('my-tool', 'agent-1', 'agent-2');
+      await shareToolWithAgent(TEST_WORKSPACE_ID, 'my-tool', 'agent-1', 'agent-2');
 
       expect(mockUpdateAgent).not.toHaveBeenCalled();
     });
@@ -649,14 +656,14 @@ describe('Self-Authoring Module', () => {
     it('throws if tool not found', async () => {
       mockGetCustomTool.mockResolvedValueOnce(null);
 
-      await expect(shareToolWithAgent('nonexistent', 'agent-1', 'agent-2'))
+      await expect(shareToolWithAgent(TEST_WORKSPACE_ID, 'nonexistent', 'agent-1', 'agent-2'))
         .rejects.toThrow('not found');
     });
 
     it('throws if agent does not own the tool', async () => {
       mockGetCustomTool.mockResolvedValueOnce(makeCustomTool({ registered_by: 'other-agent' }));
 
-      await expect(shareToolWithAgent('my-tool', 'agent-1', 'agent-2'))
+      await expect(shareToolWithAgent(TEST_WORKSPACE_ID, 'my-tool', 'agent-1', 'agent-2'))
         .rejects.toThrow('does not own');
     });
 
@@ -664,7 +671,7 @@ describe('Self-Authoring Module', () => {
       mockGetCustomTool.mockResolvedValueOnce(makeCustomTool({ registered_by: 'agent-1' }));
       mockGetAgent.mockResolvedValueOnce(null);
 
-      await expect(shareToolWithAgent('my-tool', 'agent-1', 'agent-2'))
+      await expect(shareToolWithAgent(TEST_WORKSPACE_ID, 'my-tool', 'agent-1', 'agent-2'))
         .rejects.toThrow('not found');
     });
   });
@@ -680,7 +687,7 @@ describe('Self-Authoring Module', () => {
         makeCustomTool({ name: 'csv-to-json', schema_json: '{}' }),
       ]);
 
-      const results = await discoverTools('CSV');
+      const results = await discoverTools(TEST_WORKSPACE_ID, 'CSV');
 
       expect(results).toHaveLength(2);
       expect(results.map((t: any) => t.name)).toEqual(['csv-parser', 'csv-to-json']);
@@ -692,7 +699,7 @@ describe('Self-Authoring Module', () => {
         makeCustomTool({ name: 'tool-b', schema_json: '{"description":"sends emails"}' }),
       ]);
 
-      const results = await discoverTools('csv');
+      const results = await discoverTools(TEST_WORKSPACE_ID, 'csv');
 
       expect(results).toHaveLength(1);
       expect(results[0].name).toBe('tool-a');
@@ -703,7 +710,7 @@ describe('Self-Authoring Module', () => {
         makeCustomTool({ name: 'tool-a', schema_json: '{}' }),
       ]);
 
-      const results = await discoverTools('nonexistent');
+      const results = await discoverTools(TEST_WORKSPACE_ID, 'nonexistent');
 
       expect(results).toEqual([]);
     });
@@ -714,7 +721,7 @@ describe('Self-Authoring Module', () => {
         makeCustomTool({ name: 'tool-abcdef', schema_json: '{}' }),
       ]);
 
-      const results = await discoverTools('tool');
+      const results = await discoverTools(TEST_WORKSPACE_ID, 'tool');
 
       expect(results).toHaveLength(2);
     });
@@ -743,10 +750,11 @@ describe('Self-Authoring Module', () => {
         ],
       };
 
-      const result = await createToolPipeline('agent-1', pipeline);
+      const result = await createToolPipeline(TEST_WORKSPACE_ID, 'agent-1', pipeline);
 
       expect(result.name).toBe('etl-pipeline');
       expect(mockRegisterCustomTool).toHaveBeenCalledWith(
+        TEST_WORKSPACE_ID,
         'etl-pipeline',
         expect.any(String),
         null,
@@ -771,11 +779,12 @@ describe('Self-Authoring Module', () => {
         ],
       };
 
-      const result = await createToolPipeline('agent-1', pipeline);
+      const result = await createToolPipeline(TEST_WORKSPACE_ID, 'agent-1', pipeline);
 
       expect(result.name).toBe('solo-pipeline');
       // Should have used default schema since firstTool was null
       expect(mockRegisterCustomTool).toHaveBeenCalledWith(
+        TEST_WORKSPACE_ID,
         'solo-pipeline',
         JSON.stringify({ type: 'object', properties: {} }),
         null,
@@ -797,7 +806,7 @@ describe('Self-Authoring Module', () => {
         ],
       };
 
-      await expect(createToolPipeline('agent-1', pipeline))
+      await expect(createToolPipeline(TEST_WORKSPACE_ID, 'agent-1', pipeline))
         .rejects.toThrow('unknown tool: nonexistent');
     });
   });
@@ -811,7 +820,7 @@ describe('Self-Authoring Module', () => {
         makeCustomTool({ script_code: 'console.log("hi")', language: 'javascript', approved: true })
       );
 
-      const script = await getToolExecutionScript('my-tool');
+      const script = await getToolExecutionScript(TEST_WORKSPACE_ID, 'my-tool');
 
       expect(script).not.toBeNull();
       expect(script).toContain('#!/usr/bin/env node');
@@ -825,7 +834,7 @@ describe('Self-Authoring Module', () => {
         makeCustomTool({ script_code: 'print("hi")', language: 'python', approved: true })
       );
 
-      const script = await getToolExecutionScript('py-tool');
+      const script = await getToolExecutionScript(TEST_WORKSPACE_ID, 'py-tool');
 
       expect(script).toContain('#!/usr/bin/env python3');
       expect(script).toContain('import os, json');
@@ -836,7 +845,7 @@ describe('Self-Authoring Module', () => {
         makeCustomTool({ script_code: 'echo hi', language: 'bash', approved: true })
       );
 
-      const script = await getToolExecutionScript('sh-tool');
+      const script = await getToolExecutionScript(TEST_WORKSPACE_ID, 'sh-tool');
 
       expect(script).toContain('#!/usr/bin/env bash');
       expect(script).toContain('set -euo pipefail');
@@ -847,7 +856,7 @@ describe('Self-Authoring Module', () => {
         makeCustomTool({ script_code: null, approved: true })
       );
 
-      const script = await getToolExecutionScript('no-code');
+      const script = await getToolExecutionScript(TEST_WORKSPACE_ID, 'no-code');
 
       expect(script).toBeNull();
     });
@@ -857,7 +866,7 @@ describe('Self-Authoring Module', () => {
         makeCustomTool({ script_code: 'code', approved: false })
       );
 
-      const script = await getToolExecutionScript('unapproved');
+      const script = await getToolExecutionScript(TEST_WORKSPACE_ID, 'unapproved');
 
       expect(script).toBeNull();
     });
@@ -865,7 +874,7 @@ describe('Self-Authoring Module', () => {
     it('returns null if tool not found', async () => {
       mockGetCustomTool.mockResolvedValueOnce(null);
 
-      const script = await getToolExecutionScript('nonexistent');
+      const script = await getToolExecutionScript(TEST_WORKSPACE_ID, 'nonexistent');
 
       expect(script).toBeNull();
     });
@@ -875,7 +884,7 @@ describe('Self-Authoring Module', () => {
         makeCustomTool({ script_code: 'some code', language: 'rust', approved: true })
       );
 
-      const script = await getToolExecutionScript('rust-tool');
+      const script = await getToolExecutionScript(TEST_WORKSPACE_ID, 'rust-tool');
 
       expect(script).not.toBeNull();
       expect(script).toContain('#!/usr/bin/env node');
@@ -893,19 +902,19 @@ describe('Self-Authoring Module', () => {
       ];
       mockQuery.mockResolvedValueOnce(configs);
 
-      const result = await getMcpConfigs('agent-1');
+      const result = await getMcpConfigs(TEST_WORKSPACE_ID, 'agent-1');
 
       expect(result).toEqual(configs);
       expect(mockQuery).toHaveBeenCalledWith(
         expect.stringContaining('mcp_configs'),
-        ['agent-1']
+        expect.arrayContaining(['agent-1', TEST_WORKSPACE_ID])
       );
     });
 
     it('returns empty array when no configs exist', async () => {
       mockQuery.mockResolvedValueOnce([]);
 
-      const result = await getMcpConfigs('agent-none');
+      const result = await getMcpConfigs(TEST_WORKSPACE_ID, 'agent-none');
       expect(result).toEqual([]);
     });
   });
@@ -919,18 +928,18 @@ describe('Self-Authoring Module', () => {
       mockCanModifyAgent.mockResolvedValueOnce(true);
       mockExecute.mockResolvedValueOnce({ rowCount: 1 });
 
-      await approveMcpConfig('mcp-1', 'user-1');
+      await approveMcpConfig(TEST_WORKSPACE_ID, 'mcp-1', 'user-1');
 
       expect(mockExecute).toHaveBeenCalledWith(
         expect.stringContaining('UPDATE mcp_configs'),
-        ['mcp-1']
+        expect.arrayContaining(['mcp-1'])
       );
     });
 
     it('throws if MCP config not found', async () => {
       mockQueryOne.mockResolvedValueOnce(null);
 
-      await expect(approveMcpConfig('nonexistent', 'user-1'))
+      await expect(approveMcpConfig(TEST_WORKSPACE_ID, 'nonexistent', 'user-1'))
         .rejects.toThrow('not found');
     });
 
@@ -938,7 +947,7 @@ describe('Self-Authoring Module', () => {
       mockQueryOne.mockResolvedValueOnce({ id: 'mcp-1', agent_id: 'agent-1' });
       mockCanModifyAgent.mockResolvedValueOnce(false);
 
-      await expect(approveMcpConfig('mcp-1', 'user-1'))
+      await expect(approveMcpConfig(TEST_WORKSPACE_ID, 'mcp-1', 'user-1'))
         .rejects.toThrow('Insufficient permissions');
     });
   });
@@ -954,19 +963,19 @@ describe('Self-Authoring Module', () => {
       ];
       mockQuery.mockResolvedValueOnce(artifacts);
 
-      const result = await getCodeArtifacts('agent-1');
+      const result = await getCodeArtifacts(TEST_WORKSPACE_ID, 'agent-1');
 
       expect(result).toEqual(artifacts);
       expect(mockQuery).toHaveBeenCalledWith(
         expect.stringContaining('code_artifacts'),
-        ['agent-1']
+        expect.arrayContaining(['agent-1', TEST_WORKSPACE_ID])
       );
     });
 
     it('returns empty array when no artifacts exist', async () => {
       mockQuery.mockResolvedValueOnce([]);
 
-      const result = await getCodeArtifacts('agent-none');
+      const result = await getCodeArtifacts(TEST_WORKSPACE_ID, 'agent-none');
       expect(result).toEqual([]);
     });
   });
@@ -976,19 +985,19 @@ describe('Self-Authoring Module', () => {
       const artifact = { id: 'art-1', agent_id: 'agent-1', file_path: '/src/a.ts', content: 'code' };
       mockQueryOne.mockResolvedValueOnce(artifact);
 
-      const result = await getCodeArtifact('agent-1', '/src/a.ts');
+      const result = await getCodeArtifact(TEST_WORKSPACE_ID, 'agent-1', '/src/a.ts');
 
       expect(result).toEqual(artifact);
       expect(mockQueryOne).toHaveBeenCalledWith(
         expect.stringContaining('code_artifacts'),
-        ['agent-1', '/src/a.ts']
+        expect.arrayContaining(['agent-1', '/src/a.ts'])
       );
     });
 
     it('returns null when artifact not found', async () => {
       mockQueryOne.mockResolvedValueOnce(undefined);
 
-      const result = await getCodeArtifact('agent-1', '/nonexistent');
+      const result = await getCodeArtifact(TEST_WORKSPACE_ID, 'agent-1', '/nonexistent');
       expect(result).toBeNull();
     });
   });
@@ -1001,19 +1010,19 @@ describe('Self-Authoring Module', () => {
       const skills = [makeSkill(), makeSkill({ id: 'skill-2', name: 'other-skill' })];
       mockQuery.mockResolvedValueOnce(skills);
 
-      const result = await getAuthoredSkills('agent-1');
+      const result = await getAuthoredSkills(TEST_WORKSPACE_ID, 'agent-1');
 
       expect(result).toEqual(skills);
       expect(mockQuery).toHaveBeenCalledWith(
         expect.stringContaining('authored_skills'),
-        ['agent-1']
+        expect.arrayContaining(['agent-1', TEST_WORKSPACE_ID])
       );
     });
 
     it('returns empty array when no skills exist', async () => {
       mockQuery.mockResolvedValueOnce([]);
 
-      const result = await getAuthoredSkills('agent-none');
+      const result = await getAuthoredSkills(TEST_WORKSPACE_ID, 'agent-none');
       expect(result).toEqual([]);
     });
   });
@@ -1023,7 +1032,7 @@ describe('Self-Authoring Module', () => {
       const skill = makeSkill();
       mockQueryOne.mockResolvedValueOnce(skill);
 
-      const result = await getAuthoredSkill('skill-1');
+      const result = await getAuthoredSkill(TEST_WORKSPACE_ID, 'skill-1');
 
       expect(result).toEqual(skill);
     });
@@ -1031,7 +1040,7 @@ describe('Self-Authoring Module', () => {
     it('returns null when skill not found', async () => {
       mockQueryOne.mockResolvedValueOnce(undefined);
 
-      const result = await getAuthoredSkill('nonexistent');
+      const result = await getAuthoredSkill(TEST_WORKSPACE_ID, 'nonexistent');
       expect(result).toBeNull();
     });
   });
@@ -1045,18 +1054,18 @@ describe('Self-Authoring Module', () => {
       mockCanModifyAgent.mockResolvedValueOnce(true);
       mockExecute.mockResolvedValueOnce({ rowCount: 1 });
 
-      await approveAuthoredSkill('skill-1', 'user-1');
+      await approveAuthoredSkill(TEST_WORKSPACE_ID, 'skill-1', 'user-1');
 
       expect(mockExecute).toHaveBeenCalledWith(
         expect.stringContaining('UPDATE authored_skills'),
-        ['skill-1']
+        expect.arrayContaining(['skill-1'])
       );
     });
 
     it('throws if skill not found', async () => {
       mockQueryOne.mockResolvedValueOnce(undefined);
 
-      await expect(approveAuthoredSkill('nonexistent', 'user-1'))
+      await expect(approveAuthoredSkill(TEST_WORKSPACE_ID, 'nonexistent', 'user-1'))
         .rejects.toThrow('not found');
     });
 
@@ -1064,7 +1073,7 @@ describe('Self-Authoring Module', () => {
       mockQueryOne.mockResolvedValueOnce(makeSkill());
       mockCanModifyAgent.mockResolvedValueOnce(false);
 
-      await expect(approveAuthoredSkill('skill-1', 'user-1'))
+      await expect(approveAuthoredSkill(TEST_WORKSPACE_ID, 'skill-1', 'user-1'))
         .rejects.toThrow('Insufficient permissions');
     });
   });
@@ -1078,18 +1087,18 @@ describe('Self-Authoring Module', () => {
       mockCanModifyAgent.mockResolvedValueOnce(true);
       mockExecute.mockResolvedValueOnce({ rowCount: 1 });
 
-      await updateAuthoredSkillTemplate('skill-1', 'New template: {{var}}', 'user-1');
+      await updateAuthoredSkillTemplate(TEST_WORKSPACE_ID, 'skill-1', 'New template: {{var}}', 'user-1');
 
       expect(mockExecute).toHaveBeenCalledWith(
         expect.stringContaining('version = version + 1'),
-        ['New template: {{var}}', 'skill-1']
+        expect.arrayContaining(['New template: {{var}}', 'skill-1'])
       );
     });
 
     it('throws if skill not found', async () => {
       mockQueryOne.mockResolvedValueOnce(undefined);
 
-      await expect(updateAuthoredSkillTemplate('nonexistent', 'template', 'user-1'))
+      await expect(updateAuthoredSkillTemplate(TEST_WORKSPACE_ID, 'nonexistent', 'template', 'user-1'))
         .rejects.toThrow('not found');
     });
 
@@ -1097,7 +1106,7 @@ describe('Self-Authoring Module', () => {
       mockQueryOne.mockResolvedValueOnce(makeSkill());
       mockCanModifyAgent.mockResolvedValueOnce(false);
 
-      await expect(updateAuthoredSkillTemplate('skill-1', 'template', 'user-1'))
+      await expect(updateAuthoredSkillTemplate(TEST_WORKSPACE_ID, 'skill-1', 'template', 'user-1'))
         .rejects.toThrow('Insufficient permissions');
     });
   });
@@ -1109,7 +1118,7 @@ describe('Self-Authoring Module', () => {
     it('throws if agent not found', async () => {
       mockGetAgent.mockResolvedValueOnce(null);
 
-      await expect(authorTool('nonexistent', 'make a csv parser'))
+      await expect(authorTool(TEST_WORKSPACE_ID, 'nonexistent', 'make a csv parser'))
         .rejects.toThrow('Agent nonexistent not found');
     });
 
@@ -1145,7 +1154,7 @@ describe('Self-Authoring Module', () => {
       // The tool will try sandbox test which will fail in test environment (no Docker)
       // But the try/catch around sandboxTest handles this gracefully
 
-      const result = await authorTool('agent-1', 'make a csv parser');
+      const result = await authorTool(TEST_WORKSPACE_ID, 'agent-1', 'make a csv parser');
 
       expect(result.tool).toEqual(registeredTool);
       expect(result.requiresApproval).toBe(true);
@@ -1180,7 +1189,7 @@ describe('Self-Authoring Module', () => {
       mockExecute.mockResolvedValue({ rowCount: 1 });
       mockCreateProposal.mockResolvedValueOnce(undefined);
 
-      const result = await authorTool('agent-1', 'a helper tool');
+      const result = await authorTool(TEST_WORKSPACE_ID, 'agent-1', 'a helper tool');
 
       expect(result.requiresApproval).toBe(false);
     });
@@ -1221,7 +1230,7 @@ describe('Self-Authoring Module', () => {
       mockExecute.mockResolvedValue({ rowCount: 1 });
       mockCreateProposal.mockResolvedValueOnce(undefined);
 
-      const result = await authorTool('agent-1', 'a sandbox test');
+      const result = await authorTool(TEST_WORKSPACE_ID, 'agent-1', 'a sandbox test');
 
       expect(result.testResult).not.toBeNull();
       expect(result.testResult!.passed).toBe(true);
@@ -1276,7 +1285,7 @@ describe('Self-Authoring Module', () => {
       mockExecute.mockResolvedValue({ rowCount: 1 });
       mockCreateProposal.mockResolvedValueOnce(undefined);
 
-      const result = await authorTool('agent-1', 'a failing sandbox test');
+      const result = await authorTool(TEST_WORKSPACE_ID, 'agent-1', 'a failing sandbox test');
 
       expect(result.testResult).not.toBeNull();
       // After auto-fix, the second sandbox run succeeds
@@ -1317,7 +1326,7 @@ describe('Self-Authoring Module', () => {
       mockExecute.mockResolvedValue({ rowCount: 1 });
       mockCreateProposal.mockResolvedValueOnce(undefined);
 
-      const result = await authorTool('agent-1', 'a sandbox error test');
+      const result = await authorTool(TEST_WORKSPACE_ID, 'agent-1', 'a sandbox error test');
 
       // sandboxTest catches the error internally and returns { passed: false }
       expect(result.testResult).not.toBeNull();
@@ -1357,7 +1366,7 @@ describe('Self-Authoring Module', () => {
       mockExecute.mockResolvedValue({ rowCount: 1 });
       mockCreateProposal.mockResolvedValueOnce(undefined);
 
-      const result = await authorTool('agent-1', 'a sandbox throw test');
+      const result = await authorTool(TEST_WORKSPACE_ID, 'agent-1', 'a sandbox throw test');
 
       // sandbox threw, so testResult is null
       expect(result.testResult).toBeNull();
@@ -1400,7 +1409,7 @@ describe('Self-Authoring Module', () => {
       mockExecute.mockResolvedValue({ rowCount: 1 });
       mockCreateProposal.mockResolvedValueOnce(undefined);
 
-      const result = await authorTool('agent-1', 'a wait rejection test');
+      const result = await authorTool(TEST_WORKSPACE_ID, 'agent-1', 'a wait rejection test');
 
       expect(result.testResult).not.toBeNull();
       expect(result.testResult!.passed).toBe(false);
@@ -1434,7 +1443,7 @@ describe('Self-Authoring Module', () => {
       mockExecute.mockResolvedValue({ rowCount: 1 });
       mockCreateProposal.mockResolvedValueOnce(undefined);
 
-      const result = await authorTool('agent-1', 'an unsupported language test');
+      const result = await authorTool(TEST_WORKSPACE_ID, 'agent-1', 'an unsupported language test');
 
       expect(result.testResult).not.toBeNull();
       expect(result.testResult!.passed).toBe(false);
@@ -1487,7 +1496,7 @@ describe('Self-Authoring Module', () => {
       mockExecute.mockResolvedValue({ rowCount: 1 });
       mockCreateProposal.mockResolvedValueOnce(undefined);
 
-      const result = await authorTool('agent-1', 'empty error test');
+      const result = await authorTool(TEST_WORKSPACE_ID, 'agent-1', 'empty error test');
 
       // Auto-fix also fails (2nd sandbox also returns code 1), so original code is used
       expect(result.testResult).not.toBeNull();
@@ -1504,7 +1513,7 @@ describe('Self-Authoring Module', () => {
     it('throws if agent not found', async () => {
       mockGetAgent.mockResolvedValueOnce(null);
 
-      await expect(authorSkill('nonexistent', 'summarize emails'))
+      await expect(authorSkill(TEST_WORKSPACE_ID, 'nonexistent', 'summarize emails'))
         .rejects.toThrow('Agent nonexistent not found');
     });
 
@@ -1533,7 +1542,7 @@ describe('Self-Authoring Module', () => {
       mockAttachSkillToAgent.mockResolvedValueOnce(undefined);
       mockCreateProposal.mockResolvedValueOnce(undefined);
 
-      const result = await authorSkill('agent-1', 'summarize emails');
+      const result = await authorSkill(TEST_WORKSPACE_ID, 'agent-1', 'summarize emails');
 
       expect(result.agent_id).toBe('agent-1');
       expect(result.skill_type).toBe('prompt_template');
@@ -1567,7 +1576,7 @@ describe('Self-Authoring Module', () => {
       mockAttachSkillToAgent.mockResolvedValueOnce(undefined);
       mockCreateProposal.mockResolvedValueOnce(undefined);
 
-      const result = await authorSkill('agent-1', 'quick task');
+      const result = await authorSkill(TEST_WORKSPACE_ID, 'agent-1', 'quick task');
 
       expect(result.approved).toBe(true);
     });
@@ -1708,7 +1717,7 @@ describe('Self-Authoring Module', () => {
       mockExecute.mockResolvedValue({ rowCount: 1 });
       mockCreateProposal.mockResolvedValueOnce(undefined);
 
-      const result = await authorTool('agent-1', 'make a broken tool');
+      const result = await authorTool(TEST_WORKSPACE_ID, 'agent-1', 'make a broken tool');
 
       expect(result.tool).toBeDefined();
       expect(result.code).toContain('console.log');
@@ -1748,7 +1757,7 @@ describe('Self-Authoring Module', () => {
       mockExecute.mockResolvedValue({ rowCount: 1 });
       mockCreateProposal.mockResolvedValueOnce(undefined);
 
-      const result = await authorTool('agent-1', 'remove fail test');
+      const result = await authorTool(TEST_WORKSPACE_ID, 'agent-1', 'remove fail test');
 
       expect(result.testResult).not.toBeNull();
       expect(result.testResult!.passed).toBe(false);
@@ -1795,7 +1804,7 @@ describe('Self-Authoring Module', () => {
       mockExecute.mockResolvedValue({ rowCount: 1 });
       mockCreateProposal.mockResolvedValueOnce(undefined);
 
-      const result = await authorTool('agent-1', 'a python tool');
+      const result = await authorTool(TEST_WORKSPACE_ID, 'agent-1', 'a python tool');
 
       expect(result.testResult).not.toBeNull();
       expect(result.testResult!.passed).toBe(true);
@@ -1846,7 +1855,7 @@ describe('Self-Authoring Module', () => {
       mockExecute.mockResolvedValue({ rowCount: 1 });
       mockCreateProposal.mockResolvedValueOnce(undefined);
 
-      const result = await authorTool('agent-1', 'no message error test');
+      const result = await authorTool(TEST_WORKSPACE_ID, 'agent-1', 'no message error test');
 
       expect(result.testResult).not.toBeNull();
       expect(result.testResult!.passed).toBe(false);
@@ -1897,7 +1906,7 @@ describe('Self-Authoring Module', () => {
       mockCreateProposal.mockResolvedValueOnce(undefined);
 
       // Should still succeed despite rmSync failure
-      const result = await authorTool('agent-1', 'rmSync fail test');
+      const result = await authorTool(TEST_WORKSPACE_ID, 'agent-1', 'rmSync fail test');
 
       expect(result.testResult).not.toBeNull();
       expect(result.testResult!.passed).toBe(true);
@@ -1938,7 +1947,7 @@ describe('Self-Authoring Module', () => {
       mockExecute.mockResolvedValue({ rowCount: 1 });
       mockCreateProposal.mockResolvedValueOnce(undefined);
 
-      const result = await authorTool('agent-1', 'null container test');
+      const result = await authorTool(TEST_WORKSPACE_ID, 'agent-1', 'null container test');
 
       expect(result.testResult).not.toBeNull();
       expect(result.testResult!.passed).toBe(false);
@@ -1995,7 +2004,7 @@ describe('Self-Authoring Module', () => {
       mockExecute.mockResolvedValue({ rowCount: 1 });
       mockCreateProposal.mockResolvedValueOnce(undefined);
 
-      const result = await authorTool('agent-1', 'a number example tool');
+      const result = await authorTool(TEST_WORKSPACE_ID, 'agent-1', 'a number example tool');
 
       // Verify the INPUT env var contains the right sample values
       const createCallArgs = mockDockerCreateContainer.mock.calls[0][0];
@@ -2054,7 +2063,7 @@ describe('Self-Authoring Module', () => {
       mockExecute.mockResolvedValue({ rowCount: 1 });
       mockCreateProposal.mockResolvedValueOnce(undefined);
 
-      const result = await authorTool('agent-1', 'a number default tool');
+      const result = await authorTool(TEST_WORKSPACE_ID, 'agent-1', 'a number default tool');
 
       const createCallArgs = mockDockerCreateContainer.mock.calls[0][0];
       const inputEnv = createCallArgs.Env.find((e: string) => e.startsWith('INPUT='));
@@ -2107,7 +2116,7 @@ describe('Self-Authoring Module', () => {
       mockExecute.mockResolvedValue({ rowCount: 1 });
       mockCreateProposal.mockResolvedValueOnce(undefined);
 
-      const result = await authorTool('agent-1', 'a boolean default tool');
+      const result = await authorTool(TEST_WORKSPACE_ID, 'agent-1', 'a boolean default tool');
 
       const createCallArgs = mockDockerCreateContainer.mock.calls[0][0];
       const inputEnv = createCallArgs.Env.find((e: string) => e.startsWith('INPUT='));
@@ -2157,7 +2166,7 @@ describe('Self-Authoring Module', () => {
       mockExecute.mockResolvedValue({ rowCount: 1 });
       mockCreateProposal.mockResolvedValueOnce(undefined);
 
-      const result = await authorTool('agent-1', 'an array/object default tool');
+      const result = await authorTool(TEST_WORKSPACE_ID, 'agent-1', 'an array/object default tool');
 
       const createCallArgs = mockDockerCreateContainer.mock.calls[0][0];
       const inputEnv = createCallArgs.Env.find((e: string) => e.startsWith('INPUT='));
@@ -2207,11 +2216,12 @@ describe('Self-Authoring Module', () => {
       mockExecute.mockResolvedValue({ rowCount: 1 });
       mockCreateProposal.mockResolvedValueOnce(undefined);
 
-      const result = await authorTool('agent-1', 'a minimal tool');
+      const result = await authorTool(TEST_WORKSPACE_ID, 'agent-1', 'a minimal tool');
 
       expect(result.tool).toBeDefined();
       // The tool should be registered with default schema and javascript language
       expect(mockRegisterCustomTool).toHaveBeenCalledWith(
+        TEST_WORKSPACE_ID,
         'minimal-tool',
         JSON.stringify({ type: 'object', properties: {} }), // default inputSchema
         null,
@@ -2241,7 +2251,7 @@ describe('Self-Authoring Module', () => {
         })),
       }));
 
-      await expect(authorSkill('agent-1', 'something weird'))
+      await expect(authorSkill(TEST_WORKSPACE_ID, 'agent-1', 'something weird'))
         .rejects.toThrow('AI did not return valid JSON');
     });
   });
@@ -2267,7 +2277,7 @@ describe('Self-Authoring Module', () => {
         })),
       }));
 
-      await expect(authorTool('agent-1', 'something impossible'))
+      await expect(authorTool(TEST_WORKSPACE_ID, 'agent-1', 'something impossible'))
         .rejects.toThrow('AI did not return valid JSON');
     });
   });

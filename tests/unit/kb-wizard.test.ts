@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
+const TEST_WORKSPACE_ID = 'W_TEST_123';
+
 // ── Mocks ──
 
 const mockCreateKBEntry = vi.fn();
@@ -394,7 +396,7 @@ describe('KB Wizard', () => {
   describe('completeWizard', () => {
     it('should throw if no suggestions are set', async () => {
       const state = makeWizardState({ suggestions: null });
-      await expect(completeWizard(state)).rejects.toThrow('Cannot complete wizard without suggestions');
+      await expect(completeWizard(TEST_WORKSPACE_ID, state)).rejects.toThrow('Cannot complete wizard without suggestions');
     });
 
     it('should call createKBEntry with correct params', async () => {
@@ -410,9 +412,9 @@ describe('KB Wizard', () => {
       const entry = makeKBEntry({ title: 'Final Title' });
       mockCreateKBEntry.mockResolvedValue(entry);
 
-      const result = await completeWizard(state);
+      const result = await completeWizard(TEST_WORKSPACE_ID, state);
 
-      expect(mockCreateKBEntry).toHaveBeenCalledWith({
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(TEST_WORKSPACE_ID, {
         title: 'Final Title',
         summary: 'Test summary.',
         content: 'Full article content',
@@ -437,9 +439,9 @@ describe('KB Wizard', () => {
       });
 
       mockCreateKBEntry.mockResolvedValue(makeKBEntry());
-      await completeWizard(state);
+      await completeWizard(TEST_WORKSPACE_ID, state);
 
-      const call = mockCreateKBEntry.mock.calls[0][0];
+      const call = mockCreateKBEntry.mock.calls[0][1];
       expect(call.title).toBe('Override Title');
       expect(call.category).toBe('Engineering');
     });
@@ -450,8 +452,8 @@ describe('KB Wizard', () => {
         sourceType: 'manual',
       });
       mockCreateKBEntry.mockResolvedValue(makeKBEntry());
-      await completeWizard(state);
-      expect(mockCreateKBEntry.mock.calls[0][0].approved).toBe(true);
+      await completeWizard(TEST_WORKSPACE_ID, state);
+      expect(mockCreateKBEntry.mock.calls[0][1].approved).toBe(true);
     });
 
     it('should set approved=false for non-manual source types', async () => {
@@ -460,8 +462,8 @@ describe('KB Wizard', () => {
         sourceType: 'agent',
       });
       mockCreateKBEntry.mockResolvedValue(makeKBEntry({ approved: false }));
-      await completeWizard(state);
-      expect(mockCreateKBEntry.mock.calls[0][0].approved).toBe(false);
+      await completeWizard(TEST_WORKSPACE_ID, state);
+      expect(mockCreateKBEntry.mock.calls[0][1].approved).toBe(false);
     });
 
     it('should pass contributedBy as undefined when null', async () => {
@@ -470,8 +472,8 @@ describe('KB Wizard', () => {
         contributedBy: null,
       });
       mockCreateKBEntry.mockResolvedValue(makeKBEntry());
-      await completeWizard(state);
-      expect(mockCreateKBEntry.mock.calls[0][0].contributedBy).toBeUndefined();
+      await completeWizard(TEST_WORKSPACE_ID, state);
+      expect(mockCreateKBEntry.mock.calls[0][1].contributedBy).toBeUndefined();
     });
   });
 
@@ -483,9 +485,9 @@ describe('KB Wizard', () => {
       const entry = makeKBEntry({ source_type: 'agent', approved: false });
       mockCreateKBEntry.mockResolvedValue(entry);
 
-      const result = await createAgentContribution('agent-1', 'Agent content', suggestions);
+      const result = await createAgentContribution(TEST_WORKSPACE_ID, 'agent-1', 'Agent content', suggestions);
 
-      expect(mockCreateKBEntry).toHaveBeenCalledWith({
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(TEST_WORKSPACE_ID, {
         title: 'Agent Insight',
         summary: 'Test summary.',
         content: 'Agent content',
@@ -501,8 +503,8 @@ describe('KB Wizard', () => {
 
     it('should always set approved to false', async () => {
       mockCreateKBEntry.mockResolvedValue(makeKBEntry());
-      await createAgentContribution('a1', 'content', makeSuggestions());
-      expect(mockCreateKBEntry.mock.calls[0][0].approved).toBe(false);
+      await createAgentContribution(TEST_WORKSPACE_ID, 'a1', 'content', makeSuggestions());
+      expect(mockCreateKBEntry.mock.calls[0][1].approved).toBe(false);
     });
   });
 
@@ -513,15 +515,15 @@ describe('KB Wizard', () => {
       const entry = makeKBEntry({ approved: true });
       mockApproveKBEntry.mockResolvedValue(entry);
 
-      const result = await approveContribution('entry-1');
+      const result = await approveContribution(TEST_WORKSPACE_ID, 'entry-1');
 
-      expect(mockApproveKBEntry).toHaveBeenCalledWith('entry-1');
+      expect(mockApproveKBEntry).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 'entry-1');
       expect(result).toEqual(entry);
     });
 
     it('should propagate errors from approveKBEntry', async () => {
       mockApproveKBEntry.mockRejectedValue(new Error('Entry not found'));
-      await expect(approveContribution('bad-id')).rejects.toThrow('Entry not found');
+      await expect(approveContribution(TEST_WORKSPACE_ID, 'bad-id')).rejects.toThrow('Entry not found');
     });
   });
 });

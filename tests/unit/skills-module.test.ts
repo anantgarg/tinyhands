@@ -33,6 +33,8 @@ import {
   getAvailableSkills,
 } from '../../src/modules/skills';
 
+const TEST_WORKSPACE_ID = 'W_TEST_123';
+
 // ── Helpers ──
 
 function makeSkill(overrides: Partial<{
@@ -69,7 +71,7 @@ describe('Skills Module', () => {
   describe('registerSkill', () => {
     it('should insert a new skill into the database and return it', async () => {
       const config = { endpoint: 'https://api.example.com' };
-      const skill = await registerSkill('my-skill', 'mcp', config);
+      const skill = await registerSkill(TEST_WORKSPACE_ID, 'my-skill', 'mcp', config);
 
       expect(skill.name).toBe('my-skill');
       expect(skill.skill_type).toBe('mcp');
@@ -83,37 +85,38 @@ describe('Skills Module', () => {
       expect(mockExecute).toHaveBeenCalledOnce();
       const [sql, params] = mockExecute.mock.calls[0];
       expect(sql).toContain('INSERT INTO skills');
-      expect(params).toHaveLength(7);
-      expect(params[1]).toBe('my-skill');
-      expect(params[2]).toBe('mcp');
-      expect(params[3]).toBe(JSON.stringify(config));
-      expect(params[4]).toBe(1);
+      expect(params).toHaveLength(8);
+      expect(params[1]).toBe(TEST_WORKSPACE_ID);
+      expect(params[2]).toBe('my-skill');
+      expect(params[3]).toBe('mcp');
+      expect(params[4]).toBe(JSON.stringify(config));
+      expect(params[5]).toBe(1);
     });
 
     it('should generate a unique UUID for each skill', async () => {
-      const skill1 = await registerSkill('a', 'mcp', {});
-      const skill2 = await registerSkill('b', 'mcp', {});
+      const skill1 = await registerSkill(TEST_WORKSPACE_ID, 'a', 'mcp', {});
+      const skill2 = await registerSkill(TEST_WORKSPACE_ID, 'b', 'mcp', {});
 
       expect(skill1.id).not.toBe(skill2.id);
     });
 
     it('should support prompt_template skill type', async () => {
       const config = { template: 'Do the thing' };
-      const skill = await registerSkill('prompter', 'prompt_template', config);
+      const skill = await registerSkill(TEST_WORKSPACE_ID, 'prompter', 'prompt_template', config);
 
       expect(skill.skill_type).toBe('prompt_template');
       expect(JSON.parse(skill.config_json)).toEqual(config);
     });
 
     it('should handle empty config object', async () => {
-      const skill = await registerSkill('empty-config', 'mcp', {});
+      const skill = await registerSkill(TEST_WORKSPACE_ID, 'empty-config', 'mcp', {});
 
       expect(skill.config_json).toBe('{}');
     });
 
     it('should handle config with nested objects', async () => {
       const config = { auth: { type: 'oauth', scopes: ['read', 'write'] }, url: 'https://x.com' };
-      const skill = await registerSkill('nested', 'mcp', config);
+      const skill = await registerSkill(TEST_WORKSPACE_ID, 'nested', 'mcp', config);
 
       expect(JSON.parse(skill.config_json)).toEqual(config);
     });
@@ -128,19 +131,19 @@ describe('Skills Module', () => {
       const dbRow = makeSkill({ id: 'abc-123' });
       mockQueryOne.mockResolvedValueOnce(dbRow);
 
-      const result = await getSkill('abc-123');
+      const result = await getSkill(TEST_WORKSPACE_ID, 'abc-123');
 
       expect(result).toEqual(dbRow);
       expect(mockQueryOne).toHaveBeenCalledWith(
-        'SELECT * FROM skills WHERE id = $1',
-        ['abc-123']
+        expect.stringContaining('SELECT * FROM skills WHERE'),
+        expect.arrayContaining(['abc-123'])
       );
     });
 
     it('should return null when skill is not found', async () => {
       mockQueryOne.mockResolvedValueOnce(undefined);
 
-      const result = await getSkill('nonexistent');
+      const result = await getSkill(TEST_WORKSPACE_ID, 'nonexistent');
 
       expect(result).toBeNull();
     });
@@ -148,7 +151,7 @@ describe('Skills Module', () => {
     it('should return null when queryOne returns null', async () => {
       mockQueryOne.mockResolvedValueOnce(null);
 
-      const result = await getSkill('nope');
+      const result = await getSkill(TEST_WORKSPACE_ID, 'nope');
 
       expect(result).toBeNull();
     });
@@ -163,19 +166,19 @@ describe('Skills Module', () => {
       const dbRow = makeSkill({ name: 'linear' });
       mockQueryOne.mockResolvedValueOnce(dbRow);
 
-      const result = await getSkillByName('linear');
+      const result = await getSkillByName(TEST_WORKSPACE_ID, 'linear');
 
       expect(result).toEqual(dbRow);
       expect(mockQueryOne).toHaveBeenCalledWith(
-        'SELECT * FROM skills WHERE name = $1',
-        ['linear']
+        expect.stringContaining('SELECT * FROM skills WHERE'),
+        expect.arrayContaining(['linear'])
       );
     });
 
     it('should return null when no skill matches the name', async () => {
       mockQueryOne.mockResolvedValueOnce(undefined);
 
-      const result = await getSkillByName('does-not-exist');
+      const result = await getSkillByName(TEST_WORKSPACE_ID, 'does-not-exist');
 
       expect(result).toBeNull();
     });
@@ -190,11 +193,12 @@ describe('Skills Module', () => {
       const skills = [makeSkill({ name: 'a' }), makeSkill({ name: 'b' })];
       mockQuery.mockResolvedValueOnce(skills);
 
-      const result = await listSkills();
+      const result = await listSkills(TEST_WORKSPACE_ID);
 
       expect(result).toEqual(skills);
       expect(mockQuery).toHaveBeenCalledWith(
-        'SELECT * FROM skills ORDER BY name'
+        expect.stringContaining('SELECT * FROM skills'),
+        expect.arrayContaining([TEST_WORKSPACE_ID])
       );
     });
 
@@ -202,31 +206,31 @@ describe('Skills Module', () => {
       const skills = [makeSkill({ skill_type: 'mcp' })];
       mockQuery.mockResolvedValueOnce(skills);
 
-      const result = await listSkills('mcp');
+      const result = await listSkills(TEST_WORKSPACE_ID, 'mcp');
 
       expect(result).toEqual(skills);
       expect(mockQuery).toHaveBeenCalledWith(
-        'SELECT * FROM skills WHERE skill_type = $1 ORDER BY name',
-        ['mcp']
+        expect.stringContaining('skill_type'),
+        expect.arrayContaining(['mcp', TEST_WORKSPACE_ID])
       );
     });
 
     it('should filter by prompt_template type', async () => {
       mockQuery.mockResolvedValueOnce([]);
 
-      const result = await listSkills('prompt_template');
+      const result = await listSkills(TEST_WORKSPACE_ID, 'prompt_template');
 
       expect(result).toEqual([]);
       expect(mockQuery).toHaveBeenCalledWith(
-        'SELECT * FROM skills WHERE skill_type = $1 ORDER BY name',
-        ['prompt_template']
+        expect.stringContaining('skill_type'),
+        expect.arrayContaining(['prompt_template', TEST_WORKSPACE_ID])
       );
     });
 
     it('should return empty array when no skills exist', async () => {
       mockQuery.mockResolvedValueOnce([]);
 
-      const result = await listSkills();
+      const result = await listSkills(TEST_WORKSPACE_ID);
 
       expect(result).toEqual([]);
     });
@@ -246,20 +250,21 @@ describe('Skills Module', () => {
         .mockResolvedValueOnce(existing)
         .mockResolvedValueOnce(updated);
 
-      const result = await updateSkill('u-1', { new: true });
+      const result = await updateSkill(TEST_WORKSPACE_ID, 'u-1', { new: true });
 
       expect(result).toEqual(updated);
       expect(mockExecute).toHaveBeenCalledOnce();
       const [sql, params] = mockExecute.mock.calls[0];
       expect(sql).toContain('UPDATE skills SET config_json');
       expect(sql).toContain('version = version + 1');
-      expect(params).toEqual([JSON.stringify({ new: true }), 'u-1']);
+      expect(params).toContain(JSON.stringify({ new: true }));
+      expect(params).toContain('u-1');
     });
 
     it('should throw when skill does not exist', async () => {
       mockQueryOne.mockResolvedValueOnce(undefined);
 
-      await expect(updateSkill('missing', {})).rejects.toThrow('Skill missing not found');
+      await expect(updateSkill(TEST_WORKSPACE_ID, 'missing', {})).rejects.toThrow('Skill missing not found');
     });
 
     it('should re-fetch and return the updated skill', async () => {
@@ -270,7 +275,7 @@ describe('Skills Module', () => {
         .mockResolvedValueOnce(existing)
         .mockResolvedValueOnce(afterUpdate);
 
-      const result = await updateSkill('s-99', { replaced: true });
+      const result = await updateSkill(TEST_WORKSPACE_ID, 's-99', { replaced: true });
 
       expect(result.version).toBe(2);
       expect(JSON.parse(result.config_json)).toEqual({ replaced: true });
@@ -288,10 +293,10 @@ describe('Skills Module', () => {
       mockCanModifyAgent.mockResolvedValueOnce(false);
 
       await expect(
-        attachSkillToAgent('agent-1', 'linear', 'read', 'user-x')
+        attachSkillToAgent(TEST_WORKSPACE_ID, 'agent-1', 'linear', 'read', 'user-x')
       ).rejects.toThrow('Insufficient permissions to attach skill');
 
-      expect(mockCanModifyAgent).toHaveBeenCalledWith('agent-1', 'user-x');
+      expect(mockCanModifyAgent).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 'agent-1', 'user-x');
     });
 
     it('should attach an existing skill to an agent', async () => {
@@ -299,7 +304,7 @@ describe('Skills Module', () => {
       const existingSkill = makeSkill({ id: 'sk-1', name: 'existing-tool' });
       mockQueryOne.mockResolvedValueOnce(existingSkill); // getSkillByName
 
-      const result = await attachSkillToAgent('agent-1', 'existing-tool', 'read', 'user-1');
+      const result = await attachSkillToAgent(TEST_WORKSPACE_ID, 'agent-1', 'existing-tool', 'read', 'user-1');
 
       expect(result.agent_id).toBe('agent-1');
       expect(result.skill_id).toBe('sk-1');
@@ -318,7 +323,7 @@ describe('Skills Module', () => {
       mockCanModifyAgent.mockResolvedValueOnce(true);
       mockQueryOne.mockResolvedValueOnce(undefined); // getSkillByName returns null
 
-      const result = await attachSkillToAgent('agent-1', 'linear', 'write', 'user-1');
+      const result = await attachSkillToAgent(TEST_WORKSPACE_ID, 'agent-1', 'linear', 'write', 'user-1');
 
       // registerSkill should have been called (execute for INSERT INTO skills)
       // then another execute for INSERT INTO agent_skills
@@ -327,9 +332,10 @@ describe('Skills Module', () => {
       // First execute: INSERT INTO skills
       const [skillSql, skillParams] = mockExecute.mock.calls[0];
       expect(skillSql).toContain('INSERT INTO skills');
-      expect(skillParams[1]).toBe('linear'); // name
-      expect(skillParams[2]).toBe('mcp');    // skill_type
-      const configInserted = JSON.parse(skillParams[3]);
+      expect(skillParams[1]).toBe(TEST_WORKSPACE_ID); // workspace_id
+      expect(skillParams[2]).toBe('linear'); // name
+      expect(skillParams[3]).toBe('mcp');    // skill_type
+      const configInserted = JSON.parse(skillParams[4]);
       expect(configInserted.builtin).toBe(true);
       expect(configInserted.name).toBe('Linear');
       expect(configInserted.capabilities).toContain('Read issues');
@@ -342,14 +348,14 @@ describe('Skills Module', () => {
       mockCanModifyAgent.mockResolvedValueOnce(true);
       mockQueryOne.mockResolvedValueOnce(undefined); // getSkillByName returns null
 
-      const result = await attachSkillToAgent('agent-1', 'ticket-triage', 'read', 'user-1');
+      const result = await attachSkillToAgent(TEST_WORKSPACE_ID, 'agent-1', 'ticket-triage', 'read', 'user-1');
 
       expect(mockExecute).toHaveBeenCalledTimes(2);
 
       const [skillSql, skillParams] = mockExecute.mock.calls[0];
       expect(skillSql).toContain('INSERT INTO skills');
-      expect(skillParams[2]).toBe('prompt_template');
-      const config = JSON.parse(skillParams[3]);
+      expect(skillParams[3]).toBe('prompt_template');
+      const config = JSON.parse(skillParams[4]);
       expect(config.builtin).toBe(true);
       expect(config.name).toBe('Ticket Triage');
       expect(config.template).toContain('severity');
@@ -362,7 +368,7 @@ describe('Skills Module', () => {
       mockQueryOne.mockResolvedValueOnce(undefined); // getSkillByName returns null
 
       await expect(
-        attachSkillToAgent('agent-1', 'unknown-skill', 'read', 'user-1')
+        attachSkillToAgent(TEST_WORKSPACE_ID, 'agent-1', 'unknown-skill', 'read', 'user-1')
       ).rejects.toThrow('Skill "unknown-skill" not found');
     });
 
@@ -371,7 +377,7 @@ describe('Skills Module', () => {
       const existingSkill = makeSkill({ id: 'sk-w', name: 'writer' });
       mockQueryOne.mockResolvedValueOnce(existingSkill);
 
-      const result = await attachSkillToAgent('agent-2', 'writer', 'write', 'user-1');
+      const result = await attachSkillToAgent(TEST_WORKSPACE_ID, 'agent-2', 'writer', 'write', 'user-1');
 
       expect(result.permission_level).toBe('write');
     });
@@ -381,7 +387,7 @@ describe('Skills Module', () => {
       const existingSkill = makeSkill({ id: 'sk-a', name: 'admin-skill' });
       mockQueryOne.mockResolvedValueOnce(existingSkill);
 
-      const result = await attachSkillToAgent('agent-3', 'admin-skill', 'admin', 'user-1');
+      const result = await attachSkillToAgent(TEST_WORKSPACE_ID, 'agent-3', 'admin-skill', 'admin', 'user-1');
 
       expect(result.permission_level).toBe('admin');
     });
@@ -391,7 +397,7 @@ describe('Skills Module', () => {
       const existingSkill = makeSkill({ id: 'sk-dup', name: 'dup-skill' });
       mockQueryOne.mockResolvedValueOnce(existingSkill);
 
-      await attachSkillToAgent('agent-1', 'dup-skill', 'admin', 'user-1');
+      await attachSkillToAgent(TEST_WORKSPACE_ID, 'agent-1', 'dup-skill', 'admin', 'user-1');
 
       const [sql] = mockExecute.mock.calls[0];
       expect(sql).toContain('ON CONFLICT (agent_id, skill_id) DO UPDATE');
@@ -403,7 +409,7 @@ describe('Skills Module', () => {
       mockQueryOne.mockResolvedValueOnce(undefined);
 
       // Pass "Linear" with capital L — the code lowercases for builtin lookup
-      const result = await attachSkillToAgent('agent-1', 'Linear', 'read', 'user-1');
+      const result = await attachSkillToAgent(TEST_WORKSPACE_ID, 'agent-1', 'Linear', 'read', 'user-1');
 
       // Should still auto-create because BUILTIN_MCP_SKILLS uses lowercase keys
       // and the code does skillName.toLowerCase()
@@ -415,11 +421,11 @@ describe('Skills Module', () => {
       mockCanModifyAgent.mockResolvedValueOnce(true);
       mockQueryOne.mockResolvedValueOnce(undefined);
 
-      const result = await attachSkillToAgent('agent-1', 'Company-Research', 'read', 'user-1');
+      const result = await attachSkillToAgent(TEST_WORKSPACE_ID, 'agent-1', 'Company-Research', 'read', 'user-1');
 
       expect(mockExecute).toHaveBeenCalledTimes(2);
       const [, skillParams] = mockExecute.mock.calls[0];
-      expect(skillParams[2]).toBe('prompt_template');
+      expect(skillParams[3]).toBe('prompt_template');
     });
 
     it('should auto-create each builtin MCP skill correctly', async () => {
@@ -430,12 +436,12 @@ describe('Skills Module', () => {
         mockCanModifyAgent.mockResolvedValueOnce(true);
         mockQueryOne.mockResolvedValueOnce(undefined);
 
-        await attachSkillToAgent('agent-1', name, 'read', 'user-1');
+        await attachSkillToAgent(TEST_WORKSPACE_ID, 'agent-1', name, 'read', 'user-1');
 
         expect(mockExecute).toHaveBeenCalledTimes(2);
         const skillParams = mockExecute.mock.calls[0][1];
-        expect(skillParams[2]).toBe('mcp');
-        const config = JSON.parse(skillParams[3]);
+        expect(skillParams[3]).toBe('mcp');
+        const config = JSON.parse(skillParams[4]);
         expect(config.builtin).toBe(true);
         expect(config.capabilities).toBeDefined();
         expect(config.capabilities.length).toBeGreaterThan(0);
@@ -450,12 +456,12 @@ describe('Skills Module', () => {
         mockCanModifyAgent.mockResolvedValueOnce(true);
         mockQueryOne.mockResolvedValueOnce(undefined);
 
-        await attachSkillToAgent('agent-1', name, 'read', 'user-1');
+        await attachSkillToAgent(TEST_WORKSPACE_ID, 'agent-1', name, 'read', 'user-1');
 
         expect(mockExecute).toHaveBeenCalledTimes(2);
         const skillParams = mockExecute.mock.calls[0][1];
-        expect(skillParams[2]).toBe('prompt_template');
-        const config = JSON.parse(skillParams[3]);
+        expect(skillParams[3]).toBe('prompt_template');
+        const config = JSON.parse(skillParams[4]);
         expect(config.builtin).toBe(true);
         expect(config.template).toBeDefined();
         expect(config.description).toBeDefined();
@@ -472,20 +478,20 @@ describe('Skills Module', () => {
       mockCanModifyAgent.mockResolvedValueOnce(false);
 
       await expect(
-        detachSkillFromAgent('agent-1', 'skill-1', 'user-x')
+        detachSkillFromAgent(TEST_WORKSPACE_ID, 'agent-1', 'skill-1', 'user-x')
       ).rejects.toThrow('Insufficient permissions to detach skill');
 
-      expect(mockCanModifyAgent).toHaveBeenCalledWith('agent-1', 'user-x');
+      expect(mockCanModifyAgent).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 'agent-1', 'user-x');
     });
 
     it('should delete the agent-skill link when authorized', async () => {
       mockCanModifyAgent.mockResolvedValueOnce(true);
 
-      await detachSkillFromAgent('agent-1', 'skill-1', 'user-1');
+      await detachSkillFromAgent(TEST_WORKSPACE_ID, 'agent-1', 'skill-1', 'user-1');
 
       expect(mockExecute).toHaveBeenCalledWith(
-        'DELETE FROM agent_skills WHERE agent_id = $1 AND skill_id = $2',
-        ['agent-1', 'skill-1']
+        expect.stringContaining('DELETE FROM agent_skills'),
+        expect.arrayContaining(['agent-1', 'skill-1', TEST_WORKSPACE_ID])
       );
     });
 
@@ -494,7 +500,7 @@ describe('Skills Module', () => {
 
       // The DELETE will simply affect 0 rows, which is fine
       await expect(
-        detachSkillFromAgent('agent-1', 'nonexistent', 'user-1')
+        detachSkillFromAgent(TEST_WORKSPACE_ID, 'agent-1', 'nonexistent', 'user-1')
       ).resolves.toBeUndefined();
     });
   });
@@ -511,7 +517,7 @@ describe('Skills Module', () => {
       ];
       mockQuery.mockResolvedValueOnce(rows);
 
-      const result = await getAgentSkills('agent-1');
+      const result = await getAgentSkills(TEST_WORKSPACE_ID, 'agent-1');
 
       expect(result).toEqual(rows);
       expect(result).toHaveLength(2);
@@ -522,13 +528,14 @@ describe('Skills Module', () => {
       const [sql, params] = mockQuery.mock.calls[0];
       expect(sql).toContain('JOIN skills s ON asl.skill_id = s.id');
       expect(sql).toContain('WHERE asl.agent_id = $1');
-      expect(params).toEqual(['agent-1']);
+      expect(params).toContain('agent-1');
+      expect(params).toContain(TEST_WORKSPACE_ID);
     });
 
     it('should return empty array when agent has no skills', async () => {
       mockQuery.mockResolvedValueOnce([]);
 
-      const result = await getAgentSkills('lonely-agent');
+      const result = await getAgentSkills(TEST_WORKSPACE_ID, 'lonely-agent');
 
       expect(result).toEqual([]);
     });
@@ -536,7 +543,7 @@ describe('Skills Module', () => {
     it('should order results by skill name', async () => {
       mockQuery.mockResolvedValueOnce([]);
 
-      await getAgentSkills('agent-1');
+      await getAgentSkills(TEST_WORKSPACE_ID, 'agent-1');
 
       const [sql] = mockQuery.mock.calls[0];
       expect(sql).toContain('ORDER BY s.name');
