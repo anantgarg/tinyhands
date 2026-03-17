@@ -31,6 +31,28 @@ async function getOwnBotIdentity(): Promise<void> {
   } catch { /* will retry next message */ }
 }
 
+/**
+ * Check if our bot has previously posted in a thread.
+ * Used to decide whether mentions_only agents should respond to thread replies.
+ */
+async function isBotInThread(channelId: string, threadTs: string): Promise<boolean> {
+  try {
+    const client = getSlackApp().client;
+    const result = await client.conversations.replies({
+      channel: channelId,
+      ts: threadTs,
+      limit: 50,
+      inclusive: true,
+    });
+    if (!result.messages) return false;
+    return result.messages.some(
+      (m: any) => (m.bot_id && m.bot_id === ownBotId) || (ownBotUserId && m.user === ownBotUserId),
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function registerEvents(app: App): void {
   // ── Message Events ──
   app.event('message', async ({ event, client }) => {
@@ -204,10 +226,18 @@ export function registerEvents(app: App): void {
 
       // Process each agent in the channel
       for (const agent of agents) {
-        // mentions_only agents only respond to @mentions and thread replies
-        if (agent.mentions_only && !isMentioned && !isThreadReply) {
-          logger.debug('Message skipped — agent is mentions-only', { agentId: agent.id });
-          continue;
+        // mentions_only agents only respond to @mentions and thread replies where the bot is already participating
+        if (agent.mentions_only && !isMentioned) {
+          if (!isThreadReply) {
+            logger.debug('Message skipped — agent is mentions-only', { agentId: agent.id });
+            continue;
+          }
+          // Thread reply — only respond if bot previously posted in this thread
+          const botParticipating = await isBotInThread(channelId, threadTs);
+          if (!botParticipating) {
+            logger.debug('Thread reply skipped — agent is mentions-only and bot is not in thread', { agentId: agent.id, threadTs });
+            continue;
+          }
         }
 
         // Relevance check: skip for @mentions, thread replies, and mentions-only agents

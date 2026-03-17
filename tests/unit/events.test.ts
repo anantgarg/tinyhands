@@ -270,6 +270,9 @@ describe('Slack Events -- registerEvents', () => {
         auth: {
           test: vi.fn().mockResolvedValue({ user_id: 'U_BOT', bot_id: 'B_BOT' }),
         },
+        conversations: {
+          replies: vi.fn().mockResolvedValue({ messages: [] }),
+        },
       },
     });
 
@@ -3022,15 +3025,60 @@ describe('Slack Events -- registerEvents', () => {
       expect(mockEnqueueRun).toHaveBeenCalledTimes(1);
     });
 
-    it('should respond to mentions_only agents for thread replies', async () => {
+    it('should respond to mentions_only agents for thread replies where bot is participating', async () => {
       const agent = makeAgent({ id: 'a1', mentions_only: true });
       mockGetAgentsByChannel.mockResolvedValue([agent]);
+
+      // Bot has previously posted in this thread
+      mockGetSlackApp.mockReturnValue({
+        client: {
+          auth: {
+            test: vi.fn().mockResolvedValue({ user_id: 'U_BOT', bot_id: 'B_BOT' }),
+          },
+          conversations: {
+            replies: vi.fn().mockResolvedValue({
+              messages: [
+                { user: 'U_USER', text: 'original message' },
+                { user: 'U_BOT', text: 'bot reply' },
+              ],
+            }),
+          },
+        },
+      });
 
       registerEvents(mockApp as any);
       const event = makeMessageEvent({ text: 'follow up', thread_ts: '1700000000.000001' });
       await mockApp._trigger('message', { event, client: {} });
 
       expect(mockEnqueueRun).toHaveBeenCalledTimes(1);
+    });
+
+    it('should skip mentions_only agents for thread replies where bot is NOT participating', async () => {
+      const agent = makeAgent({ id: 'a1', mentions_only: true });
+      mockGetAgentsByChannel.mockResolvedValue([agent]);
+
+      // Bot has NOT posted in this thread
+      mockGetSlackApp.mockReturnValue({
+        client: {
+          auth: {
+            test: vi.fn().mockResolvedValue({ user_id: 'U_BOT', bot_id: 'B_BOT' }),
+          },
+          conversations: {
+            replies: vi.fn().mockResolvedValue({
+              messages: [
+                { user: 'U_USER', text: 'original message' },
+                { user: 'U_OTHER', text: 'someone else replying' },
+              ],
+            }),
+          },
+        },
+      });
+
+      registerEvents(mockApp as any);
+      const event = makeMessageEvent({ text: 'follow up', thread_ts: '1700000000.000001' });
+      await mockApp._trigger('message', { event, client: {} });
+
+      expect(mockEnqueueRun).not.toHaveBeenCalled();
     });
 
     it('should skip relevance check for mentions_only agents when @mentioned (single agent)', async () => {
