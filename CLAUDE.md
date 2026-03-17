@@ -250,7 +250,7 @@ Optional: `GITHUB_TOKEN`, `PORT` (default 3000), `LOG_LEVEL`, `DOCKER_BASE_IMAGE
 ## Development Workflow
 
 - **Use worktrees**: Always use git worktrees (`isolation: "worktree"`) when making code changes, to avoid disrupting the working directory.
-- **Test thoroughly**: Run the full test suite (`npm test`) before committing. All 2598+ tests must pass with 100% code coverage — no skipped or failing tests.
+- **Test thoroughly**: Run the full test suite (`npm test`) before committing. All tests must pass with 100% code coverage — no skipped or failing tests. Every code change MUST include corresponding test updates: add tests for new functionality, update existing tests for modified behavior, and remove tests for deleted code.
 - **Publish releases**: Every push should include a tagged release with a changelog summarizing what changed. Use `gh release create` with clear release notes.
 - **Update documentation**: Every time you make code changes, you MUST also update the relevant documentation files to reflect those changes:
   - `README.md` — User-facing overview, features list, getting started
