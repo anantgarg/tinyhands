@@ -329,6 +329,12 @@ export function registerEvents(app: App): void {
         return;
       }
 
+      // Skip bot messages in DMs — only real user messages should be routed to agents
+      if (msg.bot_id || msg.subtype === 'bot_message') {
+        logger.info('Skipping bot message in DM — not routing to agents', { bot_id: msg.bot_id, subtype: msg.subtype });
+        return;
+      }
+
       // New DM message: smart-route to an agent
       try {
         const accessible = await getAccessibleAgents(userId);

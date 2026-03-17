@@ -2435,6 +2435,47 @@ describe('Slack Events -- registerEvents', () => {
   // ── DM Handling (Smart Routing) ──
 
   describe('DM message event -- smart routing to agents', () => {
+    it('should skip bot messages in DMs and not route to agents', async () => {
+      mockGetAccessibleAgents.mockResolvedValue([makeAgent({ id: 'a1', status: 'active' })]);
+
+      registerEvents(mockApp as any);
+
+      await mockApp._trigger('message', {
+        event: {
+          channel: 'D_DM_CHAN',
+          channel_type: 'im',
+          bot_id: 'B_OTHER_BOT',
+          text: 'Let\'s build a new hand!',
+          ts: '1700000000.100',
+        },
+      });
+
+      expect(mockGetAccessibleAgents).not.toHaveBeenCalled();
+      expect(mockPostBlocks).not.toHaveBeenCalled();
+      expect(mockEnqueueRun).not.toHaveBeenCalled();
+    });
+
+    it('should skip bot_message subtype in DMs and not route to agents', async () => {
+      mockGetAccessibleAgents.mockResolvedValue([makeAgent({ id: 'a1', status: 'active' })]);
+
+      registerEvents(mockApp as any);
+
+      await mockApp._trigger('message', {
+        event: {
+          channel: 'D_DM_CHAN',
+          channel_type: 'im',
+          user: 'U_BOT_USER',
+          subtype: 'bot_message',
+          text: 'some bot message',
+          ts: '1700000000.100',
+        },
+      });
+
+      expect(mockGetAccessibleAgents).not.toHaveBeenCalled();
+      expect(mockPostBlocks).not.toHaveBeenCalled();
+      expect(mockEnqueueRun).not.toHaveBeenCalled();
+    });
+
     it('should route to single active agent automatically', async () => {
       const agent = makeAgent({ id: 'a1', name: 'solo-bot', avatar_emoji: ':robot:', status: 'active' });
       mockGetAccessibleAgents.mockResolvedValue([agent]);
