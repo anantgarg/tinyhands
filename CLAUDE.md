@@ -159,6 +159,44 @@ Types: `slack_channel`, `linear`, `zendesk`, `intercom`, `webhook`, `schedule`. 
 ### Agent Memory
 Optional per-agent. Categories: customer_preference, decision, context, technical, general, preference, procedure, correction, entity. Stored in `agent_memories` table with relevance scores.
 
+## Slack App Configuration
+
+### Required Bot Token Scopes (OAuth & Permissions)
+
+| Scope | Purpose |
+|-------|---------|
+| `app_mentions:read` | Receive @mention events |
+| `channels:history` | Read messages in public channels |
+| `channels:join` | Auto-join public channels |
+| `channels:manage` | Create channels for agents |
+| `chat:write` | Send messages |
+| `chat:write.customize` | Send messages with custom username/emoji |
+| `commands` | Slash commands (/agents, /new-agent, etc.) |
+| `files:read` | Read uploaded files for KB |
+| `groups:history` | Read messages in private channels |
+| `groups:read` | View private channels the bot is in |
+| `groups:write` | Auto-invite bot to private channels |
+| `im:history` | Read DM messages |
+| `im:read` | View DMs |
+| `im:write` | Send DMs |
+| `users:read` | Look up user info |
+
+### Required Event Subscriptions (Socket Mode)
+
+Subscribe to these bot events under **Event Subscriptions**:
+
+- `message.channels` — messages in public channels
+- `message.groups` — messages in private channels
+- `message.im` — direct messages
+- `message.mpim` — group DMs
+- `app_mention` — @mentions of the bot
+- `app_home_opened` — Home tab opened
+- `file_shared` — file uploads for KB
+
+### App-Level Token
+
+Socket Mode requires an App-Level Token (`xapp-...`) with the `connections:write` scope. Generate this under **Basic Information → App-Level Tokens**.
+
 ## Environment Variables
 
 Core required vars (see `.env.example` for full list):
