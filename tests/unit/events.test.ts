@@ -3035,10 +3035,10 @@ describe('Slack Events -- registerEvents', () => {
     it('should handle "add member @user" in DM thread with Access & Roles context', async () => {
       mockGetDmConversation.mockResolvedValue(null);
       mockConversationsReplies.mockResolvedValue({
-        messages: [{ text: '*test-agent \u2014 Access & Roles*' }],
+        messages: [{ text: 'Access & Roles [agent-1]' }],
       });
       const agent = makeAgent({ id: 'agent-1', name: 'test-agent' });
-      mockGetAgentByName.mockResolvedValue(agent);
+      mockGetAgentByChannel.mockResolvedValue(agent);
       mockCanModifyAgent.mockResolvedValue(true);
       mockSetAgentRole.mockResolvedValue(undefined);
 
@@ -3067,10 +3067,10 @@ describe('Slack Events -- registerEvents', () => {
     it('should handle "remove member @user" in DM thread with Access & Roles context', async () => {
       mockGetDmConversation.mockResolvedValue(null);
       mockConversationsReplies.mockResolvedValue({
-        messages: [{ text: '*test-agent \u2014 Access & Roles*' }],
+        messages: [{ text: 'Access & Roles [agent-1]' }],
       });
       const agent = makeAgent({ id: 'agent-1', name: 'test-agent' });
-      mockGetAgentByName.mockResolvedValue(agent);
+      mockGetAgentByChannel.mockResolvedValue(agent);
       mockCanModifyAgent.mockResolvedValue(true);
       mockRemoveAgentRole.mockResolvedValue(undefined);
 
@@ -3099,10 +3099,10 @@ describe('Slack Events -- registerEvents', () => {
     it('should deny add member when user lacks permission', async () => {
       mockGetDmConversation.mockResolvedValue(null);
       mockConversationsReplies.mockResolvedValue({
-        messages: [{ text: '*test-agent \u2014 Access & Roles*' }],
+        messages: [{ text: 'Access & Roles [agent-1]' }],
       });
       const agent = makeAgent({ id: 'agent-1', name: 'test-agent' });
-      mockGetAgentByName.mockResolvedValue(agent);
+      mockGetAgentByChannel.mockResolvedValue(agent);
       mockCanModifyAgent.mockResolvedValue(false);
 
       registerEvents(mockApp as any);
@@ -3155,12 +3155,12 @@ describe('Slack Events -- registerEvents', () => {
       );
     });
 
-    it('should fall through to expired when agent not found by name', async () => {
+    it('should fall through to expired when agent not found by id', async () => {
       mockGetDmConversation.mockResolvedValue(null);
       mockConversationsReplies.mockResolvedValue({
-        messages: [{ text: '*nonexistent-agent \u2014 Access & Roles*' }],
+        messages: [{ text: 'Access & Roles [nonexistent-agent-id]' }],
       });
-      mockGetAgentByName.mockResolvedValue(null);
+      mockGetAgentByChannel.mockResolvedValue(null);
 
       registerEvents(mockApp as any);
 

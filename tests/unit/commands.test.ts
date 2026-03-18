@@ -47,6 +47,8 @@ const mockApproveUpgrade = vi.fn().mockResolvedValue({ agent_id: 'agent-1', user
 const mockDenyUpgrade = vi.fn().mockResolvedValue(undefined);
 const mockGetAgentRole = vi.fn().mockResolvedValue('owner');
 const mockGetAgentRoles = vi.fn().mockResolvedValue([]);
+const mockSetAgentRole = vi.fn().mockResolvedValue(undefined);
+const mockRemoveAgentRole = vi.fn().mockResolvedValue(undefined);
 
 vi.mock('../../src/modules/access-control', () => ({
   initSuperadmin: (...args: any[]) => mockInitSuperadmin(...args),
@@ -59,6 +61,8 @@ vi.mock('../../src/modules/access-control', () => ({
   denyUpgrade: (...args: any[]) => mockDenyUpgrade(...args),
   getAgentRole: (...args: any[]) => mockGetAgentRole(...args),
   getAgentRoles: (...args: any[]) => mockGetAgentRoles(...args),
+  setAgentRole: (...args: any[]) => mockSetAgentRole(...args),
+  removeAgentRole: (...args: any[]) => mockRemoveAgentRole(...args),
 }));
 
 const mockGetAuditLog = vi.fn().mockResolvedValue([]);
@@ -2130,7 +2134,7 @@ describe('Commands Module', () => {
       await app.handlers.action['agent_overflow']({ action, ack, body });
 
       const allText = JSON.stringify(mockPostBlocks.mock.calls[0][1]);
-      expect(allText).toContain('No explicit roles assigned');
+      expect(allText).toContain('No explicit roles');
     });
 
     it('agent_overflow pause should update agent status', async () => {
@@ -4025,7 +4029,7 @@ describe('Commands Module', () => {
     it('registerConfirmationActions should register action handlers', () => {
       const app = createMockApp();
       registerConfirmationActions(app as any);
-      expect(app.action).toHaveBeenCalledTimes(16);
+      expect(app.action).toHaveBeenCalledTimes(20);
     });
 
     it('all registration functions should be idempotent (safe to call twice)', async () => {
@@ -4324,7 +4328,127 @@ describe('Commands Module', () => {
       await app.handlers.action['agent_overflow']({ action, ack, body });
 
       const allText = JSON.stringify(mockPostBlocks.mock.calls[0][1]);
-      expect(allText).toContain('No explicit roles assigned');
+      expect(allText).toContain('No explicit roles');
+    });
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // Access & Roles interactive actions
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  describe('Access & Roles interactive actions', () => {
+    it('access_roles should show interactive user list with overflow menus', async () => {
+      const app = createMockApp();
+      await safeRegisterInlineActions(app);
+
+      mockCanModifyAgent.mockResolvedValue(true);
+      mockGetAgent.mockResolvedValue(makeFakeAgent({ default_access: 'viewer', write_policy: 'auto' }));
+      mockGetAgentRoles.mockResolvedValue([
+        { agent_id: 'agent-1', user_id: 'U1', role: 'owner', granted_by: 'system', granted_at: '2024-01-01', workspace_id: 'W_TEST_123' },
+        { agent_id: 'agent-1', user_id: 'U2', role: 'member', granted_by: 'U1', granted_at: '2024-01-01', workspace_id: 'W_TEST_123' },
+      ]);
+
+      const ack = vi.fn();
+      const action = { selected_option: { value: 'access_roles:agent-1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, team: { id: 'W_TEST_123' } };
+
+      await app.handlers.action['agent_overflow']({ action, ack, body });
+
+      const allText = JSON.stringify(mockPostBlocks.mock.calls[0][1]);
+      // Should contain user picker for adding users
+      expect(allText).toContain('add_user_to_agent');
+      // Should contain overflow menus for changing roles
+      expect(allText).toContain('change_agent_role');
+      // Should contain settings overflows
+      expect(allText).toContain('change_default_access');
+      expect(allText).toContain('change_write_policy');
+      // Fallback text should contain agentId
+      expect(mockPostBlocks.mock.calls[0][2]).toContain('[agent-1]');
+    });
+
+    beforeEach(() => {
+      mockCanModifyAgent.mockResolvedValue(true);
+      mockSetAgentRole.mockResolvedValue(undefined);
+      mockRemoveAgentRole.mockResolvedValue(undefined);
+      mockUpdateAgent.mockResolvedValue(undefined);
+    });
+
+    it('change_agent_role should update role', async () => {
+      const app = createMockApp();
+      registerConfirmationActions(app as any);
+
+      const ack = vi.fn();
+      const action = { selected_option: { value: JSON.stringify({ agentId: 'agent-1', userId: 'U2', role: 'viewer' }) } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' }, channel: { id: 'C1' } };
+
+      await app.handlers.action['change_agent_role']({ action, ack, body });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockSetAgentRole).toHaveBeenCalledWith('W_TEST_123', 'agent-1', 'U2', 'viewer', 'U1');
+    });
+
+    it('change_agent_role should remove user when role is remove', async () => {
+      const app = createMockApp();
+      registerConfirmationActions(app as any);
+
+      mockCanModifyAgent.mockResolvedValue(true);
+
+      const ack = vi.fn();
+      const action = { selected_option: { value: JSON.stringify({ agentId: 'agent-1', userId: 'U2', role: 'remove' }) } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' }, channel: { id: 'C1' } };
+
+      await app.handlers.action['change_agent_role']({ action, ack, body });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockRemoveAgentRole).toHaveBeenCalledWith('W_TEST_123', 'agent-1', 'U2');
+    });
+
+    it('add_user_to_agent should add user with member role', async () => {
+      const app = createMockApp();
+      registerConfirmationActions(app as any);
+
+      mockCanModifyAgent.mockResolvedValue(true);
+
+      const ack = vi.fn();
+      const action = { selected_user: 'U_NEW' };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' }, message: { text: 'Access & Roles [agent-1]' }, channel: { id: 'C1' } };
+
+      await app.handlers.action['add_user_to_agent']({ action, ack, body });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockSetAgentRole).toHaveBeenCalledWith('W_TEST_123', 'agent-1', 'U_NEW', 'member', 'U1');
+    });
+
+    it('change_default_access should update agent default access', async () => {
+      const app = createMockApp();
+      registerConfirmationActions(app as any);
+
+      mockCanModifyAgent.mockResolvedValue(true);
+
+      const ack = vi.fn();
+      const action = { selected_option: { value: JSON.stringify({ agentId: 'agent-1', access: 'none' }) } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' }, channel: { id: 'C1' } };
+
+      await app.handlers.action['change_default_access']({ action, ack, body });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockUpdateAgent).toHaveBeenCalledWith('W_TEST_123', 'agent-1', { default_access: 'none' }, 'U1');
+    });
+
+    it('change_write_policy should update agent write policy', async () => {
+      const app = createMockApp();
+      registerConfirmationActions(app as any);
+
+      mockCanModifyAgent.mockResolvedValue(true);
+
+      const ack = vi.fn();
+      const action = { selected_option: { value: JSON.stringify({ agentId: 'agent-1', policy: 'admin_confirm' }) } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' }, channel: { id: 'C1' } };
+
+      await app.handlers.action['change_write_policy']({ action, ack, body });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockUpdateAgent).toHaveBeenCalledWith('W_TEST_123', 'agent-1', { write_policy: 'admin_confirm' }, 'U1');
     });
   });
 

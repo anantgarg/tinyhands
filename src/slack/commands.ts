@@ -886,25 +886,8 @@ export function registerInlineActions(app: App): void {
           if (channelId) await postMessage(channelId, ':x: Agent not found.');
           return;
         }
-        const roles = await getAgentRoles(workspaceId, agentId);
-        const ownerList = roles.filter(r => r.role === 'owner').map(r => `<@${r.user_id}>`);
-        const memberRoleList = roles.filter(r => r.role === 'member').map(r => `<@${r.user_id}>`);
-        const viewerList = roles.filter(r => r.role === 'viewer').map(r => `<@${r.user_id}>`);
-
-        let rolesSection = `*Default access:* ${formatAccessLevel(agent.default_access)} · *Writes:* ${formatWritePolicy(agent.write_policy || 'auto')}`;
-        if (ownerList.length > 0) rolesSection += `\n:crown: *Owner:* ${ownerList.join(', ')}`;
-        if (memberRoleList.length > 0) rolesSection += `\n:busts_in_silhouette: *Full access:* ${memberRoleList.join(', ')}`;
-        if (viewerList.length > 0) rolesSection += `\n:eye: *View only:* ${viewerList.join(', ')}`;
-        if (ownerList.length === 0 && memberRoleList.length === 0 && viewerList.length === 0) {
-          rolesSection += '\n_No explicit roles assigned — all users have default access._';
-        }
-
         if (channelId) {
-          await postBlocks(channelId, [
-            { type: 'header', text: { type: 'plain_text', text: `:busts_in_silhouette: ${agent.name} — Access & Roles` } },
-            { type: 'section', text: { type: 'mrkdwn', text: rolesSection } },
-            { type: 'section', text: { type: 'mrkdwn', text: `To manage roles, use \`add member @user\` or \`remove member @user\` in the agent's channel.` } },
-          ], `Access & Roles: ${agent.name}`);
+          await postAccessRolesBlocks(workspaceId, agentId, agent, channelId);
         }
         break;
       }
@@ -3577,6 +3560,96 @@ export function registerConfirmationActions(app: App): void {
       ],
     });
   });
+
+  // ── Access & Roles interactive actions ──
+
+  app.action('change_agent_role', async ({ action, ack, body }) => {
+    await ack();
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
+    const actorId = (body as any).user?.id;
+    let parsed: { agentId: string; userId: string; role: string };
+    try {
+      parsed = JSON.parse((action as any).selected_option?.value || (action as any).value);
+    } catch { return; }
+
+    const { canModifyAgent, setAgentRole, removeAgentRole } = await import('../modules/access-control');
+    if (!(await canModifyAgent(workspaceId, parsed.agentId, actorId))) {
+      await replyToAction(body, ':x: You don\'t have permission to change roles.');
+      return;
+    }
+
+    if (parsed.role === 'remove') {
+      await removeAgentRole(workspaceId, parsed.agentId, parsed.userId);
+      await replyToAction(body, `:white_check_mark: <@${parsed.userId}> removed from this agent.`);
+    } else {
+      await setAgentRole(workspaceId, parsed.agentId, parsed.userId, parsed.role as any, actorId);
+      await replyToAction(body, `:white_check_mark: <@${parsed.userId}> is now *${formatUserRole(parsed.role)}*.`);
+    }
+  });
+
+  app.action('add_user_to_agent', async ({ action, ack, body }) => {
+    await ack();
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
+    const actorId = (body as any).user?.id;
+    const selectedUserId = (action as any).selected_user;
+    if (!selectedUserId) return;
+
+    // Extract agentId from the message fallback text: "Access & Roles [agentId]"
+    const messageText = (body as any).message?.text || '';
+    const idMatch = messageText.match(/\[([^\]]+)\]/);
+    if (!idMatch) {
+      await replyToAction(body, ':x: Could not determine which agent this is for. Please re-open Access & Roles from /agents.');
+      return;
+    }
+    const agentId = idMatch[1];
+
+    const { canModifyAgent, setAgentRole } = await import('../modules/access-control');
+    if (!(await canModifyAgent(workspaceId, agentId, actorId))) {
+      await replyToAction(body, ':x: You don\'t have permission to add users.');
+      return;
+    }
+
+    await setAgentRole(workspaceId, agentId, selectedUserId, 'member', actorId);
+    await replyToAction(body, `:white_check_mark: <@${selectedUserId}> now has *Full access*.`);
+  });
+
+  app.action('change_default_access', async ({ action, ack, body }) => {
+    await ack();
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
+    const actorId = (body as any).user?.id;
+    let parsed: { agentId: string; access: string };
+    try {
+      parsed = JSON.parse((action as any).selected_option?.value || (action as any).value);
+    } catch { return; }
+
+    const { canModifyAgent } = await import('../modules/access-control');
+    if (!(await canModifyAgent(workspaceId, parsed.agentId, actorId))) {
+      await replyToAction(body, ':x: You don\'t have permission to change settings.');
+      return;
+    }
+
+    await updateAgent(workspaceId, parsed.agentId, { default_access: parsed.access } as any, actorId);
+    await replyToAction(body, `:white_check_mark: Default access changed to *${formatAccessLevel(parsed.access)}*.`);
+  });
+
+  app.action('change_write_policy', async ({ action, ack, body }) => {
+    await ack();
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
+    const actorId = (body as any).user?.id;
+    let parsed: { agentId: string; policy: string };
+    try {
+      parsed = JSON.parse((action as any).selected_option?.value || (action as any).value);
+    } catch { return; }
+
+    const { canModifyAgent } = await import('../modules/access-control');
+    if (!(await canModifyAgent(workspaceId, parsed.agentId, actorId))) {
+      await replyToAction(body, ':x: You don\'t have permission to change settings.');
+      return;
+    }
+
+    await updateAgent(workspaceId, parsed.agentId, { write_policy: parsed.policy } as any, actorId);
+    await replyToAction(body, `:white_check_mark: Write approval changed to *${formatWritePolicy(parsed.policy)}*.`);
+  });
 }
 
 // ── Effort Level Mapping ──
@@ -3630,6 +3703,78 @@ function formatUserRole(role: string): string {
     case 'none': return 'No access';
     default: return role;
   }
+}
+
+async function postAccessRolesBlocks(workspaceId: string, agentId: string, agent: any, channelId: string): Promise<void> {
+  const roles = await getAgentRoles(workspaceId, agentId);
+
+  const blocks: any[] = [
+    { type: 'header', text: { type: 'plain_text', text: `:busts_in_silhouette: ${agent.name} — Access & Roles` } },
+    {
+      type: 'section',
+      text: { type: 'mrkdwn', text: `*Default access:* ${formatAccessLevel(agent.default_access)} · *Writes:* ${formatWritePolicy(agent.write_policy || 'auto')}` },
+    },
+  ];
+
+  // Show each user with their role and a change menu
+  for (const r of roles) {
+    const roleIcon = r.role === 'owner' ? ':crown:' : r.role === 'member' ? ':busts_in_silhouette:' : ':eye:';
+    const roleLabel = formatUserRole(r.role);
+
+    blocks.push({
+      type: 'section',
+      text: { type: 'mrkdwn', text: `${roleIcon} <@${r.user_id}> — ${roleLabel}` },
+      accessory: {
+        type: 'overflow',
+        action_id: 'change_agent_role',
+        options: [
+          { text: { type: 'plain_text', text: ':crown: Make owner' }, value: JSON.stringify({ agentId, userId: r.user_id, role: 'owner' }) },
+          { text: { type: 'plain_text', text: ':busts_in_silhouette: Full access' }, value: JSON.stringify({ agentId, userId: r.user_id, role: 'member' }) },
+          { text: { type: 'plain_text', text: ':eye: View only' }, value: JSON.stringify({ agentId, userId: r.user_id, role: 'viewer' }) },
+          { text: { type: 'plain_text', text: ':x: Remove' }, value: JSON.stringify({ agentId, userId: r.user_id, role: 'remove' }) },
+        ],
+      },
+    });
+  }
+
+  if (roles.length === 0) {
+    blocks.push({ type: 'section', text: { type: 'mrkdwn', text: '_No explicit roles — all users have default access._' } });
+  }
+
+  blocks.push({ type: 'divider' });
+
+  // Action row: add user picker + settings overflows
+  blocks.push({
+    type: 'actions',
+    elements: [
+      {
+        type: 'users_select',
+        action_id: 'add_user_to_agent',
+        placeholder: { type: 'plain_text', text: 'Add a user...' },
+      },
+      {
+        type: 'overflow',
+        action_id: 'change_default_access',
+        options: [
+          { text: { type: 'plain_text', text: ':shield: Invite only' }, value: JSON.stringify({ agentId, access: 'none' }) },
+          { text: { type: 'plain_text', text: ':globe_with_meridians: Everyone (view only)' }, value: JSON.stringify({ agentId, access: 'viewer' }) },
+          { text: { type: 'plain_text', text: ':unlock: Everyone (full access)' }, value: JSON.stringify({ agentId, access: 'member' }) },
+        ],
+      },
+      {
+        type: 'overflow',
+        action_id: 'change_write_policy',
+        options: [
+          { text: { type: 'plain_text', text: ':zap: No approval needed' }, value: JSON.stringify({ agentId, policy: 'auto' }) },
+          { text: { type: 'plain_text', text: ':hand: User confirms' }, value: JSON.stringify({ agentId, policy: 'confirm' }) },
+          { text: { type: 'plain_text', text: ':lock: Owner approves' }, value: JSON.stringify({ agentId, policy: 'admin_confirm' }) },
+          { text: { type: 'plain_text', text: ':no_entry_sign: Block all writes' }, value: JSON.stringify({ agentId, policy: 'deny' }) },
+        ],
+      },
+    ],
+  });
+
+  await postBlocks(channelId, blocks, `Access & Roles [${agentId}]`);
 }
 
 function respondModeLabel(analysis: { respond_to_all_messages: boolean; mentions_only?: boolean }): string {

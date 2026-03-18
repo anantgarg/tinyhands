@@ -340,19 +340,18 @@ export function registerEvents(app: App): void {
         const removeMemberDmMatch = text.match(/^remove\s+member\s+<@(\w+)>/i);
         if (addMemberDmMatch || removeMemberDmMatch) {
           try {
-            // Try to find agent name from the thread's parent message text
+            // Find agent ID from the thread's parent message fallback text: "Access & Roles [agentId]"
             const parentMessages = await app.client.conversations.replies({
               channel: channelId,
               ts: msg.thread_ts,
               limit: 1,
             });
             const parentText = parentMessages.messages?.[0]?.text || '';
-            const agentNameMatch = parentText.match(/\*?([^*\u2014]+?)\s*\u2014\s*Access/);
+            const agentIdMatch = parentText.match(/\[([^\]]+)\]/);
 
-            if (agentNameMatch) {
-              const agentName = agentNameMatch[1].replace(/[^\w\s-]/g, '').trim();
-              const { getAgentByName } = await import('../modules/agents');
-              const agent = await getAgentByName(workspaceId, agentName);
+            if (agentIdMatch) {
+              const { getAgent } = await import('../modules/agents');
+              const agent = await getAgent(workspaceId, agentIdMatch[1]);
 
               if (agent) {
                 const { canModifyAgent, setAgentRole, removeAgentRole } = await import('../modules/access-control');
