@@ -1,7 +1,7 @@
 import type { App } from '@slack/bolt';
 import { v4 as uuid } from 'uuid';
 import { createAgent, listAgents, getAgent, getAgentByName, updateAgent, getAccessibleAgents, addAgentMembers, getAgentMembers, addAgentMember, removeAgentMember } from '../modules/agents';
-import { initSuperadmin, canModifyAgent, listPlatformAdmins } from '../modules/access-control';
+import { initSuperadmin, canModifyAgent, listPlatformAdmins, getAgentRole, getAgentRoles, isPlatformAdmin } from '../modules/access-control';
 import { createChannel, postMessage, postBlocks, getSlackApp, sendDMBlocks, openModal, pushModal } from './index';
 import { analyzeGoal } from '../modules/agents/goal-analyzer';
 import { attachSkillToAgent } from '../modules/skills';
@@ -182,7 +182,20 @@ export function registerCommands(app: App): void {
       for (const a of agents) {
         const channels = (a.channel_ids?.length > 0 ? a.channel_ids : [a.channel_id]).map((c: string) => `<#${c}>`).join(', ');
         const statusIcon = a.status === 'active' ? ':large_green_circle:' : a.status === 'paused' ? ':double_vertical_bar:' : ':red_circle:';
-        const accessIcon = a.default_access === 'none' ? ' :lock:' : '';
+        const accessBadge = a.default_access === 'none' ? ' :lock: restricted' : ' :globe_with_meridians: open';
+
+        // Format tools list with truncation
+        let toolsDisplay: string;
+        if (a.tools.length === 0) {
+          toolsDisplay = 'none';
+        } else if (a.tools.length <= 5) {
+          toolsDisplay = a.tools.join(', ');
+        } else {
+          toolsDisplay = a.tools.slice(0, 5).join(', ') + ` +${a.tools.length - 5} more`;
+        }
+
+        // Get user's role for this agent
+        const userRole = await getAgentRole(workspaceId, a.id, userId);
 
         const overflowOptions: any[] = [
           { text: { type: 'plain_text', text: ':gear: View Config' }, value: `view_config:${a.id}` },
@@ -194,14 +207,16 @@ export function registerCommands(app: App): void {
           overflowOptions.push({ text: { type: 'plain_text', text: ':pencil: Update' }, value: `update:${a.id}` });
         }
 
-        if (a.status === 'active') {
-          overflowOptions.push({ text: { type: 'plain_text', text: ':double_vertical_bar: Pause' }, value: `pause:${a.id}` });
-        } else if (a.status === 'paused') {
-          overflowOptions.push({ text: { type: 'plain_text', text: ':arrow_forward: Resume' }, value: `resume:${a.id}` });
+        if (canModify) {
+          if (a.status === 'active') {
+            overflowOptions.push({ text: { type: 'plain_text', text: ':double_vertical_bar: Pause' }, value: `pause:${a.id}` });
+          } else if (a.status === 'paused') {
+            overflowOptions.push({ text: { type: 'plain_text', text: ':arrow_forward: Resume' }, value: `resume:${a.id}` });
+          }
         }
 
-        if (a.default_access === 'none' && canModify) {
-          overflowOptions.push({ text: { type: 'plain_text', text: ':busts_in_silhouette: Members' }, value: `members:${a.id}` });
+        if (canModify) {
+          overflowOptions.push({ text: { type: 'plain_text', text: ':busts_in_silhouette: Access & Roles' }, value: `access_roles:${a.id}` });
         }
 
         if (canModify) {
@@ -212,7 +227,7 @@ export function registerCommands(app: App): void {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `${statusIcon} *${a.avatar_emoji} ${a.name}*${accessIcon}\n${channels} · ${a.model} · ${maxTurnsToEffort(a.max_turns)} effort · ${a.tools.length} tools · memory ${a.memory_enabled ? 'on' : 'off'}${a.created_by ? ` · by <@${a.created_by}>` : ''}`,
+            text: `${statusIcon} *${a.avatar_emoji} ${a.name}*${accessBadge}\n${channels} · ${a.model} · ${maxTurnsToEffort(a.max_turns)} effort · memory ${a.memory_enabled ? 'on' : 'off'}${a.created_by ? ` · by <@${a.created_by}>` : ''}\nTools: ${toolsDisplay}\nAccess: ${a.default_access === 'none' ? 'restricted' : a.default_access} · Write: ${a.write_policy || 'auto'} · Your role: ${userRole}`,
           },
           accessory: {
             type: 'overflow',
@@ -735,14 +750,34 @@ export function registerInlineActions(app: App): void {
         const agent = await getAgent(workspaceId, agentId);
         if (!agent) { if (channelId) await postMessage(channelId, ':x: Agent not found.'); return; }
         const channels = (agent.channel_ids?.length > 0 ? agent.channel_ids : [agent.channel_id]).map((c: string) => `<#${c}>`).join(', ');
+
+        // Build roles section
+        const agentRoles = await getAgentRoles(workspaceId, agentId);
+        const ownerUsers = agentRoles.filter(r => r.role === 'owner').map(r => `<@${r.user_id}>`);
+        const memberUsers = agentRoles.filter(r => r.role === 'member').map(r => `<@${r.user_id}>`);
+        const viewerUsers = agentRoles.filter(r => r.role === 'viewer').map(r => `<@${r.user_id}>`);
+
+        let rolesText = `*Access Control:*\nDefault access: ${agent.default_access} · Write policy: ${agent.write_policy || 'auto'}`;
+        if (ownerUsers.length > 0 || memberUsers.length > 0 || viewerUsers.length > 0) {
+          rolesText += '\n*Roles:*';
+          if (ownerUsers.length > 0) rolesText += `\n:crown: Owner: ${ownerUsers.join(', ')}`;
+          if (memberUsers.length > 0) rolesText += `\n:busts_in_silhouette: Member: ${memberUsers.join(', ')}`;
+          if (viewerUsers.length > 0) rolesText += `\n:eye: Viewer: ${viewerUsers.join(', ')}`;
+        }
+
         const blocks: any[] = [
           { type: 'header', text: { type: 'plain_text', text: `${agent.avatar_emoji} ${agent.name}` } },
           {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `*Status:* ${agent.status}\n*Model:* ${agent.model}\n*Effort:* ${maxTurnsToEffort(agent.max_turns)}\n*Memory:* ${agent.memory_enabled ? 'on' : 'off'}\n*Access:* ${agent.default_access === 'none' ? ':lock: restricted' : agent.default_access}\n*Channels:* ${channels}\n*Tools:* ${agent.tools.join(', ') || 'none'}\n*Responds to:* ${respondModeLabelFromAgent(agent)}`,
+              text: `*Status:* ${agent.status}\n*Model:* ${agent.model}\n*Effort:* ${maxTurnsToEffort(agent.max_turns)}\n*Memory:* ${agent.memory_enabled ? 'on' : 'off'}\n*Access:* ${agent.default_access === 'none' ? ':lock: restricted' : agent.default_access}\n*Write Policy:* ${agent.write_policy || 'auto'}\n*Channels:* ${channels}\n*Tools:* ${agent.tools.join(', ') || 'none'}\n*Responds to:* ${respondModeLabelFromAgent(agent)}`,
             },
+          },
+          { type: 'divider' },
+          {
+            type: 'section',
+            text: { type: 'mrkdwn', text: rolesText },
           },
           { type: 'divider' },
           {
@@ -825,26 +860,35 @@ export function registerInlineActions(app: App): void {
         break;
       }
 
-      case 'members': {
+      case 'access_roles': {
         if (!(await canModifyAgent(workspaceId, agentId, userId))) {
-          if (channelId) await postMessage(channelId, ':x: You don\'t have permission to manage members.');
+          if (channelId) await postMessage(channelId, ':x: You don\'t have permission to manage access & roles.');
           return;
         }
         const agent = await getAgent(workspaceId, agentId);
-        if (!agent || agent.default_access !== 'none') {
-          if (channelId) await postMessage(channelId, ':x: This agent does not have restricted access.');
+        if (!agent) {
+          if (channelId) await postMessage(channelId, ':x: Agent not found.');
           return;
         }
-        const members = await getAgentMembers(workspaceId, agentId);
-        const memberList = members.length > 0
-          ? members.map(m => `<@${m}>`).join(', ')
-          : '_No members yet_';
+        const roles = await getAgentRoles(workspaceId, agentId);
+        const ownerList = roles.filter(r => r.role === 'owner').map(r => `<@${r.user_id}>`);
+        const memberRoleList = roles.filter(r => r.role === 'member').map(r => `<@${r.user_id}>`);
+        const viewerList = roles.filter(r => r.role === 'viewer').map(r => `<@${r.user_id}>`);
+
+        let rolesSection = `*Default access:* ${agent.default_access} · *Write policy:* ${agent.write_policy || 'auto'}`;
+        if (ownerList.length > 0) rolesSection += `\n:crown: *Owner:* ${ownerList.join(', ')}`;
+        if (memberRoleList.length > 0) rolesSection += `\n:busts_in_silhouette: *Member:* ${memberRoleList.join(', ')}`;
+        if (viewerList.length > 0) rolesSection += `\n:eye: *Viewer:* ${viewerList.join(', ')}`;
+        if (ownerList.length === 0 && memberRoleList.length === 0 && viewerList.length === 0) {
+          rolesSection += '\n_No explicit roles assigned — all users have default access._';
+        }
+
         if (channelId) {
           await postBlocks(channelId, [
-            { type: 'header', text: { type: 'plain_text', text: `:lock: ${agent.name} — Members` } },
-            { type: 'section', text: { type: 'mrkdwn', text: `*Current members:* ${memberList}` } },
+            { type: 'header', text: { type: 'plain_text', text: `:busts_in_silhouette: ${agent.name} — Access & Roles` } },
+            { type: 'section', text: { type: 'mrkdwn', text: rolesSection } },
             { type: 'section', text: { type: 'mrkdwn', text: `_To add members, say \`add member @user\` in the agent's channel.\nTo remove, say \`remove member @user\`._` } },
-          ], `Members: ${agent.name}`);
+          ], `Access & Roles: ${agent.name}`);
         }
         break;
       }

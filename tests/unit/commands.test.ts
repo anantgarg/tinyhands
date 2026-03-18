@@ -45,6 +45,8 @@ const mockListPlatformAdmins = vi.fn().mockResolvedValue([{ user_id: 'UADMIN' }]
 const mockIsPlatformAdmin = vi.fn().mockResolvedValue(true);
 const mockApproveUpgrade = vi.fn().mockResolvedValue({ agent_id: 'agent-1', user_id: 'U_REQUESTER' });
 const mockDenyUpgrade = vi.fn().mockResolvedValue(undefined);
+const mockGetAgentRole = vi.fn().mockResolvedValue('owner');
+const mockGetAgentRoles = vi.fn().mockResolvedValue([]);
 
 vi.mock('../../src/modules/access-control', () => ({
   initSuperadmin: (...args: any[]) => mockInitSuperadmin(...args),
@@ -55,6 +57,8 @@ vi.mock('../../src/modules/access-control', () => ({
   isSuperadmin: (...args: any[]) => mockIsPlatformAdmin(...args),
   approveUpgrade: (...args: any[]) => mockApproveUpgrade(...args),
   denyUpgrade: (...args: any[]) => mockDenyUpgrade(...args),
+  getAgentRole: (...args: any[]) => mockGetAgentRole(...args),
+  getAgentRoles: (...args: any[]) => mockGetAgentRoles(...args),
 }));
 
 const mockGetAuditLog = vi.fn().mockResolvedValue([]);
@@ -428,6 +432,8 @@ describe('Commands Module', () => {
     mockCanModifyAgent.mockResolvedValue(true);
     mockListPlatformAdmins.mockResolvedValue([{ user_id: 'UADMIN' }]);
     mockIsPlatformAdmin.mockResolvedValue(true);
+    mockGetAgentRole.mockResolvedValue('owner');
+    mockGetAgentRoles.mockResolvedValue([]);
     mockPostMessage.mockResolvedValue('msg-ts-123');
     mockPostBlocks.mockResolvedValue('msg-ts-456');
     mockCreateChannel.mockResolvedValue('C_NEW_CHANNEL');
@@ -776,6 +782,128 @@ describe('Commands Module', () => {
 
       const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
       expect(allText).not.toContain('by <@');
+    });
+
+    it('should show tool names instead of count', async () => {
+      const app = createMockApp();
+      registerCommands(app as any);
+
+      mockListAgents.mockResolvedValue([makeFakeAgent({ tools: ['web-search', 'hubspot-read', 'linear-write'] })]);
+      mockCanModifyAgent.mockResolvedValue(false);
+      const ack = vi.fn();
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
+
+      await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
+
+      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
+      expect(allText).toContain('Tools: web-search, hubspot-read, linear-write');
+    });
+
+    it('should show "none" when agent has no tools', async () => {
+      const app = createMockApp();
+      registerCommands(app as any);
+
+      mockListAgents.mockResolvedValue([makeFakeAgent({ tools: [] })]);
+      mockCanModifyAgent.mockResolvedValue(false);
+      const ack = vi.fn();
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
+
+      await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
+
+      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
+      expect(allText).toContain('Tools: none');
+    });
+
+    it('should truncate tools list when more than 5 tools', async () => {
+      const app = createMockApp();
+      registerCommands(app as any);
+
+      mockListAgents.mockResolvedValue([makeFakeAgent({ tools: ['t1', 't2', 't3', 't4', 't5', 't6', 't7', 't8'] })]);
+      mockCanModifyAgent.mockResolvedValue(false);
+      const ack = vi.fn();
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
+
+      await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
+
+      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
+      expect(allText).toContain('t1, t2, t3, t4, t5 +3 more');
+    });
+
+    it('should show access level badge', async () => {
+      const app = createMockApp();
+      registerCommands(app as any);
+
+      mockListAgents.mockResolvedValue([makeFakeAgent({ default_access: 'none' })]);
+      mockCanModifyAgent.mockResolvedValue(false);
+      const ack = vi.fn();
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
+
+      await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
+
+      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
+      expect(allText).toContain(':lock: restricted');
+    });
+
+    it('should show open access badge for non-restricted agents', async () => {
+      const app = createMockApp();
+      registerCommands(app as any);
+
+      mockListAgents.mockResolvedValue([makeFakeAgent({ default_access: 'viewer' })]);
+      mockCanModifyAgent.mockResolvedValue(false);
+      const ack = vi.fn();
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
+
+      await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
+
+      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
+      expect(allText).toContain(':globe_with_meridians: open');
+    });
+
+    it('should show user role for the agent', async () => {
+      const app = createMockApp();
+      registerCommands(app as any);
+
+      mockListAgents.mockResolvedValue([makeFakeAgent()]);
+      mockCanModifyAgent.mockResolvedValue(false);
+      mockGetAgentRole.mockResolvedValue('member');
+      const ack = vi.fn();
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
+
+      await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
+
+      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
+      expect(allText).toContain('Your role: member');
+    });
+
+    it('should show write policy in agent card', async () => {
+      const app = createMockApp();
+      registerCommands(app as any);
+
+      mockListAgents.mockResolvedValue([makeFakeAgent({ write_policy: 'confirm' })]);
+      mockCanModifyAgent.mockResolvedValue(false);
+      const ack = vi.fn();
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
+
+      await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
+
+      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
+      expect(allText).toContain('Write: confirm');
+    });
+
+    it('should not show pause/resume options for non-owners', async () => {
+      const app = createMockApp();
+      registerCommands(app as any);
+
+      mockListAgents.mockResolvedValue([makeFakeAgent({ status: 'active' })]);
+      mockCanModifyAgent.mockResolvedValue(false);
+      const ack = vi.fn();
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
+
+      await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
+
+      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
+      expect(allText).not.toContain('pause:agent-1');
+      expect(allText).not.toContain('resume:agent-1');
     });
   });
 
@@ -1877,6 +2005,109 @@ describe('Commands Module', () => {
       await app.handlers.action['agent_overflow']({ action, ack, body });
 
       expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('not found'));
+    });
+
+    it('agent_overflow view_config should show write policy and roles', async () => {
+      const app = createMockApp();
+      await safeRegisterInlineActions(app);
+
+      mockGetAgent.mockResolvedValue(makeFakeAgent({ write_policy: 'confirm', default_access: 'viewer' }));
+      mockGetAgentRoles.mockResolvedValue([
+        { agent_id: 'agent-1', user_id: 'U_OWNER', role: 'owner', granted_by: 'system', granted_at: '2024-01-01', workspace_id: 'W_TEST_123' },
+        { agent_id: 'agent-1', user_id: 'U_MEMBER', role: 'member', granted_by: 'U_OWNER', granted_at: '2024-01-01', workspace_id: 'W_TEST_123' },
+      ]);
+
+      const ack = vi.fn();
+      const action = { selected_option: { value: 'view_config:agent-1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
+
+      await app.handlers.action['agent_overflow']({ action, ack, body });
+
+      const allText = JSON.stringify(mockPostBlocks.mock.calls[0][1]);
+      expect(allText).toContain('Write Policy');
+      expect(allText).toContain('confirm');
+      expect(allText).toContain('Access Control');
+      expect(allText).toContain(':crown: Owner');
+      expect(allText).toContain('<@U_OWNER>');
+      expect(allText).toContain(':busts_in_silhouette: Member');
+      expect(allText).toContain('<@U_MEMBER>');
+    });
+
+    it('agent_overflow view_config should show only default access when no explicit roles', async () => {
+      const app = createMockApp();
+      await safeRegisterInlineActions(app);
+
+      mockGetAgent.mockResolvedValue(makeFakeAgent({ write_policy: 'auto', default_access: 'viewer' }));
+      mockGetAgentRoles.mockResolvedValue([]);
+
+      const ack = vi.fn();
+      const action = { selected_option: { value: 'view_config:agent-1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
+
+      await app.handlers.action['agent_overflow']({ action, ack, body });
+
+      const allText = JSON.stringify(mockPostBlocks.mock.calls[0][1]);
+      expect(allText).toContain('Default access: viewer');
+      expect(allText).toContain('Write policy: auto');
+      expect(allText).not.toContain(':crown:');
+    });
+
+    it('agent_overflow access_roles should show grouped roles', async () => {
+      const app = createMockApp();
+      await safeRegisterInlineActions(app);
+
+      mockCanModifyAgent.mockResolvedValue(true);
+      mockGetAgent.mockResolvedValue(makeFakeAgent({ default_access: 'viewer', write_policy: 'auto' }));
+      mockGetAgentRoles.mockResolvedValue([
+        { agent_id: 'agent-1', user_id: 'U1', role: 'owner', granted_by: 'system', granted_at: '2024-01-01', workspace_id: 'W_TEST_123' },
+        { agent_id: 'agent-1', user_id: 'U2', role: 'viewer', granted_by: 'U1', granted_at: '2024-01-01', workspace_id: 'W_TEST_123' },
+      ]);
+
+      const ack = vi.fn();
+      const action = { selected_option: { value: 'access_roles:agent-1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, team: { id: 'W_TEST_123' } };
+
+      await app.handlers.action['agent_overflow']({ action, ack, body });
+
+      const allText = JSON.stringify(mockPostBlocks.mock.calls[0][1]);
+      expect(allText).toContain('Access & Roles');
+      expect(allText).toContain(':crown:');
+      expect(allText).toContain('<@U1>');
+      expect(allText).toContain(':eye:');
+      expect(allText).toContain('<@U2>');
+    });
+
+    it('agent_overflow access_roles should deny unpermitted users', async () => {
+      const app = createMockApp();
+      await safeRegisterInlineActions(app);
+
+      mockCanModifyAgent.mockResolvedValue(false);
+
+      const ack = vi.fn();
+      const action = { selected_option: { value: 'access_roles:agent-1' } };
+      const body = { user: { id: 'U_UNPRIV' }, channel: { id: 'C1' }, team: { id: 'W_TEST_123' } };
+
+      await app.handlers.action['agent_overflow']({ action, ack, body });
+
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('permission'));
+    });
+
+    it('agent_overflow access_roles should handle no explicit roles', async () => {
+      const app = createMockApp();
+      await safeRegisterInlineActions(app);
+
+      mockCanModifyAgent.mockResolvedValue(true);
+      mockGetAgent.mockResolvedValue(makeFakeAgent());
+      mockGetAgentRoles.mockResolvedValue([]);
+
+      const ack = vi.fn();
+      const action = { selected_option: { value: 'access_roles:agent-1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, team: { id: 'W_TEST_123' } };
+
+      await app.handlers.action['agent_overflow']({ action, ack, body });
+
+      const allText = JSON.stringify(mockPostBlocks.mock.calls[0][1]);
+      expect(allText).toContain('No explicit roles assigned');
     });
 
     it('agent_overflow pause should update agent status', async () => {
@@ -3793,11 +4024,27 @@ describe('Commands Module', () => {
   });
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  // Additional coverage: private agents with members option
+  // Additional coverage: access & roles option for agents
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  describe('/agents command - members option for private agents', () => {
-    it('should show members option for private agents when user can modify', async () => {
+  describe('/agents command - access & roles option', () => {
+    it('should show access_roles option for all agents when user can modify', async () => {
+      const app = createMockApp();
+      registerCommands(app as any);
+
+      mockListAgents.mockResolvedValue([makeFakeAgent({ default_access: 'viewer' })]);
+      mockCanModifyAgent.mockResolvedValue(true);
+      const ack = vi.fn();
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
+
+      await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
+
+      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
+      expect(allText).toContain('access_roles:agent-1');
+      expect(allText).toContain('Access & Roles');
+    });
+
+    it('should show access_roles option for restricted agents when user can modify', async () => {
       const app = createMockApp();
       registerCommands(app as any);
 
@@ -3809,11 +4056,11 @@ describe('Commands Module', () => {
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
       const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
-      expect(allText).toContain('members:agent-1');
+      expect(allText).toContain('access_roles:agent-1');
       expect(allText).toContain(':lock:');
     });
 
-    it('should not show members option for restricted agents when user cannot modify', async () => {
+    it('should not show access_roles option when user cannot modify', async () => {
       const app = createMockApp();
       registerCommands(app as any);
 
@@ -3825,7 +4072,7 @@ describe('Commands Module', () => {
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
       const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
-      expect(allText).not.toContain('members:agent-1');
+      expect(allText).not.toContain('access_roles:agent-1');
     });
   });
 
@@ -3975,77 +4222,86 @@ describe('Commands Module', () => {
   });
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  // Additional coverage: agent_overflow members case
+  // Additional coverage: agent_overflow access_roles case
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  describe('agent_overflow - members case', () => {
-    it('should deny members action when user cannot modify', async () => {
+  describe('agent_overflow - access_roles case', () => {
+    it('should deny access_roles action when user cannot modify', async () => {
       const app = createMockApp();
       await safeRegisterInlineActions(app);
 
       mockCanModifyAgent.mockResolvedValue(false);
 
       const ack = vi.fn();
-      const action = { selected_option: { value: 'members:agent-1' } };
+      const action = { selected_option: { value: 'access_roles:agent-1' } };
       const body = { user: { id: 'U1' }, channel: { id: 'C1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['agent_overflow']({ action, ack, body });
 
-      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('permission'), );
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('permission'));
     });
 
-    it('should deny members when agent does not have restricted access', async () => {
+    it('should show access_roles for any agent when user can modify (not just restricted)', async () => {
       const app = createMockApp();
       await safeRegisterInlineActions(app);
 
       mockCanModifyAgent.mockResolvedValue(true);
       mockGetAgent.mockResolvedValue(makeFakeAgent({ default_access: 'viewer' }));
+      mockGetAgentRoles.mockResolvedValue([
+        { agent_id: 'agent-1', user_id: 'U_OWNER', role: 'owner', granted_by: 'system', granted_at: '2024-01-01', workspace_id: 'W_TEST_123' },
+      ]);
 
       const ack = vi.fn();
-      const action = { selected_option: { value: 'members:agent-1' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, team: { id: 'W_TEST_123' } };
-
-      await app.handlers.action['agent_overflow']({ action, ack, body });
-
-      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('restricted'));
-    });
-
-    it('should show member list for restricted agent when user can modify', async () => {
-      const app = createMockApp();
-      await safeRegisterInlineActions(app);
-
-      mockCanModifyAgent.mockResolvedValue(true);
-      mockGetAgent.mockResolvedValue(makeFakeAgent({ default_access: 'none' }));
-      mockGetAgentMembers.mockResolvedValue(['UMEMBER1', 'UMEMBER2']);
-
-      const ack = vi.fn();
-      const action = { selected_option: { value: 'members:agent-1' } };
+      const action = { selected_option: { value: 'access_roles:agent-1' } };
       const body = { user: { id: 'U1' }, channel: { id: 'C1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['agent_overflow']({ action, ack, body });
 
       const allText = JSON.stringify(mockPostBlocks.mock.calls[0][1]);
-      expect(allText).toContain('<@UMEMBER1>');
-      expect(allText).toContain('<@UMEMBER2>');
-      expect(allText).toContain('Members');
+      expect(allText).toContain('Access & Roles');
+      expect(allText).toContain('<@U_OWNER>');
     });
 
-    it('should show no members message when member list is empty', async () => {
+    it('should show roles grouped by level for restricted agent', async () => {
       const app = createMockApp();
       await safeRegisterInlineActions(app);
 
       mockCanModifyAgent.mockResolvedValue(true);
       mockGetAgent.mockResolvedValue(makeFakeAgent({ default_access: 'none' }));
-      mockGetAgentMembers.mockResolvedValue([]);
+      mockGetAgentRoles.mockResolvedValue([
+        { agent_id: 'agent-1', user_id: 'U1', role: 'owner', granted_by: 'system', granted_at: '2024-01-01', workspace_id: 'W_TEST_123' },
+        { agent_id: 'agent-1', user_id: 'U2', role: 'member', granted_by: 'U1', granted_at: '2024-01-01', workspace_id: 'W_TEST_123' },
+      ]);
 
       const ack = vi.fn();
-      const action = { selected_option: { value: 'members:agent-1' } };
+      const action = { selected_option: { value: 'access_roles:agent-1' } };
       const body = { user: { id: 'U1' }, channel: { id: 'C1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['agent_overflow']({ action, ack, body });
 
       const allText = JSON.stringify(mockPostBlocks.mock.calls[0][1]);
-      expect(allText).toContain('No members yet');
+      expect(allText).toContain(':crown:');
+      expect(allText).toContain('<@U1>');
+      expect(allText).toContain(':busts_in_silhouette:');
+      expect(allText).toContain('<@U2>');
+    });
+
+    it('should show default access message when no explicit roles', async () => {
+      const app = createMockApp();
+      await safeRegisterInlineActions(app);
+
+      mockCanModifyAgent.mockResolvedValue(true);
+      mockGetAgent.mockResolvedValue(makeFakeAgent({ default_access: 'viewer' }));
+      mockGetAgentRoles.mockResolvedValue([]);
+
+      const ack = vi.fn();
+      const action = { selected_option: { value: 'access_roles:agent-1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, team: { id: 'W_TEST_123' } };
+
+      await app.handlers.action['agent_overflow']({ action, ack, body });
+
+      const allText = JSON.stringify(mockPostBlocks.mock.calls[0][1]);
+      expect(allText).toContain('No explicit roles assigned');
     });
   });
 
