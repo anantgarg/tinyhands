@@ -94,13 +94,37 @@ When you create an agent, TinyHands automatically selects the right tools based 
 
 ---
 
-## Private Agents
+## Agent Access Levels
 
-Not every agent needs to be visible to everyone. When creating an agent, you can set its visibility to **Private**. Private agents:
+Not every agent needs to be accessible to everyone. Each agent has a **default access level** that controls who can interact with it:
 
-- Only appear for members you've added
-- Are silently ignored when non-members message in shared channels
-- Can be managed with `add member @user` and `remove member @user` in the agent's channel
+| Access Level | Description |
+|-------------|-------------|
+| **None** | Agent is hidden — only explicitly granted users can see it |
+| **Viewer** | Everyone can see the agent, but can only read (no write tool actions) |
+| **Member** | Everyone can fully interact with the agent |
+
+When you're a **viewer** and try to trigger a write action, the system automatically sends an upgrade request to the agent's owners. If approved, you'll be notified and can re-run your request.
+
+### Write Policies
+
+Each agent has a **write policy** that controls how write tool actions are handled:
+
+| Policy | Behavior |
+|--------|----------|
+| **Auto** | Write actions execute immediately for members |
+| **Confirm** | Write actions require the requesting user to confirm |
+| **Admin Confirm** | Write actions require an agent owner to approve |
+| **Deny** | Write actions are blocked entirely |
+
+### Personal Tool Connections
+
+Some agents use tools that require your personal credentials (e.g., Google Drive, Notion, GitHub). Use `/connect` to manage your personal connections:
+
+1. Run `/connect` in a bot DM
+2. Click **Connect** next to the service you want
+3. Complete the OAuth flow in your browser
+4. Your connection is securely stored and available to agents configured to use it
 
 ---
 
@@ -132,6 +156,7 @@ You can change this in the agent's settings via `/agents` → Update.
 | `/agents` | View and manage all your agents (in bot DM) |
 | `/update-agent` | Update an existing agent (in bot DM) |
 | `/kb search <query>` | Search the knowledge base (in bot DM) |
+| `/connect` | Manage your personal tool connections (in bot DM) |
 | DM the bot | Talk to any agent directly |
 
 ---
@@ -140,6 +165,7 @@ You can change this in the agent's settings via `/agents` → Update.
 
 - Start simple. Create an agent with a clear, focused goal — you can always expand it later.
 - Use `/opus` before a message for the most capable model on complex tasks.
-- Private agents are great for team-specific workflows that don't need org-wide visibility.
+- Set agent default access to "none" for team-specific workflows that don't need org-wide visibility.
+- Use `/connect` to set up personal tool connections before interacting with agents that need your credentials.
 
 Questions? DM TinyHands or reach out to the platform team.

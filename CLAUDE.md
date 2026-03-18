@@ -49,7 +49,7 @@ src/
 ├── config.ts                                       # Env var config
 ├── db/
 │   ├── index.ts                                    # PostgreSQL pool, query helpers
-│   └── migrations/                                 # SQL migrations (001-009)
+│   └── migrations/                                 # SQL migrations (001-015)
 ├── queue/index.ts                                  # BullMQ queue, Redis, rate limiting
 ├── slack/
 │   ├── index.ts                                    # Bolt app setup
@@ -59,7 +59,7 @@ src/
 │   └── buffer.ts                                   # Real-time streaming to Slack
 ├── modules/
 │   ├── agents/              # Agent CRUD, goal analyzer (Claude-powered config gen)
-│   ├── access-control/      # Superadmins, per-agent roles, permissions
+│   ├── access-control/      # Platform roles, agent roles, upgrade requests, permissions
 │   ├── execution/           # Docker container lifecycle, Claude SDK, token tracking
 │   ├── tools/               # Tool registry + integrations (see below)
 │   ├── knowledge-base/      # KB entries, full-text search (tsvector + GIN)
@@ -78,7 +78,10 @@ src/
 │   ├── dashboard/           # Slack Home Tab metrics
 │   ├── document-filling/    # Google Docs/Sheets template automation
 │   ├── auto-update/         # Pull-based deploy from GitHub
-│   └── permissions/         # Tool access control (read-only vs read-write)
+│   ├── permissions/         # Tool access control (read-only vs read-write)
+│   ├── connections/         # Encrypted credential storage, OAuth flows, connection modes
+│   ├── audit/               # Action audit logging (fire-and-forget)
+│   └── workspace-settings/  # Per-workspace configuration settings
 ├── types/index.ts           # All TypeScript interfaces
 └── utils/                   # Logger, costs, chunker, Slack formatting, webhooks
 ```
@@ -87,7 +90,7 @@ src/
 
 PostgreSQL with migrations in `src/db/migrations/`. Key tables:
 
-- **agents** — Agent config (name, system_prompt, tools[], model, visibility, channels)
+- **agents** — Agent config (name, system_prompt, tools[], model, default_access, write_policy, channels)
 - **run_history** — Execution records (tokens, cost, duration, status, trace_id)
 - **custom_tools** — Tool definitions (schema, code, config, access_level)
 - **kb_entries** — Knowledge base articles (full-text search via tsvector)
@@ -97,7 +100,14 @@ PostgreSQL with migrations in `src/db/migrations/`. Key tables:
 - **agent_memories** — Persistent cross-run memory (facts, categories, relevance)
 - **workflow_definitions** / **workflow_runs** — Multi-step automation state
 - **evolution_proposals** — Agent self-improvement proposals
-- **superadmins**, **agent_admins**, **agent_members** — Access control
+- **platform_roles** — Workspace-level roles (superadmin, admin, member)
+- **agent_roles** — Per-agent access levels (owner, member, viewer)
+- **workspace_settings** — Per-workspace configuration
+- **upgrade_requests** — Viewer→member upgrade request tracking
+- **connections** — Encrypted tool credentials (team + personal)
+- **agent_tool_connections** — Per-agent tool connection mode config
+- **oauth_states** — OAuth flow state tracking
+- **action_audit_log** — Comprehensive action audit trail
 
 Query helpers: `query()`, `queryOne()`, `execute()` from `src/db/index.ts`.
 
@@ -246,7 +256,7 @@ DATABASE_URL (PostgreSQL)
 REDIS_URL
 ```
 
-Optional: `GITHUB_TOKEN`, `PORT` (default 3000), `LOG_LEVEL`, `DOCKER_BASE_IMAGE`, `DAILY_BUDGET_USD`, `AUTO_UPDATE_ENABLED`.
+Optional: `GITHUB_TOKEN`, `PORT` (default 3000), `LOG_LEVEL`, `DOCKER_BASE_IMAGE`, `DAILY_BUDGET_USD`, `AUTO_UPDATE_ENABLED`, `ENCRYPTION_KEY` (AES-256 for credential storage), `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `NOTION_CLIENT_ID`, `NOTION_CLIENT_SECRET`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`.
 
 ## Development Workflow
 

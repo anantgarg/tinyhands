@@ -6,11 +6,21 @@ This guide covers setup, configuration, and ongoing management of TinyHands for 
 
 ## Initial Setup
 
+### Platform Roles
+
+TinyHands uses a three-tier platform role system:
+
+| Role | Permissions |
+|------|-------------|
+| **Superadmin** | Full platform control — manage all agents, tools, KB, roles, audit log |
+| **Admin** | Manage tools, KB, and agents — cannot change platform roles |
+| **Member** | Create and use agents (configurable via workspace settings) |
+
 ### Becoming the First Superadmin
 
-The first person to run any slash command in the TinyHands bot DM automatically becomes the superadmin. From there you can add additional superadmins.
+The first person to run any slash command in the TinyHands bot DM automatically becomes the superadmin. From there you can add additional platform admins.
 
-### Adding More Superadmins
+### Managing Platform Roles
 
 DM the TinyHands bot and type:
 
@@ -18,7 +28,7 @@ DM the TinyHands bot and type:
 add @username as superadmin
 ```
 
-Only existing superadmins can add new ones. There must always be at least one superadmin.
+Only existing superadmins can change platform roles. There must always be at least one superadmin.
 
 ---
 
@@ -142,9 +152,9 @@ TinyHands auto-configures: name, avatar, system prompt, model, tools, effort lev
 You'll see a confirmation screen where you can adjust:
 - **Model**: haiku, sonnet, or opus
 - **Effort level**: low, medium, high, or max
-- **Visibility**: public or private
+- **Default Access**: none, viewer, or member
+- **Write Policy**: auto, confirm, admin_confirm, or deny
 - **Channel**: existing channel or create a new one
-- **Members**: (for private agents) select who can access it
 
 ### Agent Configuration
 
@@ -156,7 +166,8 @@ Each agent has these settings (viewable via `/agents` → overflow → View Conf
 | **Model** | haiku, sonnet, opus |
 | **Effort level** | Low (1-2 turns), Medium (10-25), High (50), Max (100+) |
 | **Memory** | Enabled or disabled |
-| **Visibility** | Public (org-wide) or Private (members only) |
+| **Default Access** | None (hidden), Viewer (read-only), Member (full) |
+| **Write Policy** | Auto, Confirm, Admin Confirm, Deny |
 | **Response mode** | All messages or mentions only |
 | **Tools** | Built-in + custom integrations |
 | **System prompt** | Auto-generated or custom |
@@ -171,30 +182,94 @@ From `/agents`, use the overflow menu to pause (stop responding), resume, or del
 
 ---
 
-## Private Agents & Access Control
+## Agent Access Control
 
-### Private Agent Visibility
+### Agent Access Levels
 
-Private agents are invisible to non-members. They:
-- Only appear in `/agents` for members and superadmins
-- Silently ignore messages from non-members in shared channels
-- Are accessible via DM only to members
+Each agent has a **default access level** that determines what unenrolled users can do:
 
-### Member Management
+| Default Access | Behavior for users without explicit role |
+|---------------|------------------------------------------|
+| **None** | Agent is hidden — only explicitly granted users can see/use it |
+| **Viewer** | Can see the agent, but write actions trigger upgrade requests |
+| **Member** | Can fully interact with the agent |
 
-From `/agents`, click the overflow menu on a private agent → **Members** to open the member picker and add users.
-
-To remove members, type `remove member @user` in the agent's channel.
-
-### Agent Roles
+Individual users can be granted specific roles that override the default:
 
 | Role | Permissions |
 |------|-------------|
-| **Owner** | Full control — modify agent, manage members, delete |
-| **Admin** | Modify agent, manage members |
-| **Member** | Send messages to the agent only |
+| **Owner** | Full control — modify agent, manage roles, delete, approve upgrades |
+| **Member** | Full interaction — read and write tool actions |
+| **Viewer** | Read-only — write actions trigger an automatic upgrade request |
 
-The agent creator automatically becomes the owner.
+The agent creator automatically becomes the owner. Platform admins (superadmin/admin) have owner-level access to all agents.
+
+### Write Policies
+
+Each agent has a **write policy** controlling how write tool actions are handled:
+
+| Policy | Behavior |
+|--------|----------|
+| **Auto** | Write actions execute immediately for members |
+| **Confirm** | Write actions require the requesting user to confirm |
+| **Admin Confirm** | Write actions require an agent owner to approve |
+| **Deny** | Write actions are blocked entirely |
+
+### Auto-Upgrade Requests
+
+When a viewer attempts a write action on an agent (and write_policy is not "deny"):
+1. The system creates an upgrade request
+2. All agent owners are notified via DM
+3. The viewer is told their request has been sent
+4. If approved, the viewer gets member access and is notified to re-run their request
+5. If denied, no notification is sent
+
+### Managing Agent Roles
+
+From `/agents`, click the overflow menu on an agent → **Members** to manage roles. You can grant owner, member, or viewer access to specific users.
+
+---
+
+## Tool Connections
+
+### Connection Modes
+
+Each tool on an agent can be configured with a connection mode:
+
+| Mode | Description |
+|------|-------------|
+| **Team** | Single shared credential for the whole workspace |
+| **Delegated** | Owner's personal credential shared through the agent |
+| **Runtime** | Each user brings their own credential (prompted to `/connect` if missing) |
+
+### Personal Connections
+
+Users connect their personal accounts via `/connect`:
+1. Run `/connect` in a bot DM
+2. Click **Connect** next to the desired service
+3. Complete the OAuth flow in the browser
+4. Credentials are encrypted with AES-256-GCM and stored securely
+
+Supported personal connection types:
+- **Google** — Drive, Sheets, Gmail
+- **Notion** — Workspace access
+- **GitHub** — Personal repository access
+
+### Setting Up OAuth (Admin)
+
+To enable personal connections, configure these environment variables:
+
+```env
+ENCRYPTION_KEY=<32-byte hex key for AES-256>
+GOOGLE_CLIENT_ID=<from Google Cloud Console>
+GOOGLE_CLIENT_SECRET=<from Google Cloud Console>
+NOTION_CLIENT_ID=<from Notion integrations>
+NOTION_CLIENT_SECRET=<from Notion integrations>
+GITHUB_CLIENT_ID=<from GitHub OAuth apps>
+GITHUB_CLIENT_SECRET=<from GitHub OAuth apps>
+```
+
+OAuth callbacks are handled at `GET /auth/callback/:integration` on the Express server.
 
 ---
 
@@ -210,13 +285,36 @@ Triggers can be paused and resumed from `/agents`.
 
 ---
 
+## Audit Log
+
+Platform admins can view a comprehensive audit trail of all actions via `/audit`. The audit log tracks:
+
+- Role changes (platform and agent level)
+- Agent creation, updates, and deletion
+- Tool invocations with user context
+- Connection creation and deletion
+- Upgrade request approvals and denials
+
+The audit log has forever retention and is indexed by workspace, agent, user, and timestamp.
+
+### Viewing the Audit Log
+
+1. Run `/audit` in a bot DM (platform admin only)
+2. Filter by agent, user, action type, or date range
+3. Results show actor, action, target, and timestamp
+
+---
+
 ## Admin Notifications
 
-Superadmins receive notifications when:
-- An agent requests a read-write tool that needs approval
+Platform admins receive notifications when:
+- A viewer requests an upgrade to member access
 - An agent needs a tool that doesn't exist yet (feature request)
 
-These notifications include the agent name, requested tool, and the user who created the agent, with options to approve or configure.
+Agent owners receive notifications when:
+- A viewer on their agent requests a member upgrade (with approve/deny buttons)
+
+These notifications include the agent name, requesting user, and context, with options to approve or configure.
 
 ---
 
@@ -226,10 +324,12 @@ These notifications include the agent name, requested tool, and the user who cre
 |---------|-------|-----|--------------|
 | `/agents` | Bot DM | All users | View and manage agents |
 | `/update-agent` | Bot DM | Agent owners/admins | Update an agent via conversation |
-| `/tools` | Bot DM | Superadmins | Manage integrations and tools |
-| `/kb` | Bot DM | Superadmins | KB dashboard (sources, entries, API keys) |
+| `/tools` | Bot DM | Platform admins | Manage integrations and tools |
+| `/kb` | Bot DM | Platform admins | KB dashboard (sources, entries, API keys) |
 | `/kb search <query>` | Bot DM | All users | Search the knowledge base |
 | `/kb add` | Bot DM | All users | Submit a KB entry (pending approval if non-admin) |
+| `/connect` | Bot DM | All users | Manage personal tool connections |
+| `/audit` | Bot DM | Platform admins | View action audit log |
 | `add @user as superadmin` | Bot DM | Superadmins | Grant superadmin access |
 
 ---
@@ -239,5 +339,7 @@ These notifications include the agent name, requested tool, and the user who cre
 - Set up integrations (`/tools`) and knowledge sources (`/kb`) before creating agents — agents auto-select tools based on their goal.
 - Use read-only access levels for integrations unless agents genuinely need write access.
 - Enable auto-sync on knowledge sources to keep agent context up to date.
-- Use private agents for team-specific workflows (e.g., engineering-only, sales-only).
+- Use default access "none" for team-specific agents (e.g., engineering-only, sales-only).
+- Set write policy to "admin_confirm" for agents that modify external systems.
+- Use "runtime" connection mode for tools that should use each user's own credentials.
 - Start with medium effort level — increase to high or max only for agents doing deep research.

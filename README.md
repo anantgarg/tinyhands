@@ -85,10 +85,11 @@ Register and manage third-party tool integrations entirely from Slack via `/tool
 | **HubSpot** | Search contacts/deals/companies, list pipelines | Create/update contacts/deals/companies, add notes/tasks |
 | **SerpAPI** | SERP rankings across Google, Bing, Yahoo | — (read-only) |
 
-- Superadmins register tools by entering API credentials in Slack
-- Any user can create agents with **read-only** tools
-- **Write tools** require superadmin approval — a DM is sent to all admins when requested
+- Platform admins register tools by entering API credentials in Slack
+- **Connection modes**: team (shared creds), delegated (owner's personal creds), runtime (each user brings own)
+- **Write policies** per agent: auto, confirm, admin_confirm, or deny
 - **Unconfigured tool detection** — if a tool exists but has no API key, the system blocks agent creation and prompts the admin to configure it
+- **Personal connections** via `/connect` — OAuth for Google Drive, Sheets, Gmail, Notion, GitHub
 
 ### Knowledge Base
 Manage a shared knowledge base via `/kb`:
@@ -126,7 +127,9 @@ The GitHub connector automatically detects Mintlify documentation projects:
 - **Agent Teams** — Lead agents spawn sub-agents for parallel/delegated work
 - **Observability** — Structured logging, cost tracking, alerting
 - **Self-Evolution** — Agents can write their own tools, create MCP configs, and update their prompts
-- **Access Control** — Superadmin role for tool/KB management, per-agent owner/admin roles
+- **Role-Based Access Control** — Platform roles (superadmin/admin/member), per-agent access levels (owner/member/viewer/none), write policies, auto-upgrade requests
+- **Personal Tool Connections** — Encrypted credential storage (AES-256-GCM), OAuth flows for Google/Notion/GitHub, team/delegated/runtime connection modes
+- **Audit Logging** — Comprehensive action audit trail for role changes, tool invocations, agent operations, and connection management
 - **Pull-Based Deploy** — Multiple deployments poll for updates automatically. No webhook needed.
 - **Agent Templates** — 10 pre-built agent templates. Browse via `/templates`, activate with one click.
 - **Contributor-Friendly** — Add templates, skills, or tools via PR. No wiring needed — just drop a file.
@@ -141,6 +144,8 @@ The GitHub connector automatically detects Mintlify documentation projects:
 | `/templates` | Browse and activate pre-built agent templates |
 | `/tools` | View registered tool integrations, register new ones |
 | `/kb` | Knowledge base dashboard — sources, entries, API keys |
+| `/connect` | Manage personal tool connections (Google, Notion, GitHub) |
+| `/audit` | View action audit log (platform admins only) |
 
 ---
 
@@ -407,6 +412,13 @@ Run `/agents` to see all agents. Use the overflow menu on any agent to:
 | `DAILY_BUDGET_USD` | No | Daily spend alert threshold (default: `50`) |
 | `MAX_CONCURRENT_WORKERS` | No | Worker concurrency (default: `3`) |
 | `DOCKER_BASE_IMAGE` | No | Docker image for agent runs (default: `tinyhands-runner:latest`) |
+| `ENCRYPTION_KEY` | No | AES-256 key for encrypting tool credentials (required for connections) |
+| `GOOGLE_CLIENT_ID` | No | OAuth client ID for Google integrations |
+| `GOOGLE_CLIENT_SECRET` | No | OAuth client secret for Google integrations |
+| `NOTION_CLIENT_ID` | No | OAuth client ID for Notion integration |
+| `NOTION_CLIENT_SECRET` | No | OAuth client secret for Notion integration |
+| `GITHUB_CLIENT_ID` | No | OAuth client ID for GitHub integration |
+| `GITHUB_CLIENT_SECRET` | No | OAuth client secret for GitHub integration |
 
 ---
 
