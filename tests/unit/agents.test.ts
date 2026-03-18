@@ -51,6 +51,8 @@ import {
   getAccessibleAgents,
 } from '../../src/modules/agents';
 
+const TEST_WORKSPACE_ID = 'W_TEST_123';
+
 describe('Agent Management', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -64,7 +66,7 @@ describe('Agent Management', () => {
     it('should create an agent with defaults', async () => {
       mockQueryOne.mockResolvedValueOnce(undefined); // no existing agent
 
-      const agent = await createAgent({
+      const agent = await createAgent(TEST_WORKSPACE_ID, {
         name: 'test-agent',
         channelId: 'C123',
         systemPrompt: 'You are a test agent',
@@ -85,7 +87,7 @@ describe('Agent Management', () => {
     it('should create with custom options', async () => {
       mockQueryOne.mockResolvedValueOnce(undefined);
 
-      const agent = await createAgent({
+      const agent = await createAgent(TEST_WORKSPACE_ID, {
         name: 'custom-agent',
         channelId: 'C456',
         channelIds: ['C456', 'C789'],
@@ -110,7 +112,7 @@ describe('Agent Management', () => {
       mockQueryOne.mockResolvedValueOnce({ id: 'existing-id' });
 
       await expect(
-        createAgent({
+        createAgent(TEST_WORKSPACE_ID, {
           name: 'existing-agent',
           channelId: 'C123',
           systemPrompt: 'test',
@@ -131,7 +133,7 @@ describe('Agent Management', () => {
         relevance_keywords: '["test"]',
       });
 
-      const agent = await getAgent('a1');
+      const agent = await getAgent(TEST_WORKSPACE_ID, 'a1');
       expect(agent).toBeDefined();
       expect(agent!.tools).toEqual(['Read', 'Write']);
       expect(agent!.relevance_keywords).toEqual(['test']);
@@ -140,7 +142,7 @@ describe('Agent Management', () => {
 
     it('should return null for missing agent', async () => {
       mockQueryOne.mockResolvedValueOnce(undefined);
-      const agent = await getAgent('nonexistent');
+      const agent = await getAgent(TEST_WORKSPACE_ID, 'nonexistent');
       expect(agent).toBeNull();
     });
   });
@@ -152,7 +154,7 @@ describe('Agent Management', () => {
         tools: '[]', relevance_keywords: '[]',
       });
 
-      const agent = await getAgentByName('my-agent');
+      const agent = await getAgentByName(TEST_WORKSPACE_ID, 'my-agent');
       expect(agent).toBeDefined();
       expect(agent!.name).toBe('my-agent');
     });
@@ -165,7 +167,7 @@ describe('Agent Management', () => {
         tools: '[]', relevance_keywords: '[]',
       });
 
-      const agent = await getAgentByChannel('C123');
+      const agent = await getAgentByChannel(TEST_WORKSPACE_ID, 'C123');
       expect(agent).toBeDefined();
     });
   });
@@ -177,7 +179,7 @@ describe('Agent Management', () => {
         { id: 'a2', name: 'agent2', channel_id: 'C1', tools: '[]', relevance_keywords: '[]' },
       ]);
 
-      const agents = await getAgentsByChannel('C1');
+      const agents = await getAgentsByChannel(TEST_WORKSPACE_ID, 'C1');
       expect(agents).toHaveLength(2);
     });
   });
@@ -188,11 +190,11 @@ describe('Agent Management', () => {
         { id: 'a1', name: 'active-agent', status: 'active', tools: '[]', relevance_keywords: '[]' },
       ]);
 
-      const agents = await listAgents();
+      const agents = await listAgents(TEST_WORKSPACE_ID);
       expect(agents).toHaveLength(1);
       expect(mockQuery).toHaveBeenCalledWith(
         expect.stringContaining('status !='),
-        ['archived']
+        [TEST_WORKSPACE_ID, 'archived']
       );
     });
   });
@@ -214,7 +216,7 @@ describe('Agent Management', () => {
         tools: '[]', relevance_keywords: '[]',
       });
 
-      const updated = await updateAgent('a1', { name: 'new-name' }, 'U001');
+      const updated = await updateAgent(TEST_WORKSPACE_ID, 'a1', { name: 'new-name' }, 'U001');
       expect(updated.name).toBe('new-name');
       expect(mockWithTransaction).toHaveBeenCalled();
     });
@@ -223,7 +225,7 @@ describe('Agent Management', () => {
       mockQueryOne.mockResolvedValueOnce(undefined);
 
       await expect(
-        updateAgent('nonexistent', { name: 'x' }, 'U001')
+        updateAgent(TEST_WORKSPACE_ID, 'nonexistent', { name: 'x' }, 'U001')
       ).rejects.toThrow('not found');
     });
 
@@ -233,7 +235,7 @@ describe('Agent Management', () => {
         tools: '[]', relevance_keywords: '[]',
       });
 
-      const result = await updateAgent('a1', {}, 'U001');
+      const result = await updateAgent(TEST_WORKSPACE_ID, 'a1', {}, 'U001');
       expect(result.name).toBe('test');
       expect(mockWithTransaction).not.toHaveBeenCalled();
     });
@@ -241,10 +243,10 @@ describe('Agent Management', () => {
 
   describe('deleteAgent', () => {
     it('should archive the agent', async () => {
-      await deleteAgent('a1');
+      await deleteAgent(TEST_WORKSPACE_ID, 'a1');
       expect(mockExecute).toHaveBeenCalledWith(
         expect.stringContaining('status'),
-        ['archived', 'a1']
+        ['archived', TEST_WORKSPACE_ID, 'a1']
       );
     });
   });
@@ -256,7 +258,7 @@ describe('Agent Management', () => {
         { id: 'v1', agent_id: 'a1', version: 1 },
       ]);
 
-      const versions = await getAgentVersions('a1');
+      const versions = await getAgentVersions(TEST_WORKSPACE_ID, 'a1');
       expect(versions).toHaveLength(2);
     });
   });
@@ -298,7 +300,7 @@ describe('Agent Management', () => {
       const fakeClient = { query: vi.fn() };
       mockWithTransaction.mockImplementation(async (fn: any) => fn(fakeClient));
 
-      const agent = await createAgent({
+      const agent = await createAgent(TEST_WORKSPACE_ID, {
         name: 'private-agent',
         channelId: 'C123',
         systemPrompt: 'Private prompt',
@@ -335,7 +337,7 @@ describe('Agent Management', () => {
         tools: '[]', relevance_keywords: '[]',
       });
 
-      const result = await updateAgent('a1', { channel_ids: ['C2', 'C3'] }, 'U001');
+      const result = await updateAgent(TEST_WORKSPACE_ID, 'a1', { channel_ids: ['C2', 'C3'] }, 'U001');
       expect(result.channel_ids).toEqual(['C2', 'C3']);
     });
 
@@ -346,7 +348,7 @@ describe('Agent Management', () => {
         tools: '[]', relevance_keywords: '[]',
       });
 
-      const result = await updateAgent('a1', { channel_id: 'C5' }, 'U001');
+      const result = await updateAgent(TEST_WORKSPACE_ID, 'a1', { channel_id: 'C5' }, 'U001');
       expect(result.channel_id).toBe('C5');
     });
 
@@ -363,7 +365,7 @@ describe('Agent Management', () => {
         tools: '[]', relevance_keywords: '[]',
       });
 
-      const result = await updateAgent('a1', { system_prompt: 'new prompt' }, 'U001');
+      const result = await updateAgent(TEST_WORKSPACE_ID, 'a1', { system_prompt: 'new prompt' }, 'U001');
       expect(result.system_prompt).toBe('new prompt');
       // Should have called query for UPDATE and for version tracking
       expect(fakeClient.query).toHaveBeenCalledTimes(3); // UPDATE + SELECT MAX + INSERT version
@@ -380,7 +382,7 @@ describe('Agent Management', () => {
         tools: '[]', relevance_keywords: '[]',
       });
 
-      await updateAgent('a1', { system_prompt: 'same prompt' }, 'U001');
+      await updateAgent(TEST_WORKSPACE_ID, 'a1', { system_prompt: 'same prompt' }, 'U001');
       // Only the UPDATE query, no version insert
       expect(fakeClient.query).toHaveBeenCalledTimes(1);
     });
@@ -392,7 +394,7 @@ describe('Agent Management', () => {
         tools: '["Read","Write"]', relevance_keywords: '[]',
       });
 
-      const result = await updateAgent('a1', { tools: ['Read', 'Write'] }, 'U001');
+      const result = await updateAgent(TEST_WORKSPACE_ID, 'a1', { tools: ['Read', 'Write'] }, 'U001');
       expect(result.tools).toEqual(['Read', 'Write']);
     });
 
@@ -403,7 +405,7 @@ describe('Agent Management', () => {
         tools: '[]', relevance_keywords: '[]', avatar_emoji: ':star:',
       });
 
-      await updateAgent('a1', { avatar_emoji: ':star:' }, 'U001');
+      await updateAgent(TEST_WORKSPACE_ID, 'a1', { avatar_emoji: ':star:' }, 'U001');
       expect(mockWithTransaction).toHaveBeenCalled();
     });
 
@@ -414,7 +416,7 @@ describe('Agent Management', () => {
         tools: '[]', relevance_keywords: '[]', status: 'paused',
       });
 
-      await updateAgent('a1', { status: 'paused' }, 'U001');
+      await updateAgent(TEST_WORKSPACE_ID, 'a1', { status: 'paused' }, 'U001');
       expect(mockWithTransaction).toHaveBeenCalled();
     });
 
@@ -425,7 +427,7 @@ describe('Agent Management', () => {
         tools: '[]', relevance_keywords: '[]', model: 'opus',
       });
 
-      await updateAgent('a1', { model: 'opus' }, 'U001');
+      await updateAgent(TEST_WORKSPACE_ID, 'a1', { model: 'opus' }, 'U001');
       expect(mockWithTransaction).toHaveBeenCalled();
     });
 
@@ -436,7 +438,7 @@ describe('Agent Management', () => {
         tools: '[]', relevance_keywords: '[]', streaming_detail: true,
       });
 
-      await updateAgent('a1', { streaming_detail: true }, 'U001');
+      await updateAgent(TEST_WORKSPACE_ID, 'a1', { streaming_detail: true }, 'U001');
       expect(mockWithTransaction).toHaveBeenCalled();
     });
 
@@ -447,7 +449,7 @@ describe('Agent Management', () => {
         tools: '[]', relevance_keywords: '[]',
       });
 
-      await updateAgent('a1', { self_evolution_mode: 'autonomous' }, 'U001');
+      await updateAgent(TEST_WORKSPACE_ID, 'a1', { self_evolution_mode: 'autonomous' }, 'U001');
       expect(mockWithTransaction).toHaveBeenCalled();
     });
 
@@ -458,7 +460,7 @@ describe('Agent Management', () => {
         tools: '[]', relevance_keywords: '[]',
       });
 
-      await updateAgent('a1', { max_turns: 20 }, 'U001');
+      await updateAgent(TEST_WORKSPACE_ID, 'a1', { max_turns: 20 }, 'U001');
       expect(mockWithTransaction).toHaveBeenCalled();
     });
 
@@ -469,7 +471,7 @@ describe('Agent Management', () => {
         tools: '[]', relevance_keywords: '[]',
       });
 
-      await updateAgent('a1', { memory_enabled: true }, 'U001');
+      await updateAgent(TEST_WORKSPACE_ID, 'a1', { memory_enabled: true }, 'U001');
       expect(mockWithTransaction).toHaveBeenCalled();
     });
 
@@ -480,7 +482,7 @@ describe('Agent Management', () => {
         tools: '[]', relevance_keywords: '[]',
       });
 
-      await updateAgent('a1', { respond_to_all_messages: true }, 'U001');
+      await updateAgent(TEST_WORKSPACE_ID, 'a1', { respond_to_all_messages: true }, 'U001');
       expect(mockWithTransaction).toHaveBeenCalled();
     });
 
@@ -491,7 +493,7 @@ describe('Agent Management', () => {
         tools: '[]', relevance_keywords: '[]',
       });
 
-      await updateAgent('a1', { mentions_only: true }, 'U001');
+      await updateAgent(TEST_WORKSPACE_ID, 'a1', { mentions_only: true }, 'U001');
       expect(mockWithTransaction).toHaveBeenCalled();
     });
 
@@ -502,7 +504,7 @@ describe('Agent Management', () => {
         tools: '[]', relevance_keywords: '[]',
       });
 
-      await updateAgent('a1', { visibility: 'private' }, 'U001');
+      await updateAgent(TEST_WORKSPACE_ID, 'a1', { visibility: 'private' }, 'U001');
       expect(mockWithTransaction).toHaveBeenCalled();
     });
 
@@ -513,7 +515,7 @@ describe('Agent Management', () => {
         tools: '[]', relevance_keywords: '["deploy"]',
       });
 
-      await updateAgent('a1', { relevance_keywords: ['deploy'] }, 'U001');
+      await updateAgent(TEST_WORKSPACE_ID, 'a1', { relevance_keywords: ['deploy'] }, 'U001');
       expect(mockWithTransaction).toHaveBeenCalled();
     });
 
@@ -527,7 +529,7 @@ describe('Agent Management', () => {
       mockQueryOne.mockResolvedValueOnce({ id: 'a2' });
 
       await expect(
-        updateAgent('a1', { name: 'taken-name' }, 'U001')
+        updateAgent(TEST_WORKSPACE_ID, 'a1', { name: 'taken-name' }, 'U001')
       ).rejects.toThrow('already exists');
     });
 
@@ -538,7 +540,7 @@ describe('Agent Management', () => {
         tools: '[]', relevance_keywords: '[]',
       });
 
-      await updateAgent('a1', { channel_ids: ['C5'] }, 'U001');
+      await updateAgent(TEST_WORKSPACE_ID, 'a1', { channel_ids: ['C5'] }, 'U001');
       // The auto-join is async (import().then()) — just verify no error
     });
 
@@ -549,7 +551,7 @@ describe('Agent Management', () => {
         tools: '[]', relevance_keywords: '[]',
       });
 
-      await updateAgent('a1', { channel_id: 'C9' }, 'U001');
+      await updateAgent(TEST_WORKSPACE_ID, 'a1', { channel_id: 'C9' }, 'U001');
       // The auto-join is async — just verify no error
     });
 
@@ -566,7 +568,7 @@ describe('Agent Management', () => {
         tools: '[]', relevance_keywords: '[]',
       });
 
-      await updateAgent('a1', { system_prompt: 'new' }, 'U001');
+      await updateAgent(TEST_WORKSPACE_ID, 'a1', { system_prompt: 'new' }, 'U001');
       // Should create version 1 when max_version is null
       const insertCall = fakeClient.query.mock.calls[2];
       expect(insertCall[0]).toContain('agent_versions');
@@ -581,7 +583,7 @@ describe('Agent Management', () => {
         system_prompt: 'test prompt', change_note: 'Initial', changed_by: 'U001',
       });
 
-      const version = await getAgentVersion('a1', 1);
+      const version = await getAgentVersion(TEST_WORKSPACE_ID, 'a1', 1);
       expect(version).toBeDefined();
       expect(version!.version).toBe(1);
     });
@@ -589,7 +591,7 @@ describe('Agent Management', () => {
     it('should return null when version not found', async () => {
       mockQueryOne.mockResolvedValueOnce(undefined);
 
-      const version = await getAgentVersion('a1', 99);
+      const version = await getAgentVersion(TEST_WORKSPACE_ID, 'a1', 99);
       expect(version).toBeNull();
     });
   });
@@ -620,21 +622,21 @@ describe('Agent Management', () => {
         tools: '[]', relevance_keywords: '[]',
       });
 
-      const result = await revertAgent('a1', 1, 'U001');
+      const result = await revertAgent(TEST_WORKSPACE_ID, 'a1', 1, 'U001');
       expect(result.system_prompt).toBe('original prompt');
     });
 
     it('should throw when version not found', async () => {
       mockQueryOne.mockResolvedValueOnce(undefined);
 
-      await expect(revertAgent('a1', 99, 'U001')).rejects.toThrow('not found');
+      await expect(revertAgent(TEST_WORKSPACE_ID, 'a1', 99, 'U001')).rejects.toThrow('not found');
     });
   });
 
   describe('Agent Members', () => {
     describe('addAgentMember', () => {
       it('should add member with ON CONFLICT DO NOTHING', async () => {
-        await addAgentMember('a1', 'U001', 'U002');
+        await addAgentMember(TEST_WORKSPACE_ID, 'a1', 'U001', 'U002');
         expect(mockExecute).toHaveBeenCalledWith(
           expect.stringContaining('agent_members'),
           ['a1', 'U001', 'U002']
@@ -644,7 +646,7 @@ describe('Agent Management', () => {
 
     describe('removeAgentMember', () => {
       it('should delete member from agent_members', async () => {
-        await removeAgentMember('a1', 'U001');
+        await removeAgentMember(TEST_WORKSPACE_ID, 'a1', 'U001');
         expect(mockExecute).toHaveBeenCalledWith(
           expect.stringContaining('DELETE'),
           ['a1', 'U001']
@@ -659,7 +661,7 @@ describe('Agent Management', () => {
           { user_id: 'U002' },
         ]);
 
-        const members = await getAgentMembers('a1');
+        const members = await getAgentMembers(TEST_WORKSPACE_ID, 'a1');
         expect(members).toEqual(['U001', 'U002']);
       });
     });
@@ -668,21 +670,21 @@ describe('Agent Management', () => {
       it('should return true when member exists', async () => {
         mockQueryOne.mockResolvedValueOnce({ '?column?': 1 });
 
-        const result = await isAgentMember('a1', 'U001');
+        const result = await isAgentMember(TEST_WORKSPACE_ID, 'a1', 'U001');
         expect(result).toBe(true);
       });
 
       it('should return false when member does not exist', async () => {
         mockQueryOne.mockResolvedValueOnce(undefined);
 
-        const result = await isAgentMember('a1', 'U999');
+        const result = await isAgentMember(TEST_WORKSPACE_ID, 'a1', 'U999');
         expect(result).toBe(false);
       });
     });
 
     describe('addAgentMembers', () => {
       it('should add multiple members', async () => {
-        await addAgentMembers('a1', ['U001', 'U002', 'U003'], 'U999');
+        await addAgentMembers(TEST_WORKSPACE_ID, 'a1', ['U001', 'U002', 'U003'], 'U999');
         expect(mockExecute).toHaveBeenCalledTimes(3);
       });
     });
@@ -691,7 +693,7 @@ describe('Agent Management', () => {
   describe('canAccessAgent', () => {
     it('should return false when agent not found', async () => {
       mockQueryOne.mockResolvedValueOnce(undefined); // getAgent
-      const result = await canAccessAgent('nonexistent', 'U001');
+      const result = await canAccessAgent(TEST_WORKSPACE_ID, 'nonexistent', 'U001');
       expect(result).toBe(false);
     });
 
@@ -701,7 +703,7 @@ describe('Agent Management', () => {
         tools: '[]', relevance_keywords: '[]', visibility: 'public',
       });
 
-      const result = await canAccessAgent('a1', 'U001');
+      const result = await canAccessAgent(TEST_WORKSPACE_ID, 'a1', 'U001');
       expect(result).toBe(true);
     });
 
@@ -712,7 +714,7 @@ describe('Agent Management', () => {
       });
       mockIsSuperadmin.mockResolvedValueOnce(true);
 
-      const result = await canAccessAgent('a1', 'U-superadmin');
+      const result = await canAccessAgent(TEST_WORKSPACE_ID, 'a1', 'U-superadmin');
       expect(result).toBe(true);
     });
 
@@ -725,7 +727,7 @@ describe('Agent Management', () => {
       // admin check
       mockQueryOne.mockResolvedValueOnce({ agent_id: 'a1', user_id: 'U-admin' });
 
-      const result = await canAccessAgent('a1', 'U-admin');
+      const result = await canAccessAgent(TEST_WORKSPACE_ID, 'a1', 'U-admin');
       expect(result).toBe(true);
     });
 
@@ -740,7 +742,7 @@ describe('Agent Management', () => {
       // member check (isAgentMember)
       mockQueryOne.mockResolvedValueOnce({ '?column?': 1 });
 
-      const result = await canAccessAgent('a1', 'U-member');
+      const result = await canAccessAgent(TEST_WORKSPACE_ID, 'a1', 'U-member');
       expect(result).toBe(true);
     });
 
@@ -755,7 +757,7 @@ describe('Agent Management', () => {
       // member check — not member
       mockQueryOne.mockResolvedValueOnce(undefined);
 
-      const result = await canAccessAgent('a1', 'U-outsider');
+      const result = await canAccessAgent(TEST_WORKSPACE_ID, 'a1', 'U-outsider');
       expect(result).toBe(false);
     });
   });
@@ -763,7 +765,7 @@ describe('Agent Management', () => {
   describe('DM Conversations', () => {
     describe('createDmConversation', () => {
       it('should create a DM conversation record', async () => {
-        const result = await createDmConversation('U001', 'a1', 'D123', '1234.5678');
+        const result = await createDmConversation(TEST_WORKSPACE_ID, 'U001', 'a1', 'D123', '1234.5678');
         expect(result.user_id).toBe('U001');
         expect(result.agent_id).toBe('a1');
         expect(result.dm_channel_id).toBe('D123');
@@ -783,7 +785,7 @@ describe('Agent Management', () => {
           dm_channel_id: 'D123', thread_ts: '1234.5678',
         });
 
-        const result = await getDmConversation('D123', '1234.5678');
+        const result = await getDmConversation(TEST_WORKSPACE_ID, 'D123', '1234.5678');
         expect(result).toBeDefined();
         expect(result!.dm_channel_id).toBe('D123');
       });
@@ -791,17 +793,17 @@ describe('Agent Management', () => {
       it('should return null when not found', async () => {
         mockQueryOne.mockResolvedValueOnce(undefined);
 
-        const result = await getDmConversation('D999', '0000.0000');
+        const result = await getDmConversation(TEST_WORKSPACE_ID, 'D999', '0000.0000');
         expect(result).toBeNull();
       });
     });
 
     describe('touchDmConversation', () => {
       it('should update last_active_at', async () => {
-        await touchDmConversation('D123', '1234.5678');
+        await touchDmConversation(TEST_WORKSPACE_ID, 'D123', '1234.5678');
         expect(mockExecute).toHaveBeenCalledWith(
           expect.stringContaining('last_active_at'),
-          ['D123', '1234.5678']
+          [TEST_WORKSPACE_ID, 'D123', '1234.5678']
         );
       });
     });
@@ -815,7 +817,7 @@ describe('Agent Management', () => {
         { id: 'a2', name: 'agent2', tools: '[]', relevance_keywords: '[]' },
       ]);
 
-      const agents = await getAccessibleAgents('U-superadmin');
+      const agents = await getAccessibleAgents(TEST_WORKSPACE_ID, 'U-superadmin');
       expect(agents).toHaveLength(2);
     });
 
@@ -825,11 +827,11 @@ describe('Agent Management', () => {
         { id: 'a1', name: 'public-agent', visibility: 'public', tools: '[]', relevance_keywords: '[]' },
       ]);
 
-      const agents = await getAccessibleAgents('U-regular');
+      const agents = await getAccessibleAgents(TEST_WORKSPACE_ID, 'U-regular');
       expect(agents).toHaveLength(1);
       expect(mockQuery).toHaveBeenCalledWith(
         expect.stringContaining('LEFT JOIN agent_members'),
-        ['U-regular']
+        [TEST_WORKSPACE_ID, 'U-regular']
       );
     });
   });
@@ -841,7 +843,7 @@ describe('Agent Management', () => {
         tools: '[]', relevance_keywords: null,
       });
 
-      const agent = await getAgent('a1');
+      const agent = await getAgent(TEST_WORKSPACE_ID, 'a1');
       expect(agent!.relevance_keywords).toEqual([]);
     });
 
@@ -852,7 +854,7 @@ describe('Agent Management', () => {
         tools: '[]', relevance_keywords: '[]',
       });
 
-      const agent = await getAgent('a1');
+      const agent = await getAgent(TEST_WORKSPACE_ID, 'a1');
       expect(agent!.channel_ids).toEqual(['C1']);
     });
 
@@ -863,19 +865,19 @@ describe('Agent Management', () => {
         visibility: null,
       });
 
-      const agent = await getAgent('a1');
+      const agent = await getAgent(TEST_WORKSPACE_ID, 'a1');
       expect(agent!.visibility).toBe('public');
     });
 
     it('should return null for getAgentByName when not found', async () => {
       mockQueryOne.mockResolvedValueOnce(undefined);
-      const agent = await getAgentByName('nonexistent');
+      const agent = await getAgentByName(TEST_WORKSPACE_ID, 'nonexistent');
       expect(agent).toBeNull();
     });
 
     it('should return null for getAgentByChannel when not found', async () => {
       mockQueryOne.mockResolvedValueOnce(undefined);
-      const agent = await getAgentByChannel('C999');
+      const agent = await getAgentByChannel(TEST_WORKSPACE_ID, 'C999');
       expect(agent).toBeNull();
     });
   });

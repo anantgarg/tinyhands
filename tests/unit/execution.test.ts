@@ -155,10 +155,13 @@ import {
 import type { JobData, RunRecord } from '../../src/types';
 import type { Job } from 'bullmq';
 
+const TEST_WORKSPACE_ID = 'W_TEST_123';
+
 // ── Helpers ──
 
 function makeJobData(overrides: Partial<JobData> = {}): JobData {
   return {
+    workspaceId: TEST_WORKSPACE_ID,
     agentId: 'agent-1',
     channelId: 'C123',
     threadTs: '1700000000.000000',
@@ -235,7 +238,7 @@ describe('Execution Module – Run Record CRUD', () => {
       mockExecute.mockResolvedValueOnce(undefined);
 
       const data = makeJobData();
-      const record = await createRunRecord(data, 'job-42');
+      const record = await createRunRecord(TEST_WORKSPACE_ID, data, 'job-42');
 
       expect(record.id).toBeDefined();
       expect(record.id).toMatch(/^[0-9a-f-]{36}$/); // UUID v4
@@ -264,19 +267,19 @@ describe('Execution Module – Run Record CRUD', () => {
       mockExecute.mockResolvedValueOnce(undefined);
 
       const data = makeJobData();
-      await createRunRecord(data, 'job-99');
+      await createRunRecord(TEST_WORKSPACE_ID, data, 'job-99');
 
       expect(mockExecute).toHaveBeenCalledTimes(1);
       const [sql, params] = mockExecute.mock.calls[0];
       expect(sql).toContain('INSERT INTO run_history');
-      expect(params).toHaveLength(20);
+      expect(params).toHaveLength(21);
     });
 
     it('should use modelOverride when provided', async () => {
       mockExecute.mockResolvedValueOnce(undefined);
 
       const data = makeJobData({ modelOverride: 'opus' });
-      const record = await createRunRecord(data, 'job-1');
+      const record = await createRunRecord(TEST_WORKSPACE_ID, data, 'job-1');
 
       expect(record.model).toBe('opus');
     });
@@ -285,7 +288,7 @@ describe('Execution Module – Run Record CRUD', () => {
       mockExecute.mockResolvedValueOnce(undefined);
 
       const data = makeJobData({ modelOverride: undefined });
-      const record = await createRunRecord(data, 'job-1');
+      const record = await createRunRecord(TEST_WORKSPACE_ID, data, 'job-1');
 
       expect(record.model).toBe('sonnet');
     });
@@ -294,7 +297,7 @@ describe('Execution Module – Run Record CRUD', () => {
       mockExecute.mockResolvedValueOnce(undefined);
 
       const data = makeJobData({ userId: null });
-      const record = await createRunRecord(data, 'job-1');
+      const record = await createRunRecord(TEST_WORKSPACE_ID, data, 'job-1');
 
       expect(record.slack_user_id).toBeNull();
     });
@@ -310,7 +313,7 @@ describe('Execution Module – Run Record CRUD', () => {
       mockExecute.mockResolvedValue(undefined);
 
       const data = makeJobData();
-      const r1 = await createRunRecord(data, 'job-1');
+      const r1 = await createRunRecord(TEST_WORKSPACE_ID, data, 'job-1');
       const r2 = await createRunRecord(data, 'job-2');
 
       expect(r1.id).not.toBe(r2.id);
@@ -320,7 +323,7 @@ describe('Execution Module – Run Record CRUD', () => {
       mockExecute.mockResolvedValueOnce(undefined);
 
       const before = Date.now();
-      const record = await createRunRecord(makeJobData(), 'job-1');
+      const record = await createRunRecord(TEST_WORKSPACE_ID, makeJobData(), 'job-1');
       const after = Date.now();
 
       const created = new Date(record.created_at).getTime();
@@ -337,33 +340,34 @@ describe('Execution Module – Run Record CRUD', () => {
     it('should build a parameterised UPDATE for allowed columns', async () => {
       mockExecute.mockResolvedValueOnce(undefined);
 
-      await updateRunRecord('run-1', { status: 'completed', output: 'All done' });
+      await updateRunRecord(TEST_WORKSPACE_ID, 'run-1', { status: 'completed', output: 'All done' });
 
       expect(mockExecute).toHaveBeenCalledTimes(1);
       const [sql, params] = mockExecute.mock.calls[0];
       expect(sql).toContain('UPDATE run_history SET');
-      expect(sql).toContain('WHERE id =');
-      expect(params).toHaveLength(3);
+      expect(sql).toContain('WHERE workspace_id =');
+      expect(params).toHaveLength(4);
       expect(params).toContain('completed');
       expect(params).toContain('All done');
+      expect(params).toContain(TEST_WORKSPACE_ID);
       expect(params).toContain('run-1');
     });
 
     it('should not call execute when updates object is empty', async () => {
-      await updateRunRecord('run-1', {});
+      await updateRunRecord(TEST_WORKSPACE_ID, 'run-1', {});
 
       expect(mockExecute).not.toHaveBeenCalled();
     });
 
     it('should throw for disallowed columns', async () => {
       await expect(
-        updateRunRecord('run-1', { id: 'new-id' } as any),
+        updateRunRecord(TEST_WORKSPACE_ID, 'run-1', { id: 'new-id' } as any),
       ).rejects.toThrow('Invalid column for run record update: id');
     });
 
     it('should throw for agent_id (not in allowed set)', async () => {
       await expect(
-        updateRunRecord('run-1', { agent_id: 'other' } as any),
+        updateRunRecord(TEST_WORKSPACE_ID, 'run-1', { agent_id: 'other' } as any),
       ).rejects.toThrow('Invalid column for run record update: agent_id');
     });
 
@@ -384,11 +388,11 @@ describe('Execution Module – Run Record CRUD', () => {
         completed_at: '2025-06-01T00:00:00Z',
       };
 
-      await updateRunRecord('run-1', allowedUpdates);
+      await updateRunRecord(TEST_WORKSPACE_ID, 'run-1', allowedUpdates);
 
       expect(mockExecute).toHaveBeenCalledTimes(1);
       const [sql, params] = mockExecute.mock.calls[0];
-      expect(params).toHaveLength(12);
+      expect(params).toHaveLength(13);
       expect(sql).toContain('output =');
       expect(sql).toContain('status =');
       expect(sql).toContain('completed_at =');
@@ -397,19 +401,19 @@ describe('Execution Module – Run Record CRUD', () => {
     it('should update a single field correctly', async () => {
       mockExecute.mockResolvedValueOnce(undefined);
 
-      await updateRunRecord('run-1', { duration_ms: 9999 });
+      await updateRunRecord(TEST_WORKSPACE_ID, 'run-1', { duration_ms: 9999 });
 
       const [sql, params] = mockExecute.mock.calls[0];
       expect(sql).toContain('duration_ms = $1');
-      expect(sql).toContain('WHERE id = $2');
-      expect(params).toEqual([9999, 'run-1']);
+      expect(sql).toContain('WHERE workspace_id = $2 AND id = $3');
+      expect(params).toEqual([9999, TEST_WORKSPACE_ID, 'run-1']);
     });
 
     it('should propagate DB errors', async () => {
       mockExecute.mockRejectedValueOnce(new Error('deadlock detected'));
 
       await expect(
-        updateRunRecord('run-1', { status: 'failed' }),
+        updateRunRecord(TEST_WORKSPACE_ID, 'run-1', { status: 'failed' }),
       ).rejects.toThrow('deadlock detected');
     });
   });
@@ -423,11 +427,11 @@ describe('Execution Module – Run Record CRUD', () => {
       const fakeRow = makeFakeRunRecord();
       mockQueryOne.mockResolvedValueOnce(fakeRow);
 
-      const result = await getRunRecord('run-1');
+      const result = await getRunRecord(TEST_WORKSPACE_ID, 'run-1');
 
       expect(mockQueryOne).toHaveBeenCalledWith(
-        'SELECT * FROM run_history WHERE id = $1',
-        ['run-1'],
+        'SELECT * FROM run_history WHERE workspace_id = $1 AND id = $2',
+        [TEST_WORKSPACE_ID, 'run-1'],
       );
       expect(result).toEqual(fakeRow);
     });
@@ -435,7 +439,7 @@ describe('Execution Module – Run Record CRUD', () => {
     it('should return null when not found', async () => {
       mockQueryOne.mockResolvedValueOnce(undefined);
 
-      const result = await getRunRecord('nonexistent');
+      const result = await getRunRecord(TEST_WORKSPACE_ID, 'nonexistent');
 
       expect(result).toBeNull();
     });
@@ -443,7 +447,7 @@ describe('Execution Module – Run Record CRUD', () => {
     it('should return null explicitly (not undefined)', async () => {
       mockQueryOne.mockResolvedValueOnce(null);
 
-      const result = await getRunRecord('run-1');
+      const result = await getRunRecord(TEST_WORKSPACE_ID, 'run-1');
 
       expect(result).toBeNull();
       expect(result).not.toBeUndefined();
@@ -464,22 +468,22 @@ describe('Execution Module – Run Record CRUD', () => {
     it('should query with default limit of 20', async () => {
       mockQuery.mockResolvedValueOnce([]);
 
-      await getRecentRuns();
+      await getRecentRuns(TEST_WORKSPACE_ID);
 
       expect(mockQuery).toHaveBeenCalledWith(
-        'SELECT * FROM run_history ORDER BY created_at DESC LIMIT $1',
-        [20],
+        'SELECT * FROM run_history WHERE workspace_id = $1 ORDER BY created_at DESC LIMIT $2',
+        [TEST_WORKSPACE_ID, 20],
       );
     });
 
     it('should respect custom limit', async () => {
       mockQuery.mockResolvedValueOnce([]);
 
-      await getRecentRuns(5);
+      await getRecentRuns(TEST_WORKSPACE_ID, 5);
 
       expect(mockQuery).toHaveBeenCalledWith(
-        'SELECT * FROM run_history ORDER BY created_at DESC LIMIT $1',
-        [5],
+        'SELECT * FROM run_history WHERE workspace_id = $1 ORDER BY created_at DESC LIMIT $2',
+        [TEST_WORKSPACE_ID, 5],
       );
     });
 
@@ -490,7 +494,7 @@ describe('Execution Module – Run Record CRUD', () => {
       ];
       mockQuery.mockResolvedValueOnce(rows);
 
-      const result = await getRecentRuns(10);
+      const result = await getRecentRuns(TEST_WORKSPACE_ID, 10);
 
       expect(result).toHaveLength(2);
       expect(result[0].id).toBe('run-1');
@@ -500,7 +504,7 @@ describe('Execution Module – Run Record CRUD', () => {
     it('should return empty array when no runs', async () => {
       mockQuery.mockResolvedValueOnce([]);
 
-      const result = await getRecentRuns();
+      const result = await getRecentRuns(TEST_WORKSPACE_ID);
 
       expect(result).toEqual([]);
     });
@@ -520,22 +524,22 @@ describe('Execution Module – Run Record CRUD', () => {
     it('should query with agent_id and default limit of 20', async () => {
       mockQuery.mockResolvedValueOnce([]);
 
-      await getRunsByAgent('agent-1');
+      await getRunsByAgent(TEST_WORKSPACE_ID, 'agent-1');
 
       expect(mockQuery).toHaveBeenCalledWith(
-        'SELECT * FROM run_history WHERE agent_id = $1 ORDER BY created_at DESC LIMIT $2',
-        ['agent-1', 20],
+        'SELECT * FROM run_history WHERE workspace_id = $1 AND agent_id = $2 ORDER BY created_at DESC LIMIT $3',
+        [TEST_WORKSPACE_ID, 'agent-1', 20],
       );
     });
 
     it('should respect custom limit', async () => {
       mockQuery.mockResolvedValueOnce([]);
 
-      await getRunsByAgent('agent-1', 3);
+      await getRunsByAgent(TEST_WORKSPACE_ID, 'agent-1', 3);
 
       expect(mockQuery).toHaveBeenCalledWith(
-        'SELECT * FROM run_history WHERE agent_id = $1 ORDER BY created_at DESC LIMIT $2',
-        ['agent-1', 3],
+        'SELECT * FROM run_history WHERE workspace_id = $1 AND agent_id = $2 ORDER BY created_at DESC LIMIT $3',
+        [TEST_WORKSPACE_ID, 'agent-1', 3],
       );
     });
 
@@ -546,7 +550,7 @@ describe('Execution Module – Run Record CRUD', () => {
       ];
       mockQuery.mockResolvedValueOnce(rows);
 
-      const result = await getRunsByAgent('agent-1');
+      const result = await getRunsByAgent(TEST_WORKSPACE_ID, 'agent-1');
 
       expect(result).toHaveLength(2);
       expect(result.every(r => r.agent_id === 'agent-1')).toBe(true);
@@ -555,7 +559,7 @@ describe('Execution Module – Run Record CRUD', () => {
     it('should return empty array when agent has no runs', async () => {
       mockQuery.mockResolvedValueOnce([]);
 
-      const result = await getRunsByAgent('agent-no-runs');
+      const result = await getRunsByAgent(TEST_WORKSPACE_ID, 'agent-no-runs');
 
       expect(result).toEqual([]);
     });
@@ -727,7 +731,7 @@ describe('Execution Module – executeAgentRun', () => {
     const job = makeFakeJob(makeJobData());
     await executeAgentRun(job);
 
-    expect(mockRecordTokenUsage).toHaveBeenCalledWith(150); // 100 + 50
+    expect(mockRecordTokenUsage).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 150); // 100 + 50
   });
 
   it('should use estimateCost when cost_usd is 0', async () => {
@@ -1594,7 +1598,7 @@ describe('Execution Module – executeAgentRun', () => {
     await executeAgentRun(job);
 
     // Should have used 0 defaults for missing fields
-    expect(mockRecordTokenUsage).toHaveBeenCalledWith(0); // 0 + 0
+    expect(mockRecordTokenUsage).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 0); // 0 + 0
   });
 
   // ── system_prompt fallback ──

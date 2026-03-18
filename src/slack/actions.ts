@@ -3,6 +3,7 @@ import { approveContribution } from '../modules/kb-wizard';
 import { approveProposal, rejectProposal } from '../modules/self-evolution';
 import { resolveHumanAction } from '../modules/workflows';
 import { postMessage } from './index';
+import { getDefaultWorkspaceId } from '../db';
 import { logger } from '../utils/logger';
 
 export function registerActions(app: App): void {
@@ -12,9 +13,10 @@ export function registerActions(app: App): void {
     const actionData = action as any;
     const entryId = actionData.value;
     const userId = (body as any).user?.id;
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
 
     try {
-      const entry = await approveContribution(entryId);
+      const entry = await approveContribution(workspaceId, entryId);
       await postMessage(
         (body as any).channel?.id || '',
         `:white_check_mark: KB entry "${entry.title}" approved by <@${userId}>`,
@@ -29,9 +31,10 @@ export function registerActions(app: App): void {
     const actionData = action as any;
     const entryId = actionData.value;
     const userId = (body as any).user?.id;
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
 
     const { deleteKBEntry } = await import('../modules/knowledge-base');
-    await deleteKBEntry(entryId);
+    await deleteKBEntry(workspaceId, entryId);
 
     await postMessage(
       (body as any).channel?.id || '',
@@ -45,9 +48,10 @@ export function registerActions(app: App): void {
     const actionData = action as any;
     const proposalId = actionData.value;
     const userId = (body as any).user?.id;
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
 
     try {
-      const proposal = await approveProposal(proposalId, userId);
+      const proposal = await approveProposal(workspaceId, proposalId, userId);
       await postMessage(
         (body as any).channel?.id || '',
         `:white_check_mark: Evolution proposal approved: ${proposal.description}`,
@@ -62,9 +66,10 @@ export function registerActions(app: App): void {
     const actionData = action as any;
     const proposalId = actionData.value;
     const userId = (body as any).user?.id;
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
 
     try {
-      await rejectProposal(proposalId, userId);
+      await rejectProposal(workspaceId, proposalId, userId);
       await postMessage(
         (body as any).channel?.id || '',
         `:x: Evolution proposal rejected by <@${userId}>`,
@@ -78,10 +83,11 @@ export function registerActions(app: App): void {
   app.action('workflow_action', async ({ action, ack, body }) => {
     await ack();
     const actionData = action as any;
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
 
     try {
       const { workflowRunId, actionData: data } = JSON.parse(actionData.value);
-      await resolveHumanAction(workflowRunId, data);
+      await resolveHumanAction(workspaceId, workflowRunId, data);
 
       await postMessage(
         (body as any).channel?.id || '',
@@ -98,9 +104,10 @@ export function registerActions(app: App): void {
     const { pauseTrigger } = await import('../modules/triggers');
     const actionData = action as any;
     const userId = (body as any).user?.id;
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
 
     try {
-      await pauseTrigger(actionData.value, userId);
+      await pauseTrigger(workspaceId, actionData.value, userId);
       await postMessage(
         (body as any).channel?.id || '',
         ':pause_button: Trigger paused',
@@ -115,9 +122,10 @@ export function registerActions(app: App): void {
     const { resumeTrigger } = await import('../modules/triggers');
     const actionData = action as any;
     const userId = (body as any).user?.id;
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
 
     try {
-      await resumeTrigger(actionData.value, userId);
+      await resumeTrigger(workspaceId, actionData.value, userId);
       await postMessage(
         (body as any).channel?.id || '',
         ':arrow_forward: Trigger resumed',

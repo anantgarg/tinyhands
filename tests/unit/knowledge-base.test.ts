@@ -38,6 +38,8 @@ import {
 import { chunkText } from '../../src/utils/chunker';
 import { logger } from '../../src/utils/logger';
 
+const TEST_WORKSPACE_ID = 'W_TEST_123';
+
 // ── Helpers ──
 
 function makeRawRow(overrides: Record<string, any> = {}) {
@@ -85,7 +87,7 @@ describe('Knowledge Base Module', () => {
     };
 
     it('should create a manual entry with approved=true', async () => {
-      const entry = await createKBEntry(baseParams);
+      const entry = await createKBEntry(TEST_WORKSPACE_ID, baseParams);
 
       expect(entry.title).toBe('New Article');
       expect(entry.summary).toBe('Article summary');
@@ -103,17 +105,17 @@ describe('Knowledge Base Module', () => {
     });
 
     it('should auto-approve manual source type entries', async () => {
-      const entry = await createKBEntry({ ...baseParams, sourceType: 'manual' });
+      const entry = await createKBEntry(TEST_WORKSPACE_ID, { ...baseParams, sourceType: 'manual' });
       expect(entry.approved).toBe(true);
     });
 
     it('should not auto-approve non-manual source types', async () => {
-      const entry = await createKBEntry({ ...baseParams, sourceType: 'agent' });
+      const entry = await createKBEntry(TEST_WORKSPACE_ID, { ...baseParams, sourceType: 'agent' });
       expect(entry.approved).toBe(false);
     });
 
     it('should allow explicit approved=true for non-manual sources', async () => {
-      const entry = await createKBEntry({
+      const entry = await createKBEntry(TEST_WORKSPACE_ID, {
         ...baseParams,
         sourceType: 'google_drive',
         approved: true,
@@ -122,7 +124,7 @@ describe('Knowledge Base Module', () => {
     });
 
     it('should set contributedBy when provided', async () => {
-      const entry = await createKBEntry({
+      const entry = await createKBEntry(TEST_WORKSPACE_ID, {
         ...baseParams,
         contributedBy: 'U999',
       });
@@ -130,7 +132,7 @@ describe('Knowledge Base Module', () => {
     });
 
     it('should set kbSourceId when provided', async () => {
-      const entry = await createKBEntry({
+      const entry = await createKBEntry(TEST_WORKSPACE_ID, {
         ...baseParams,
         sourceType: 'zendesk_help_center',
         approved: true,
@@ -140,7 +142,7 @@ describe('Knowledge Base Module', () => {
     });
 
     it('should use withTransaction to insert entry', async () => {
-      await createKBEntry(baseParams);
+      await createKBEntry(TEST_WORKSPACE_ID, baseParams);
       expect(mockWithTransaction).toHaveBeenCalledTimes(1);
     });
 
@@ -148,7 +150,7 @@ describe('Knowledge Base Module', () => {
       const fakeClient = { query: vi.fn() };
       mockWithTransaction.mockImplementation(async (fn: any) => fn(fakeClient));
 
-      const entry = await createKBEntry(baseParams);
+      const entry = await createKBEntry(TEST_WORKSPACE_ID, baseParams);
 
       // First call is the INSERT
       expect(fakeClient.query).toHaveBeenCalled();
@@ -156,17 +158,18 @@ describe('Knowledge Base Module', () => {
       expect(insertCall[0]).toContain('INSERT INTO kb_entries');
       const params = insertCall[1];
       expect(params[0]).toBe(entry.id); // id
-      expect(params[1]).toBe('New Article'); // title
-      expect(params[5]).toBe(JSON.stringify(['node', 'typescript'])); // tags as JSON
-      expect(params[6]).toBe(JSON.stringify('all')); // access_scope as JSON
-      expect(params[9]).toBe(true); // approved (manual)
+      expect(params[1]).toBe(TEST_WORKSPACE_ID); // workspace_id
+      expect(params[2]).toBe('New Article'); // title
+      expect(params[6]).toBe(JSON.stringify(['node', 'typescript'])); // tags as JSON
+      expect(params[7]).toBe(JSON.stringify('all')); // access_scope as JSON
+      expect(params[10]).toBe(true); // approved (manual)
     });
 
     it('should index chunks when entry is approved', async () => {
       const fakeClient = { query: vi.fn() };
       mockWithTransaction.mockImplementation(async (fn: any) => fn(fakeClient));
 
-      await createKBEntry(baseParams); // manual → approved=true
+      await createKBEntry(TEST_WORKSPACE_ID, baseParams); // manual → approved=true
 
       expect(chunkText).toHaveBeenCalledWith('Article content body', 'New Article');
       // INSERT for entry + 2 INSERT for chunks
@@ -174,21 +177,21 @@ describe('Knowledge Base Module', () => {
 
       const chunk0Call = fakeClient.query.mock.calls[1];
       expect(chunk0Call[0]).toContain('INSERT INTO kb_chunks');
-      expect(chunk0Call[1][2]).toBe(0); // chunk_index
-      expect(chunk0Call[1][3]).toBe('chunk 0'); // content
-      expect(chunk0Call[1][4]).toBe('hash0'); // content_hash
+      expect(chunk0Call[1][3]).toBe(0); // chunk_index
+      expect(chunk0Call[1][4]).toBe('chunk 0'); // content
+      expect(chunk0Call[1][5]).toBe('hash0'); // content_hash
 
       const chunk1Call = fakeClient.query.mock.calls[2];
-      expect(chunk1Call[1][2]).toBe(1);
-      expect(chunk1Call[1][3]).toBe('chunk 1');
-      expect(chunk1Call[1][4]).toBe('hash1');
+      expect(chunk1Call[1][3]).toBe(1);
+      expect(chunk1Call[1][4]).toBe('chunk 1');
+      expect(chunk1Call[1][5]).toBe('hash1');
     });
 
     it('should NOT index chunks when entry is not approved', async () => {
       const fakeClient = { query: vi.fn() };
       mockWithTransaction.mockImplementation(async (fn: any) => fn(fakeClient));
 
-      await createKBEntry({ ...baseParams, sourceType: 'agent' }); // not approved
+      await createKBEntry(TEST_WORKSPACE_ID, { ...baseParams, sourceType: 'agent' }); // not approved
 
       expect(chunkText).not.toHaveBeenCalled();
       // Only 1 INSERT call (the entry itself, no chunk inserts)
@@ -196,7 +199,7 @@ describe('Knowledge Base Module', () => {
     });
 
     it('should log info after creation', async () => {
-      const entry = await createKBEntry(baseParams);
+      const entry = await createKBEntry(TEST_WORKSPACE_ID, baseParams);
 
       expect(logger.info).toHaveBeenCalledWith('KB entry created', {
         entryId: entry.id,
@@ -208,21 +211,21 @@ describe('Knowledge Base Module', () => {
     it('should propagate transaction errors', async () => {
       mockWithTransaction.mockRejectedValue(new Error('DB connection failed'));
 
-      await expect(createKBEntry(baseParams)).rejects.toThrow('DB connection failed');
+      await expect(createKBEntry(TEST_WORKSPACE_ID, baseParams)).rejects.toThrow('DB connection failed');
     });
 
     it('should handle access_scope as string array', async () => {
       const fakeClient = { query: vi.fn() };
       mockWithTransaction.mockImplementation(async (fn: any) => fn(fakeClient));
 
-      const entry = await createKBEntry({
+      const entry = await createKBEntry(TEST_WORKSPACE_ID, {
         ...baseParams,
         accessScope: ['agent-1', 'agent-2'],
       });
 
       expect(entry.access_scope).toEqual(['agent-1', 'agent-2']);
       const insertParams = fakeClient.query.mock.calls[0][1];
-      expect(insertParams[6]).toBe(JSON.stringify(['agent-1', 'agent-2']));
+      expect(insertParams[7]).toBe(JSON.stringify(['agent-1', 'agent-2']));
     });
   });
 
@@ -235,13 +238,13 @@ describe('Knowledge Base Module', () => {
       mockQueryOne.mockResolvedValue(rawRow);
       mockExecute.mockResolvedValue(undefined);
 
-      const result = await approveKBEntry('entry-1');
+      const result = await approveKBEntry(TEST_WORKSPACE_ID, 'entry-1');
 
       expect(result.approved).toBe(true);
       expect(result.id).toBe('entry-1');
       expect(mockExecute).toHaveBeenCalledWith(
-        'UPDATE kb_entries SET approved = TRUE, updated_at = NOW() WHERE id = $1',
-        ['entry-1']
+        'UPDATE kb_entries SET approved = TRUE, updated_at = NOW() WHERE id = $1 AND workspace_id = $2',
+        ['entry-1', TEST_WORKSPACE_ID]
       );
     });
 
@@ -250,7 +253,7 @@ describe('Knowledge Base Module', () => {
       mockQueryOne.mockResolvedValue(rawRow);
       mockExecute.mockResolvedValue(undefined);
 
-      await approveKBEntry('entry-1');
+      await approveKBEntry(TEST_WORKSPACE_ID, 'entry-1');
 
       expect(chunkText).toHaveBeenCalledWith('Full content here', 'Test Article');
       // execute calls: 1 UPDATE + 2 chunk INSERTs
@@ -262,7 +265,7 @@ describe('Knowledge Base Module', () => {
     it('should throw if entry not found', async () => {
       mockQueryOne.mockResolvedValue(null);
 
-      await expect(approveKBEntry('nonexistent')).rejects.toThrow(
+      await expect(approveKBEntry(TEST_WORKSPACE_ID, 'nonexistent')).rejects.toThrow(
         'KB entry nonexistent not found'
       );
     });
@@ -271,7 +274,7 @@ describe('Knowledge Base Module', () => {
       mockQueryOne.mockResolvedValue(makeRawRow({ approved: false }));
       mockExecute.mockResolvedValue(undefined);
 
-      await approveKBEntry('entry-1');
+      await approveKBEntry(TEST_WORKSPACE_ID, 'entry-1');
 
       expect(logger.info).toHaveBeenCalledWith('KB entry approved', { entryId: 'entry-1' });
     });
@@ -285,7 +288,7 @@ describe('Knowledge Base Module', () => {
       mockQueryOne.mockResolvedValue(rawRow);
       mockExecute.mockResolvedValue(undefined);
 
-      const result = await approveKBEntry('entry-1');
+      const result = await approveKBEntry(TEST_WORKSPACE_ID, 'entry-1');
 
       expect(result.approved).toBe(true);
       expect(result.tags).toEqual(['a', 'b']);
@@ -300,7 +303,7 @@ describe('Knowledge Base Module', () => {
     it('should return deserialized entry when found', async () => {
       mockQueryOne.mockResolvedValue(makeRawRow());
 
-      const entry = await getKBEntry('entry-1');
+      const entry = await getKBEntry(TEST_WORKSPACE_ID, 'entry-1');
 
       expect(entry).not.toBeNull();
       expect(entry!.id).toBe('entry-1');
@@ -308,15 +311,15 @@ describe('Knowledge Base Module', () => {
       expect(entry!.access_scope).toBe('all');
       expect(entry!.kb_source_id).toBeNull();
       expect(mockQueryOne).toHaveBeenCalledWith(
-        'SELECT * FROM kb_entries WHERE id = $1',
-        ['entry-1']
+        'SELECT * FROM kb_entries WHERE id = $1 AND workspace_id = $2',
+        ['entry-1', TEST_WORKSPACE_ID]
       );
     });
 
     it('should return null when not found', async () => {
       mockQueryOne.mockResolvedValue(null);
 
-      const entry = await getKBEntry('nonexistent');
+      const entry = await getKBEntry(TEST_WORKSPACE_ID, 'nonexistent');
 
       expect(entry).toBeNull();
     });
@@ -324,7 +327,7 @@ describe('Knowledge Base Module', () => {
     it('should return null when queryOne returns undefined', async () => {
       mockQueryOne.mockResolvedValue(undefined);
 
-      const entry = await getKBEntry('missing');
+      const entry = await getKBEntry(TEST_WORKSPACE_ID, 'missing');
 
       expect(entry).toBeNull();
     });
@@ -332,7 +335,7 @@ describe('Knowledge Base Module', () => {
     it('should deserialize tags from JSON string', async () => {
       mockQueryOne.mockResolvedValue(makeRawRow({ tags: '["x","y","z"]' }));
 
-      const entry = await getKBEntry('entry-1');
+      const entry = await getKBEntry(TEST_WORKSPACE_ID, 'entry-1');
 
       expect(entry!.tags).toEqual(['x', 'y', 'z']);
     });
@@ -340,7 +343,7 @@ describe('Knowledge Base Module', () => {
     it('should deserialize access_scope as array from JSON string', async () => {
       mockQueryOne.mockResolvedValue(makeRawRow({ access_scope: '["agent-a","agent-b"]' }));
 
-      const entry = await getKBEntry('entry-1');
+      const entry = await getKBEntry(TEST_WORKSPACE_ID, 'entry-1');
 
       expect(entry!.access_scope).toEqual(['agent-a', 'agent-b']);
     });
@@ -348,7 +351,7 @@ describe('Knowledge Base Module', () => {
     it('should handle empty tags gracefully (fallback to [])', async () => {
       mockQueryOne.mockResolvedValue(makeRawRow({ tags: null }));
 
-      const entry = await getKBEntry('entry-1');
+      const entry = await getKBEntry(TEST_WORKSPACE_ID, 'entry-1');
 
       expect(entry!.tags).toEqual([]);
     });
@@ -356,7 +359,7 @@ describe('Knowledge Base Module', () => {
     it('should handle empty access_scope gracefully (fallback to "all")', async () => {
       mockQueryOne.mockResolvedValue(makeRawRow({ access_scope: null }));
 
-      const entry = await getKBEntry('entry-1');
+      const entry = await getKBEntry(TEST_WORKSPACE_ID, 'entry-1');
 
       expect(entry!.access_scope).toBe('all');
     });
@@ -364,7 +367,7 @@ describe('Knowledge Base Module', () => {
     it('should preserve kb_source_id when present', async () => {
       mockQueryOne.mockResolvedValue(makeRawRow({ kb_source_id: 'src-42' }));
 
-      const entry = await getKBEntry('entry-1');
+      const entry = await getKBEntry(TEST_WORKSPACE_ID, 'entry-1');
 
       expect(entry!.kb_source_id).toBe('src-42');
     });
@@ -378,25 +381,25 @@ describe('Knowledge Base Module', () => {
       const rows = [makeRawRow({ id: 'e1' }), makeRawRow({ id: 'e2' })];
       mockQuery.mockResolvedValue(rows);
 
-      const entries = await listKBEntries();
+      const entries = await listKBEntries(TEST_WORKSPACE_ID);
 
       expect(entries).toHaveLength(2);
       expect(entries[0].id).toBe('e1');
       expect(entries[1].id).toBe('e2');
       expect(mockQuery).toHaveBeenCalledWith(
-        'SELECT * FROM kb_entries WHERE approved = TRUE ORDER BY created_at DESC LIMIT $1',
-        [50]
+        'SELECT * FROM kb_entries WHERE approved = TRUE AND workspace_id = $1 ORDER BY created_at DESC LIMIT $2',
+        [TEST_WORKSPACE_ID, 50]
       );
     });
 
     it('should respect custom limit', async () => {
       mockQuery.mockResolvedValue([]);
 
-      await listKBEntries(10);
+      await listKBEntries(TEST_WORKSPACE_ID, 10);
 
       expect(mockQuery).toHaveBeenCalledWith(
         expect.any(String),
-        [10]
+        [TEST_WORKSPACE_ID, 10]
       );
     });
 
@@ -407,7 +410,7 @@ describe('Knowledge Base Module', () => {
       ];
       mockQuery.mockResolvedValue(rows);
 
-      const entries = await listKBEntries();
+      const entries = await listKBEntries(TEST_WORKSPACE_ID);
 
       expect(entries[0].tags).toEqual(['a']);
       expect(entries[1].tags).toEqual(['b', 'c']);
@@ -416,7 +419,7 @@ describe('Knowledge Base Module', () => {
     it('should return empty array when no entries exist', async () => {
       mockQuery.mockResolvedValue([]);
 
-      const entries = await listKBEntries();
+      const entries = await listKBEntries(TEST_WORKSPACE_ID);
 
       expect(entries).toEqual([]);
     });
@@ -430,18 +433,19 @@ describe('Knowledge Base Module', () => {
       const rows = [makeRawRow({ id: 'p1', approved: false }), makeRawRow({ id: 'p2', approved: false })];
       mockQuery.mockResolvedValue(rows);
 
-      const entries = await listPendingEntries();
+      const entries = await listPendingEntries(TEST_WORKSPACE_ID);
 
       expect(entries).toHaveLength(2);
       expect(mockQuery).toHaveBeenCalledWith(
-        'SELECT * FROM kb_entries WHERE approved = FALSE ORDER BY created_at DESC'
+        'SELECT * FROM kb_entries WHERE approved = FALSE AND workspace_id = $1 ORDER BY created_at DESC',
+        [TEST_WORKSPACE_ID]
       );
     });
 
     it('should return empty array when no pending entries', async () => {
       mockQuery.mockResolvedValue([]);
 
-      const entries = await listPendingEntries();
+      const entries = await listPendingEntries(TEST_WORKSPACE_ID);
 
       expect(entries).toEqual([]);
     });
@@ -449,7 +453,7 @@ describe('Knowledge Base Module', () => {
     it('should deserialize returned rows', async () => {
       mockQuery.mockResolvedValue([makeRawRow({ tags: '["pending"]' })]);
 
-      const entries = await listPendingEntries();
+      const entries = await listPendingEntries(TEST_WORKSPACE_ID);
 
       expect(entries[0].tags).toEqual(['pending']);
     });
@@ -462,25 +466,25 @@ describe('Knowledge Base Module', () => {
     it('should delete chunks first, then the entry', async () => {
       mockExecute.mockResolvedValue(undefined);
 
-      await deleteKBEntry('entry-1');
+      await deleteKBEntry(TEST_WORKSPACE_ID, 'entry-1');
 
       expect(mockExecute).toHaveBeenCalledTimes(2);
       // First call: delete chunks
       expect(mockExecute.mock.calls[0]).toEqual([
-        'DELETE FROM kb_chunks WHERE entry_id = $1',
-        ['entry-1'],
+        'DELETE FROM kb_chunks WHERE entry_id = $1 AND entry_id IN (SELECT id FROM kb_entries WHERE workspace_id = $2)',
+        ['entry-1', TEST_WORKSPACE_ID],
       ]);
       // Second call: delete entry
       expect(mockExecute.mock.calls[1]).toEqual([
-        'DELETE FROM kb_entries WHERE id = $1',
-        ['entry-1'],
+        'DELETE FROM kb_entries WHERE id = $1 AND workspace_id = $2',
+        ['entry-1', TEST_WORKSPACE_ID],
       ]);
     });
 
     it('should log info after deletion', async () => {
       mockExecute.mockResolvedValue(undefined);
 
-      await deleteKBEntry('entry-42');
+      await deleteKBEntry(TEST_WORKSPACE_ID, 'entry-42');
 
       expect(logger.info).toHaveBeenCalledWith('KB entry deleted', { entryId: 'entry-42' });
     });
@@ -515,7 +519,7 @@ describe('Knowledge Base Module', () => {
         .mockResolvedValueOnce(makeRawRow({ id: 'e1' }))
         .mockResolvedValueOnce(makeRawRow({ id: 'e2' }));
 
-      const results = await searchKB('test query words');
+      const results = await searchKB(TEST_WORKSPACE_ID, 'test query words');
 
       expect(results).toHaveLength(2);
       expect(results[0].id).toBe('e1');
@@ -525,7 +529,7 @@ describe('Knowledge Base Module', () => {
     it('should build FTS query from words longer than 2 chars joined by |', async () => {
       mockQuery.mockResolvedValueOnce([]);
 
-      await searchKB('hello my world');
+      await searchKB(TEST_WORKSPACE_ID, 'hello my world');
 
       const ftsCall = mockQuery.mock.calls[0];
       // "my" is excluded (length <= 2), "hello" and "world" remain
@@ -535,21 +539,21 @@ describe('Knowledge Base Module', () => {
     it('should strip special characters from query', async () => {
       mockQuery.mockResolvedValueOnce([]);
 
-      await searchKB('hello! world? foo@bar');
+      await searchKB(TEST_WORKSPACE_ID, 'hello! world? foo@bar');
 
       const ftsCall = mockQuery.mock.calls[0];
       expect(ftsCall[1][0]).toBe('hello | world | foo | bar');
     });
 
     it('should return empty array for empty/short query', async () => {
-      const results = await searchKB('hi');
+      const results = await searchKB(TEST_WORKSPACE_ID, 'hi');
 
       expect(results).toEqual([]);
       expect(mockQuery).not.toHaveBeenCalled();
     });
 
     it('should return empty array for query with only special characters', async () => {
-      const results = await searchKB('!@#$%');
+      const results = await searchKB(TEST_WORKSPACE_ID, '!@#$%');
 
       expect(results).toEqual([]);
     });
@@ -565,7 +569,7 @@ describe('Knowledge Base Module', () => {
         .mockResolvedValueOnce(makeRawRow({ id: 'e1' }))
         .mockResolvedValueOnce(makeRawRow({ id: 'e2' }));
 
-      const results = await searchKB('some query text');
+      const results = await searchKB(TEST_WORKSPACE_ID, 'some query text');
 
       expect(results).toHaveLength(2);
       // getKBEntry called only twice (deduplicated)
@@ -576,7 +580,7 @@ describe('Knowledge Base Module', () => {
       mockQuery.mockResolvedValueOnce([{ entry_id: 'e1', content: 'c', rank: 1 }]);
       mockQueryOne.mockResolvedValueOnce(makeRawRow({ id: 'e1', approved: false }));
 
-      const results = await searchKB('test query words');
+      const results = await searchKB(TEST_WORKSPACE_ID, 'test query words');
 
       expect(results).toHaveLength(0);
     });
@@ -585,7 +589,7 @@ describe('Knowledge Base Module', () => {
       mockQuery.mockResolvedValueOnce([{ entry_id: 'e1', content: 'c', rank: 1 }]);
       mockQueryOne.mockResolvedValueOnce(null);
 
-      const results = await searchKB('test query words');
+      const results = await searchKB(TEST_WORKSPACE_ID, 'test query words');
 
       expect(results).toHaveLength(0);
     });
@@ -600,7 +604,7 @@ describe('Knowledge Base Module', () => {
         .mockResolvedValueOnce(makeRawRow({ id: 'e1', access_scope: '["agent-x"]' }))
         .mockResolvedValueOnce(makeRawRow({ id: 'e2', access_scope: '"all"' }));
 
-      const results = await searchKB('test query words', 'agent-y');
+      const results = await searchKB(TEST_WORKSPACE_ID, 'test query words', 'agent-y');
 
       // e1 is scoped to agent-x, and we're searching as agent-y → excluded
       expect(results).toHaveLength(1);
@@ -615,7 +619,7 @@ describe('Knowledge Base Module', () => {
         makeRawRow({ id: 'e1', access_scope: '["agent-a","agent-b"]' })
       );
 
-      const results = await searchKB('test query words', 'agent-b');
+      const results = await searchKB(TEST_WORKSPACE_ID, 'test query words', 'agent-b');
 
       expect(results).toHaveLength(1);
     });
@@ -628,7 +632,7 @@ describe('Knowledge Base Module', () => {
         makeRawRow({ id: 'e1', access_scope: '["agent-x"]' })
       );
 
-      const results = await searchKB('test query words');
+      const results = await searchKB(TEST_WORKSPACE_ID, 'test query words');
 
       // No agentId → scope check skipped
       expect(results).toHaveLength(1);
@@ -639,12 +643,13 @@ describe('Knowledge Base Module', () => {
         .mockRejectedValueOnce(new Error('FTS syntax error')) // FTS fails
         .mockResolvedValueOnce([makeRawRow({ id: 'e1' })]); // LIKE fallback
 
-      const results = await searchKB('test query words');
+      const results = await searchKB(TEST_WORKSPACE_ID, 'test query words');
 
       expect(results).toHaveLength(1);
       const fallbackCall = mockQuery.mock.calls[1];
       expect(fallbackCall[0]).toContain('LIKE');
-      expect(fallbackCall[1][0]).toBe('%test query words%');
+      expect(fallbackCall[1][0]).toBe(TEST_WORKSPACE_ID);
+      expect(fallbackCall[1][1]).toBe('%test query words%');
     });
 
     it('should truncate LIKE query to 50 chars in fallback', async () => {
@@ -653,19 +658,20 @@ describe('Knowledge Base Module', () => {
         .mockRejectedValueOnce(new Error('FTS error'))
         .mockResolvedValueOnce([]);
 
-      await searchKB(longQuery);
+      await searchKB(TEST_WORKSPACE_ID, longQuery);
 
       const fallbackCall = mockQuery.mock.calls[1];
-      expect(fallbackCall[1][0]).toBe(`%${'a'.repeat(50)}%`);
+      expect(fallbackCall[1][0]).toBe(TEST_WORKSPACE_ID);
+      expect(fallbackCall[1][1]).toBe(`%${'a'.repeat(50)}%`);
     });
 
     it('should limit FTS query terms to 10 words', async () => {
       const manyWords = Array.from({ length: 20 }, (_, i) => `word${i}`).join(' ');
       mockQuery.mockResolvedValueOnce([]);
 
-      await searchKB(manyWords);
+      await searchKB(TEST_WORKSPACE_ID, manyWords);
 
-      const ftsQuery = mockQuery.mock.calls[0][1][0];
+      const ftsQuery = mockQuery.mock.calls[0][1][0]; // first param is ftsQuery
       const terms = ftsQuery.split(' | ');
       expect(terms).toHaveLength(10);
     });
@@ -675,7 +681,7 @@ describe('Knowledge Base Module', () => {
         .mockRejectedValueOnce(new Error('FTS error'))
         .mockResolvedValueOnce([makeRawRow({ tags: '["fallback"]' })]);
 
-      const results = await searchKB('test query words');
+      const results = await searchKB(TEST_WORKSPACE_ID, 'test query words');
 
       expect(results[0].tags).toEqual(['fallback']);
     });
@@ -692,18 +698,19 @@ describe('Knowledge Base Module', () => {
         { category: 'support' },
       ]);
 
-      const categories = await getCategories();
+      const categories = await getCategories(TEST_WORKSPACE_ID);
 
       expect(categories).toEqual(['billing', 'engineering', 'support']);
       expect(mockQuery).toHaveBeenCalledWith(
-        'SELECT DISTINCT category FROM kb_entries WHERE approved = TRUE ORDER BY category'
+        'SELECT DISTINCT category FROM kb_entries WHERE approved = TRUE AND workspace_id = $1 ORDER BY category',
+        [TEST_WORKSPACE_ID]
       );
     });
 
     it('should return empty array when no categories exist', async () => {
       mockQuery.mockResolvedValue([]);
 
-      const categories = await getCategories();
+      const categories = await getCategories(TEST_WORKSPACE_ID);
 
       expect(categories).toEqual([]);
     });

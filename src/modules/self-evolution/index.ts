@@ -11,12 +11,13 @@ import { logger } from '../../utils/logger';
 // ── Evolution Proposals ──
 
 export async function createProposal(
+  workspaceId: string,
   agentId: string,
   action: EvolutionAction,
   description: string,
   diff: string
 ): Promise<EvolutionProposal> {
-  const agent = await getAgent(agentId);
+  const agent = await getAgent(workspaceId, agentId);
   if (!agent) throw new Error(`Agent ${agentId} not found`);
 
   const id = uuid();
@@ -32,14 +33,14 @@ export async function createProposal(
   };
 
   await execute(`
-    INSERT INTO evolution_proposals (id, agent_id, action, description, diff, status, created_at, resolved_at)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-  `, [proposal.id, proposal.agent_id, proposal.action, proposal.description,
+    INSERT INTO evolution_proposals (id, workspace_id, agent_id, action, description, diff, status, created_at, resolved_at)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+  `, [proposal.id, workspaceId, proposal.agent_id, proposal.action, proposal.description,
     proposal.diff, proposal.status, proposal.created_at, proposal.resolved_at]);
 
   // Auto-execute if autonomous
   if (agent.self_evolution_mode === 'autonomous') {
-    await executeProposal(proposal);
+    await executeProposal(workspaceId, proposal);
   }
 
   logger.info('Evolution proposal created', {
@@ -50,11 +51,11 @@ export async function createProposal(
   return proposal;
 }
 
-export async function approveProposal(proposalId: string, userId: string): Promise<EvolutionProposal> {
-  const proposal = await getProposal(proposalId);
+export async function approveProposal(workspaceId: string, proposalId: string, userId: string): Promise<EvolutionProposal> {
+  const proposal = await getProposal(workspaceId, proposalId);
   if (!proposal) throw new Error(`Proposal ${proposalId} not found`);
 
-  if (!(await canModifyAgent(proposal.agent_id, userId))) {
+  if (!(await canModifyAgent(workspaceId, proposal.agent_id, userId))) {
     throw new Error('Insufficient permissions to approve proposal');
   }
 
@@ -62,77 +63,77 @@ export async function approveProposal(proposalId: string, userId: string): Promi
     throw new Error(`Proposal is ${proposal.status}, cannot approve`);
   }
 
-  await executeProposal(proposal);
+  await executeProposal(workspaceId, proposal);
 
   await execute(
-    'UPDATE evolution_proposals SET status = $1, resolved_at = NOW() WHERE id = $2',
-    ['approved', proposalId]
+    'UPDATE evolution_proposals SET status = $1, resolved_at = NOW() WHERE id = $2 AND workspace_id = $3',
+    ['approved', proposalId, workspaceId]
   );
 
   logger.info('Evolution proposal approved', { proposalId, userId });
   return { ...proposal, status: 'approved' };
 }
 
-export async function rejectProposal(proposalId: string, userId: string): Promise<void> {
-  const proposal = await getProposal(proposalId);
+export async function rejectProposal(workspaceId: string, proposalId: string, userId: string): Promise<void> {
+  const proposal = await getProposal(workspaceId, proposalId);
   if (!proposal) throw new Error(`Proposal ${proposalId} not found`);
 
-  if (!(await canModifyAgent(proposal.agent_id, userId))) {
+  if (!(await canModifyAgent(workspaceId, proposal.agent_id, userId))) {
     throw new Error('Insufficient permissions');
   }
 
   await execute(
-    'UPDATE evolution_proposals SET status = $1, resolved_at = NOW() WHERE id = $2',
-    ['rejected', proposalId]
+    'UPDATE evolution_proposals SET status = $1, resolved_at = NOW() WHERE id = $2 AND workspace_id = $3',
+    ['rejected', proposalId, workspaceId]
   );
 
   logger.info('Evolution proposal rejected', { proposalId, userId });
 }
 
-export async function getProposal(id: string): Promise<EvolutionProposal | null> {
-  const row = await queryOne<EvolutionProposal>('SELECT * FROM evolution_proposals WHERE id = $1', [id]);
+export async function getProposal(workspaceId: string, id: string): Promise<EvolutionProposal | null> {
+  const row = await queryOne<EvolutionProposal>('SELECT * FROM evolution_proposals WHERE id = $1 AND workspace_id = $2', [id, workspaceId]);
   return row || null;
 }
 
-export async function getPendingProposals(agentId?: string): Promise<EvolutionProposal[]> {
+export async function getPendingProposals(workspaceId: string, agentId?: string): Promise<EvolutionProposal[]> {
   if (agentId) {
     return query<EvolutionProposal>(
-      'SELECT * FROM evolution_proposals WHERE agent_id = $1 AND status = $2 ORDER BY created_at DESC',
-      [agentId, 'pending']
+      'SELECT * FROM evolution_proposals WHERE agent_id = $1 AND status = $2 AND workspace_id = $3 ORDER BY created_at DESC',
+      [agentId, 'pending', workspaceId]
     );
   }
   return query<EvolutionProposal>(
-    'SELECT * FROM evolution_proposals WHERE status = $1 ORDER BY created_at DESC',
-    ['pending']
+    'SELECT * FROM evolution_proposals WHERE status = $1 AND workspace_id = $2 ORDER BY created_at DESC',
+    ['pending', workspaceId]
   );
 }
 
-export async function getProposalHistory(agentId: string): Promise<EvolutionProposal[]> {
+export async function getProposalHistory(workspaceId: string, agentId: string): Promise<EvolutionProposal[]> {
   return query<EvolutionProposal>(
-    'SELECT * FROM evolution_proposals WHERE agent_id = $1 ORDER BY created_at DESC LIMIT 50',
-    [agentId]
+    'SELECT * FROM evolution_proposals WHERE agent_id = $1 AND workspace_id = $2 ORDER BY created_at DESC LIMIT 50',
+    [agentId, workspaceId]
   );
 }
 
 // ── Execution ──
 
-async function executeProposal(proposal: EvolutionProposal): Promise<void> {
+async function executeProposal(workspaceId: string, proposal: EvolutionProposal): Promise<void> {
   try {
     switch (proposal.action) {
       case 'write_tool':
-        await executeWriteTool(proposal);
+        await executeWriteTool(workspaceId, proposal);
         break;
       case 'create_mcp':
-        await executeCreateMcp(proposal);
+        await executeCreateMcp(workspaceId, proposal);
         break;
       case 'commit_code':
-        await executeCommitCode(proposal);
+        await executeCommitCode(workspaceId, proposal);
         break;
       case 'update_prompt':
-        await executeUpdatePrompt(proposal);
+        await executeUpdatePrompt(workspaceId, proposal);
         break;
       case 'add_to_kb':
-        await executeAddToKb(proposal);
+        await executeAddToKb(workspaceId, proposal);
         break;
     }
   } catch (err: any) {
@@ -145,7 +146,7 @@ async function executeProposal(proposal: EvolutionProposal): Promise<void> {
   }
 }
 
-async function executeWriteTool(proposal: EvolutionProposal): Promise<void> {
+async function executeWriteTool(workspaceId: string, proposal: EvolutionProposal): Promise<void> {
   const toolConfig = JSON.parse(proposal.diff);
   const toolName = toolConfig.name || `agent-tool-${proposal.id.slice(0, 8)}`;
   validateToolName(toolName);
@@ -159,6 +160,7 @@ async function executeWriteTool(proposal: EvolutionProposal): Promise<void> {
   const language = toolConfig.language || 'javascript';
 
   await registerCustomTool(
+    workspaceId,
     toolName,
     JSON.stringify(toolConfig.schema || {}),
     null,
@@ -169,24 +171,24 @@ async function executeWriteTool(proposal: EvolutionProposal): Promise<void> {
   logger.info('Tool registered in DB', { toolName, language, codeLength: code.length });
 }
 
-async function executeCreateMcp(proposal: EvolutionProposal): Promise<void> {
+async function executeCreateMcp(workspaceId: string, proposal: EvolutionProposal): Promise<void> {
   const mcpConfig = JSON.parse(proposal.diff);
   const name = mcpConfig.name || `mcp-${proposal.id.slice(0, 8)}`;
-  const agent = await getAgent(proposal.agent_id);
+  const agent = await getAgent(workspaceId, proposal.agent_id);
   const autoApprove = agent?.self_evolution_mode === 'autonomous';
 
   await execute(`
-    INSERT INTO mcp_configs (id, agent_id, name, config_json, approved, created_at, updated_at)
-    VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+    INSERT INTO mcp_configs (id, workspace_id, agent_id, name, config_json, approved, created_at, updated_at)
+    VALUES ($1, $2, $3, $4, $5, $6, NOW(), NOW())
     ON CONFLICT(agent_id, name) DO UPDATE SET
       config_json = EXCLUDED.config_json,
       updated_at = NOW()
-  `, [uuid(), proposal.agent_id, name, JSON.stringify(mcpConfig), autoApprove]);
+  `, [uuid(), workspaceId, proposal.agent_id, name, JSON.stringify(mcpConfig), autoApprove]);
 
   logger.info('MCP config stored in DB', { name, agentId: proposal.agent_id, autoApprove });
 }
 
-async function executeCommitCode(proposal: EvolutionProposal): Promise<void> {
+async function executeCommitCode(workspaceId: string, proposal: EvolutionProposal): Promise<void> {
   const changes = JSON.parse(proposal.diff);
 
   if (Array.isArray(changes.files)) {
@@ -202,15 +204,15 @@ async function executeCommitCode(proposal: EvolutionProposal): Promise<void> {
         const language = langMap[ext] || 'text';
 
         await execute(`
-          INSERT INTO code_artifacts (id, agent_id, file_path, content, language, proposal_id, version, created_at, updated_at)
-          VALUES ($1, $2, $3, $4, $5, $6, 1, NOW(), NOW())
+          INSERT INTO code_artifacts (id, workspace_id, agent_id, file_path, content, language, proposal_id, version, created_at, updated_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, 1, NOW(), NOW())
           ON CONFLICT(agent_id, file_path) DO UPDATE SET
             content = EXCLUDED.content,
             language = EXCLUDED.language,
             proposal_id = EXCLUDED.proposal_id,
             version = code_artifacts.version + 1,
             updated_at = NOW()
-        `, [uuid(), proposal.agent_id, file.path, file.content, language, proposal.id]);
+        `, [uuid(), workspaceId, proposal.agent_id, file.path, file.content, language, proposal.id]);
 
         logger.info('Code artifact stored in DB', {
           path: file.path,
@@ -222,13 +224,13 @@ async function executeCommitCode(proposal: EvolutionProposal): Promise<void> {
   }
 }
 
-async function executeUpdatePrompt(proposal: EvolutionProposal): Promise<void> {
-  await updateAgent(proposal.agent_id, { system_prompt: proposal.diff }, proposal.agent_id);
+async function executeUpdatePrompt(workspaceId: string, proposal: EvolutionProposal): Promise<void> {
+  await updateAgent(workspaceId, proposal.agent_id, { system_prompt: proposal.diff }, proposal.agent_id);
 }
 
-async function executeAddToKb(proposal: EvolutionProposal): Promise<void> {
+async function executeAddToKb(workspaceId: string, proposal: EvolutionProposal): Promise<void> {
   const kbData = JSON.parse(proposal.diff);
-  await createKBEntry({
+  await createKBEntry(workspaceId, {
     title: kbData.title || proposal.description,
     summary: kbData.summary || '',
     content: kbData.content || proposal.diff,

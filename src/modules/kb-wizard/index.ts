@@ -135,7 +135,7 @@ export async function advanceWizard(
   }
 }
 
-export async function completeWizard(state: WizardState): Promise<KBEntry> {
+export async function completeWizard(workspaceId: string, state: WizardState): Promise<KBEntry> {
   if (!state.suggestions) {
     throw new Error('Cannot complete wizard without suggestions');
   }
@@ -152,7 +152,7 @@ export async function completeWizard(state: WizardState): Promise<KBEntry> {
     approved: state.sourceType === 'manual',
   };
 
-  const entry = await createKBEntry(params);
+  const entry = await createKBEntry(workspaceId, params);
 
   logger.info('KB wizard completed', { entryId: entry.id, sourceType: state.sourceType });
   return entry;
@@ -161,11 +161,12 @@ export async function completeWizard(state: WizardState): Promise<KBEntry> {
 // ── Agent-Contributed Flow ──
 
 export async function createAgentContribution(
+  workspaceId: string,
   agentId: string,
   content: string,
   suggestions: WizardSuggestions
 ): Promise<KBEntry> {
-  return createKBEntry({
+  return createKBEntry(workspaceId, {
     title: suggestions.title,
     summary: suggestions.summary,
     content,
@@ -178,6 +179,6 @@ export async function createAgentContribution(
   });
 }
 
-export async function approveContribution(entryId: string): Promise<KBEntry> {
-  return approveKBEntry(entryId);
+export async function approveContribution(workspaceId: string, entryId: string): Promise<KBEntry> {
+  return approveKBEntry(workspaceId, entryId);
 }

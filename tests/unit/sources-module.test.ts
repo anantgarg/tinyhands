@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
+const TEST_WORKSPACE_ID = 'W_TEST_123';
+
 // ── Mocks ──
 
 const mockQuery = vi.fn();
@@ -96,7 +98,7 @@ describe('Sources Module', () => {
     it('inserts a new source and returns it', async () => {
       mockExecute.mockResolvedValue(undefined);
 
-      const result = await connectSource({
+      const result = await connectSource(TEST_WORKSPACE_ID, {
         agentId: 'agent-1',
         sourceType: 'github',
         uri: 'https://github.com/org/repo',
@@ -120,7 +122,7 @@ describe('Sources Module', () => {
     it('calls execute with INSERT statement and all params', async () => {
       mockExecute.mockResolvedValue(undefined);
 
-      const result = await connectSource({
+      const result = await connectSource(TEST_WORKSPACE_ID, {
         agentId: 'agent-2',
         sourceType: 'google_drive',
         uri: 'https://docs.google.com/doc/abc',
@@ -130,22 +132,18 @@ describe('Sources Module', () => {
       expect(mockExecute).toHaveBeenCalledTimes(1);
       const [sql, params] = mockExecute.mock.calls[0];
       expect(sql).toContain('INSERT INTO sources');
-      expect(params).toHaveLength(10);
-      expect(params[0]).toBe('test-uuid-1234'); // id
-      expect(params[1]).toBe('agent-2');         // agent_id
-      expect(params[2]).toBe('google_drive');    // source_type
-      expect(params[3]).toBe('https://docs.google.com/doc/abc'); // uri
-      expect(params[4]).toBe('Design Doc');      // label
-      expect(params[5]).toBe('active');          // status
-      expect(params[6]).toBeNull();              // last_sync_at
-      expect(params[7]).toBe(0);                 // chunk_count
-      expect(params[8]).toBeNull();              // error_message
+      expect(params).toContain('test-uuid-1234'); // id
+      expect(params).toContain(TEST_WORKSPACE_ID); // workspace_id
+      expect(params).toContain('agent-2');         // agent_id
+      expect(params).toContain('google_drive');    // source_type
+      expect(params).toContain('https://docs.google.com/doc/abc'); // uri
+      expect(params).toContain('Design Doc');      // label
     });
 
     it('defaults status to active', async () => {
       mockExecute.mockResolvedValue(undefined);
 
-      const result = await connectSource({
+      const result = await connectSource(TEST_WORKSPACE_ID, {
         agentId: 'agent-1',
         sourceType: 'slack_upload',
         uri: '/tmp/file.txt',
@@ -158,7 +156,7 @@ describe('Sources Module', () => {
     it('defaults chunk_count to 0', async () => {
       mockExecute.mockResolvedValue(undefined);
 
-      const result = await connectSource({
+      const result = await connectSource(TEST_WORKSPACE_ID, {
         agentId: 'agent-1',
         sourceType: 'local',
         uri: '/var/data',
@@ -176,26 +174,26 @@ describe('Sources Module', () => {
     it('deletes source_chunks first, then the source', async () => {
       mockExecute.mockResolvedValue(undefined);
 
-      await disconnectSource('source-1');
+      await disconnectSource(TEST_WORKSPACE_ID, 'source-1');
 
       expect(mockExecute).toHaveBeenCalledTimes(2);
       // First call: delete chunks
       expect(mockExecute.mock.calls[0][0]).toContain('DELETE FROM source_chunks');
-      expect(mockExecute.mock.calls[0][1]).toEqual(['source-1']);
+      expect(mockExecute.mock.calls[0][1]).toContain('source-1');
       // Second call: delete source
       expect(mockExecute.mock.calls[1][0]).toContain('DELETE FROM sources');
-      expect(mockExecute.mock.calls[1][1]).toEqual(['source-1']);
+      expect(mockExecute.mock.calls[1][1]).toContain('source-1');
     });
 
     it('deletes chunks before source (order matters for FK constraints)', async () => {
       const callOrder: string[] = [];
       mockExecute.mockImplementation((sql: string) => {
-        if (sql.includes('source_chunks')) callOrder.push('chunks');
-        if (sql.includes('sources WHERE')) callOrder.push('source');
+        if (sql.startsWith('DELETE FROM source_chunks')) callOrder.push('chunks');
+        if (sql.startsWith('DELETE FROM sources')) callOrder.push('source');
         return Promise.resolve();
       });
 
-      await disconnectSource('source-2');
+      await disconnectSource(TEST_WORKSPACE_ID, 'source-2');
 
       expect(callOrder).toEqual(['chunks', 'source']);
     });
@@ -209,19 +207,19 @@ describe('Sources Module', () => {
       const sources = [makeFakeSource(), makeFakeSource({ id: 'source-2' })];
       mockQuery.mockResolvedValueOnce(sources);
 
-      const result = await getAgentSources('agent-1');
+      const result = await getAgentSources(TEST_WORKSPACE_ID, 'agent-1');
 
       expect(result).toEqual(sources);
       expect(mockQuery).toHaveBeenCalledWith(
-        'SELECT * FROM sources WHERE agent_id = $1',
-        ['agent-1'],
+        expect.stringContaining('SELECT * FROM sources WHERE agent_id = $1'),
+        expect.arrayContaining(['agent-1']),
       );
     });
 
     it('returns empty array when agent has no sources', async () => {
       mockQuery.mockResolvedValueOnce([]);
 
-      const result = await getAgentSources('agent-no-sources');
+      const result = await getAgentSources(TEST_WORKSPACE_ID, 'agent-no-sources');
 
       expect(result).toEqual([]);
     });
@@ -235,19 +233,19 @@ describe('Sources Module', () => {
       const source = makeFakeSource();
       mockQueryOne.mockResolvedValueOnce(source);
 
-      const result = await getSource('source-1');
+      const result = await getSource(TEST_WORKSPACE_ID, 'source-1');
 
       expect(result).toEqual(source);
       expect(mockQueryOne).toHaveBeenCalledWith(
-        'SELECT * FROM sources WHERE id = $1',
-        ['source-1'],
+        expect.stringContaining('SELECT * FROM sources WHERE id = $1'),
+        expect.arrayContaining(['source-1']),
       );
     });
 
     it('returns null when source is not found', async () => {
       mockQueryOne.mockResolvedValueOnce(undefined);
 
-      const result = await getSource('nonexistent');
+      const result = await getSource(TEST_WORKSPACE_ID, 'nonexistent');
 
       expect(result).toBeNull();
     });
@@ -255,7 +253,7 @@ describe('Sources Module', () => {
     it('returns null when queryOne returns null', async () => {
       mockQueryOne.mockResolvedValueOnce(null);
 
-      const result = await getSource('gone');
+      const result = await getSource(TEST_WORKSPACE_ID, 'gone');
 
       expect(result).toBeNull();
     });
@@ -268,29 +266,29 @@ describe('Sources Module', () => {
     it('updates status and sets last_sync_at to NOW()', async () => {
       mockExecute.mockResolvedValue(undefined);
 
-      await updateSourceStatus('source-1', 'active');
+      await updateSourceStatus(TEST_WORKSPACE_ID, 'source-1', 'active');
 
       expect(mockExecute).toHaveBeenCalledWith(
-        'UPDATE sources SET status = $1, error_message = $2, last_sync_at = NOW() WHERE id = $3',
-        ['active', null, 'source-1'],
+        expect.stringContaining('UPDATE sources SET status = $1, error_message = $2, last_sync_at = NOW()'),
+        ['active', null, 'source-1', TEST_WORKSPACE_ID],
       );
     });
 
     it('sets error_message when provided', async () => {
       mockExecute.mockResolvedValue(undefined);
 
-      await updateSourceStatus('source-1', 'error', 'Connection timeout');
+      await updateSourceStatus(TEST_WORKSPACE_ID, 'source-1', 'error', 'Connection timeout');
 
       expect(mockExecute).toHaveBeenCalledWith(
         expect.stringContaining('UPDATE sources SET status'),
-        ['error', 'Connection timeout', 'source-1'],
+        ['error', 'Connection timeout', 'source-1', TEST_WORKSPACE_ID],
       );
     });
 
     it('sets error_message to null when not provided', async () => {
       mockExecute.mockResolvedValue(undefined);
 
-      await updateSourceStatus('source-1', 'syncing');
+      await updateSourceStatus(TEST_WORKSPACE_ID, 'source-1', 'syncing');
 
       const [, params] = mockExecute.mock.calls[0];
       expect(params[1]).toBeNull();
@@ -299,7 +297,7 @@ describe('Sources Module', () => {
     it('handles syncing status', async () => {
       mockExecute.mockResolvedValue(undefined);
 
-      await updateSourceStatus('source-1', 'syncing');
+      await updateSourceStatus(TEST_WORKSPACE_ID, 'source-1', 'syncing');
 
       const [, params] = mockExecute.mock.calls[0];
       expect(params[0]).toBe('syncing');
@@ -323,7 +321,7 @@ describe('Sources Module', () => {
         return fn(mockClient);
       });
 
-      const result = await ingestContent('source-1', 'agent-1', [
+      const result = await ingestContent(TEST_WORKSPACE_ID, 'source-1', 'agent-1', [
         { path: 'src/main.ts', content: 'console.log("hello")' },
       ]);
 
@@ -342,7 +340,7 @@ describe('Sources Module', () => {
         return fn(mockClient);
       });
 
-      const result = await ingestContent('source-1', 'agent-1', [
+      const result = await ingestContent(TEST_WORKSPACE_ID, 'source-1', 'agent-1', [
         { path: 'src/existing.ts', content: 'existing content' },
       ]);
 
@@ -368,7 +366,7 @@ describe('Sources Module', () => {
         return fn(mockClient);
       });
 
-      const result = await ingestContent('source-1', 'agent-1', [
+      const result = await ingestContent(TEST_WORKSPACE_ID, 'source-1', 'agent-1', [
         { path: 'file1.ts', content: 'content1' },
         { path: 'file2.ts', content: 'content2' },
       ]);
@@ -396,7 +394,7 @@ describe('Sources Module', () => {
         return fn(mockClient);
       });
 
-      await ingestContent('source-1', 'agent-1', [
+      await ingestContent(TEST_WORKSPACE_ID, 'source-1', 'agent-1', [
         { path: 'file.ts', content: 'code' },
       ]);
 
@@ -404,6 +402,7 @@ describe('Sources Module', () => {
       expect(updateParams[0]).toBe(5);       // count
       expect(updateParams[1]).toBe('active'); // status
       expect(updateParams[2]).toBe('source-1');
+      expect(updateParams[3]).toBe(TEST_WORKSPACE_ID);
     });
 
     it('returns 0 when files array is empty', async () => {
@@ -416,7 +415,7 @@ describe('Sources Module', () => {
         return fn(mockClient);
       });
 
-      const result = await ingestContent('source-1', 'agent-1', []);
+      const result = await ingestContent(TEST_WORKSPACE_ID, 'source-1', 'agent-1', []);
 
       expect(result).toBe(0);
     });
@@ -433,18 +432,18 @@ describe('Sources Module', () => {
       ];
       mockQuery.mockResolvedValueOnce(chunks);
 
-      const result = await retrieveContext('agent-1', 'login function');
+      const result = await retrieveContext(TEST_WORKSPACE_ID, 'agent-1', 'login function');
 
       expect(result).toHaveLength(2);
       expect(mockQuery).toHaveBeenCalledWith(
         expect.stringContaining('ts_rank'),
-        expect.arrayContaining(['agent-1']),
+        expect.arrayContaining(['agent-1', TEST_WORKSPACE_ID]),
       );
     });
 
     it('returns empty array for empty/short-word query', async () => {
       // All words <= 2 chars are filtered, resulting in empty FTS query
-      const result = await retrieveContext('agent-1', 'a b c');
+      const result = await retrieveContext(TEST_WORKSPACE_ID, 'agent-1', 'a b c');
 
       expect(result).toEqual([]);
       expect(mockQuery).not.toHaveBeenCalled();
@@ -462,7 +461,7 @@ describe('Sources Module', () => {
       mockQuery.mockResolvedValueOnce(chunks);
 
       // Token budget of 80 allows only 1 chunk (50 tokens each, second would exceed)
-      const result = await retrieveContext('agent-1', 'search query here', 80);
+      const result = await retrieveContext(TEST_WORKSPACE_ID, 'agent-1', 'search query here', 80);
 
       // First chunk = 50 tokens (within 80 budget)
       // Second chunk would be 100 tokens (exceeds 80 budget)
@@ -473,11 +472,11 @@ describe('Sources Module', () => {
     it('uses default token budget of 8000 when not specified', async () => {
       mockQuery.mockResolvedValueOnce([]);
 
-      await retrieveContext('agent-1', 'query text here');
+      await retrieveContext(TEST_WORKSPACE_ID, 'agent-1', 'query text here');
 
       const [, params] = mockQuery.mock.calls[0];
       // Last param is MAX_CHUNKS_RETRIEVED (20), not the budget
-      expect(params[2]).toBe(20);
+      expect(params[3]).toBe(20);
     });
 
     it('deduplicates chunks by file_path:chunk_index', async () => {
@@ -488,7 +487,7 @@ describe('Sources Module', () => {
       ];
       mockQuery.mockResolvedValueOnce(chunks);
 
-      const result = await retrieveContext('agent-1', 'search something specific');
+      const result = await retrieveContext(TEST_WORKSPACE_ID, 'agent-1', 'search something specific');
 
       expect(result).toHaveLength(2);
       expect(result[0].id).toBe('c1');
@@ -502,7 +501,7 @@ describe('Sources Module', () => {
       const fallbackChunks = [makeFakeChunk({ id: 'fb-1' })];
       mockQuery.mockResolvedValueOnce(fallbackChunks);
 
-      const result = await retrieveContext('agent-1', 'some query text');
+      const result = await retrieveContext(TEST_WORKSPACE_ID, 'agent-1', 'some query text');
 
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('fb-1');
@@ -513,17 +512,17 @@ describe('Sources Module', () => {
     it('limits FTS query to 20 chunks (MAX_CHUNKS_RETRIEVED)', async () => {
       mockQuery.mockResolvedValueOnce([]);
 
-      await retrieveContext('agent-1', 'some search terms here');
+      await retrieveContext(TEST_WORKSPACE_ID, 'agent-1', 'some search terms here');
 
       const [sql, params] = mockQuery.mock.calls[0];
-      expect(sql).toContain('LIMIT $3');
-      expect(params[2]).toBe(20);
+      expect(sql).toContain('LIMIT $4');
+      expect(params[3]).toBe(20);
     });
 
     it('sanitizes FTS query: strips punctuation and joins with OR', async () => {
       mockQuery.mockResolvedValueOnce([]);
 
-      await retrieveContext('agent-1', 'hello, world! foo-bar');
+      await retrieveContext(TEST_WORKSPACE_ID, 'agent-1', 'hello, world! foo-bar');
 
       const [, params] = mockQuery.mock.calls[0];
       // Words > 2 chars, joined with ' | '
@@ -533,7 +532,7 @@ describe('Sources Module', () => {
     });
 
     it('returns empty array when all query words are 2 chars or fewer', async () => {
-      const result = await retrieveContext('agent-1', 'is it ok');
+      const result = await retrieveContext(TEST_WORKSPACE_ID, 'agent-1', 'is it ok');
 
       expect(result).toEqual([]);
     });

@@ -1,5 +1,6 @@
 import express from 'express';
 import { config } from './config';
+import { getDefaultWorkspaceId } from './db';
 import { deployWebhookHandler } from './modules/auto-update';
 import { fireTrigger, getActiveTriggersByType } from './modules/triggers';
 import { searchKB, listKBEntries, getCategories } from './modules/knowledge-base';
@@ -28,8 +29,9 @@ export function createWebhookServer(): express.Application {
   // ── Generic Agent Webhook Triggers ──
   app.post('/webhooks/agent-:agentName', async (req, res) => {
     const { agentName } = req.params;
+    const workspaceId = getDefaultWorkspaceId();
 
-    const webhookTriggers = await getActiveTriggersByType('webhook');
+    const webhookTriggers = await getActiveTriggersByType(workspaceId, 'webhook');
     const matching = webhookTriggers.filter(t => {
       const cfg = JSON.parse(t.config_json);
       return cfg.agent_name === agentName;
@@ -42,7 +44,7 @@ export function createWebhookServer(): express.Application {
 
     for (const trigger of matching) {
       const idempotencyKey = `webhook:${agentName}:${req.body.id || uuid()}`;
-      await fireTrigger({
+      await fireTrigger(trigger.workspace_id, {
         triggerId: trigger.id,
         idempotencyKey,
         payload: req.body,
@@ -62,7 +64,8 @@ export function createWebhookServer(): express.Application {
       return;
     }
 
-    const triggers = await getActiveTriggersByType('linear');
+    const workspaceId = getDefaultWorkspaceId();
+    const triggers = await getActiveTriggersByType(workspaceId, 'linear');
     if (triggers.length === 0) {
       res.status(200).json({ message: 'No active Linear triggers' });
       return;
@@ -70,7 +73,7 @@ export function createWebhookServer(): express.Application {
 
     for (const trigger of triggers) {
       const idempotencyKey = `linear:${req.body.action}:${req.body.data?.id || uuid()}`;
-      await fireTrigger({
+      await fireTrigger(trigger.workspace_id, {
         triggerId: trigger.id,
         idempotencyKey,
         payload: req.body,
@@ -90,10 +93,11 @@ export function createWebhookServer(): express.Application {
       return;
     }
 
-    const triggers = await getActiveTriggersByType('zendesk');
+    const workspaceId = getDefaultWorkspaceId();
+    const triggers = await getActiveTriggersByType(workspaceId, 'zendesk');
     for (const trigger of triggers) {
       const idempotencyKey = `zendesk:${req.body.ticket_id || uuid()}:${req.body.updated_at || ''}`;
-      await fireTrigger({
+      await fireTrigger(trigger.workspace_id, {
         triggerId: trigger.id,
         idempotencyKey,
         payload: req.body,
@@ -112,10 +116,11 @@ export function createWebhookServer(): express.Application {
       return;
     }
 
-    const triggers = await getActiveTriggersByType('intercom');
+    const workspaceId = getDefaultWorkspaceId();
+    const triggers = await getActiveTriggersByType(workspaceId, 'intercom');
     for (const trigger of triggers) {
       const idempotencyKey = `intercom:${req.body.id || uuid()}`;
-      await fireTrigger({
+      await fireTrigger(trigger.workspace_id, {
         triggerId: trigger.id,
         idempotencyKey,
         payload: req.body,
@@ -140,7 +145,8 @@ export function createWebhookServer(): express.Application {
     }
 
     try {
-      const results = await searchKB(q, agent_id, limit || 4000);
+      const workspaceId = getDefaultWorkspaceId();
+      const results = await searchKB(workspaceId, q, agent_id, limit || 4000);
       res.json({
         results: results.map(e => ({
           id: e.id,
@@ -168,7 +174,8 @@ export function createWebhookServer(): express.Application {
     const category = req.query.category as string;
 
     try {
-      let entries = await listKBEntries(limit);
+      const workspaceId = getDefaultWorkspaceId();
+      let entries = await listKBEntries(workspaceId, limit);
       if (category) {
         entries = entries.filter(e => e.category === category);
       }
@@ -195,7 +202,8 @@ export function createWebhookServer(): express.Application {
     }
 
     try {
-      const categories = await getCategories();
+      const workspaceId = getDefaultWorkspaceId();
+      const categories = await getCategories(workspaceId);
       res.json({ categories });
     } catch (err: any) {
       logger.error('Internal KB categories failed', { error: err.message });

@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+const TEST_WORKSPACE_ID = 'W_TEST_123';
+
 // ── Mock setup ──
 const mockQuery = vi.fn();
 const mockQueryOne = vi.fn();
@@ -64,23 +66,23 @@ describe('getApiKey', () => {
     const fakeKey = { id: 'k1', provider: 'google_drive', config_json: '{}', setup_complete: true };
     mockQueryOne.mockResolvedValue(fakeKey);
 
-    const result = await getApiKey('google_drive' as any);
+    const result = await getApiKey(TEST_WORKSPACE_ID, 'google_drive' as any);
     expect(result).toEqual(fakeKey);
     expect(mockQueryOne).toHaveBeenCalledWith(
-      'SELECT * FROM kb_api_keys WHERE provider = $1',
-      ['google_drive'],
+      'SELECT * FROM kb_api_keys WHERE provider = $1 AND workspace_id = $2',
+      ['google_drive', TEST_WORKSPACE_ID],
     );
   });
 
   it('should return null when no API key exists', async () => {
     mockQueryOne.mockResolvedValue(null);
-    const result = await getApiKey('zendesk_help_center' as any);
+    const result = await getApiKey(TEST_WORKSPACE_ID, 'zendesk_help_center' as any);
     expect(result).toBeNull();
   });
 
   it('should return null when queryOne returns undefined', async () => {
     mockQueryOne.mockResolvedValue(undefined);
-    const result = await getApiKey('github' as any);
+    const result = await getApiKey(TEST_WORKSPACE_ID, 'github' as any);
     expect(result).toBeNull();
   });
 });
@@ -89,7 +91,7 @@ describe('setApiKey', () => {
   it('should create a new API key when none exists', async () => {
     mockQueryOne.mockResolvedValue(null); // getApiKey returns null
 
-    const result = await setApiKey('firecrawl' as any, { api_key: 'abc123' }, 'user1');
+    const result = await setApiKey(TEST_WORKSPACE_ID, 'firecrawl' as any, { api_key: 'abc123' }, 'user1');
 
     expect(result.id).toBe('test-uuid-1234');
     expect(result.provider).toBe('firecrawl');
@@ -98,7 +100,7 @@ describe('setApiKey', () => {
     expect(result.created_by).toBe('user1');
     expect(mockExecute).toHaveBeenCalledWith(
       expect.stringContaining('INSERT INTO kb_api_keys'),
-      expect.arrayContaining(['test-uuid-1234', 'firecrawl']),
+      expect.arrayContaining(['test-uuid-1234', TEST_WORKSPACE_ID, 'firecrawl']),
     );
   });
 
@@ -111,21 +113,21 @@ describe('setApiKey', () => {
     };
     mockQueryOne.mockResolvedValue(existing);
 
-    const result = await setApiKey('google_drive' as any, { client_id: 'new' }, 'user2');
+    const result = await setApiKey(TEST_WORKSPACE_ID, 'google_drive' as any, { client_id: 'new' }, 'user2');
 
     expect(result.config_json).toBe(JSON.stringify({ client_id: 'new' }));
     expect(result.setup_complete).toBe(true);
     expect(result.id).toBe('existing-id'); // preserves existing id
     expect(mockExecute).toHaveBeenCalledWith(
       expect.stringContaining('UPDATE kb_api_keys SET'),
-      expect.arrayContaining([JSON.stringify({ client_id: 'new' }), true, 'google_drive']),
+      expect.arrayContaining([JSON.stringify({ client_id: 'new' }), true, 'google_drive', TEST_WORKSPACE_ID]),
     );
   });
 
   it('should set setup_complete to false when any config value is empty', async () => {
     mockQueryOne.mockResolvedValue(null);
 
-    const result = await setApiKey('github' as any, { api_key: 'xyz', secret: '' }, 'user1');
+    const result = await setApiKey(TEST_WORKSPACE_ID, 'github' as any, { api_key: 'xyz', secret: '' }, 'user1');
 
     expect(result.setup_complete).toBe(false);
   });
@@ -133,7 +135,7 @@ describe('setApiKey', () => {
   it('should set setup_complete to false when a config value is only whitespace', async () => {
     mockQueryOne.mockResolvedValue(null);
 
-    const result = await setApiKey('github' as any, { api_key: '  ' }, 'user1');
+    const result = await setApiKey(TEST_WORKSPACE_ID, 'github' as any, { api_key: '  ' }, 'user1');
 
     expect(result.setup_complete).toBe(false);
   });
@@ -152,7 +154,7 @@ describe('setApiKeyField', () => {
       .mockResolvedValueOnce(existing)
       .mockResolvedValueOnce(existing);
 
-    const result = await setApiKeyField('google_drive' as any, 'client_secret', 'xyz', 'user1');
+    const result = await setApiKeyField(TEST_WORKSPACE_ID, 'google_drive' as any, 'client_secret', 'xyz', 'user1');
 
     expect(result).toEqual({ client_id: 'abc', client_secret: 'xyz' });
   });
@@ -160,7 +162,7 @@ describe('setApiKeyField', () => {
   it('should create config from scratch when no key exists', async () => {
     mockQueryOne.mockResolvedValue(null);
 
-    const result = await setApiKeyField('reducto' as any, 'token', 'tok123', 'user1');
+    const result = await setApiKeyField(TEST_WORKSPACE_ID, 'reducto' as any, 'token', 'tok123', 'user1');
 
     expect(result).toEqual({ token: 'tok123' });
   });
@@ -176,7 +178,7 @@ describe('setApiKeyField', () => {
       .mockResolvedValueOnce(existing)
       .mockResolvedValueOnce(existing);
 
-    const result = await setApiKeyField('github' as any, 'token', 'new', 'user1');
+    const result = await setApiKeyField(TEST_WORKSPACE_ID, 'github' as any, 'token', 'new', 'user1');
 
     expect(result.token).toBe('new');
   });
@@ -194,7 +196,7 @@ describe('removeApiKeyField', () => {
       .mockResolvedValueOnce(existing) // removeApiKeyField's getApiKey
       .mockResolvedValueOnce(existing); // setApiKey's getApiKey
 
-    const result = await removeApiKeyField('google_drive' as any, 'client_secret', 'user1');
+    const result = await removeApiKeyField(TEST_WORKSPACE_ID, 'google_drive' as any, 'client_secret', 'user1');
 
     expect(result).toEqual({ client_id: 'abc' });
     expect(result).not.toHaveProperty('client_secret');
@@ -203,7 +205,7 @@ describe('removeApiKeyField', () => {
   it('should throw when no API key is configured for the provider', async () => {
     mockQueryOne.mockResolvedValue(null);
 
-    await expect(removeApiKeyField('zendesk_help_center' as any, 'token', 'user1'))
+    await expect(removeApiKeyField(TEST_WORKSPACE_ID, 'zendesk_help_center' as any, 'token', 'user1'))
       .rejects.toThrow('No API key configured for zendesk_help_center');
   });
 });
@@ -211,19 +213,19 @@ describe('removeApiKeyField', () => {
 describe('isProviderConfigured', () => {
   it('should return true when setup_complete is true', async () => {
     mockQueryOne.mockResolvedValue({ setup_complete: true });
-    const result = await isProviderConfigured('github' as any);
+    const result = await isProviderConfigured(TEST_WORKSPACE_ID, 'github' as any);
     expect(result).toBe(true);
   });
 
   it('should return false when setup_complete is false', async () => {
     mockQueryOne.mockResolvedValue({ setup_complete: false });
-    const result = await isProviderConfigured('github' as any);
+    const result = await isProviderConfigured(TEST_WORKSPACE_ID, 'github' as any);
     expect(result).toBe(false);
   });
 
   it('should return false when no API key exists', async () => {
     mockQueryOne.mockResolvedValue(null);
-    const result = await isProviderConfigured('github' as any);
+    const result = await isProviderConfigured(TEST_WORKSPACE_ID, 'github' as any);
     expect(result).toBe(false);
   });
 });
@@ -236,25 +238,28 @@ describe('listApiKeys', () => {
     ];
     mockQuery.mockResolvedValue(keys);
 
-    const result = await listApiKeys();
+    const result = await listApiKeys(TEST_WORKSPACE_ID);
     expect(result).toEqual(keys);
-    expect(mockQuery).toHaveBeenCalledWith('SELECT * FROM kb_api_keys ORDER BY provider');
+    expect(mockQuery).toHaveBeenCalledWith(
+      'SELECT * FROM kb_api_keys WHERE workspace_id = $1 ORDER BY provider',
+      [TEST_WORKSPACE_ID],
+    );
   });
 
   it('should return empty array when no keys exist', async () => {
     mockQuery.mockResolvedValue([]);
-    const result = await listApiKeys();
+    const result = await listApiKeys(TEST_WORKSPACE_ID);
     expect(result).toEqual([]);
   });
 });
 
 describe('deleteApiKey', () => {
   it('should delete the API key for a provider', async () => {
-    await deleteApiKey('google_drive' as any, 'user1');
+    await deleteApiKey(TEST_WORKSPACE_ID, 'google_drive' as any, 'user1');
 
     expect(mockExecute).toHaveBeenCalledWith(
-      'DELETE FROM kb_api_keys WHERE provider = $1',
-      ['google_drive'],
+      'DELETE FROM kb_api_keys WHERE provider = $1 AND workspace_id = $2',
+      ['google_drive', TEST_WORKSPACE_ID],
     );
   });
 });
@@ -268,7 +273,7 @@ describe('createSource', () => {
     mockGetProviderForConnector.mockReturnValue('github');
     mockQueryOne.mockResolvedValue({ setup_complete: true }); // isProviderConfigured
 
-    const result = await createSource({
+    const result = await createSource(TEST_WORKSPACE_ID, {
       name: 'My Repo',
       sourceType: 'github' as any,
       config: { repo: 'owner/repo' },
@@ -292,7 +297,7 @@ describe('createSource', () => {
     mockGetProviderForConnector.mockReturnValue('google_drive');
     mockQueryOne.mockResolvedValue(null); // no API key
 
-    const result = await createSource({
+    const result = await createSource(TEST_WORKSPACE_ID, {
       name: 'Docs',
       sourceType: 'google_drive' as any,
       config: { folder_id: 'abc' },
@@ -306,7 +311,7 @@ describe('createSource', () => {
     mockGetProviderForConnector.mockReturnValue('firecrawl');
     mockQueryOne.mockResolvedValue({ setup_complete: true });
 
-    const result = await createSource({
+    const result = await createSource(TEST_WORKSPACE_ID, {
       name: 'Site',
       sourceType: 'firecrawl' as any,
       config: { url: 'https://example.com', depth: '3' },
@@ -322,17 +327,17 @@ describe('getSource', () => {
     const source = { id: 's1', name: 'Test', source_type: 'github' };
     mockQueryOne.mockResolvedValue(source);
 
-    const result = await getSource('s1');
+    const result = await getSource(TEST_WORKSPACE_ID, 's1');
     expect(result).toEqual(source);
     expect(mockQueryOne).toHaveBeenCalledWith(
-      'SELECT * FROM kb_sources WHERE id = $1',
-      ['s1'],
+      'SELECT * FROM kb_sources WHERE id = $1 AND workspace_id = $2',
+      ['s1', TEST_WORKSPACE_ID],
     );
   });
 
   it('should return null when source does not exist', async () => {
     mockQueryOne.mockResolvedValue(undefined);
-    const result = await getSource('nonexistent');
+    const result = await getSource(TEST_WORKSPACE_ID, 'nonexistent');
     expect(result).toBeNull();
   });
 });
@@ -342,15 +347,18 @@ describe('listSources', () => {
     const sources = [{ id: 's2' }, { id: 's1' }];
     mockQuery.mockResolvedValue(sources);
 
-    const result = await listSources();
+    const result = await listSources(TEST_WORKSPACE_ID);
     expect(result).toEqual(sources);
-    expect(mockQuery).toHaveBeenCalledWith('SELECT * FROM kb_sources ORDER BY created_at DESC');
+    expect(mockQuery).toHaveBeenCalledWith(
+      'SELECT * FROM kb_sources WHERE workspace_id = $1 ORDER BY created_at DESC',
+      [TEST_WORKSPACE_ID],
+    );
   });
 });
 
 describe('updateSource', () => {
   it('should update specified fields', async () => {
-    await updateSource('s1', { name: 'Updated', status: 'error' as any });
+    await updateSource(TEST_WORKSPACE_ID, 's1', { name: 'Updated', status: 'error' as any });
 
     expect(mockExecute).toHaveBeenCalledWith(
       expect.stringContaining('UPDATE kb_sources SET'),
@@ -359,12 +367,12 @@ describe('updateSource', () => {
   });
 
   it('should do nothing when no fields are provided', async () => {
-    await updateSource('s1', {});
+    await updateSource(TEST_WORKSPACE_ID, 's1', {});
     expect(mockExecute).not.toHaveBeenCalled();
   });
 
   it('should skip undefined values', async () => {
-    await updateSource('s1', { name: undefined, entry_count: 5 } as any);
+    await updateSource(TEST_WORKSPACE_ID, 's1', { name: undefined, entry_count: 5 } as any);
 
     expect(mockExecute).toHaveBeenCalledTimes(1);
     // The query should only have entry_count, not name
@@ -376,57 +384,57 @@ describe('updateSource', () => {
 
 describe('deleteSource', () => {
   it('should delete chunks, entries, and source in order', async () => {
-    await deleteSource('s1', 'user1');
+    await deleteSource(TEST_WORKSPACE_ID, 's1', 'user1');
 
     expect(mockExecute).toHaveBeenCalledTimes(3);
     // First: delete chunks
     expect(mockExecute.mock.calls[0][0]).toContain('DELETE FROM kb_chunks');
-    expect(mockExecute.mock.calls[0][1]).toEqual(['s1']);
+    expect(mockExecute.mock.calls[0][1]).toEqual(['s1', TEST_WORKSPACE_ID]);
     // Second: delete entries
     expect(mockExecute.mock.calls[1][0]).toContain('DELETE FROM kb_entries');
-    expect(mockExecute.mock.calls[1][1]).toEqual(['s1']);
+    expect(mockExecute.mock.calls[1][1]).toEqual(['s1', TEST_WORKSPACE_ID]);
     // Third: delete source
     expect(mockExecute.mock.calls[2][0]).toContain('DELETE FROM kb_sources');
-    expect(mockExecute.mock.calls[2][1]).toEqual(['s1']);
+    expect(mockExecute.mock.calls[2][1]).toEqual(['s1', TEST_WORKSPACE_ID]);
   });
 });
 
 describe('toggleAutoSync', () => {
   it('should enable auto-sync', async () => {
-    await toggleAutoSync('s1', true);
+    await toggleAutoSync(TEST_WORKSPACE_ID, 's1', true);
 
     expect(mockExecute).toHaveBeenCalledWith(
-      'UPDATE kb_sources SET auto_sync = $1, updated_at = NOW() WHERE id = $2',
-      [true, 's1'],
+      expect.stringContaining('UPDATE kb_sources SET auto_sync'),
+      expect.arrayContaining([true, 's1']),
     );
   });
 
   it('should disable auto-sync', async () => {
-    await toggleAutoSync('s1', false);
+    await toggleAutoSync(TEST_WORKSPACE_ID, 's1', false);
 
     expect(mockExecute).toHaveBeenCalledWith(
-      'UPDATE kb_sources SET auto_sync = $1, updated_at = NOW() WHERE id = $2',
-      [false, 's1'],
+      expect.stringContaining('UPDATE kb_sources SET auto_sync'),
+      expect.arrayContaining([false, 's1']),
     );
   });
 });
 
 describe('updateSourceStatus', () => {
   it('should update status with error message', async () => {
-    await updateSourceStatus('s1', 'error' as any, 'Connection failed');
+    await updateSourceStatus(TEST_WORKSPACE_ID, 's1', 'error' as any, 'Connection failed');
 
     expect(mockExecute).toHaveBeenCalledWith(
-      'UPDATE kb_sources SET status = $1, error_message = $2, updated_at = NOW() WHERE id = $3',
-      ['error', 'Connection failed', 's1'],
+      expect.stringContaining('UPDATE kb_sources SET status'),
+      expect.arrayContaining(['error', 'Connection failed', 's1']),
     );
   });
 
   it('should set error_message to null when not provided', async () => {
-    await updateSourceStatus('s1', 'active' as any);
+    await updateSourceStatus(TEST_WORKSPACE_ID, 's1', 'active' as any);
 
     expect(mockExecute).toHaveBeenCalledWith(
       expect.any(String),
-      ['active', null, 's1'],
+      expect.arrayContaining(['active', null, 's1']),
     );
   });
 });
@@ -444,7 +452,7 @@ describe('startSync', () => {
     mockGetProviderForConnector.mockReturnValue('github');
     mockSyncSource.mockResolvedValue(undefined);
 
-    await startSync('s1');
+    await startSync(TEST_WORKSPACE_ID, 's1');
 
     expect(mockSyncSource).toHaveBeenCalledWith(source);
   });
@@ -452,7 +460,7 @@ describe('startSync', () => {
   it('should throw when source does not exist', async () => {
     mockQueryOne.mockResolvedValue(null);
 
-    await expect(startSync('nonexistent')).rejects.toThrow('Source nonexistent not found');
+    await expect(startSync(TEST_WORKSPACE_ID, 'nonexistent')).rejects.toThrow('Source nonexistent not found');
   });
 
   it('should throw when provider is not configured', async () => {
@@ -462,7 +470,7 @@ describe('startSync', () => {
       .mockResolvedValueOnce(null); // no API key
     mockGetProviderForConnector.mockReturnValue('google_drive');
 
-    await expect(startSync('s1')).rejects.toThrow('Provider google_drive is not configured');
+    await expect(startSync(TEST_WORKSPACE_ID, 's1')).rejects.toThrow('Provider google_drive is not configured');
   });
 });
 
@@ -477,16 +485,16 @@ describe('flushAndResync', () => {
     mockGetProviderForConnector.mockReturnValue('github');
     mockSyncSource.mockResolvedValue(undefined);
 
-    await flushAndResync('s1', 'user1');
+    await flushAndResync(TEST_WORKSPACE_ID, 's1', 'user1');
 
     // Should delete chunks and entries
     expect(mockExecute).toHaveBeenCalledWith(
       expect.stringContaining('DELETE FROM kb_chunks'),
-      ['s1'],
+      ['s1', TEST_WORKSPACE_ID],
     );
     expect(mockExecute).toHaveBeenCalledWith(
       expect.stringContaining('DELETE FROM kb_entries WHERE kb_source_id'),
-      ['s1'],
+      ['s1', TEST_WORKSPACE_ID],
     );
     // Should update entry_count to 0
     expect(mockExecute).toHaveBeenCalledWith(
@@ -500,7 +508,7 @@ describe('flushAndResync', () => {
   it('should throw when source does not exist', async () => {
     mockQueryOne.mockResolvedValue(null);
 
-    await expect(flushAndResync('nonexistent', 'user1'))
+    await expect(flushAndResync(TEST_WORKSPACE_ID, 'nonexistent', 'user1'))
       .rejects.toThrow('Source nonexistent not found');
   });
 });

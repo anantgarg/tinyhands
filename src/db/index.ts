@@ -79,3 +79,75 @@ export async function closeDb(): Promise<void> {
     pool = null;
   }
 }
+
+// ── Workspace Context ──
+
+let defaultWorkspaceId: string | null = null;
+
+export function setDefaultWorkspaceId(id: string): void {
+  defaultWorkspaceId = id;
+}
+
+export function getDefaultWorkspaceId(): string {
+  if (!defaultWorkspaceId) throw new Error('Workspace not initialized. Call setDefaultWorkspaceId() first.');
+  return defaultWorkspaceId;
+}
+
+export function getDefaultWorkspaceIdOrNull(): string | null {
+  return defaultWorkspaceId;
+}
+
+// ── Workspace CRUD (core) ──
+
+export interface WorkspaceRecord {
+  id: string;
+  team_name: string;
+  domain: string | null;
+  bot_token: string;
+  bot_user_id: string;
+  bot_id: string | null;
+  app_id: string | null;
+  authed_user_id: string | null;
+  scope: string | null;
+  status: string;
+  installed_at: string;
+  updated_at: string;
+}
+
+export async function upsertWorkspace(data: {
+  id: string;
+  team_name: string;
+  domain?: string;
+  bot_token: string;
+  bot_user_id: string;
+  bot_id?: string;
+  app_id?: string;
+  authed_user_id?: string;
+  scope?: string;
+  status?: string;
+}): Promise<WorkspaceRecord> {
+  const row = await queryOne<WorkspaceRecord>(
+    `INSERT INTO workspaces (id, team_name, domain, bot_token, bot_user_id, bot_id, app_id, authed_user_id, scope, status)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+     ON CONFLICT (id) DO UPDATE SET
+       team_name = EXCLUDED.team_name,
+       domain = COALESCE(EXCLUDED.domain, workspaces.domain),
+       bot_token = EXCLUDED.bot_token,
+       bot_user_id = EXCLUDED.bot_user_id,
+       bot_id = COALESCE(EXCLUDED.bot_id, workspaces.bot_id),
+       updated_at = NOW()
+     RETURNING *`,
+    [data.id, data.team_name, data.domain || null, data.bot_token, data.bot_user_id,
+     data.bot_id || null, data.app_id || null, data.authed_user_id || null,
+     data.scope || null, data.status || 'active']
+  );
+  return row!;
+}
+
+export async function getWorkspace(teamId: string): Promise<WorkspaceRecord | undefined> {
+  return queryOne<WorkspaceRecord>('SELECT * FROM workspaces WHERE id = $1', [teamId]);
+}
+
+export async function listActiveWorkspaces(): Promise<WorkspaceRecord[]> {
+  return query<WorkspaceRecord>("SELECT * FROM workspaces WHERE status = 'active'");
+}

@@ -1,5 +1,6 @@
-import { initDb } from './db';
-import { initSlackClient } from './slack';
+import { initDb, upsertWorkspace, setDefaultWorkspaceId } from './db';
+import { initSlackClient, getSlackApp } from './slack';
+import { config } from './config';
 import { getScheduledTriggersDue, fireTrigger, updateTriggerLastFired, getTriggerLastFiredAt } from './modules/triggers';
 import { logger } from './utils/logger';
 import { CronExpressionParser } from 'cron-parser';
@@ -12,6 +13,18 @@ async function main(): Promise<void> {
   await initDb();
   initSlackClient();
 
+  // Bootstrap workspace from bot token
+  const authResult = await getSlackApp().client.auth.test();
+  await upsertWorkspace({
+    id: authResult.team_id as string,
+    team_name: (authResult.team as string) || 'default',
+    bot_token: config.slack.botToken,
+    bot_user_id: authResult.user_id as string,
+    bot_id: authResult.bot_id as string,
+  });
+  setDefaultWorkspaceId(authResult.team_id as string);
+  logger.info('Scheduler workspace bootstrapped', { workspaceId: authResult.team_id });
+
   setInterval(async () => {
     try {
       const triggers = await getScheduledTriggersDue();
@@ -19,21 +32,21 @@ async function main(): Promise<void> {
 
       for (const trigger of triggers) {
         try {
-          const config = JSON.parse(trigger.config_json);
-          const cronExpr = config.cron;
+          const triggerConfig = JSON.parse(trigger.config_json);
+          const cronExpr = triggerConfig.cron;
           if (!cronExpr) {
             logger.warn('Schedule trigger missing cron expression', { triggerId: trigger.id });
             continue;
           }
 
-          const timezone = config.timezone || 'UTC';
+          const timezone = triggerConfig.timezone || 'UTC';
           const interval = CronExpressionParser.parse(cronExpr, {
             currentDate: new Date(),
             tz: timezone,
           });
 
           const prevTime = interval.prev().toDate();
-          const lastFiredAt = await getTriggerLastFiredAt(trigger.id);
+          const lastFiredAt = await getTriggerLastFiredAt(trigger.workspace_id, trigger.id);
 
           // If we haven't fired since the last scheduled time, fire now
           if (!lastFiredAt || lastFiredAt < prevTime) {
@@ -46,18 +59,18 @@ async function main(): Promise<void> {
               prevTime: prevTime.toISOString(),
             });
 
-            await fireTrigger({
+            await fireTrigger(trigger.workspace_id, {
               triggerId: trigger.id,
               idempotencyKey,
               payload: {
                 firedAt: new Date().toISOString(),
                 scheduledFor: prevTime.toISOString(),
                 cron: cronExpr,
-                description: config.description || 'Scheduled execution',
+                description: triggerConfig.description || 'Scheduled execution',
               },
             });
 
-            await updateTriggerLastFired(trigger.id);
+            await updateTriggerLastFired(trigger.workspace_id, trigger.id);
           }
         } catch (err: any) {
           logger.error('Schedule trigger evaluation failed', {

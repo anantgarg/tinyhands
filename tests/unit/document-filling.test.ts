@@ -28,6 +28,8 @@ import {
 } from '../../src/modules/document-filling';
 import type { TemplateField, DocumentType } from '../../src/types';
 
+const TEST_WORKSPACE_ID = 'W_TEST_123';
+
 // ══════════════════════════════════════════════════
 //  extractFields
 // ══════════════════════════════════════════════════
@@ -185,7 +187,7 @@ describe('fillFields', () => {
       { name: 'company name', value: null, confidence: 0, source: null, unfilled_reason: null },
     ];
 
-    const result = await fillFields(fields);
+    const result = await fillFields(TEST_WORKSPACE_ID, fields);
     expect(result).toHaveLength(1);
     expect(result[0].value).toBe('Acme Corp');
     expect(result[0].confidence).toBe(0.8);
@@ -201,7 +203,7 @@ describe('fillFields', () => {
       { name: 'company name', value: null, confidence: 0, source: null, unfilled_reason: null },
     ];
 
-    const result = await fillFields(fields);
+    const result = await fillFields(TEST_WORKSPACE_ID, fields);
     expect(result).toHaveLength(1);
     expect(result[0].confidence).toBe(0.5);
     expect(result[0].source).toBe('Info');
@@ -214,7 +216,7 @@ describe('fillFields', () => {
       { name: 'address', value: null, confidence: 0, source: null, unfilled_reason: null },
     ];
 
-    const result = await fillFields(fields);
+    const result = await fillFields(TEST_WORKSPACE_ID, fields);
     expect(result).toHaveLength(1);
     expect(result[0].value).toBeNull();
     expect(result[0].unfilled_reason).toBe('No relevant knowledge base entries found');
@@ -229,7 +231,7 @@ describe('fillFields', () => {
       { name: 'zip_code', value: null, confidence: 0, source: null, unfilled_reason: null },
     ];
 
-    const result = await fillFields(fields);
+    const result = await fillFields(TEST_WORKSPACE_ID, fields);
     expect(result).toHaveLength(1);
     expect(result[0].value).toBeNull();
     expect(result[0].unfilled_reason).toContain('not found in KB content');
@@ -242,8 +244,8 @@ describe('fillFields', () => {
       { name: 'field', value: null, confidence: 0, source: null, unfilled_reason: null },
     ];
 
-    await fillFields(fields, { agentId: 'agent-42' });
-    expect(mockSearchKB).toHaveBeenCalledWith('field', 'agent-42');
+    await fillFields(TEST_WORKSPACE_ID, fields, { agentId: 'agent-42' });
+    expect(mockSearchKB).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 'field', 'agent-42');
   });
 
   it('should handle multiple fields', async () => {
@@ -256,7 +258,7 @@ describe('fillFields', () => {
       { name: 'phone', value: null, confidence: 0, source: null, unfilled_reason: null },
     ];
 
-    const result = await fillFields(fields);
+    const result = await fillFields(TEST_WORKSPACE_ID, fields);
     expect(result).toHaveLength(2);
     expect(result[0].value).toBe('Alice');
     expect(result[1].unfilled_reason).toBe('No relevant knowledge base entries found');
@@ -271,7 +273,7 @@ describe('fillFields', () => {
       { name: 'status', value: null, confidence: 0, source: null, unfilled_reason: null },
     ];
 
-    const result = await fillFields(fields);
+    const result = await fillFields(TEST_WORKSPACE_ID, fields);
     expect(result).toHaveLength(1);
     expect(result[0].value).toBe('Active');
     expect(result[0].confidence).toBe(0.8);
@@ -327,7 +329,7 @@ describe('processTemplate', () => {
       .mockResolvedValueOnce([{ content: 'email: alice@example.com', title: 'Contacts' }]);
 
     const template = 'Dear {{name}}, your email is {{email}}.';
-    const result = await processTemplate(template);
+    const result = await processTemplate(TEST_WORKSPACE_ID, template);
 
     expect(result.fields).toHaveLength(2);
     expect(result.result).toContain('Alice Smith');
@@ -340,7 +342,7 @@ describe('processTemplate', () => {
     mockSearchKB.mockResolvedValue([]);
 
     const template = '{{company}} at {{address}}';
-    const result = await processTemplate(template);
+    const result = await processTemplate(TEST_WORKSPACE_ID, template);
 
     expect(result.unfilled).toHaveLength(2);
     expect(result.summary).toContain('2 unfilled');
@@ -348,7 +350,7 @@ describe('processTemplate', () => {
 
   it('should handle template with no placeholders', async () => {
     const template = 'No fields at all.';
-    const result = await processTemplate(template);
+    const result = await processTemplate(TEST_WORKSPACE_ID, template);
 
     expect(result.fields).toHaveLength(0);
     expect(result.unfilled).toHaveLength(0);
@@ -359,8 +361,8 @@ describe('processTemplate', () => {
   it('should pass options through to fillFields', async () => {
     mockSearchKB.mockResolvedValue([]);
 
-    await processTemplate('{{x}}', { agentId: 'agent-7' });
-    expect(mockSearchKB).toHaveBeenCalledWith('x', 'agent-7');
+    await processTemplate(TEST_WORKSPACE_ID, '{{x}}', { agentId: 'agent-7' });
+    expect(mockSearchKB).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 'x', 'agent-7');
   });
 });
 

@@ -98,6 +98,7 @@ const mockQueryOne = vi.fn();
 vi.mock('../../src/db', () => ({
   execute: (...args: any[]) => mockExecute(...args),
   queryOne: (...args: any[]) => mockQueryOne(...args),
+  getDefaultWorkspaceId: () => 'W_TEST_123',
 }));
 
 vi.mock('uuid', () => ({
@@ -536,12 +537,12 @@ describe('Commands Module', () => {
 
       mockListAgents.mockResolvedValue([]);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockInitSuperadmin).toHaveBeenCalledWith('U123');
+      expect(mockInitSuperadmin).toHaveBeenCalledWith('W_TEST_123', 'U123');
       expect(mockListAgents).toHaveBeenCalled();
       expect(mockRespond).toHaveBeenCalled();
     });
@@ -552,7 +553,7 @@ describe('Commands Module', () => {
 
       mockListAgents.mockResolvedValue([]);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
@@ -569,7 +570,7 @@ describe('Commands Module', () => {
       mockListAgents.mockResolvedValue([agent]);
       mockCanModifyAgent.mockResolvedValue(true);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
@@ -586,7 +587,7 @@ describe('Commands Module', () => {
       mockListAgents.mockResolvedValue([makeFakeAgent()]);
       mockCanModifyAgent.mockResolvedValue(true);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
@@ -601,7 +602,7 @@ describe('Commands Module', () => {
       mockListAgents.mockResolvedValue([makeFakeAgent()]);
       mockCanModifyAgent.mockResolvedValue(false);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
@@ -615,7 +616,7 @@ describe('Commands Module', () => {
 
       mockListAgents.mockResolvedValue([makeFakeAgent({ status: 'active' })]);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
@@ -629,7 +630,7 @@ describe('Commands Module', () => {
 
       mockListAgents.mockResolvedValue([makeFakeAgent({ status: 'paused' })]);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
@@ -643,7 +644,7 @@ describe('Commands Module', () => {
 
       mockListAgents.mockResolvedValue([]);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
@@ -658,7 +659,7 @@ describe('Commands Module', () => {
 
       mockListAgents.mockResolvedValue([]);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
@@ -677,7 +678,7 @@ describe('Commands Module', () => {
       ]);
       mockCanModifyAgent.mockResolvedValue(true);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
@@ -695,7 +696,7 @@ describe('Commands Module', () => {
       mockListAgents.mockResolvedValue([makeFakeAgent({ channel_ids: ['C1', 'C2'] })]);
       mockCanModifyAgent.mockResolvedValue(false);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
@@ -711,7 +712,7 @@ describe('Commands Module', () => {
       mockListAgents.mockResolvedValue([makeFakeAgent({ model: 'opus', max_turns: 25 })]);
       mockCanModifyAgent.mockResolvedValue(false);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
@@ -726,7 +727,7 @@ describe('Commands Module', () => {
 
       mockListAgents.mockResolvedValue([]);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_TARGET', channel_name: 'directmessage', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_TARGET', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
@@ -740,7 +741,7 @@ describe('Commands Module', () => {
       mockListAgents.mockResolvedValue([makeFakeAgent({ created_by: 'U_OWNER' })]);
       mockCanModifyAgent.mockResolvedValue(false);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
@@ -755,7 +756,7 @@ describe('Commands Module', () => {
       mockListAgents.mockResolvedValue([makeFakeAgent({ created_by: null })]);
       mockCanModifyAgent.mockResolvedValue(false);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
@@ -774,12 +775,12 @@ describe('Commands Module', () => {
       registerCommands(app as any);
 
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
       await app.handlers.command['/new-agent']({ command, ack });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockInitSuperadmin).toHaveBeenCalledWith('U123');
+      expect(mockInitSuperadmin).toHaveBeenCalledWith('W_TEST_123', 'U123');
       // Should post the intro blocks
       expect(mockPostBlocks).toHaveBeenCalledWith(
         'C_CHAN',
@@ -801,7 +802,7 @@ describe('Commands Module', () => {
 
       mockPostBlocks.mockResolvedValue('thread-ts-abc');
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
       await app.handlers.command['/new-agent']({ command, ack });
 
@@ -825,7 +826,7 @@ describe('Commands Module', () => {
 
       mockPostBlocks.mockResolvedValue(null);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
       await app.handlers.command['/new-agent']({ command, ack });
 
@@ -845,7 +846,7 @@ describe('Commands Module', () => {
 
       mockListAgents.mockResolvedValue([]);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
       await app.handlers.command['/update-agent']({ command, ack });
 
@@ -860,7 +861,7 @@ describe('Commands Module', () => {
       mockListAgents.mockResolvedValue([makeFakeAgent()]);
       mockCanModifyAgent.mockResolvedValue(false);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
       await app.handlers.command['/update-agent']({ command, ack });
 
@@ -875,7 +876,7 @@ describe('Commands Module', () => {
       mockCanModifyAgent.mockResolvedValue(true);
       mockPostBlocks.mockResolvedValue('update-ts');
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
       await app.handlers.command['/update-agent']({ command, ack });
 
@@ -913,7 +914,7 @@ describe('Commands Module', () => {
 
       mockIsSuperadmin.mockResolvedValue(false);
       const ack = vi.fn();
-      const command = { user_id: 'U_REGULAR', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
+      const command = { user_id: 'U_REGULAR', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
       await app.handlers.command['/tools']({ command, ack, respond: mockRespond });
 
@@ -928,7 +929,7 @@ describe('Commands Module', () => {
       mockIsSuperadmin.mockResolvedValue(true);
       mockListCustomTools.mockResolvedValue([]);
       const ack = vi.fn();
-      const command = { user_id: 'U_ADMIN', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
+      const command = { user_id: 'U_ADMIN', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
       await app.handlers.command['/tools']({ command, ack, respond: mockRespond });
 
@@ -952,7 +953,7 @@ describe('Commands Module', () => {
         },
       ]);
       const ack = vi.fn();
-      const command = { user_id: 'U_ADMIN', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
+      const command = { user_id: 'U_ADMIN', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
       await app.handlers.command['/tools']({ command, ack, respond: mockRespond });
 
@@ -979,7 +980,7 @@ describe('Commands Module', () => {
         },
       ]);
       const ack = vi.fn();
-      const command = { user_id: 'U_ADMIN', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
+      const command = { user_id: 'U_ADMIN', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
       await app.handlers.command['/tools']({ command, ack, respond: mockRespond });
 
@@ -995,7 +996,7 @@ describe('Commands Module', () => {
       mockIsSuperadmin.mockResolvedValue(true);
       mockListCustomTools.mockResolvedValue([]);
       const ack = vi.fn();
-      const command = { user_id: 'U_ADMIN', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
+      const command = { user_id: 'U_ADMIN', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
       await app.handlers.command['/tools']({ command, ack, respond: mockRespond });
 
@@ -1019,12 +1020,12 @@ describe('Commands Module', () => {
       ]);
 
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: 'search test query', trigger_id: 'trig-1' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: 'search test query', trigger_id: 'trig-1' };
 
       await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockSearchKB).toHaveBeenCalledWith('test query');
+      expect(mockSearchKB).toHaveBeenCalledWith('W_TEST_123', 'test query');
     });
 
     it('/kb search with empty query should show usage message', async () => {
@@ -1032,7 +1033,7 @@ describe('Commands Module', () => {
       registerCommands(app as any);
 
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: 'search   ', trigger_id: 'trig-1' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: 'search   ', trigger_id: 'trig-1' };
 
       await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
@@ -1045,7 +1046,7 @@ describe('Commands Module', () => {
 
       mockSearchKB.mockResolvedValue([]);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: 'search unicorns', trigger_id: 'trig-1' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: 'search unicorns', trigger_id: 'trig-1' };
 
       await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
@@ -1062,7 +1063,7 @@ describe('Commands Module', () => {
       ]);
 
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: 'search test', trigger_id: 'trig-1' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: 'search test', trigger_id: 'trig-1' };
 
       await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
@@ -1075,7 +1076,7 @@ describe('Commands Module', () => {
       registerCommands(app as any);
 
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: 'add', trigger_id: 'trig-1' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: 'add', trigger_id: 'trig-1' };
 
       await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
@@ -1092,7 +1093,7 @@ describe('Commands Module', () => {
 
       mockIsSuperadmin.mockResolvedValue(false);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '', trigger_id: 'trig-1' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '', trigger_id: 'trig-1' };
 
       await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
@@ -1109,7 +1110,7 @@ describe('Commands Module', () => {
       mockGetCategories.mockResolvedValue([]);
       mockListSources.mockResolvedValue([]);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '', trigger_id: 'trig-1' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '', trigger_id: 'trig-1' };
 
       await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
@@ -1140,7 +1141,7 @@ describe('Commands Module', () => {
         },
       ]);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '', trigger_id: 'trig-1' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '', trigger_id: 'trig-1' };
 
       await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
@@ -1162,7 +1163,7 @@ describe('Commands Module', () => {
       mockGetCategories.mockResolvedValue([]);
       mockListSources.mockResolvedValue([]);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '', trigger_id: 'trig-1' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '', trigger_id: 'trig-1' };
 
       await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
@@ -1184,7 +1185,7 @@ describe('Commands Module', () => {
       mockGetCategories.mockResolvedValue([]);
       mockListSources.mockResolvedValue([]);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '', trigger_id: 'trig-1' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '', trigger_id: 'trig-1' };
 
       await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
@@ -1202,7 +1203,7 @@ describe('Commands Module', () => {
       mockGetCategories.mockResolvedValue([]);
       mockListSources.mockResolvedValue([]);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '', trigger_id: 'trig-1' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '', trigger_id: 'trig-1' };
 
       await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
@@ -1275,7 +1276,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'confirm-id-1' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['confirm_new_agent']({ action, ack, body });
 
@@ -1291,7 +1292,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'nonexistent-id' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['confirm_new_agent']({ action, ack, body });
 
@@ -1305,7 +1306,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'cancel-id-1' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['cancel_new_agent']({ action, ack, body });
 
@@ -1323,7 +1324,7 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const respond = vi.fn();
       const action = { value: 'cancel-update-1' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       // Return row with channelId/threadTs so it uses postMessage
       mockQueryOne.mockResolvedValueOnce({ data: { channelId: 'C1', threadTs: 'thread-ts-1' } });
@@ -1365,12 +1366,12 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'confirm-id-valid' };
-      const body = { user: { id: 'U_CREATOR' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U_CREATOR' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['confirm_new_agent']({ action, ack, body });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockCreateAgent).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateAgent).toHaveBeenCalledWith('W_TEST_123', expect.objectContaining({
         name: 'My Agent',
         channelId: 'C_EXISTING',
         channelIds: ['C_EXISTING'],
@@ -1408,7 +1409,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'confirm-id' };
-      const body = { user: { id: 'U_CREATOR' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U_CREATOR' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['confirm_new_agent']({ action, ack, body });
 
@@ -1445,7 +1446,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'c-id' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['confirm_new_agent']({ action, ack, body });
 
@@ -1453,8 +1454,8 @@ describe('Commands Module', () => {
       await new Promise(r => setTimeout(r, 10));
 
       expect(mockAttachSkillToAgent).toHaveBeenCalledTimes(2);
-      expect(mockAttachSkillToAgent).toHaveBeenCalledWith('agent-sk', 'linear', 'read', 'U1');
-      expect(mockAttachSkillToAgent).toHaveBeenCalledWith('agent-sk', 'zendesk', 'read', 'U1');
+      expect(mockAttachSkillToAgent).toHaveBeenCalledWith('W_TEST_123', 'agent-sk', 'linear', 'read', 'U1');
+      expect(mockAttachSkillToAgent).toHaveBeenCalledWith('W_TEST_123', 'agent-sk', 'zendesk', 'read', 'U1');
       expect(mockCreateTrigger).toHaveBeenCalledTimes(1);
     });
 
@@ -1480,7 +1481,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'c-id' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['confirm_new_agent']({ action, ack, body });
 
@@ -1524,12 +1525,12 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'confirm-priv' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['confirm_new_agent']({ action, ack, body });
 
       expect(mockConvInvite).toHaveBeenCalledWith({ channel: 'C_PRIVATE', users: 'UBOT' });
-      expect(mockCreateAgent).toHaveBeenCalledWith(expect.objectContaining({ name: 'Private Agent' }));
+      expect(mockCreateAgent).toHaveBeenCalledWith('W_TEST_123', expect.objectContaining({ name: 'Private Agent' }));
     });
 
     it('confirm_new_agent should show friendly error when bot cannot access private channel', async () => {
@@ -1562,7 +1563,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'confirm-priv' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['confirm_new_agent']({ action, ack, body });
 
@@ -1576,7 +1577,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'req-1' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['dismiss_feature_request']({ action, ack, body });
 
@@ -1593,7 +1594,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'wt-req-1' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['deny_write_tools']({ action, ack, body });
 
@@ -1616,7 +1617,7 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const respond = vi.fn();
       const action = { value: 'upd-expired' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['confirm_update_agent']({ action, ack, body, respond });
 
@@ -1633,7 +1634,7 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const respond = vi.fn();
       const action = { value: 'nonexistent' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['confirm_update_agent']({ action, ack, body, respond });
 
@@ -1665,12 +1666,12 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const respond = vi.fn();
       const action = { value: 'upd-valid' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['confirm_update_agent']({ action, ack, body, respond });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockUpdateAgent).toHaveBeenCalledWith(
+      expect(mockUpdateAgent).toHaveBeenCalledWith('W_TEST_123',
         'agent-1',
         expect.objectContaining({
           system_prompt: 'You help with support',
@@ -1699,12 +1700,12 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'wt-approve-1' };
-      const body = { user: { id: 'U_ADMIN' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U_ADMIN' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['approve_write_tools']({ action, ack, body });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockAddToolToAgent).toHaveBeenCalledWith('agent-1', 'zendesk-write', 'U_ADMIN');
+      expect(mockAddToolToAgent).toHaveBeenCalledWith('W_TEST_123', 'agent-1', 'zendesk-write', 'U_ADMIN');
       expect(mockPostMessage).toHaveBeenCalledWith('C_CHAN', expect.stringContaining('approved'));
     });
 
@@ -1716,7 +1717,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'wt-gone' };
-      const body = { user: { id: 'U_ADMIN' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U_ADMIN' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['approve_write_tools']({ action, ack, body });
 
@@ -1731,7 +1732,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'retry-gone' };
-      const body = { user: { id: 'U_ADMIN' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U_ADMIN' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['retry_agent_creation']({ action, ack, body });
 
@@ -1757,7 +1758,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'retry-1' };
-      const body = { user: { id: 'U_ADMIN' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U_ADMIN' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['retry_agent_creation']({ action, ack, body });
 
@@ -1770,7 +1771,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'ack-1' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['ack_new_tool_request']({ action, ack, body });
 
@@ -1797,7 +1798,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: undefined };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['agent_overflow']({ action, ack, body });
 
@@ -1814,12 +1815,12 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'view_config:agent-1' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['agent_overflow']({ action, ack, body });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockGetAgent).toHaveBeenCalledWith('agent-1');
+      expect(mockGetAgent).toHaveBeenCalledWith('W_TEST_123', 'agent-1');
       expect(mockPostBlocks).toHaveBeenCalledWith(
         'C1',
         expect.arrayContaining([
@@ -1840,7 +1841,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'view_config:agent-1' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['agent_overflow']({ action, ack, body });
 
@@ -1857,7 +1858,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'view_config:nonexistent' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['agent_overflow']({ action, ack, body });
 
@@ -1873,11 +1874,11 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'pause:agent-1' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['agent_overflow']({ action, ack, body });
 
-      expect(mockUpdateAgent).toHaveBeenCalledWith('agent-1', expect.objectContaining({ status: 'paused' }), 'U1');
+      expect(mockUpdateAgent).toHaveBeenCalledWith('W_TEST_123','agent-1', expect.objectContaining({ status: 'paused' }), 'U1');
       expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('paused'));
     });
 
@@ -1890,11 +1891,11 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'resume:agent-1' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['agent_overflow']({ action, ack, body });
 
-      expect(mockUpdateAgent).toHaveBeenCalledWith('agent-1', expect.objectContaining({ status: 'active' }), 'U1');
+      expect(mockUpdateAgent).toHaveBeenCalledWith('W_TEST_123','agent-1', expect.objectContaining({ status: 'active' }), 'U1');
       expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('resumed'));
     });
 
@@ -1906,7 +1907,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'pause:agent-1' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['agent_overflow']({ action, ack, body });
 
@@ -1921,7 +1922,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'update:agent-1' } };
-      const body = { user: { id: 'U_UNPRIV' }, channel: { id: 'C1' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U_UNPRIV' }, channel: { id: 'C1' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['agent_overflow']({ action, ack, body });
 
@@ -1937,7 +1938,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'update:agent-1' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['agent_overflow']({ action, ack, body });
 
@@ -1959,7 +1960,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'delete:agent-1' } };
-      const body = { user: { id: 'U_UNPRIV' }, channel: { id: 'C1' } };
+      const body = { user: { id: 'U_UNPRIV' }, channel: { id: 'C1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['agent_overflow']({ action, ack, body });
 
@@ -1975,7 +1976,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'delete:agent-1' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['agent_overflow']({ action, ack, body });
 
@@ -1990,7 +1991,7 @@ describe('Commands Module', () => {
       await safeRegisterInlineActions(app);
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' }, channel: { id: 'C_CHAN' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C_CHAN' }, team: { id: 'W_TEST_123' } };
 
       if (app.handlers.action['agents_new_agent']) {
         await app.handlers.action['agents_new_agent']({ ack, body });
@@ -2008,7 +2009,7 @@ describe('Commands Module', () => {
       if (app.handlers.action['confirm_delete_agent']) {
         const ack = vi.fn();
         const action = { value: 'agent-1' };
-        const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+        const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
         await app.handlers.action['confirm_delete_agent']({ action, ack, body });
 
@@ -2026,7 +2027,7 @@ describe('Commands Module', () => {
 
       if (app.handlers.action['cancel_delete_agent']) {
         const ack = vi.fn();
-        const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+        const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
         await app.handlers.action['cancel_delete_agent']({ ack, body });
 
@@ -2063,7 +2064,7 @@ describe('Commands Module', () => {
       registerToolAndKBModals(app as any);
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
       const view = {
         private_metadata: 'my-tool',
         state: {
@@ -2078,7 +2079,7 @@ describe('Commands Module', () => {
       await app.handlers.view['tool_config_modal']({ ack, body, view });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockSetToolConfigKey).toHaveBeenCalledWith('my-tool', 'api_key', 'sk-test123', 'U1');
+      expect(mockSetToolConfigKey).toHaveBeenCalledWith('W_TEST_123', 'my-tool', 'api_key', 'sk-test123', 'U1');
     });
 
     it('tool_config_modal should remove key when removeKey is provided', async () => {
@@ -2086,7 +2087,7 @@ describe('Commands Module', () => {
       registerToolAndKBModals(app as any);
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
       const view = {
         private_metadata: 'my-tool',
         state: {
@@ -2100,7 +2101,7 @@ describe('Commands Module', () => {
 
       await app.handlers.view['tool_config_modal']({ ack, body, view });
 
-      expect(mockRemoveToolConfigKey).toHaveBeenCalledWith('my-tool', 'old_key', 'U1');
+      expect(mockRemoveToolConfigKey).toHaveBeenCalledWith('W_TEST_123', 'my-tool', 'old_key', 'U1');
     });
 
     it('tool_config_modal should send DM on error', async () => {
@@ -2110,7 +2111,7 @@ describe('Commands Module', () => {
       mockSetToolConfigKey.mockRejectedValue(new Error('Config failed'));
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
       const view = {
         private_metadata: 'my-tool',
         state: {
@@ -2138,7 +2139,7 @@ describe('Commands Module', () => {
       registerToolAndKBModals(app as any);
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
       const view = {
         private_metadata: 'my-tool',
         state: {
@@ -2151,7 +2152,7 @@ describe('Commands Module', () => {
       await app.handlers.view['tool_access_modal']({ ack, body, view });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockUpdateToolAccessLevel).toHaveBeenCalledWith('my-tool', 'read-write', 'U1');
+      expect(mockUpdateToolAccessLevel).toHaveBeenCalledWith('W_TEST_123', 'my-tool', 'read-write', 'U1');
     });
 
     it('tool_add_to_agent_modal should add tool to agent', async () => {
@@ -2161,7 +2162,7 @@ describe('Commands Module', () => {
       mockGetAgent.mockResolvedValue(makeFakeAgent());
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
       const view = {
         private_metadata: 'zendesk-read',
         state: {
@@ -2174,7 +2175,7 @@ describe('Commands Module', () => {
       await app.handlers.view['tool_add_to_agent_modal']({ ack, body, view });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockAddToolToAgent).toHaveBeenCalledWith('agent-1', 'zendesk-read', 'U1');
+      expect(mockAddToolToAgent).toHaveBeenCalledWith('W_TEST_123', 'agent-1', 'zendesk-read', 'U1');
       expect(mockSendDMBlocks).toHaveBeenCalledWith(
         'U1',
         expect.arrayContaining([
@@ -2189,7 +2190,7 @@ describe('Commands Module', () => {
       registerToolAndKBModals(app as any);
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
       const view = {
         private_metadata: '',
         state: {
@@ -2221,7 +2222,7 @@ describe('Commands Module', () => {
       mockCreateKBEntry.mockResolvedValue({ title: 'My Doc', id: 'kb-1' });
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
       const view = {
         private_metadata: '',
         state: {
@@ -2236,7 +2237,7 @@ describe('Commands Module', () => {
 
       await app.handlers.view['kb_add_modal']({ ack, body, view });
 
-      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateKBEntry).toHaveBeenCalledWith('W_TEST_123', expect.objectContaining({
         title: 'My Doc',
         category: 'engineering',
         content: 'Some content here',
@@ -2268,7 +2269,7 @@ describe('Commands Module', () => {
   describe('handleConversationReply', () => {
     it('should return false when no matching conversation exists', async () => {
       mockQueryOne.mockResolvedValue(null);
-      const result = await handleConversationReply('U1', 'C1', 'thread-ts-1', 'hello');
+      const result = await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-ts-1', 'hello');
       expect(result).toBe(false);
     });
 
@@ -2277,13 +2278,13 @@ describe('Commands Module', () => {
         id: 'conf-1',
         data: { type: 'conversation', step: 'awaiting_goal', flow: 'new_agent', userId: 'U1', channelId: 'C1', threadTs: 'thread-ts-1' },
       });
-      const result = await handleConversationReply('U1', 'C1', 'thread-ts-1', '   ');
+      const result = await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-ts-1', '   ');
       expect(result).toBe(false);
     });
 
     it('should query with correct threadTs and userId parameters', async () => {
       mockQueryOne.mockResolvedValue(null);
-      await handleConversationReply('U_SPECIFIC', 'C1', 'specific-thread-ts', 'test');
+      await handleConversationReply('W_TEST_123', 'U_SPECIFIC', 'C1', 'specific-thread-ts', 'test');
       expect(mockQueryOne).toHaveBeenCalledWith(
         expect.stringContaining("data->>'threadTs'"),
         ['specific-thread-ts', 'U_SPECIFIC'],
@@ -2305,7 +2306,7 @@ describe('Commands Module', () => {
         },
       });
 
-      const result = await handleConversationReply('U1', 'C1', 'thread-ts-1', 'Build a support bot');
+      const result = await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-ts-1', 'Build a support bot');
 
       expect(result).toBe(true);
       expect(mockExecute).toHaveBeenCalledWith(
@@ -2343,7 +2344,7 @@ describe('Commands Module', () => {
       mockAnalyzeGoal.mockResolvedValue(makeFakeAnalysis());
       mockGetAgentByName.mockResolvedValue(null);
 
-      const result = await handleConversationReply('U1', 'C1', 'thread-ts-1', 'every message');
+      const result = await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-ts-1', 'every message');
 
       expect(result).toBe(true);
       expect(mockAnalyzeGoal).toHaveBeenCalledWith(
@@ -2370,7 +2371,7 @@ describe('Commands Module', () => {
       mockAnalyzeGoal.mockResolvedValue(makeFakeAnalysis());
       mockGetAgentByName.mockResolvedValue({ id: 'existing-agent', name: 'support-bot' });
 
-      await handleConversationReply('U1', 'C1', 'thread-1', 'every message');
+      await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'every message');
 
       const insertCall = mockExecute.mock.calls.find(
         (c: any[]) => typeof c[0] === 'string' && c[0].includes('INSERT INTO pending_confirmations') && c[1][1].includes('awaiting_channel'),
@@ -2400,7 +2401,7 @@ describe('Commands Module', () => {
       }));
       mockListSuperadmins.mockResolvedValue([{ user_id: 'UADMIN' }]);
 
-      await handleConversationReply('U1', 'C1', 'thread-1', 'on every push to main');
+      await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'on every push to main');
 
       expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('Feature request queued'), 'thread-1');
       expect(mockSendDMBlocks).toHaveBeenCalledWith('UADMIN', expect.any(Array), expect.any(String));
@@ -2422,7 +2423,7 @@ describe('Commands Module', () => {
 
       mockAnalyzeGoal.mockRejectedValue(new Error('API timeout'));
 
-      await handleConversationReply('U1', 'C1', 'thread-1', 'daily');
+      await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'daily');
 
       expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('API timeout'), 'thread-1');
     });
@@ -2447,7 +2448,7 @@ describe('Commands Module', () => {
       mockGetAgent.mockResolvedValue(agent);
       mockAnalyzeGoal.mockResolvedValue(makeFakeAnalysis({ summary: 'Updated config' }));
 
-      const result = await handleConversationReply('U1', 'C1', 'thread-ts-1', 'add memory and change model');
+      const result = await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-ts-1', 'add memory and change model');
 
       expect(result).toBe(true);
       expect(mockExecute).toHaveBeenCalledWith(
@@ -2472,7 +2473,7 @@ describe('Commands Module', () => {
 
       mockGetAgent.mockResolvedValue(null);
 
-      await handleConversationReply('U1', 'C1', 'thread-1', 'change model');
+      await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'change model');
 
       expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('not found'), 'thread-1');
     });
@@ -2493,10 +2494,10 @@ describe('Commands Module', () => {
         },
       });
 
-      const result = await handleConversationReply('U1', 'C1', 'thread-1', 'service_account_json: {"key":"value"}');
+      const result = await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'service_account_json: {"key":"value"}');
 
       expect(result).toBe(true);
-      expect(mockSetApiKey).toHaveBeenCalledWith(
+      expect(mockSetApiKey).toHaveBeenCalledWith('W_TEST_123',
         'google',
         expect.objectContaining({ service_account_json: '{"key":"value"}' }),
         'U1',
@@ -2517,7 +2518,7 @@ describe('Commands Module', () => {
         },
       });
 
-      const result = await handleConversationReply('U1', 'C1', 'thread-1', 'subdomain: acme');
+      const result = await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'subdomain: acme');
 
       expect(result).toBe(true);
       // Should post missing keys warning
@@ -2550,10 +2551,10 @@ describe('Commands Module', () => {
 
       mockCreateSource.mockResolvedValue({ id: 'src-new', status: 'active' });
 
-      const result = await handleConversationReply('U1', 'C1', 'thread-1', 'name: My Docs\nfolder_id: abc123');
+      const result = await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'name: My Docs\nfolder_id: abc123');
 
       expect(result).toBe(true);
-      expect(mockCreateSource).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateSource).toHaveBeenCalledWith('W_TEST_123', expect.objectContaining({
         name: 'My Docs',
         sourceType: 'google_drive',
         createdBy: 'U1',
@@ -2576,9 +2577,9 @@ describe('Commands Module', () => {
 
       mockCreateSource.mockResolvedValue({ id: 'src-new', status: 'needs_setup' });
 
-      await handleConversationReply('U1', 'C1', 'thread-1', 'Engineering Docs');
+      await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'Engineering Docs');
 
-      expect(mockCreateSource).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateSource).toHaveBeenCalledWith('W_TEST_123', expect.objectContaining({
         name: 'Engineering Docs',
       }));
     });
@@ -2599,9 +2600,9 @@ describe('Commands Module', () => {
 
       mockCreateSource.mockResolvedValue({ id: 'src-sync', status: 'active' });
 
-      await handleConversationReply('U1', 'C1', 'thread-1', 'name: My Source');
+      await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'name: My Source');
 
-      expect(mockStartSync).toHaveBeenCalledWith('src-sync');
+      expect(mockStartSync).toHaveBeenCalledWith('W_TEST_123', 'src-sync');
     });
 
     it('should handle missing source name by re-inserting state', async () => {
@@ -2619,7 +2620,7 @@ describe('Commands Module', () => {
       });
 
       // Text that is only "name:" with no value => sourceName empty
-      await handleConversationReply('U1', 'C1', 'thread-1', '');
+      await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', '');
 
       // empty text returns false early
     });
@@ -2642,7 +2643,7 @@ describe('Commands Module', () => {
 
       mockGetApiKey.mockResolvedValue(null);
 
-      const result = await handleConversationReply('U1', 'C1', 'thread-1', 'service_account_json: {"key":"val"}');
+      const result = await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'service_account_json: {"key":"val"}');
 
       expect(result).toBe(true);
       expect(mockSetApiKey).toHaveBeenCalled();
@@ -2665,7 +2666,7 @@ describe('Commands Module', () => {
       mockGetApiKey.mockResolvedValue(null);
 
       // The zendesk connector needs subdomain, email, api_token — only providing one
-      await handleConversationReply('U1', 'C1', 'thread-1', 'subdomain: acme');
+      await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'subdomain: acme');
 
       expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('Missing'), 'thread-1');
       expect(mockExecute).toHaveBeenCalledWith(
@@ -2696,7 +2697,7 @@ describe('Commands Module', () => {
       mockGetAgent.mockResolvedValue(makeFakeAgent());
       mockAnalyzeGoal.mockResolvedValue(makeFakeAnalysis());
 
-      const result = await handleConversationReply('U1', 'C1', 'thread-1', 'Change to handle billing');
+      const result = await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'Change to handle billing');
 
       expect(result).toBe(true);
     });
@@ -2715,7 +2716,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: null };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['tool_overflow']({ action, ack, body });
 
@@ -2733,7 +2734,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'configure:my-tool' } };
-      const body = { user: { id: 'U_REGULAR' }, channel: { id: 'C1' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U_REGULAR' }, channel: { id: 'C1' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['tool_overflow']({ action, ack, body });
 
@@ -2756,7 +2757,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'configure:my-tool' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['tool_overflow']({ action, ack, body });
 
@@ -2778,7 +2779,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'configure:missing-tool' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['tool_overflow']({ action, ack, body });
 
@@ -2800,7 +2801,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'access:my-tool' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['tool_overflow']({ action, ack, body });
 
@@ -2821,7 +2822,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'add_to_agent:my-tool' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['tool_overflow']({ action, ack, body });
 
@@ -2842,7 +2843,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'add_to_agent:my-tool' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['tool_overflow']({ action, ack, body });
 
@@ -2859,11 +2860,11 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'approve:my-tool' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['tool_overflow']({ action, ack, body });
 
-      expect(mockApproveCustomTool).toHaveBeenCalledWith('my-tool', 'U1');
+      expect(mockApproveCustomTool).toHaveBeenCalledWith('W_TEST_123', 'my-tool', 'U1');
       expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('approved'));
     });
 
@@ -2878,7 +2879,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'approve:my-tool' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['tool_overflow']({ action, ack, body });
 
@@ -2895,11 +2896,11 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'delete:my-tool' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['tool_overflow']({ action, ack, body });
 
-      expect(mockDeleteCustomTool).toHaveBeenCalledWith('my-tool', 'U1');
+      expect(mockDeleteCustomTool).toHaveBeenCalledWith('W_TEST_123', 'my-tool', 'U1');
       expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('deleted'));
     });
 
@@ -2914,7 +2915,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'delete:my-tool' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['tool_overflow']({ action, ack, body });
 
@@ -2935,7 +2936,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: null };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['kb_source_overflow']({ action, ack, body });
 
@@ -2953,7 +2954,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'sync:src-1' } };
-      const body = { user: { id: 'U_REGULAR' }, channel: { id: 'C1' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U_REGULAR' }, channel: { id: 'C1' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['kb_source_overflow']({ action, ack, body });
 
@@ -2972,7 +2973,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'sync:src-missing' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['kb_source_overflow']({ action, ack, body });
 
@@ -2990,11 +2991,11 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'sync:src-1' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['kb_source_overflow']({ action, ack, body });
 
-      expect(mockStartSync).toHaveBeenCalledWith('src-1');
+      expect(mockStartSync).toHaveBeenCalledWith('W_TEST_123', 'src-1');
       expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('Sync started'));
     });
 
@@ -3010,7 +3011,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'sync:src-1' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['kb_source_overflow']({ action, ack, body });
 
@@ -3029,7 +3030,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'sync:src-1' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['kb_source_overflow']({ action, ack, body });
 
@@ -3047,11 +3048,11 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'flush:src-1' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['kb_source_overflow']({ action, ack, body });
 
-      expect(mockFlushAndResync).toHaveBeenCalledWith('src-1', 'U1');
+      expect(mockFlushAndResync).toHaveBeenCalledWith('W_TEST_123', 'src-1', 'U1');
       expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('Flushed'));
     });
 
@@ -3066,12 +3067,12 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'toggle_sync:src-1' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['kb_source_overflow']({ action, ack, body });
 
       // auto_sync is true, so new state should be false
-      expect(mockToggleAutoSync).toHaveBeenCalledWith('src-1', false);
+      expect(mockToggleAutoSync).toHaveBeenCalledWith('W_TEST_123', 'src-1', false);
       expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('disabled'));
     });
 
@@ -3086,11 +3087,11 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'remove:src-1' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['kb_source_overflow']({ action, ack, body });
 
-      expect(mockDeleteSource).toHaveBeenCalledWith('src-1', 'U1');
+      expect(mockDeleteSource).toHaveBeenCalledWith('W_TEST_123', 'src-1', 'U1');
       expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('removed'));
     });
 
@@ -3105,7 +3106,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'configure:src-1' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['kb_source_overflow']({ action, ack, body });
 
@@ -3128,7 +3129,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: null };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['kb_entry_overflow']({ action, ack, body });
 
@@ -3152,11 +3153,11 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'view:kb-1' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['kb_entry_overflow']({ action, ack, body });
 
-      expect(mockGetKBEntry).toHaveBeenCalledWith('kb-1');
+      expect(mockGetKBEntry).toHaveBeenCalledWith('W_TEST_123', 'kb-1');
       expect(mockPostBlocks).toHaveBeenCalledWith(
         'C1',
         expect.arrayContaining([
@@ -3176,7 +3177,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'view:kb-missing' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['kb_entry_overflow']({ action, ack, body });
 
@@ -3193,11 +3194,11 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'approve:kb-1' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['kb_entry_overflow']({ action, ack, body });
 
-      expect(mockApproveKBEntry).toHaveBeenCalledWith('kb-1');
+      expect(mockApproveKBEntry).toHaveBeenCalledWith('W_TEST_123', 'kb-1');
       expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('approved'));
     });
 
@@ -3211,7 +3212,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'approve:kb-1' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['kb_entry_overflow']({ action, ack, body });
 
@@ -3228,11 +3229,11 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'delete:kb-1' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['kb_entry_overflow']({ action, ack, body });
 
-      expect(mockDeleteKBEntry).toHaveBeenCalledWith('kb-1');
+      expect(mockDeleteKBEntry).toHaveBeenCalledWith('W_TEST_123', 'kb-1');
       expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('deleted'));
     });
 
@@ -3247,7 +3248,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'delete:kb-1' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['kb_entry_overflow']({ action, ack, body });
 
@@ -3265,7 +3266,7 @@ describe('Commands Module', () => {
       registerToolAndKBModals(app as any);
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
       const view = {
         state: {
           values: {
@@ -3295,7 +3296,7 @@ describe('Commands Module', () => {
       mockCreateSource.mockResolvedValue({ id: 'src-new', status: 'needs_setup' });
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
       const view = {
         state: {
           values: {
@@ -3325,7 +3326,7 @@ describe('Commands Module', () => {
       mockCreateSource.mockResolvedValue({ id: 'src-new', status: 'active' });
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
       const view = {
         state: {
           values: {
@@ -3354,7 +3355,7 @@ describe('Commands Module', () => {
       mockCreateSource.mockRejectedValue(new Error('DB error'));
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
       const view = {
         state: {
           values: {
@@ -3383,7 +3384,7 @@ describe('Commands Module', () => {
       // The updateSource mock needs to be in kb-sources — it's already there but let's use it
       // Actually we need to add updateSource to the mock
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
       const view = {
         private_metadata: JSON.stringify({ sourceId: 'src-1', sourceType: 'google_drive' }),
         state: {
@@ -3405,7 +3406,7 @@ describe('Commands Module', () => {
       registerToolAndKBModals(app as any);
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
       const view = {
         private_metadata: JSON.stringify({ provider: 'google', requiredKeys: ['service_account_json'] }),
         state: {
@@ -3418,7 +3419,7 @@ describe('Commands Module', () => {
       await app.handlers.view['kb_api_key_save_modal']({ ack, body, view });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockSetApiKey).toHaveBeenCalledWith('google', expect.objectContaining({ service_account_json: '{"key":"val"}' }), 'U1');
+      expect(mockSetApiKey).toHaveBeenCalledWith('W_TEST_123','google', expect.objectContaining({ service_account_json: '{"key":"val"}' }), 'U1');
       expect(mockSendDMBlocks).toHaveBeenCalledWith(
         'U1',
         expect.arrayContaining([
@@ -3433,7 +3434,7 @@ describe('Commands Module', () => {
       registerToolAndKBModals(app as any);
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
       const view = {
         private_metadata: JSON.stringify({ provider: 'zendesk', requiredKeys: ['subdomain', 'email', 'api_token'] }),
         state: {
@@ -3463,7 +3464,7 @@ describe('Commands Module', () => {
       mockSetApiKey.mockRejectedValue(new Error('Invalid credentials'));
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
       const view = {
         private_metadata: JSON.stringify({ provider: 'google', requiredKeys: ['service_account_json'] }),
         state: {
@@ -3497,7 +3498,7 @@ describe('Commands Module', () => {
       mockSetApiKey.mockResolvedValue(undefined);
       mockIsProviderConfigured.mockResolvedValue(true);
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
       const view = {
         private_metadata: JSON.stringify({
           sourceType: 'google_drive',
@@ -3516,7 +3517,7 @@ describe('Commands Module', () => {
       await app.handlers.view['kb_source_api_key_modal']({ ack, body, view });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockSetApiKey).toHaveBeenCalledWith('google', expect.objectContaining({ service_account_json: '{"key":"val"}' }), 'U1');
+      expect(mockSetApiKey).toHaveBeenCalledWith('W_TEST_123','google', expect.objectContaining({ service_account_json: '{"key":"val"}' }), 'U1');
       expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('API keys saved'), 'ts-1');
     });
 
@@ -3525,7 +3526,7 @@ describe('Commands Module', () => {
       registerToolAndKBModals(app as any);
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
       const view = {
         private_metadata: JSON.stringify({
           sourceType: 'google_drive',
@@ -3560,7 +3561,7 @@ describe('Commands Module', () => {
       mockSetApiKey.mockRejectedValue(new Error('Invalid credentials'));
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
       const view = {
         private_metadata: JSON.stringify({
           sourceType: 'google_drive',
@@ -3599,7 +3600,7 @@ describe('Commands Module', () => {
 
       mockCreateSource.mockResolvedValue({ id: 'src-new', status: 'needs_setup' });
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
       const view = {
         private_metadata: JSON.stringify({
           sourceType: 'google_drive',
@@ -3618,7 +3619,7 @@ describe('Commands Module', () => {
       await app.handlers.view['kb_source_details_modal']({ ack, body, view });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockCreateSource).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateSource).toHaveBeenCalledWith('W_TEST_123', expect.objectContaining({
         name: 'My Drive Source',
         sourceType: 'google_drive',
       }));
@@ -3630,7 +3631,7 @@ describe('Commands Module', () => {
       registerToolAndKBModals(app as any);
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
       const view = {
         private_metadata: JSON.stringify({
           sourceType: 'google_drive',
@@ -3663,7 +3664,7 @@ describe('Commands Module', () => {
 
       mockCreateSource.mockResolvedValue({ id: 'src-active', status: 'active' });
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
       const view = {
         private_metadata: JSON.stringify({
           sourceType: 'google_drive',
@@ -3681,7 +3682,7 @@ describe('Commands Module', () => {
 
       await app.handlers.view['kb_source_details_modal']({ ack, body, view });
 
-      expect(mockStartSync).toHaveBeenCalledWith('src-active');
+      expect(mockStartSync).toHaveBeenCalledWith('W_TEST_123', 'src-active');
     });
 
     it('should handle creation error', async () => {
@@ -3690,7 +3691,7 @@ describe('Commands Module', () => {
 
       mockCreateSource.mockRejectedValue(new Error('DB error'));
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
       const view = {
         private_metadata: JSON.stringify({
           sourceType: 'google_drive',
@@ -3788,7 +3789,7 @@ describe('Commands Module', () => {
       mockListAgents.mockResolvedValue([makeFakeAgent({ visibility: 'private' })]);
       mockCanModifyAgent.mockResolvedValue(true);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
@@ -3804,7 +3805,7 @@ describe('Commands Module', () => {
       mockListAgents.mockResolvedValue([makeFakeAgent({ visibility: 'private' })]);
       mockCanModifyAgent.mockResolvedValue(false);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
@@ -3829,7 +3830,7 @@ describe('Commands Module', () => {
         { name: 'test-tool-write', access_level: 'read-write', language: 'docker', config_json: '{}', schema_json: '{}', approved: true },
       ]);
       const ack = vi.fn();
-      const command = { user_id: 'U_ADMIN', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '' };
+      const command = { user_id: 'U_ADMIN', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
       await app.handlers.command['/tools']({ command, ack, respond: mockRespond });
 
@@ -3865,7 +3866,7 @@ describe('Commands Module', () => {
         },
       ]);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '', trigger_id: 'trig-1' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '', trigger_id: 'trig-1' };
 
       await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
@@ -3892,7 +3893,7 @@ describe('Commands Module', () => {
         },
       ]);
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', text: '', trigger_id: 'trig-1' };
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '', trigger_id: 'trig-1' };
 
       await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
 
@@ -3971,7 +3972,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'members:agent-1' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['agent_overflow']({ action, ack, body });
 
@@ -3987,7 +3988,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'members:agent-1' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['agent_overflow']({ action, ack, body });
 
@@ -4004,7 +4005,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'members:agent-1' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['agent_overflow']({ action, ack, body });
 
@@ -4024,7 +4025,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'members:agent-1' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['agent_overflow']({ action, ack, body });
 
@@ -4046,7 +4047,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'resume:agent-1' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['agent_overflow']({ action, ack, body });
 
@@ -4070,7 +4071,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'agent-1' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['confirm_delete_agent']({ action, ack, body });
 
@@ -4096,7 +4097,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'flush:src-1' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['kb_source_overflow']({ action, ack, body });
 
@@ -4118,7 +4119,7 @@ describe('Commands Module', () => {
       mockPostBlocks.mockResolvedValue('thread-ts-source');
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, container: {} };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, container: {}, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['kb_add_source']({ ack, body });
 
@@ -4133,7 +4134,7 @@ describe('Commands Module', () => {
       if (!app.handlers.action['kb_add_source']) return;
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['kb_add_source']({ ack, body });
 
@@ -4162,6 +4163,7 @@ describe('Commands Module', () => {
         channel: { id: 'C1' },
         message: { ts: 'msg-ts', thread_ts: 'thread-ts' },
         trigger_id: 'trig-1',
+        team: { id: 'W_TEST_123' },
       };
 
       await app.handlers.action[actionId]({ ack, body });
@@ -4192,6 +4194,7 @@ describe('Commands Module', () => {
         channel: { id: 'C1' },
         message: { ts: 'msg-ts', thread_ts: 'thread-ts' },
         trigger_id: 'trig-1',
+        team: { id: 'W_TEST_123' },
       };
 
       await app.handlers.action[actionId]({ ack, body });
@@ -4218,6 +4221,7 @@ describe('Commands Module', () => {
         channel: { id: 'C1' },
         message: { ts: 'msg-ts', thread_ts: 'thread-ts' },
         // no trigger_id
+        team: { id: 'W_TEST_123' },
       };
 
       await app.handlers.action[actionId]({ ack, body });
@@ -4235,7 +4239,7 @@ describe('Commands Module', () => {
       if (!app.handlers.action[actionId]) return;
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action[actionId]({ ack, body });
 
@@ -4262,7 +4266,7 @@ describe('Commands Module', () => {
       mockPostBlocks.mockResolvedValue('thread-ts-keys');
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, container: {} };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, container: {}, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['kb_manage_api_keys']({ ack, body });
 
@@ -4278,7 +4282,7 @@ describe('Commands Module', () => {
       if (!app.handlers.action['kb_manage_api_keys']) return;
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['kb_manage_api_keys']({ ack, body });
 
@@ -4307,6 +4311,7 @@ describe('Commands Module', () => {
         channel: { id: 'C1' },
         message: { ts: 'msg-ts', thread_ts: 'thread-ts' },
         trigger_id: 'trig-1',
+        team: { id: 'W_TEST_123' },
       };
 
       await app.handlers.action[actionId]({ ack, body });
@@ -4333,6 +4338,7 @@ describe('Commands Module', () => {
         channel: { id: 'C1' },
         message: { ts: 'msg-ts', thread_ts: 'thread-ts' },
         // no trigger_id
+        team: { id: 'W_TEST_123' },
       };
 
       await app.handlers.action[actionId]({ ack, body });
@@ -4360,6 +4366,7 @@ describe('Commands Module', () => {
         channel: { id: 'C1' },
         message: { ts: 'msg-ts', thread_ts: 'thread-ts' },
         // no trigger_id -> fallback thread flow
+        team: { id: 'W_TEST_123' },
       };
 
       await app.handlers.action[actionId]({ ack, body });
@@ -4377,7 +4384,7 @@ describe('Commands Module', () => {
       if (!app.handlers.action[actionId]) return;
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action[actionId]({ ack, body });
 
@@ -4403,7 +4410,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'google' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['kb_setup_api_key']({ action, ack, body });
 
@@ -4419,7 +4426,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'google' };
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['kb_setup_api_key']({ action, ack, body });
 
@@ -4442,7 +4449,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'test-integration' };
-      const body = { user: { id: 'U1' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U1' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['register_tool_integration']({ action, ack, body });
 
@@ -4467,7 +4474,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'test-integration' };
-      const body = { user: { id: 'U_REGULAR' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U_REGULAR' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['register_tool_integration']({ action, ack, body });
 
@@ -4485,7 +4492,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'unknown-integration' };
-      const body = { user: { id: 'U1' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U1' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['register_tool_integration']({ action, ack, body });
 
@@ -4504,7 +4511,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'test-integration' };
-      const body = { user: { id: 'U1' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U1' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['register_tool_integration']({ action, ack, body });
 
@@ -4529,7 +4536,7 @@ describe('Commands Module', () => {
       mockRegister.mockResolvedValue(undefined);
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
       const view = {
         private_metadata: JSON.stringify({ integrationId: 'test-integration', requiredKeys: ['api_key', 'site'] }),
         state: {
@@ -4558,7 +4565,7 @@ describe('Commands Module', () => {
       registerToolAndKBModals(app as any);
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
       const view = {
         private_metadata: JSON.stringify({ integrationId: 'test-integration', requiredKeys: ['api_key', 'site'] }),
         state: {
@@ -4588,7 +4595,7 @@ describe('Commands Module', () => {
       mockRegister.mockRejectedValue(new Error('API key invalid'));
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
       const view = {
         private_metadata: JSON.stringify({ integrationId: 'test-integration', requiredKeys: ['api_key', 'site'] }),
         state: {
@@ -4618,7 +4625,7 @@ describe('Commands Module', () => {
       mockGetToolIntegrations.mockReturnValue([]); // no integrations
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
       const view = {
         private_metadata: JSON.stringify({ integrationId: 'unknown', requiredKeys: ['key'] }),
         state: {
@@ -4677,11 +4684,11 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const respond = vi.fn();
       const action = { value: 'upd-channels' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['confirm_update_agent']({ action, ack, body, respond });
 
-      expect(mockUpdateAgent).toHaveBeenCalledWith(
+      expect(mockUpdateAgent).toHaveBeenCalledWith('W_TEST_123',
         'agent-1',
         expect.objectContaining({ channel_ids: ['C_DIFFERENT'] }),
         'U1',
@@ -4713,7 +4720,7 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const respond = vi.fn();
       const action = { value: 'upd-err' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['confirm_update_agent']({ action, ack, body, respond });
 
@@ -4741,7 +4748,7 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const respond = vi.fn();
       const action = { value: 'upd-err2' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['confirm_update_agent']({ action, ack, body, respond });
 
@@ -4772,7 +4779,7 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const respond = vi.fn();
       const action = { value: 'upd-no-thread' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['confirm_update_agent']({ action, ack, body, respond });
 
@@ -4808,14 +4815,14 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const respond = vi.fn();
       const action = { value: 'upd-skills' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['confirm_update_agent']({ action, ack, body, respond });
 
       // Wait for fire-and-forget
       await new Promise(r => setTimeout(r, 10));
 
-      expect(mockAttachSkillToAgent).toHaveBeenCalledWith('agent-1', 'mcp-skill', 'read', 'U1');
+      expect(mockAttachSkillToAgent).toHaveBeenCalledWith('W_TEST_123', 'agent-1', 'mcp-skill', 'read', 'U1');
       expect(mockCreateTrigger).toHaveBeenCalled();
     });
 
@@ -4838,7 +4845,7 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const respond = vi.fn();
       const action = { value: 'upd-no-agent' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['confirm_update_agent']({ action, ack, body, respond });
 
@@ -4857,7 +4864,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'opus' }, block_id: 'model_effort_confirm-123' };
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['select_agent_model']({ action, ack, body });
 
@@ -4874,7 +4881,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: null, block_id: 'model_effort_confirm-123' };
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['select_agent_model']({ action, ack, body });
 
@@ -4888,7 +4895,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'opus' }, block_id: '' };
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['select_agent_model']({ action, ack, body });
 
@@ -4904,7 +4911,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'max' }, block_id: 'model_effort_confirm-456' };
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['select_agent_effort']({ action, ack, body });
 
@@ -4921,7 +4928,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: null, block_id: 'model_effort_confirm-456' };
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['select_agent_effort']({ action, ack, body });
 
@@ -4935,7 +4942,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'low' }, block_id: '' };
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['select_agent_effort']({ action, ack, body });
 
@@ -5035,7 +5042,7 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const respond = vi.fn();
       const action = { value: 'cancel-no-thread' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       mockQueryOne.mockResolvedValueOnce({ data: {} }); // No channelId/threadTs
 
@@ -5052,7 +5059,7 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const respond = vi.fn();
       const action = { value: 'cancel-gone' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       mockQueryOne.mockResolvedValueOnce(null);
 
@@ -5084,7 +5091,7 @@ describe('Commands Module', () => {
 
       mockSetApiKey.mockRejectedValue(new Error('Invalid key format'));
 
-      const result = await handleConversationReply('U1', 'C1', 'thread-1', 'service_account_json: bad_value');
+      const result = await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'service_account_json: bad_value');
 
       expect(result).toBe(true);
       expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('Failed to save'), 'thread-1');
@@ -5108,7 +5115,7 @@ describe('Commands Module', () => {
 
       mockCreateSource.mockRejectedValue(new Error('Duplicate name'));
 
-      const result = await handleConversationReply('U1', 'C1', 'thread-1', 'name: Duplicate Source');
+      const result = await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'name: Duplicate Source');
 
       expect(result).toBe(true);
       expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('Failed to create source'), 'thread-1');
@@ -5131,7 +5138,7 @@ describe('Commands Module', () => {
       mockCreateSource.mockResolvedValue({ id: 'src-new', status: 'active' });
       mockStartSync.mockRejectedValue(new Error('Sync unavailable'));
 
-      const result = await handleConversationReply('U1', 'C1', 'thread-1', 'name: My Source');
+      const result = await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'name: My Source');
 
       expect(result).toBe(true);
       expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('Sync failed to start'), 'thread-1');
@@ -5152,7 +5159,7 @@ describe('Commands Module', () => {
       });
 
       // Send text with a config field but no name — forces !sourceName at line 3472
-      const result = await handleConversationReply('U1', 'C1', 'thread-1', 'folder_id: abc123');
+      const result = await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'folder_id: abc123');
 
       expect(result).toBe(true);
       expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('provide at least a name'), 'thread-1');
@@ -5177,7 +5184,7 @@ describe('Commands Module', () => {
       mockGetApiKey.mockResolvedValue(null);
       mockSetApiKey.mockRejectedValue(new Error('Save failed'));
 
-      const result = await handleConversationReply('U1', 'C1', 'thread-1', 'service_account_json: bad');
+      const result = await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'service_account_json: bad');
 
       expect(result).toBe(true);
       expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('Failed to save'), 'thread-1');
@@ -5213,7 +5220,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'retry-1' };
-      const body = { user: { id: 'U_ADMIN' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U_ADMIN' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['retry_agent_creation']({ action, ack, body });
 
@@ -5239,7 +5246,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'retry-fail' };
-      const body = { user: { id: 'U_ADMIN' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U_ADMIN' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['retry_agent_creation']({ action, ack, body });
 
@@ -5265,7 +5272,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: JSON.stringify({ toolName: 'zendesk-read', requestId: 'req-1' }) };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['configure_unconfigured_tool']({ action, ack, body });
 
@@ -5286,7 +5293,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: JSON.stringify({ toolName: 'missing-tool', requestId: 'req-1' }) };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['configure_unconfigured_tool']({ action, ack, body });
 
@@ -5301,7 +5308,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: JSON.stringify({ toolName: 'my-tool', requestId: 'req-1' }) };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['configure_unconfigured_tool']({ action, ack, body });
 
@@ -5317,7 +5324,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'not-json' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['configure_unconfigured_tool']({ action, ack, body });
 
@@ -5338,7 +5345,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: JSON.stringify({ toolName: 'empty-tool', requestId: 'req-1' }) };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['configure_unconfigured_tool']({ action, ack, body });
 
@@ -5374,7 +5381,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'wt-err' };
-      const body = { user: { id: 'U_ADMIN' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U_ADMIN' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['approve_write_tools']({ action, ack, body });
 
@@ -5400,7 +5407,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'wt-ok' };
-      const body = { user: { id: 'U_ADMIN' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U_ADMIN' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['approve_write_tools']({ action, ack, body });
 
@@ -5426,7 +5433,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'agent-1' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts', thread_ts: 'parent-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts', thread_ts: 'parent-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['update_agent_select']({ action, ack, body });
 
@@ -5445,7 +5452,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'agent-1' } };
-      const body = { user: { id: 'U_UNPRIV' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U_UNPRIV' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['update_agent_select']({ action, ack, body });
 
@@ -5460,7 +5467,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: null };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['update_agent_select']({ action, ack, body });
 
@@ -5478,7 +5485,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'agent-missing' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['update_agent_select']({ action, ack, body });
 
@@ -5514,7 +5521,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_conversation: 'C_SELECTED' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts', thread_ts: 'thread-ts-1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts', thread_ts: 'thread-ts-1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['new_agent_channel_select']({ action, ack, body });
 
@@ -5535,7 +5542,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_conversation: null };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['new_agent_channel_select']({ action, ack, body });
 
@@ -5552,7 +5559,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_conversation: 'C_SELECTED' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts', thread_ts: 'thread-ts-1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts', thread_ts: 'thread-ts-1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['new_agent_channel_select']({ action, ack, body });
 
@@ -5583,7 +5590,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_conversation: 'C_NEW' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts', thread_ts: 'thread-ts-1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts', thread_ts: 'thread-ts-1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['new_agent_channel_select']({ action, ack, body });
 
@@ -5615,7 +5622,7 @@ describe('Commands Module', () => {
       });
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts', thread_ts: 'thread-ts-1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts', thread_ts: 'thread-ts-1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['new_agent_new_channel']({ ack, body });
 
@@ -5632,7 +5639,7 @@ describe('Commands Module', () => {
       mockQueryOne.mockResolvedValue(null);
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts', thread_ts: 'thread-ts-1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts', thread_ts: 'thread-ts-1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['new_agent_new_channel']({ ack, body });
 
@@ -5665,7 +5672,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_conversation: 'C_UPDATED' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts', thread_ts: 'thread-ts-1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts', thread_ts: 'thread-ts-1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['update_agent_channel_select']({ action, ack, body });
 
@@ -5697,7 +5704,7 @@ describe('Commands Module', () => {
       mockGetAgent.mockResolvedValue(makeFakeAgent());
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts', thread_ts: 'thread-ts-1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts', thread_ts: 'thread-ts-1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['update_agent_keep_channel']({ ack, body });
 
@@ -5717,7 +5724,7 @@ describe('Commands Module', () => {
       if (!app.handlers.action['kb_add_entry_btn']) return;
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U1' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['kb_add_entry_btn']({ ack, body });
 
@@ -5740,7 +5747,7 @@ describe('Commands Module', () => {
       mockUpdateToolAccessLevel.mockRejectedValue(new Error('Access update failed'));
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
       const view = {
         private_metadata: 'my-tool',
         state: {
@@ -5774,7 +5781,7 @@ describe('Commands Module', () => {
       mockAddToolToAgent.mockRejectedValue(new Error('Tool already added'));
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
       const view = {
         private_metadata: 'my-tool',
         state: {
@@ -5808,7 +5815,7 @@ describe('Commands Module', () => {
       mockCreateKBEntry.mockRejectedValue(new Error('DB write failed'));
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
       const view = {
         private_metadata: '',
         state: {
@@ -5845,7 +5852,7 @@ describe('Commands Module', () => {
       mockUpdateSource.mockRejectedValue(new Error('Source config failed'));
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
       const view = {
         private_metadata: JSON.stringify({ sourceId: 'src-1', sourceType: 'google_drive' }),
         state: {
@@ -5880,7 +5887,7 @@ describe('Commands Module', () => {
       mockStartSync.mockRejectedValue(new Error('Sync failed'));
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
       const view = {
         private_metadata: JSON.stringify({
           sourceType: 'google_drive',
@@ -5932,10 +5939,10 @@ describe('Commands Module', () => {
       });
       mockGetAgent.mockResolvedValue(makeFakeAgent());
 
-      const result = await handleConversationReply('U1', 'C1', 'thread-1', 'add <#CNEW1|new-channel>');
+      const result = await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'add <#CNEW1|new-channel>');
 
       expect(result).toBe(true);
-      expect(mockUpdateAgent).toHaveBeenCalledWith(
+      expect(mockUpdateAgent).toHaveBeenCalledWith('W_TEST_123',
         'agent-1',
         expect.objectContaining({ channel_ids: expect.arrayContaining(['CNEW1']) }),
         'U1',
@@ -5968,7 +5975,7 @@ describe('Commands Module', () => {
       });
       mockGetAgent.mockResolvedValue(makeFakeAgent());
 
-      const result = await handleConversationReply('U1', 'C1', 'thread-1', 'remove <#C_CHAN|old>');
+      const result = await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'remove <#C_CHAN|old>');
 
       expect(result).toBe(true);
       // Removing the only channel should post an error
@@ -6000,7 +6007,7 @@ describe('Commands Module', () => {
       });
       mockGetAgent.mockResolvedValue(makeFakeAgent());
 
-      const result = await handleConversationReply('U1', 'C1', 'thread-1', 'change channels');
+      const result = await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'change channels');
 
       expect(result).toBe(true);
       expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining("couldn't find any channel"), 'thread-1');
@@ -6031,7 +6038,7 @@ describe('Commands Module', () => {
       });
       mockGetAgent.mockResolvedValue(makeFakeAgent());
 
-      const result = await handleConversationReply('U1', 'C1', 'thread-1', 'what model is this agent using?');
+      const result = await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'what model is this agent using?');
 
       expect(result).toBe(true);
       expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('claude-sonnet'), 'thread-1');
@@ -6068,7 +6075,7 @@ describe('Commands Module', () => {
       mockGetAgent.mockResolvedValue(makeFakeAgent());
       mockAnalyzeGoal.mockResolvedValue(makeFakeAnalysis());
 
-      const result = await handleConversationReply('U1', 'C1', 'thread-1', 'update goal and add <#CNEW2|new>');
+      const result = await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'update goal and add <#CNEW2|new>');
 
       expect(result).toBe(true);
       expect(mockAnalyzeGoal).toHaveBeenCalled();
@@ -6100,7 +6107,7 @@ describe('Commands Module', () => {
       mockGetAgent.mockResolvedValue(makeFakeAgent());
       mockUpdateAgent.mockRejectedValue(new Error('Update failed'));
 
-      const result = await handleConversationReply('U1', 'C1', 'thread-1', 'set channels to <#CFAIL|fail>');
+      const result = await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'set channels to <#CFAIL|fail>');
 
       expect(result).toBe(true);
       expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('Failed to update channels'), 'thread-1');
@@ -6119,7 +6126,7 @@ describe('Commands Module', () => {
       if (!app.handlers.action['agents_new_agent']) return;
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } }; // no channel
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } }; // no channel
 
       await app.handlers.action['agents_new_agent']({ ack, body });
 
@@ -6149,7 +6156,7 @@ describe('Commands Module', () => {
       mockGetAgent.mockResolvedValue(makeFakeAgent());
       mockAnalyzeGoal.mockRejectedValue(new Error('Analysis timeout'));
 
-      const result = await handleConversationReply('U1', 'C1', 'thread-1', 'change to billing bot');
+      const result = await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'change to billing bot');
 
       expect(result).toBe(true);
       expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('Analysis timeout'), 'thread-1');
@@ -6170,7 +6177,7 @@ describe('Commands Module', () => {
       });
       mockGetAgent.mockResolvedValue(null);
 
-      const result = await handleConversationReply('U1', 'C1', 'thread-1', 'update to billing');
+      const result = await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'update to billing');
 
       expect(result).toBe(true);
       expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('not found'), 'thread-1');
@@ -6217,14 +6224,14 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'confirm-private' };
-      const body = { user: { id: 'U_CREATOR' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U_CREATOR' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['confirm_new_agent']({ action, ack, body });
 
       // Wait for fire-and-forget (withTimeout wrappers add extra microtask ticks)
       await new Promise(r => setTimeout(r, 50));
 
-      expect(mockAddAgentMembers).toHaveBeenCalledWith('agent-private', ['U_MEMBER1', 'U_MEMBER2'], 'U_CREATOR');
+      expect(mockAddAgentMembers).toHaveBeenCalledWith('W_TEST_123', 'agent-private', ['U_MEMBER1', 'U_MEMBER2'], 'U_CREATOR');
       // Should notify admin about write tools and new tools
       expect(mockSendDMBlocks).toHaveBeenCalled();
     });
@@ -6278,14 +6285,14 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'confirm-sched' };
-      const body = { user: { id: 'U_CREATOR' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U_CREATOR' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['confirm_new_agent']({ action, ack, body });
 
       // Wait for fire-and-forget
       await new Promise(r => setTimeout(r, 10));
 
-      expect(mockCreateTrigger).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateTrigger).toHaveBeenCalledWith('W_TEST_123', expect.objectContaining({
         config: expect.objectContaining({ timezone: 'America/New_York' }),
       }));
     });
@@ -6330,7 +6337,7 @@ describe('Commands Module', () => {
       ]);
 
       const respond = vi.fn();
-      await app.handlers.command['/kb']({ ack: vi.fn(), command: { user_id: 'U1', channel_name: 'directmessage', text: '' }, respond });
+      await app.handlers.command['/kb']({ ack: vi.fn(), command: { user_id: 'U1', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' }, respond });
 
       const responseText = JSON.stringify(respond.mock.calls[0][0]);
       expect(responseText).toContain('m ago');
@@ -6353,7 +6360,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'configure:empty-tool' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['tool_overflow']({ action, ack, body });
 
@@ -6392,7 +6399,7 @@ describe('Commands Module', () => {
       mockStartSync.mockResolvedValue(undefined);
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
       const view = {
         private_metadata: JSON.stringify({ sourceType: 'website', userId: 'U1', channelId: 'C1', threadTs: 'thread-1' }),
         state: {
@@ -6407,7 +6414,7 @@ describe('Commands Module', () => {
       await app.handlers.view['kb_source_details_modal']({ ack, body, view });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockCreateSource).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateSource).toHaveBeenCalledWith('W_TEST_123', expect.objectContaining({
         config: expect.objectContaining({ content_type: 'mintlify', url: 'https://example.com' }),
       }));
     });
@@ -6434,7 +6441,7 @@ describe('Commands Module', () => {
       }));
       mockListSuperadmins.mockResolvedValue([{ user_id: 'UADMIN' }]);
 
-      const result = await handleConversationReply('U_REQ', 'C1', 'thread-1', 'every message');
+      const result = await handleConversationReply('W_TEST_123', 'U_REQ', 'C1', 'thread-1', 'every message');
       expect(result).toBe(true);
       await new Promise(r => setTimeout(r, 10));
 
@@ -6467,7 +6474,7 @@ describe('Commands Module', () => {
       mockGetAgent.mockResolvedValue(makeFakeAgent({ channel_ids: ['C_CHAN'] }));
       mockAnalyzeGoal.mockResolvedValue(makeFakeAnalysis());
 
-      const result = await handleConversationReply('U1', 'C1', 'thread-1', 'remove C_CHAN and update goal');
+      const result = await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'remove C_CHAN and update goal');
       expect(result).toBe(true);
       // With only 1 channel and removing it, should keep current channels
       expect(mockAnalyzeGoal).toHaveBeenCalled();
@@ -6491,7 +6498,7 @@ describe('Commands Module', () => {
       mockGetAgent.mockResolvedValue(makeFakeAgent());
       mockAnalyzeGoal.mockResolvedValue(makeFakeAnalysis());
 
-      const result = await handleConversationReply('U1', 'C1', 'thread-1', 'set channels and update goal');
+      const result = await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'set channels and update goal');
       expect(result).toBe(true);
       expect(mockAnalyzeGoal).toHaveBeenCalled();
     });
@@ -6508,7 +6515,7 @@ describe('Commands Module', () => {
       mockGetAgent.mockResolvedValue(makeFakeAgent());
       mockAnalyzeGoal.mockResolvedValue(makeFakeAnalysis());
 
-      const result = await handleConversationReply('U1', 'C1', 'thread-1', 'do something');
+      const result = await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'do something');
       expect(result).toBe(true);
       // Should fall back to goal update
       expect(mockAnalyzeGoal).toHaveBeenCalled();
@@ -6535,7 +6542,7 @@ describe('Commands Module', () => {
       mockGetAgent.mockResolvedValueOnce(makeFakeAgent())
                   .mockResolvedValueOnce(null);
 
-      const result = await handleConversationReply('U1', 'C1', 'thread-1', 'update <#CNEW|ch>');
+      const result = await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'update <#CNEW|ch>');
       expect(result).toBe(true);
       expect(mockPostMessage).toHaveBeenCalledWith('C1', ':x: Agent not found.', 'thread-1');
     });
@@ -6567,7 +6574,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'conf-skill-err' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['confirm_new_agent']({ action, ack, body });
       await new Promise(r => setTimeout(r, 20));
@@ -6617,7 +6624,7 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const action = { value: 'conf-upd-post-err' };
       const respond = vi.fn();
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts', thread_ts: 'thread-1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts', thread_ts: 'thread-1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['confirm_update_agent']({ action, ack, body, respond });
       await new Promise(r => setTimeout(r, 20));
@@ -6658,14 +6665,14 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'retry-req-1' };
-      const body = { user: { id: 'U_ADMIN' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U_ADMIN' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['retry_agent_creation']({ action, ack, body });
       await new Promise(r => setTimeout(r, 20));
 
       expect(mockCreateAgent).toHaveBeenCalled();
-      expect(mockAttachSkillToAgent).toHaveBeenCalledWith('agent-retry', 'retry-skill', 'read', 'U_ORIG');
-      expect(mockCreateTrigger).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockAttachSkillToAgent).toHaveBeenCalledWith('W_TEST_123', 'agent-retry', 'retry-skill', 'read', 'U_ORIG');
+      expect(mockCreateTrigger).toHaveBeenCalledWith('W_TEST_123', expect.objectContaining({
         config: expect.objectContaining({ timezone: 'Europe/London' }),
       }));
       // Should notify about new tools and write tools
@@ -6702,7 +6709,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'retry-dup' };
-      const body = { user: { id: 'U_ADMIN' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U_ADMIN' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['retry_agent_creation']({ action, ack, body });
       await new Promise(r => setTimeout(r, 10));
@@ -6739,7 +6746,7 @@ describe('Commands Module', () => {
         triggers: [{ type: 'slack_channel', description: 'On message' }],
       }));
 
-      const result = await handleConversationReply('U1', 'C1', 'thread-1', 'every message');
+      const result = await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'every message');
       expect(result).toBe(true);
 
       // postBlocks is called for channel selection which includes agent name
@@ -6776,7 +6783,7 @@ describe('Commands Module', () => {
         triggers: [{ type: 'schedule', description: 'Daily', config: { cron: '0 9 * * *' } }],
       }));
 
-      const result = await handleConversationReply('U1', 'C1', 'thread-1', 'change model');
+      const result = await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'change model');
       expect(result).toBe(true);
     });
   });
@@ -6803,7 +6810,7 @@ describe('Commands Module', () => {
       mockIsProviderConfigured.mockResolvedValue(true);
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts', thread_ts: 'thread-ts' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts', thread_ts: 'thread-ts' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action[actionId]({ ack, body });
 
@@ -6832,7 +6839,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       // No trigger_id = thread flow
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts', thread_ts: 'thread-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts', thread_ts: 'thread-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action[actionId]({ ack, body });
 
@@ -6853,7 +6860,7 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       const action = { value: 'nonexistent' };
       // body with channel but no message.ts
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['approve_write_tools']({ action, ack, body });
 
@@ -6870,7 +6877,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'nonexistent' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       // Should not throw
       await app.handlers.action['approve_write_tools']({ action, ack, body });
@@ -6903,7 +6910,7 @@ describe('Commands Module', () => {
                   .mockResolvedValueOnce(makeFakeAgent());
       mockAnalyzeGoal.mockRejectedValue(new Error('API rate limit'));
 
-      const result = await handleConversationReply('U1', 'C1', 'thread-1', 'update behavior <#CNEW|ch>');
+      const result = await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'update behavior <#CNEW|ch>');
       expect(result).toBe(true);
       expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('Failed to analyze updated goal'), 'thread-1');
       expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('API rate limit'), 'thread-1');
@@ -6943,7 +6950,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'conf-bg-err' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['confirm_new_agent']({ action, ack, body });
       await new Promise(r => setTimeout(r, 30));
@@ -6995,7 +7002,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'retry-skill-fail' };
-      const body = { user: { id: 'U_ADMIN' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U_ADMIN' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['retry_agent_creation']({ action, ack, body });
       await new Promise(r => setTimeout(r, 20));
@@ -7040,7 +7047,7 @@ describe('Commands Module', () => {
       });
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts', thread_ts: 'thread-1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts', thread_ts: 'thread-1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['new_agent_new_channel']({ ack, body });
 
@@ -7086,7 +7093,7 @@ describe('Commands Module', () => {
       });
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts', thread_ts: 'thread-1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts', thread_ts: 'thread-1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['new_agent_new_channel']({ ack, body });
 
@@ -7151,7 +7158,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'view_config:agent-1' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['agent_overflow']({ action, ack, body });
 
@@ -7170,7 +7177,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'view_config:agent-1' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['agent_overflow']({ action, ack, body });
 
@@ -7189,7 +7196,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'view_config:agent-1' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['agent_overflow']({ action, ack, body });
 
@@ -7225,6 +7232,7 @@ describe('Commands Module', () => {
         channel: { id: 'C1' },
         message: { ts: 'msg-ts', thread_ts: 'thread-ts' },
         trigger_id: 'trig-1',
+        team: { id: 'W_TEST_123' },
       };
 
       await app.handlers.action[actionId]({ ack, body });
@@ -7262,6 +7270,7 @@ describe('Commands Module', () => {
         channel: { id: 'C1' },
         message: { ts: 'msg-ts', thread_ts: 'thread-ts' },
         // no trigger_id
+        team: { id: 'W_TEST_123' },
       };
 
       await app.handlers.action[actionId]({ ack, body });
@@ -7298,6 +7307,7 @@ describe('Commands Module', () => {
         channel: { id: 'C1' },
         message: { ts: 'msg-ts', thread_ts: 'thread-ts' },
         trigger_id: 'trig-1',
+        team: { id: 'W_TEST_123' },
       };
 
       await app.handlers.action[actionId]({ ack, body });
@@ -7317,7 +7327,7 @@ describe('Commands Module', () => {
       expect(app.handlers.action[actionId]).toBeDefined();
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } }; // no channel or message
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } }; // no channel or message
 
       await app.handlers.action[actionId]({ ack, body });
 
@@ -7347,6 +7357,7 @@ describe('Commands Module', () => {
         channel: { id: 'C1' },
         message: { ts: 'msg-ts', thread_ts: 'thread-ts' },
         trigger_id: 'trig-1',
+        team: { id: 'W_TEST_123' },
       };
 
       await app.handlers.action[actionId]({ ack, body });
@@ -7375,6 +7386,7 @@ describe('Commands Module', () => {
         channel: { id: 'C1' },
         message: { ts: 'msg-ts', thread_ts: 'thread-ts' },
         // no trigger_id
+        team: { id: 'W_TEST_123' },
       };
 
       await app.handlers.action[actionId]({ ack, body });
@@ -7399,6 +7411,7 @@ describe('Commands Module', () => {
         channel: { id: 'C1' },
         message: { ts: 'msg-ts', thread_ts: 'thread-ts' },
         // no trigger_id
+        team: { id: 'W_TEST_123' },
       };
 
       await app.handlers.action[actionId]({ ack, body });
@@ -7421,7 +7434,7 @@ describe('Commands Module', () => {
       expect(app.handlers.action[actionId]).toBeDefined();
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action[actionId]({ ack, body });
 
@@ -7464,7 +7477,7 @@ describe('Commands Module', () => {
       const ack = vi.fn();
       // new_agent_channel_select uses action.selected_conversation (singular)
       const action = { selected_conversation: 'C_SEL1' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts', thread_ts: 'thread-ts-1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts', thread_ts: 'thread-ts-1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['new_agent_channel_select']({ action, ack, body });
 
@@ -7500,7 +7513,7 @@ describe('Commands Module', () => {
       });
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts', thread_ts: 'thread-ts-1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts', thread_ts: 'thread-ts-1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['new_agent_new_channel']({ ack, body });
 
@@ -7546,7 +7559,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'conf-tool-req' };
-      const body = { user: { id: 'U_CREATOR' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U_CREATOR' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['confirm_new_agent']({ action, ack, body });
       await new Promise(r => setTimeout(r, 50));
@@ -7587,7 +7600,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'conf-no-admin' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['confirm_new_agent']({ action, ack, body });
       await new Promise(r => setTimeout(r, 30));
@@ -7615,7 +7628,7 @@ describe('Commands Module', () => {
       mockPostBlocks.mockResolvedValue('ts-api-keys');
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, container: {} };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, container: {}, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['kb_manage_api_keys']({ ack, body });
 
@@ -7630,7 +7643,7 @@ describe('Commands Module', () => {
       expect(app.handlers.action['kb_manage_api_keys']).toBeDefined();
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['kb_manage_api_keys']({ ack, body });
 
@@ -7649,7 +7662,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'google' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['kb_setup_api_key']({ action, ack, body });
 
@@ -7667,7 +7680,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'test-integration' };
-      const body = { user: { id: 'UADMIN' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'UADMIN' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['register_tool_integration']({ action, ack, body });
 
@@ -7684,7 +7697,7 @@ describe('Commands Module', () => {
       expect(app.handlers.action['kb_add_entry_btn']).toBeDefined();
 
       const ack = vi.fn();
-      const body = { trigger_id: 'trig-1' };
+      const body = { trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['kb_add_entry_btn']({ ack, body });
 
@@ -7705,7 +7718,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'agent-1' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts', thread_ts: 'thread-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts', thread_ts: 'thread-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['update_agent_select']({ action, ack, body });
 
@@ -7728,7 +7741,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'configure:test-tool' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['tool_overflow']({ action, ack, body });
 
@@ -7753,7 +7766,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'view:entry-1' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1' };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['kb_entry_overflow']({ action, ack, body });
 
@@ -7778,7 +7791,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'sync:src-1' } };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['kb_source_overflow']({ action, ack, body });
 
@@ -7805,7 +7818,7 @@ describe('Commands Module', () => {
       expect(app.handlers.action['cancel_delete_agent']).toBeDefined();
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['cancel_delete_agent']({ ack, body });
 
@@ -7837,7 +7850,7 @@ describe('Commands Module', () => {
       ]);
 
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C1', channel_name: 'directmessage', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C1', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
       await app.handlers.command['/templates']({ command, ack, respond: mockRespond });
 
@@ -7870,7 +7883,7 @@ describe('Commands Module', () => {
       mockGetAllTemplates.mockReturnValue([]);
 
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C1', channel_name: 'directmessage', text: '' };
+      const command = { user_id: 'U123', channel_id: 'C1', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
       await app.handlers.command['/templates']({ command, ack, respond: mockRespond });
 
@@ -7902,7 +7915,7 @@ describe('Commands Module', () => {
       ]);
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['agents_browse_templates']({ ack, body });
 
@@ -7935,7 +7948,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'seo-monitor' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['template_activate']({ action, ack, body });
 
@@ -7959,7 +7972,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'nonexistent' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['template_activate']({ action, ack, body });
 
@@ -8013,19 +8026,19 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'confirm-id' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['template_confirm']({ action, ack, body });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockCreateAgent).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateAgent).toHaveBeenCalledWith('W_TEST_123', expect.objectContaining({
         name: 'Content Strategist',
         channelId: 'C_TARGET',
         systemPrompt: 'You are a content strategist.',
         tools: ['WebSearch', 'Read'],
         model: 'opus',
       }));
-      expect(mockAttachSkillToAgent).toHaveBeenCalledWith('agent-tmpl-1', 'company-research', 'read', 'U1');
+      expect(mockAttachSkillToAgent).toHaveBeenCalledWith('W_TEST_123', 'agent-tmpl-1', 'company-research', 'read', 'U1');
       expect(mockPostMessage).toHaveBeenCalledWith('C_TARGET', expect.stringContaining('Content Strategist'));
     });
 
@@ -8069,7 +8082,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'confirm-id' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['template_confirm']({ action, ack, body });
 
@@ -8096,7 +8109,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'confirm-id' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['template_confirm']({ action, ack, body });
 
@@ -8118,7 +8131,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'confirm-id' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['template_confirm']({ action, ack, body });
 
@@ -8171,11 +8184,11 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'confirm-id' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['template_confirm']({ action, ack, body });
 
-      expect(mockCreateAgent).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateAgent).toHaveBeenCalledWith('W_TEST_123', expect.objectContaining({
         name: expect.stringContaining('SEO Monitor-'),
       }));
     });
@@ -8219,7 +8232,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'confirm-id' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['template_confirm']({ action, ack, body });
 
@@ -8235,7 +8248,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'confirm-id' };
-      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U1' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['template_cancel']({ action, ack, body });
 
@@ -8275,7 +8288,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'confirm-id-missing' };
-      const body = { user: { id: 'U_CREATOR' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U_CREATOR' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['confirm_new_agent']({ action, ack, body });
 
@@ -8317,12 +8330,12 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { value: 'confirm-id-ok' };
-      const body = { user: { id: 'U_CREATOR' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' } };
+      const body = { user: { id: 'U_CREATOR' }, channel: { id: 'C1' }, message: { ts: 'msg-ts' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['confirm_new_agent']({ action, ack, body });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockCreateAgent).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateAgent).toHaveBeenCalledWith('W_TEST_123', expect.objectContaining({
         tools: ['web-search', 'serpapi-read'],
       }));
     });
@@ -8340,7 +8353,7 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_conversation: 'C_TARGET' };
-      const body = { user: { id: 'U1' } };
+      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } };
 
       await app.handlers.action['template_channel_select']({ action, ack, body });
 

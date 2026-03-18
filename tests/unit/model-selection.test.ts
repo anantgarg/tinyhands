@@ -25,6 +25,8 @@ import {
   getModelSummary,
 } from '../../src/modules/model-selection';
 
+const TEST_WORKSPACE_ID = 'W_TEST_123';
+
 beforeEach(() => {
   vi.clearAllMocks();
 });
@@ -74,15 +76,15 @@ describe('setAgentModel', () => {
   it('should update the agent model', async () => {
     mockCanModifyAgent.mockResolvedValue(true);
 
-    const result = await setAgentModel('a1', 'opus', 'U1');
+    const result = await setAgentModel(TEST_WORKSPACE_ID, 'a1', 'opus', 'U1');
     expect(result.model).toBe('opus');
-    expect(mockUpdateAgent).toHaveBeenCalledWith('a1', { model: 'opus' }, 'U1');
+    expect(mockUpdateAgent).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 'a1', { model: 'opus' }, 'U1');
   });
 
   it('should return warning for haiku', async () => {
     mockCanModifyAgent.mockResolvedValue(true);
 
-    const result = await setAgentModel('a1', 'haiku', 'U1');
+    const result = await setAgentModel(TEST_WORKSPACE_ID, 'a1', 'haiku', 'U1');
     expect(result.warning).toBeDefined();
     expect(result.warning).toContain('Haiku');
   });
@@ -90,20 +92,20 @@ describe('setAgentModel', () => {
   it('should return no warning for sonnet', async () => {
     mockCanModifyAgent.mockResolvedValue(true);
 
-    const result = await setAgentModel('a1', 'sonnet', 'U1');
+    const result = await setAgentModel(TEST_WORKSPACE_ID, 'a1', 'sonnet', 'U1');
     expect(result.warning).toBeUndefined();
   });
 
   it('should throw on insufficient permissions', async () => {
     mockCanModifyAgent.mockResolvedValue(false);
 
-    await expect(setAgentModel('a1', 'opus', 'U1')).rejects.toThrow('Insufficient permissions');
+    await expect(setAgentModel(TEST_WORKSPACE_ID, 'a1', 'opus', 'U1')).rejects.toThrow('Insufficient permissions');
   });
 
   it('should throw on invalid model', async () => {
     mockCanModifyAgent.mockResolvedValue(true);
 
-    await expect(setAgentModel('a1', 'gpt4' as any, 'U1')).rejects.toThrow('Invalid model');
+    await expect(setAgentModel(TEST_WORKSPACE_ID, 'a1', 'gpt4' as any, 'U1')).rejects.toThrow('Invalid model');
   });
 });
 
@@ -111,7 +113,7 @@ describe('getAgentModel', () => {
   it('should return model info', async () => {
     mockGetAgent.mockResolvedValue({ id: 'a1', model: 'sonnet' });
 
-    const result = await getAgentModel('a1');
+    const result = await getAgentModel(TEST_WORKSPACE_ID, 'a1');
     expect(result.model).toBe('sonnet');
     expect(result.modelId).toBeDefined();
     expect(result.info.bestFor).toContain('General');
@@ -120,13 +122,13 @@ describe('getAgentModel', () => {
   it('should throw if agent not found', async () => {
     mockGetAgent.mockResolvedValue(null);
 
-    await expect(getAgentModel('missing')).rejects.toThrow('not found');
+    await expect(getAgentModel(TEST_WORKSPACE_ID, 'missing')).rejects.toThrow('not found');
   });
 
   it('should return warning for haiku model', async () => {
     mockGetAgent.mockResolvedValue({ id: 'a1', model: 'haiku' });
 
-    const result = await getAgentModel('a1');
+    const result = await getAgentModel(TEST_WORKSPACE_ID, 'a1');
     expect(result.info.warning).toBeDefined();
   });
 });

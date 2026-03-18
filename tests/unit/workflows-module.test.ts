@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+const TEST_WORKSPACE_ID = 'W_TEST_123';
+
 // ── Mock setup ──
 const mockQuery = vi.fn();
 const mockQueryOne = vi.fn();
@@ -56,7 +58,7 @@ describe('createWorkflowDefinition', () => {
       { id: 'step-1', type: 'agent_run' as const, config: { prompt: 'Do something' } },
     ];
 
-    const result = await createWorkflowDefinition('My Workflow', 'agent-1', steps, 'user1');
+    const result = await createWorkflowDefinition(TEST_WORKSPACE_ID, 'My Workflow', 'agent-1', steps, 'user1');
 
     expect(result.id).toBe('test-uuid-1234');
     expect(result.name).toBe('My Workflow');
@@ -66,7 +68,7 @@ describe('createWorkflowDefinition', () => {
     expect(result.created_at).toBeDefined();
     expect(mockExecute).toHaveBeenCalledWith(
       expect.stringContaining('INSERT INTO workflow_definitions'),
-      expect.arrayContaining(['test-uuid-1234', 'My Workflow', 'agent-1']),
+      expect.arrayContaining(['test-uuid-1234', TEST_WORKSPACE_ID, 'My Workflow', 'agent-1']),
     );
   });
 
@@ -77,7 +79,7 @@ describe('createWorkflowDefinition', () => {
       { id: 's3', type: 'human_action' as const, config: {} },
     ];
 
-    const result = await createWorkflowDefinition('Multi-step', 'agent-1', steps, 'user1');
+    const result = await createWorkflowDefinition(TEST_WORKSPACE_ID, 'Multi-step', 'agent-1', steps, 'user1');
 
     const parsed = JSON.parse(result.steps_json);
     expect(parsed).toHaveLength(3);
@@ -92,23 +94,23 @@ describe('getWorkflowDefinition', () => {
     const def = { id: 'wf-1', name: 'Test', agent_id: 'a1', steps_json: '[]' };
     mockQueryOne.mockResolvedValue(def);
 
-    const result = await getWorkflowDefinition('wf-1');
+    const result = await getWorkflowDefinition(TEST_WORKSPACE_ID, 'wf-1');
     expect(result).toEqual(def);
     expect(mockQueryOne).toHaveBeenCalledWith(
-      'SELECT * FROM workflow_definitions WHERE id = $1',
-      ['wf-1'],
+      expect.stringContaining('SELECT * FROM workflow_definitions WHERE id = $1'),
+      expect.arrayContaining(['wf-1']),
     );
   });
 
   it('should return null when definition does not exist', async () => {
     mockQueryOne.mockResolvedValue(null);
-    const result = await getWorkflowDefinition('nonexistent');
+    const result = await getWorkflowDefinition(TEST_WORKSPACE_ID, 'nonexistent');
     expect(result).toBeNull();
   });
 
   it('should return null for undefined queryOne result', async () => {
     mockQueryOne.mockResolvedValue(undefined);
-    const result = await getWorkflowDefinition('nope');
+    const result = await getWorkflowDefinition(TEST_WORKSPACE_ID, 'nope');
     expect(result).toBeNull();
   });
 });
@@ -134,7 +136,7 @@ describe('startWorkflow', () => {
       .mockResolvedValueOnce(definition)
       .mockResolvedValueOnce(definition);
 
-    const result = await startWorkflow('wf-1');
+    const result = await startWorkflow(TEST_WORKSPACE_ID, 'wf-1');
 
     expect(result.workflow_id).toBe('wf-1');
     expect(result.current_step).toBe(0);
@@ -147,6 +149,7 @@ describe('startWorkflow', () => {
     // executeStep should enqueue the first agent_run
     expect(mockEnqueueRun).toHaveBeenCalledWith(
       expect.objectContaining({
+        workspaceId: TEST_WORKSPACE_ID,
         agentId: 'agent-1',
         input: 'Hello',
         workflowRunId: result.id,
@@ -159,7 +162,7 @@ describe('startWorkflow', () => {
   it('should throw when workflow definition does not exist', async () => {
     mockQueryOne.mockResolvedValue(null);
 
-    await expect(startWorkflow('nonexistent')).rejects.toThrow('Workflow nonexistent not found');
+    await expect(startWorkflow(TEST_WORKSPACE_ID, 'nonexistent')).rejects.toThrow('Workflow nonexistent not found');
   });
 });
 
@@ -185,7 +188,7 @@ describe('executeStep', () => {
     mockQueryOne.mockResolvedValue(definition);
 
     const run = makeRun({ current_step: 1 }); // 1 step, index 1 = past end
-    await executeStep(run);
+    await executeStep(TEST_WORKSPACE_ID, run);
 
     // Should call completeWorkflow -> updateWorkflowRun with status='completed'
     expect(mockExecute).toHaveBeenCalledWith(
@@ -208,7 +211,7 @@ describe('executeStep', () => {
     mockQueryOne.mockResolvedValue(definition);
 
     const run = makeRun({ current_step: 20 }); // MAX_WORKFLOW_STEPS = 20
-    await executeStep(run);
+    await executeStep(TEST_WORKSPACE_ID, run);
 
     expect(mockExecute).toHaveBeenCalledWith(
       expect.stringContaining('UPDATE workflow_runs SET'),
@@ -220,7 +223,7 @@ describe('executeStep', () => {
     mockQueryOne.mockResolvedValue(null);
     const run = makeRun();
 
-    await expect(executeStep(run)).rejects.toThrow('Workflow wf-1 not found');
+    await expect(executeStep(TEST_WORKSPACE_ID, run)).rejects.toThrow('Workflow wf-1 not found');
   });
 
   it('should enqueue a run for agent_run step type', async () => {
@@ -237,10 +240,11 @@ describe('executeStep', () => {
     };
     mockQueryOne.mockResolvedValue(definition);
 
-    await executeStep(makeRun());
+    await executeStep(TEST_WORKSPACE_ID, makeRun());
 
     expect(mockEnqueueRun).toHaveBeenCalledWith(
       expect.objectContaining({
+        workspaceId: TEST_WORKSPACE_ID,
         agentId: 'agent-1',
         channelId: 'C123',
         threadTs: '123.456',
@@ -262,7 +266,7 @@ describe('executeStep', () => {
     };
     mockQueryOne.mockResolvedValue(definition);
 
-    await executeStep(makeRun());
+    await executeStep(TEST_WORKSPACE_ID, makeRun());
 
     expect(mockEnqueueRun).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -283,7 +287,7 @@ describe('executeStep', () => {
     };
     mockQueryOne.mockResolvedValue(definition);
 
-    await executeStep(makeRun());
+    await executeStep(TEST_WORKSPACE_ID, makeRun());
 
     expect(mockExecute).toHaveBeenCalledWith(
       expect.stringContaining('UPDATE workflow_runs SET'),
@@ -302,7 +306,7 @@ describe('executeStep', () => {
     mockQueryOne.mockResolvedValue(definition);
 
     const beforeMs = Date.now();
-    await executeStep(makeRun());
+    await executeStep(TEST_WORKSPACE_ID, makeRun());
 
     const callArgs = mockExecute.mock.calls[0];
     const values = callArgs[1];
@@ -324,7 +328,7 @@ describe('executeStep', () => {
     };
     mockQueryOne.mockResolvedValue(definition);
 
-    await executeStep(makeRun());
+    await executeStep(TEST_WORKSPACE_ID, makeRun());
 
     expect(mockExecute).toHaveBeenCalledWith(
       expect.stringContaining('UPDATE workflow_runs SET'),
@@ -356,7 +360,7 @@ describe('executeStep', () => {
       .mockResolvedValueOnce(definition); // recursive executeStep -> getWorkflowDefinition
 
     const run = makeRun({ step_state: JSON.stringify({ approved: true }) });
-    await executeStep(run);
+    await executeStep(TEST_WORKSPACE_ID, run);
 
     // Should update current_step to index of 'step-ok' (1)
     expect(mockExecute).toHaveBeenCalledWith(
@@ -387,7 +391,7 @@ describe('executeStep', () => {
       .mockResolvedValueOnce(definition); // recursive executeStep -> getWorkflowDefinition
 
     const run = makeRun({ step_state: JSON.stringify({ approved: false }) });
-    await executeStep(run);
+    await executeStep(TEST_WORKSPACE_ID, run);
 
     // Should update current_step to index of 'step-fail' (2)
     expect(mockExecute).toHaveBeenCalledWith(
@@ -420,7 +424,7 @@ describe('executeStep', () => {
       .mockResolvedValueOnce(definition); // recursive executeStep -> getWorkflowDefinition
 
     const run = makeRun({ step_state: '{}' });
-    await executeStep(run);
+    await executeStep(TEST_WORKSPACE_ID, run);
 
     // advanceWorkflow should have been called (increments current_step)
     expect(mockExecute).toHaveBeenCalled();
@@ -449,7 +453,7 @@ describe('advanceWorkflow', () => {
       .mockResolvedValueOnce({ id: 'run-1', current_step: 1, status: 'running' })
       .mockResolvedValueOnce(definition);
 
-    await advanceWorkflow('run-1');
+    await advanceWorkflow(TEST_WORKSPACE_ID, 'run-1');
 
     // Should update with next step, clear waiting
     expect(mockExecute).toHaveBeenCalledWith(
@@ -461,7 +465,7 @@ describe('advanceWorkflow', () => {
   it('should do nothing when workflow run does not exist', async () => {
     mockQueryOne.mockResolvedValue(null);
 
-    await advanceWorkflow('nonexistent');
+    await advanceWorkflow(TEST_WORKSPACE_ID, 'nonexistent');
 
     // Only the queryOne call, no execute for update
     expect(mockExecute).not.toHaveBeenCalled();
@@ -496,7 +500,7 @@ describe('resolveHumanAction', () => {
       .mockResolvedValueOnce({ ...run, current_step: 1, status: 'running' })
       .mockResolvedValueOnce(definition);
 
-    await resolveHumanAction('run-1', { approved: true });
+    await resolveHumanAction(TEST_WORKSPACE_ID, 'run-1', { approved: true });
 
     // Should merge state
     expect(mockExecute).toHaveBeenCalledWith(
@@ -512,21 +516,21 @@ describe('resolveHumanAction', () => {
       status: 'waiting',
     });
 
-    await expect(resolveHumanAction('run-1', {}))
+    await expect(resolveHumanAction(TEST_WORKSPACE_ID, 'run-1', {}))
       .rejects.toThrow('Workflow is not waiting for human action');
   });
 
   it('should throw when workflow run does not exist', async () => {
     mockQueryOne.mockResolvedValue(null);
 
-    await expect(resolveHumanAction('nonexistent', {}))
+    await expect(resolveHumanAction(TEST_WORKSPACE_ID, 'nonexistent', {}))
       .rejects.toThrow('Workflow is not waiting for human action');
   });
 });
 
 describe('completeWorkflow', () => {
   it('should set status to completed', async () => {
-    await completeWorkflow('run-1');
+    await completeWorkflow(TEST_WORKSPACE_ID, 'run-1');
 
     expect(mockExecute).toHaveBeenCalledWith(
       expect.stringContaining('UPDATE workflow_runs SET'),
@@ -537,7 +541,7 @@ describe('completeWorkflow', () => {
 
 describe('failWorkflow', () => {
   it('should set status to failed', async () => {
-    await failWorkflow('run-1', 'Something went wrong');
+    await failWorkflow(TEST_WORKSPACE_ID, 'run-1', 'Something went wrong');
 
     expect(mockExecute).toHaveBeenCalledWith(
       expect.stringContaining('UPDATE workflow_runs SET'),
@@ -551,17 +555,17 @@ describe('getWorkflowRun', () => {
     const run = { id: 'run-1', workflow_id: 'wf-1', status: 'running' };
     mockQueryOne.mockResolvedValue(run);
 
-    const result = await getWorkflowRun('run-1');
+    const result = await getWorkflowRun(TEST_WORKSPACE_ID, 'run-1');
     expect(result).toEqual(run);
     expect(mockQueryOne).toHaveBeenCalledWith(
-      'SELECT * FROM workflow_runs WHERE id = $1',
-      ['run-1'],
+      expect.stringContaining('SELECT * FROM workflow_runs WHERE id = $1'),
+      expect.arrayContaining(['run-1']),
     );
   });
 
   it('should return null when run does not exist', async () => {
     mockQueryOne.mockResolvedValue(null);
-    const result = await getWorkflowRun('nonexistent');
+    const result = await getWorkflowRun(TEST_WORKSPACE_ID, 'nonexistent');
     expect(result).toBeNull();
   });
 });
@@ -591,7 +595,7 @@ describe('recordSideEffect', () => {
   it('should record a new side effect and return true', async () => {
     mockQueryOne.mockResolvedValue(null); // no existing record
 
-    const result = await recordSideEffect('run-1', 'step-1', 'send_email', { to: 'a@b.com' });
+    const result = await recordSideEffect(TEST_WORKSPACE_ID, 'run-1', 'step-1', 'send_email', { to: 'a@b.com' });
 
     expect(result).toBe(true);
     expect(mockExecute).toHaveBeenCalledWith(
@@ -603,7 +607,7 @@ describe('recordSideEffect', () => {
   it('should skip duplicate side effect and return false', async () => {
     mockQueryOne.mockResolvedValue({ id: 'existing' }); // already recorded
 
-    const result = await recordSideEffect('run-1', 'step-1', 'send_email', { to: 'a@b.com' });
+    const result = await recordSideEffect(TEST_WORKSPACE_ID, 'run-1', 'step-1', 'send_email', { to: 'a@b.com' });
 
     expect(result).toBe(false);
     expect(mockExecute).not.toHaveBeenCalled();
@@ -612,7 +616,7 @@ describe('recordSideEffect', () => {
   it('should pass attempt number to insert', async () => {
     mockQueryOne.mockResolvedValue(null);
 
-    await recordSideEffect('run-1', 'step-1', 'send_slack', { channel: 'C1' }, 3);
+    await recordSideEffect(TEST_WORKSPACE_ID, 'run-1', 'step-1', 'send_slack', { channel: 'C1' }, 3);
 
     expect(mockExecute).toHaveBeenCalledWith(
       expect.stringContaining('INSERT INTO side_effects_log'),
@@ -623,7 +627,7 @@ describe('recordSideEffect', () => {
   it('should default attempt_number to 1', async () => {
     mockQueryOne.mockResolvedValue(null);
 
-    await recordSideEffect('run-1', 'step-1', 'webhook', {});
+    await recordSideEffect(TEST_WORKSPACE_ID, 'run-1', 'step-1', 'webhook', {});
 
     const insertArgs = mockExecute.mock.calls[0][1];
     expect(insertArgs).toContain(1);
@@ -660,13 +664,12 @@ describe('getExpiredTimers', () => {
 describe('processExpiredTimers', () => {
   it('should advance all expired timer workflows and return count', async () => {
     const expired = [
-      { id: 'r1', current_step: 0, status: 'waiting' },
-      { id: 'r2', current_step: 2, status: 'waiting' },
+      { id: 'r1', current_step: 0, status: 'waiting', workspace_id: TEST_WORKSPACE_ID },
+      { id: 'r2', current_step: 2, status: 'waiting', workspace_id: TEST_WORKSPACE_ID },
     ];
     mockQuery.mockResolvedValue(expired);
 
-    // For each advanceWorkflow call: getWorkflowRun, then getWorkflowRun after update, then getWorkflowDefinition
-    // We'll keep it simple: advanceWorkflow -> getWorkflowRun returns null (short-circuits)
+    // For each advanceWorkflow call: getWorkflowRun returns null (short-circuits)
     mockQueryOne.mockResolvedValue(null);
 
     const count = await processExpiredTimers();

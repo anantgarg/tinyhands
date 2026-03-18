@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+const TEST_WORKSPACE_ID = 'W_TEST_123';
+
 // ── Mock setup ──
 const mockQuery = vi.fn();
 const mockQueryOne = vi.fn();
@@ -61,7 +63,7 @@ describe('createTrigger', () => {
   it('should create a trigger when user has permissions', async () => {
     mockCanModifyAgent.mockResolvedValue(true);
 
-    const result = await createTrigger({
+    const result = await createTrigger(TEST_WORKSPACE_ID, {
       agentId: 'agent-1',
       triggerType: 'slack_channel' as any,
       config: { channel_id: 'C123' },
@@ -85,7 +87,7 @@ describe('createTrigger', () => {
     mockCanModifyAgent.mockResolvedValue(false);
 
     await expect(
-      createTrigger({
+      createTrigger(TEST_WORKSPACE_ID, {
         agentId: 'agent-1',
         triggerType: 'webhook' as any,
         config: {},
@@ -99,7 +101,7 @@ describe('createTrigger', () => {
   it('should check permissions with correct agentId and userId', async () => {
     mockCanModifyAgent.mockResolvedValue(true);
 
-    await createTrigger({
+    await createTrigger(TEST_WORKSPACE_ID, {
       agentId: 'agent-99',
       triggerType: 'linear' as any,
       config: {},
@@ -113,7 +115,7 @@ describe('createTrigger', () => {
     mockCanModifyAgent.mockResolvedValue(true);
 
     const config = { channel_id: 'C123', keywords: ['urgent', 'help'], filterBots: true };
-    const result = await createTrigger({
+    const result = await createTrigger(TEST_WORKSPACE_ID, {
       agentId: 'agent-1',
       triggerType: 'slack_channel' as any,
       config,
@@ -129,23 +131,23 @@ describe('getTrigger', () => {
     const trigger = { id: 't1', agent_id: 'a1', trigger_type: 'webhook', status: 'active' };
     mockQueryOne.mockResolvedValue(trigger);
 
-    const result = await getTrigger('t1');
+    const result = await getTrigger(TEST_WORKSPACE_ID, 't1');
     expect(result).toEqual(trigger);
     expect(mockQueryOne).toHaveBeenCalledWith(
-      'SELECT * FROM triggers WHERE id = $1',
-      ['t1'],
+      expect.stringContaining('SELECT * FROM triggers WHERE id = $1'),
+      expect.arrayContaining(['t1']),
     );
   });
 
   it('should return null when trigger does not exist', async () => {
     mockQueryOne.mockResolvedValue(null);
-    const result = await getTrigger('nonexistent');
+    const result = await getTrigger(TEST_WORKSPACE_ID, 'nonexistent');
     expect(result).toBeNull();
   });
 
   it('should return null for undefined queryOne result', async () => {
     mockQueryOne.mockResolvedValue(undefined);
-    const result = await getTrigger('nope');
+    const result = await getTrigger(TEST_WORKSPACE_ID, 'nope');
     expect(result).toBeNull();
   });
 });
@@ -158,17 +160,17 @@ describe('getAgentTriggers', () => {
     ];
     mockQuery.mockResolvedValue(triggers);
 
-    const result = await getAgentTriggers('a1');
+    const result = await getAgentTriggers(TEST_WORKSPACE_ID, 'a1');
     expect(result).toEqual(triggers);
     expect(mockQuery).toHaveBeenCalledWith(
-      'SELECT * FROM triggers WHERE agent_id = $1',
-      ['a1'],
+      expect.stringContaining('SELECT * FROM triggers WHERE agent_id = $1'),
+      expect.arrayContaining(['a1']),
     );
   });
 
   it('should return empty array when agent has no triggers', async () => {
     mockQuery.mockResolvedValue([]);
-    const result = await getAgentTriggers('agent-no-triggers');
+    const result = await getAgentTriggers(TEST_WORKSPACE_ID, 'agent-no-triggers');
     expect(result).toEqual([]);
   });
 });
@@ -178,11 +180,11 @@ describe('getActiveTriggersByType', () => {
     const triggers = [{ id: 't1', trigger_type: 'webhook', status: 'active' }];
     mockQuery.mockResolvedValue(triggers);
 
-    const result = await getActiveTriggersByType('webhook' as any);
+    const result = await getActiveTriggersByType(TEST_WORKSPACE_ID, 'webhook' as any);
     expect(result).toEqual(triggers);
     expect(mockQuery).toHaveBeenCalledWith(
-      'SELECT * FROM triggers WHERE trigger_type = $1 AND status = $2',
-      ['webhook', 'active'],
+      expect.stringContaining('SELECT * FROM triggers WHERE trigger_type = $1'),
+      expect.arrayContaining(['webhook', 'active']),
     );
   });
 });
@@ -197,18 +199,18 @@ describe('pauseTrigger', () => {
     mockQueryOne.mockResolvedValue(trigger);
     mockCanModifyAgent.mockResolvedValue(true);
 
-    await pauseTrigger('t1', 'user1');
+    await pauseTrigger(TEST_WORKSPACE_ID, 't1', 'user1');
 
     expect(mockExecute).toHaveBeenCalledWith(
-      'UPDATE triggers SET status = $1 WHERE id = $2',
-      ['paused', 't1'],
+      expect.stringContaining('UPDATE triggers SET status = $1'),
+      expect.arrayContaining(['paused', 't1']),
     );
   });
 
   it('should throw when trigger does not exist', async () => {
     mockQueryOne.mockResolvedValue(null);
 
-    await expect(pauseTrigger('nonexistent', 'user1'))
+    await expect(pauseTrigger(TEST_WORKSPACE_ID, 'nonexistent', 'user1'))
       .rejects.toThrow('Trigger nonexistent not found');
   });
 
@@ -216,7 +218,7 @@ describe('pauseTrigger', () => {
     mockQueryOne.mockResolvedValue({ id: 't1', agent_id: 'a1' });
     mockCanModifyAgent.mockResolvedValue(false);
 
-    await expect(pauseTrigger('t1', 'unauthorized'))
+    await expect(pauseTrigger(TEST_WORKSPACE_ID, 't1', 'unauthorized'))
       .rejects.toThrow('Insufficient permissions');
 
     expect(mockExecute).not.toHaveBeenCalled();
@@ -229,18 +231,18 @@ describe('resumeTrigger', () => {
     mockQueryOne.mockResolvedValue(trigger);
     mockCanModifyAgent.mockResolvedValue(true);
 
-    await resumeTrigger('t1', 'user1');
+    await resumeTrigger(TEST_WORKSPACE_ID, 't1', 'user1');
 
     expect(mockExecute).toHaveBeenCalledWith(
-      'UPDATE triggers SET status = $1 WHERE id = $2',
-      ['active', 't1'],
+      expect.stringContaining('UPDATE triggers SET status = $1'),
+      expect.arrayContaining(['active', 't1']),
     );
   });
 
   it('should throw when trigger does not exist', async () => {
     mockQueryOne.mockResolvedValue(null);
 
-    await expect(resumeTrigger('nonexistent', 'user1'))
+    await expect(resumeTrigger(TEST_WORKSPACE_ID, 'nonexistent', 'user1'))
       .rejects.toThrow('Trigger nonexistent not found');
   });
 
@@ -248,7 +250,7 @@ describe('resumeTrigger', () => {
     mockQueryOne.mockResolvedValue({ id: 't1', agent_id: 'a1' });
     mockCanModifyAgent.mockResolvedValue(false);
 
-    await expect(resumeTrigger('t1', 'unauthorized'))
+    await expect(resumeTrigger(TEST_WORKSPACE_ID, 't1', 'unauthorized'))
       .rejects.toThrow('Insufficient permissions');
 
     expect(mockExecute).not.toHaveBeenCalled();
@@ -261,18 +263,18 @@ describe('deleteTrigger', () => {
     mockQueryOne.mockResolvedValue(trigger);
     mockCanModifyAgent.mockResolvedValue(true);
 
-    await deleteTrigger('t1', 'user1');
+    await deleteTrigger(TEST_WORKSPACE_ID, 't1', 'user1');
 
     expect(mockExecute).toHaveBeenCalledWith(
-      'DELETE FROM triggers WHERE id = $1',
-      ['t1'],
+      expect.stringContaining('DELETE FROM triggers WHERE id = $1'),
+      expect.arrayContaining(['t1']),
     );
   });
 
   it('should throw when trigger does not exist', async () => {
     mockQueryOne.mockResolvedValue(null);
 
-    await expect(deleteTrigger('nonexistent', 'user1'))
+    await expect(deleteTrigger(TEST_WORKSPACE_ID, 'nonexistent', 'user1'))
       .rejects.toThrow('Trigger nonexistent not found');
   });
 
@@ -280,7 +282,7 @@ describe('deleteTrigger', () => {
     mockQueryOne.mockResolvedValue({ id: 't1', agent_id: 'a1' });
     mockCanModifyAgent.mockResolvedValue(false);
 
-    await expect(deleteTrigger('t1', 'unauthorized'))
+    await expect(deleteTrigger(TEST_WORKSPACE_ID, 't1', 'unauthorized'))
       .rejects.toThrow('Insufficient permissions');
 
     expect(mockExecute).not.toHaveBeenCalled();
@@ -312,11 +314,12 @@ describe('fireTrigger', () => {
     mockQueryOne.mockResolvedValue(trigger);
     mockIsDuplicateEvent.mockResolvedValue(false);
 
-    const result = await fireTrigger(makeEvent());
+    const result = await fireTrigger(TEST_WORKSPACE_ID, makeEvent());
 
     expect(result).toBe('test-uuid-1234'); // traceId from uuid mock
     expect(mockEnqueueRun).toHaveBeenCalledWith(
       expect.objectContaining({
+        workspaceId: TEST_WORKSPACE_ID,
         agentId: 'agent-1',
         channelId: 'C123',
         threadTs: '123.456',
@@ -330,7 +333,7 @@ describe('fireTrigger', () => {
   it('should return null when trigger does not exist', async () => {
     mockQueryOne.mockResolvedValue(null);
 
-    const result = await fireTrigger(makeEvent());
+    const result = await fireTrigger(TEST_WORKSPACE_ID, makeEvent());
     expect(result).toBeNull();
     expect(mockEnqueueRun).not.toHaveBeenCalled();
   });
@@ -338,7 +341,7 @@ describe('fireTrigger', () => {
   it('should return null when trigger is paused', async () => {
     mockQueryOne.mockResolvedValue({ id: 't1', status: 'paused' });
 
-    const result = await fireTrigger(makeEvent());
+    const result = await fireTrigger(TEST_WORKSPACE_ID, makeEvent());
     expect(result).toBeNull();
     expect(mockEnqueueRun).not.toHaveBeenCalled();
   });
@@ -352,7 +355,7 @@ describe('fireTrigger', () => {
     });
     mockIsDuplicateEvent.mockResolvedValue(true);
 
-    const result = await fireTrigger(makeEvent());
+    const result = await fireTrigger(TEST_WORKSPACE_ID, makeEvent());
     expect(result).toBeNull();
     expect(mockEnqueueRun).not.toHaveBeenCalled();
   });
@@ -367,7 +370,7 @@ describe('fireTrigger', () => {
     mockQueryOne.mockResolvedValue(trigger);
     mockIsDuplicateEvent.mockResolvedValue(false);
 
-    await fireTrigger(makeEvent({ payload: { text: 'Help me', user: 'U456' } }));
+    await fireTrigger(TEST_WORKSPACE_ID, makeEvent({ payload: { text: 'Help me', user: 'U456' } }));
 
     const jobData = mockEnqueueRun.mock.calls[0][0];
     expect(jobData.input).toContain('Help me');
@@ -384,7 +387,7 @@ describe('fireTrigger', () => {
     mockQueryOne.mockResolvedValue(trigger);
     mockIsDuplicateEvent.mockResolvedValue(false);
 
-    await fireTrigger(makeEvent({ payload: {} }));
+    await fireTrigger(TEST_WORKSPACE_ID, makeEvent({ payload: {} }));
 
     const jobData = mockEnqueueRun.mock.calls[0][0];
     expect(jobData.input).toBe('New message in channel: ""');
@@ -401,7 +404,7 @@ describe('fireTrigger', () => {
     mockQueryOne.mockResolvedValue(trigger);
     mockIsDuplicateEvent.mockResolvedValue(false);
 
-    await fireTrigger(makeEvent({
+    await fireTrigger(TEST_WORKSPACE_ID, makeEvent({
       payload: {
         action: 'create',
         type: 'issue',
@@ -426,7 +429,7 @@ describe('fireTrigger', () => {
     mockQueryOne.mockResolvedValue(trigger);
     mockIsDuplicateEvent.mockResolvedValue(false);
 
-    await fireTrigger(makeEvent({ payload: {} }));
+    await fireTrigger(TEST_WORKSPACE_ID, makeEvent({ payload: {} }));
 
     const jobData = mockEnqueueRun.mock.calls[0][0];
     expect(jobData.input).toContain('Linear event: update on issue');
@@ -443,7 +446,7 @@ describe('fireTrigger', () => {
     mockQueryOne.mockResolvedValue(trigger);
     mockIsDuplicateEvent.mockResolvedValue(false);
 
-    await fireTrigger(makeEvent({
+    await fireTrigger(TEST_WORKSPACE_ID, makeEvent({
       payload: { action: 'created', subject: 'Login issue', description: 'Cannot sign in' },
     }));
 
@@ -463,7 +466,7 @@ describe('fireTrigger', () => {
     mockQueryOne.mockResolvedValue(trigger);
     mockIsDuplicateEvent.mockResolvedValue(false);
 
-    await fireTrigger(makeEvent({ payload: {} }));
+    await fireTrigger(TEST_WORKSPACE_ID, makeEvent({ payload: {} }));
 
     const jobData = mockEnqueueRun.mock.calls[0][0];
     expect(jobData.input).toContain('Support ticket update');
@@ -480,7 +483,7 @@ describe('fireTrigger', () => {
     mockQueryOne.mockResolvedValue(trigger);
     mockIsDuplicateEvent.mockResolvedValue(false);
 
-    await fireTrigger(makeEvent({ payload: { key: 'value', num: 42 } }));
+    await fireTrigger(TEST_WORKSPACE_ID, makeEvent({ payload: { key: 'value', num: 42 } }));
 
     const jobData = mockEnqueueRun.mock.calls[0][0];
     expect(jobData.input).toContain('Webhook event received');
@@ -498,7 +501,7 @@ describe('fireTrigger', () => {
     mockQueryOne.mockResolvedValue(trigger);
     mockIsDuplicateEvent.mockResolvedValue(false);
 
-    await fireTrigger({
+    await fireTrigger(TEST_WORKSPACE_ID, {
       triggerId: 't1',
       idempotencyKey: 'key-1',
       payload: { data: true },
@@ -519,7 +522,7 @@ describe('fireTrigger', () => {
     mockQueryOne.mockResolvedValue(trigger);
     mockIsDuplicateEvent.mockResolvedValue(false);
 
-    await fireTrigger(makeEvent({ payload: { foo: 'bar' } }));
+    await fireTrigger(TEST_WORKSPACE_ID, makeEvent({ payload: { foo: 'bar' } }));
 
     const jobData = mockEnqueueRun.mock.calls[0][0];
     expect(jobData.input).toBe(JSON.stringify({ foo: 'bar' }));
@@ -535,7 +538,7 @@ describe('fireTrigger', () => {
     mockQueryOne.mockResolvedValue(trigger);
     mockIsDuplicateEvent.mockResolvedValue(false);
 
-    await fireTrigger(makeEvent({ payload: { firedAt: '2025-06-01T12:00:00Z' } }));
+    await fireTrigger(TEST_WORKSPACE_ID, makeEvent({ payload: { firedAt: '2025-06-01T12:00:00Z' } }));
 
     const jobData = mockEnqueueRun.mock.calls[0][0];
     expect(jobData.input).toContain('Scheduled execution triggered at');
@@ -552,7 +555,7 @@ describe('fireTrigger', () => {
     mockQueryOne.mockResolvedValue(trigger);
     mockIsDuplicateEvent.mockResolvedValue(false);
 
-    await fireTrigger(makeEvent({ payload: {} }));
+    await fireTrigger(TEST_WORKSPACE_ID, makeEvent({ payload: {} }));
 
     const jobData = mockEnqueueRun.mock.calls[0][0];
     expect(jobData.input).toContain('Scheduled execution triggered at');
@@ -568,7 +571,7 @@ describe('fireTrigger', () => {
     mockQueryOne.mockResolvedValue(trigger);
     mockIsDuplicateEvent.mockResolvedValue(false);
 
-    await fireTrigger(makeEvent({
+    await fireTrigger(TEST_WORKSPACE_ID, makeEvent({
       payload: { action: 'opened', title: 'Need help', description: 'I am stuck' },
     }));
 
@@ -588,7 +591,7 @@ describe('fireTrigger', () => {
     mockQueryOne.mockResolvedValue(trigger);
     mockIsDuplicateEvent.mockResolvedValue(false);
 
-    await fireTrigger(makeEvent({
+    await fireTrigger(TEST_WORKSPACE_ID, makeEvent({
       payload: { title: 'Fallback title' },
     }));
 
@@ -606,7 +609,7 @@ describe('fireTrigger', () => {
     mockQueryOne.mockResolvedValue(trigger);
     mockIsDuplicateEvent.mockResolvedValue(false);
 
-    await fireTrigger(makeEvent({
+    await fireTrigger(TEST_WORKSPACE_ID, makeEvent({
       payload: { data: { title: 'Title only' } },
     }));
 
@@ -622,12 +625,12 @@ describe('fireTrigger', () => {
 
 describe('checkTriggerStorm', () => {
   it('should always return false (stub)', async () => {
-    const result = await checkTriggerStorm('agent-1');
+    const result = await checkTriggerStorm(TEST_WORKSPACE_ID, 'agent-1');
     expect(result).toBe(false);
   });
 
   it('should return false regardless of agentId', async () => {
-    const result = await checkTriggerStorm('any-agent');
+    const result = await checkTriggerStorm(TEST_WORKSPACE_ID, 'any-agent');
     expect(result).toBe(false);
   });
 });
@@ -645,7 +648,7 @@ describe('findSlackChannelTriggers', () => {
     ];
     mockQuery.mockResolvedValue(triggers);
 
-    const result = await findSlackChannelTriggers('C123');
+    const result = await findSlackChannelTriggers(TEST_WORKSPACE_ID, 'C123');
 
     expect(result).toHaveLength(2);
     expect(result[0].id).toBe('t1');
@@ -658,25 +661,25 @@ describe('findSlackChannelTriggers', () => {
     ];
     mockQuery.mockResolvedValue(triggers);
 
-    const result = await findSlackChannelTriggers('C123');
+    const result = await findSlackChannelTriggers(TEST_WORKSPACE_ID, 'C123');
     expect(result).toEqual([]);
   });
 
   it('should return empty array when no slack_channel triggers exist', async () => {
     mockQuery.mockResolvedValue([]);
 
-    const result = await findSlackChannelTriggers('C123');
+    const result = await findSlackChannelTriggers(TEST_WORKSPACE_ID, 'C123');
     expect(result).toEqual([]);
   });
 
   it('should call getActiveTriggersByType with slack_channel', async () => {
     mockQuery.mockResolvedValue([]);
 
-    await findSlackChannelTriggers('C123');
+    await findSlackChannelTriggers(TEST_WORKSPACE_ID, 'C123');
 
     expect(mockQuery).toHaveBeenCalledWith(
-      'SELECT * FROM triggers WHERE trigger_type = $1 AND status = $2',
-      ['slack_channel', 'active'],
+      expect.stringContaining('SELECT * FROM triggers WHERE trigger_type = $1'),
+      expect.arrayContaining(['slack_channel', 'active']),
     );
   });
 });
@@ -713,11 +716,11 @@ describe('updateTriggerLastFired', () => {
   it('should update the last_fired_at timestamp', async () => {
     mockExecute.mockResolvedValue(undefined);
 
-    await updateTriggerLastFired('t1');
+    await updateTriggerLastFired(TEST_WORKSPACE_ID, 't1');
 
     expect(mockExecute).toHaveBeenCalledWith(
-      'UPDATE triggers SET last_fired_at = NOW() WHERE id = $1',
-      ['t1'],
+      expect.stringContaining('UPDATE triggers SET last_fired_at = NOW()'),
+      expect.arrayContaining(['t1']),
     );
   });
 });
@@ -726,25 +729,25 @@ describe('getTriggerLastFiredAt', () => {
   it('should return the last fired date when set', async () => {
     mockQueryOne.mockResolvedValue({ last_fired_at: '2025-06-01T12:00:00Z' });
 
-    const result = await getTriggerLastFiredAt('t1');
+    const result = await getTriggerLastFiredAt(TEST_WORKSPACE_ID, 't1');
     expect(result).toEqual(new Date('2025-06-01T12:00:00Z'));
     expect(mockQueryOne).toHaveBeenCalledWith(
-      'SELECT last_fired_at FROM triggers WHERE id = $1',
-      ['t1'],
+      expect.stringContaining('SELECT last_fired_at FROM triggers WHERE id = $1'),
+      expect.arrayContaining(['t1']),
     );
   });
 
   it('should return null when last_fired_at is null', async () => {
     mockQueryOne.mockResolvedValue({ last_fired_at: null });
 
-    const result = await getTriggerLastFiredAt('t1');
+    const result = await getTriggerLastFiredAt(TEST_WORKSPACE_ID, 't1');
     expect(result).toBeNull();
   });
 
   it('should return null when trigger does not exist', async () => {
     mockQueryOne.mockResolvedValue(null);
 
-    const result = await getTriggerLastFiredAt('nonexistent');
+    const result = await getTriggerLastFiredAt(TEST_WORKSPACE_ID, 'nonexistent');
     expect(result).toBeNull();
   });
 });

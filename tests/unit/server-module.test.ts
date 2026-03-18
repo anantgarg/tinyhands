@@ -34,6 +34,10 @@ vi.mock('../../src/modules/knowledge-base', () => ({
   getCategories: (...args: any[]) => mockGetCategories(...args),
 }));
 
+vi.mock('../../src/db', () => ({
+  getDefaultWorkspaceId: () => 'W_TEST_123',
+}));
+
 vi.mock('../../src/config', () => ({
   config: {
     server: { port: 3000, internalSecret: '' },
@@ -204,7 +208,7 @@ describe('Webhook Server', () => {
   describe('POST /webhooks/agent-:agentName', () => {
     it('fires matching webhook triggers and returns 202', async () => {
       mockGetActiveTriggersByType.mockResolvedValueOnce([
-        { id: 'trigger-1', config_json: JSON.stringify({ agent_name: 'my-bot' }) },
+        { id: 'trigger-1', workspace_id: 'W_TEST_123', config_json: JSON.stringify({ agent_name: 'my-bot' }) },
       ]);
       mockFireTrigger.mockResolvedValue(undefined);
 
@@ -215,8 +219,8 @@ describe('Webhook Server', () => {
 
       expect(res.status).toBe(202);
       expect(res.body).toEqual({ message: 'Trigger fired', count: 1 });
-      expect(mockGetActiveTriggersByType).toHaveBeenCalledWith('webhook');
-      expect(mockFireTrigger).toHaveBeenCalledWith({
+      expect(mockGetActiveTriggersByType).toHaveBeenCalledWith('W_TEST_123', 'webhook');
+      expect(mockFireTrigger).toHaveBeenCalledWith('W_TEST_123', {
         triggerId: 'trigger-1',
         idempotencyKey: 'webhook:my-bot:req-1',
         payload: { id: 'req-1', data: 'hello' },
@@ -225,8 +229,8 @@ describe('Webhook Server', () => {
 
     it('fires multiple matching triggers', async () => {
       mockGetActiveTriggersByType.mockResolvedValueOnce([
-        { id: 'trigger-1', config_json: JSON.stringify({ agent_name: 'multi' }) },
-        { id: 'trigger-2', config_json: JSON.stringify({ agent_name: 'multi' }) },
+        { id: 'trigger-1', workspace_id: 'W_TEST_123', config_json: JSON.stringify({ agent_name: 'multi' }) },
+        { id: 'trigger-2', workspace_id: 'W_TEST_123', config_json: JSON.stringify({ agent_name: 'multi' }) },
       ]);
       mockFireTrigger.mockResolvedValue(undefined);
 
@@ -241,7 +245,7 @@ describe('Webhook Server', () => {
 
     it('returns 404 when no triggers match the agent name', async () => {
       mockGetActiveTriggersByType.mockResolvedValueOnce([
-        { id: 'trigger-1', config_json: JSON.stringify({ agent_name: 'other-bot' }) },
+        { id: 'trigger-1', workspace_id: 'W_TEST_123', config_json: JSON.stringify({ agent_name: 'other-bot' }) },
       ]);
 
       const res = await makeTestRequest(app, 'POST', '/webhooks/agent-my-bot', {
@@ -263,7 +267,7 @@ describe('Webhook Server', () => {
 
     it('generates a UUID for idempotency when body has no id', async () => {
       mockGetActiveTriggersByType.mockResolvedValueOnce([
-        { id: 'trigger-1', config_json: JSON.stringify({ agent_name: 'bot' }) },
+        { id: 'trigger-1', workspace_id: 'W_TEST_123', config_json: JSON.stringify({ agent_name: 'bot' }) },
       ]);
       mockFireTrigger.mockResolvedValue(undefined);
 
@@ -272,6 +276,7 @@ describe('Webhook Server', () => {
       });
 
       expect(mockFireTrigger).toHaveBeenCalledWith(
+        'W_TEST_123',
         expect.objectContaining({
           idempotencyKey: 'webhook:bot:test-uuid-1234',
         }),
@@ -286,7 +291,7 @@ describe('Webhook Server', () => {
     it('fires triggers when no secret is configured (skip verification)', async () => {
       // SECRET is already cleared in beforeEach
       mockGetActiveTriggersByType.mockResolvedValueOnce([
-        { id: 'linear-trigger-1' },
+        { id: 'linear-trigger-1', workspace_id: 'W_TEST_123' },
       ]);
       mockFireTrigger.mockResolvedValue(undefined);
 
@@ -297,7 +302,7 @@ describe('Webhook Server', () => {
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ message: 'OK' });
-      expect(mockFireTrigger).toHaveBeenCalledWith({
+      expect(mockFireTrigger).toHaveBeenCalledWith('W_TEST_123', {
         triggerId: 'linear-trigger-1',
         idempotencyKey: 'linear:create:issue-1',
         payload: { action: 'create', data: { id: 'issue-1' } },
@@ -331,7 +336,7 @@ describe('Webhook Server', () => {
 
     it('generates UUID when data.id is missing', async () => {
       mockGetActiveTriggersByType.mockResolvedValueOnce([
-        { id: 'linear-trigger-1' },
+        { id: 'linear-trigger-1', workspace_id: 'W_TEST_123' },
       ]);
       mockFireTrigger.mockResolvedValue(undefined);
 
@@ -341,6 +346,7 @@ describe('Webhook Server', () => {
       });
 
       expect(mockFireTrigger).toHaveBeenCalledWith(
+        'W_TEST_123',
         expect.objectContaining({
           idempotencyKey: 'linear:create:test-uuid-1234',
         }),
@@ -349,8 +355,8 @@ describe('Webhook Server', () => {
 
     it('fires multiple linear triggers', async () => {
       mockGetActiveTriggersByType.mockResolvedValueOnce([
-        { id: 'lt-1' },
-        { id: 'lt-2' },
+        { id: 'lt-1', workspace_id: 'W_TEST_123' },
+        { id: 'lt-2', workspace_id: 'W_TEST_123' },
       ]);
       mockFireTrigger.mockResolvedValue(undefined);
 
@@ -370,7 +376,7 @@ describe('Webhook Server', () => {
   describe('POST /webhooks/zendesk', () => {
     it('fires triggers when no secret is configured', async () => {
       mockGetActiveTriggersByType.mockResolvedValueOnce([
-        { id: 'zd-trigger-1' },
+        { id: 'zd-trigger-1', workspace_id: 'W_TEST_123' },
       ]);
       mockFireTrigger.mockResolvedValue(undefined);
 
@@ -381,7 +387,7 @@ describe('Webhook Server', () => {
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ message: 'OK' });
-      expect(mockFireTrigger).toHaveBeenCalledWith({
+      expect(mockFireTrigger).toHaveBeenCalledWith('W_TEST_123', {
         triggerId: 'zd-trigger-1',
         idempotencyKey: 'zendesk:TK-100:2025-01-01',
         payload: { ticket_id: 'TK-100', updated_at: '2025-01-01' },
@@ -415,13 +421,14 @@ describe('Webhook Server', () => {
 
     it('uses UUID when ticket_id is missing', async () => {
       mockGetActiveTriggersByType.mockResolvedValueOnce([
-        { id: 'zd-trigger-1' },
+        { id: 'zd-trigger-1', workspace_id: 'W_TEST_123' },
       ]);
       mockFireTrigger.mockResolvedValue(undefined);
 
       await makeTestRequest(app, 'POST', '/webhooks/zendesk', {});
 
       expect(mockFireTrigger).toHaveBeenCalledWith(
+        'W_TEST_123',
         expect.objectContaining({
           idempotencyKey: expect.stringContaining('zendesk:test-uuid-1234'),
         }),
@@ -435,7 +442,7 @@ describe('Webhook Server', () => {
   describe('POST /webhooks/intercom', () => {
     it('fires triggers when no secret is configured', async () => {
       mockGetActiveTriggersByType.mockResolvedValueOnce([
-        { id: 'ic-trigger-1' },
+        { id: 'ic-trigger-1', workspace_id: 'W_TEST_123' },
       ]);
       mockFireTrigger.mockResolvedValue(undefined);
 
@@ -445,7 +452,7 @@ describe('Webhook Server', () => {
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual({ message: 'OK' });
-      expect(mockFireTrigger).toHaveBeenCalledWith({
+      expect(mockFireTrigger).toHaveBeenCalledWith('W_TEST_123', {
         triggerId: 'ic-trigger-1',
         idempotencyKey: 'intercom:conversation-42',
         payload: { id: 'conversation-42' },
@@ -479,7 +486,7 @@ describe('Webhook Server', () => {
 
     it('uses UUID when body has no id field', async () => {
       mockGetActiveTriggersByType.mockResolvedValueOnce([
-        { id: 'ic-trigger-1' },
+        { id: 'ic-trigger-1', workspace_id: 'W_TEST_123' },
       ]);
       mockFireTrigger.mockResolvedValue(undefined);
 
@@ -488,6 +495,7 @@ describe('Webhook Server', () => {
       });
 
       expect(mockFireTrigger).toHaveBeenCalledWith(
+        'W_TEST_123',
         expect.objectContaining({
           idempotencyKey: 'intercom:test-uuid-1234',
         }),
@@ -496,8 +504,8 @@ describe('Webhook Server', () => {
 
     it('fires multiple intercom triggers', async () => {
       mockGetActiveTriggersByType.mockResolvedValueOnce([
-        { id: 'ic-trigger-1' },
-        { id: 'ic-trigger-2' },
+        { id: 'ic-trigger-1', workspace_id: 'W_TEST_123' },
+        { id: 'ic-trigger-2', workspace_id: 'W_TEST_123' },
       ]);
       mockFireTrigger.mockResolvedValue(undefined);
 
@@ -526,7 +534,7 @@ describe('Webhook Server', () => {
       expect(res.status).toBe(200);
       expect(res.body.results).toHaveLength(1);
       expect(res.body.results[0].title).toBe('Getting Started');
-      expect(mockSearchKB).toHaveBeenCalledWith('getting started', undefined, 4000);
+      expect(mockSearchKB).toHaveBeenCalledWith('W_TEST_123', 'getting started', undefined, 4000);
     });
 
     it('returns 400 when query is missing', async () => {
@@ -544,7 +552,7 @@ describe('Webhook Server', () => {
         agent_id: 'agent-123',
       });
 
-      expect(mockSearchKB).toHaveBeenCalledWith('test', 'agent-123', 4000);
+      expect(mockSearchKB).toHaveBeenCalledWith('W_TEST_123', 'test', 'agent-123', 4000);
     });
   });
 
@@ -558,7 +566,7 @@ describe('Webhook Server', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.entries).toHaveLength(1);
-      expect(mockListKBEntries).toHaveBeenCalledWith(20);
+      expect(mockListKBEntries).toHaveBeenCalledWith('W_TEST_123', 20);
     });
 
     it('filters by category', async () => {

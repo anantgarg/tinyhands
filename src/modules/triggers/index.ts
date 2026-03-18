@@ -14,7 +14,7 @@ export interface CreateTriggerParams {
   createdBy: string;
 }
 
-export async function createTrigger(params: CreateTriggerParams): Promise<Trigger> {
+export async function createTrigger(workspaceId: string, params: CreateTriggerParams): Promise<Trigger> {
   if (!(await canModifyAgent(params.agentId, params.createdBy))) {
     throw new Error('Insufficient permissions to create trigger');
   }
@@ -32,61 +32,61 @@ export async function createTrigger(params: CreateTriggerParams): Promise<Trigge
   };
 
   await execute(`
-    INSERT INTO triggers (id, agent_id, trigger_type, config_json, status, created_by, created_at)
-    VALUES ($1, $2, $3, $4, $5, $6, $7)
-  `, [trigger.id, trigger.agent_id, trigger.trigger_type,
+    INSERT INTO triggers (id, workspace_id, agent_id, trigger_type, config_json, status, created_by, created_at)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+  `, [trigger.id, workspaceId, trigger.agent_id, trigger.trigger_type,
     trigger.config_json, trigger.status, trigger.created_by, trigger.created_at]);
 
   logger.info('Trigger created', { triggerId: id, agentId: params.agentId, type: params.triggerType });
   return trigger;
 }
 
-export async function getTrigger(id: string): Promise<Trigger | null> {
-  const row = await queryOne<Trigger>('SELECT * FROM triggers WHERE id = $1', [id]);
+export async function getTrigger(workspaceId: string, id: string): Promise<Trigger | null> {
+  const row = await queryOne<Trigger>('SELECT * FROM triggers WHERE id = $1 AND workspace_id = $2', [id, workspaceId]);
   return row || null;
 }
 
-export async function getAgentTriggers(agentId: string): Promise<Trigger[]> {
-  return query<Trigger>('SELECT * FROM triggers WHERE agent_id = $1', [agentId]);
+export async function getAgentTriggers(workspaceId: string, agentId: string): Promise<Trigger[]> {
+  return query<Trigger>('SELECT * FROM triggers WHERE agent_id = $1 AND workspace_id = $2', [agentId, workspaceId]);
 }
 
-export async function getActiveTriggersByType(triggerType: TriggerType): Promise<Trigger[]> {
+export async function getActiveTriggersByType(workspaceId: string, triggerType: TriggerType): Promise<Trigger[]> {
   return query<Trigger>(
-    'SELECT * FROM triggers WHERE trigger_type = $1 AND status = $2',
-    [triggerType, 'active']
+    'SELECT * FROM triggers WHERE trigger_type = $1 AND status = $2 AND workspace_id = $3',
+    [triggerType, 'active', workspaceId]
   );
 }
 
-export async function pauseTrigger(triggerId: string, userId: string): Promise<void> {
-  const trigger = await getTrigger(triggerId);
+export async function pauseTrigger(workspaceId: string, triggerId: string, userId: string): Promise<void> {
+  const trigger = await getTrigger(workspaceId, triggerId);
   if (!trigger) throw new Error(`Trigger ${triggerId} not found`);
   if (!(await canModifyAgent(trigger.agent_id, userId))) {
     throw new Error('Insufficient permissions');
   }
 
-  await execute('UPDATE triggers SET status = $1 WHERE id = $2', ['paused', triggerId]);
+  await execute('UPDATE triggers SET status = $1 WHERE id = $2 AND workspace_id = $3', ['paused', triggerId, workspaceId]);
   logger.info('Trigger paused', { triggerId });
 }
 
-export async function resumeTrigger(triggerId: string, userId: string): Promise<void> {
-  const trigger = await getTrigger(triggerId);
+export async function resumeTrigger(workspaceId: string, triggerId: string, userId: string): Promise<void> {
+  const trigger = await getTrigger(workspaceId, triggerId);
   if (!trigger) throw new Error(`Trigger ${triggerId} not found`);
   if (!(await canModifyAgent(trigger.agent_id, userId))) {
     throw new Error('Insufficient permissions');
   }
 
-  await execute('UPDATE triggers SET status = $1 WHERE id = $2', ['active', triggerId]);
+  await execute('UPDATE triggers SET status = $1 WHERE id = $2 AND workspace_id = $3', ['active', triggerId, workspaceId]);
   logger.info('Trigger resumed', { triggerId });
 }
 
-export async function deleteTrigger(triggerId: string, userId: string): Promise<void> {
-  const trigger = await getTrigger(triggerId);
+export async function deleteTrigger(workspaceId: string, triggerId: string, userId: string): Promise<void> {
+  const trigger = await getTrigger(workspaceId, triggerId);
   if (!trigger) throw new Error(`Trigger ${triggerId} not found`);
   if (!(await canModifyAgent(trigger.agent_id, userId))) {
     throw new Error('Insufficient permissions');
   }
 
-  await execute('DELETE FROM triggers WHERE id = $1', [triggerId]);
+  await execute('DELETE FROM triggers WHERE id = $1 AND workspace_id = $2', [triggerId, workspaceId]);
   logger.info('Trigger deleted', { triggerId });
 }
 
@@ -100,12 +100,12 @@ export interface TriggerEvent {
   sourceThreadTs?: string;
 }
 
-export async function fireTrigger(event: TriggerEvent): Promise<string | null> {
-  const trigger = await getTrigger(event.triggerId);
+export async function fireTrigger(workspaceId: string, event: TriggerEvent): Promise<string | null> {
+  const trigger = await getTrigger(workspaceId, event.triggerId);
   if (!trigger || trigger.status !== 'active') return null;
 
   // Dedup check
-  const isDuplicate = await isDuplicateEvent(event.idempotencyKey);
+  const isDuplicate = await isDuplicateEvent(workspaceId, event.idempotencyKey);
   if (isDuplicate) {
     logger.info('Duplicate event dropped', { triggerId: event.triggerId, key: event.idempotencyKey });
     return null;
@@ -116,6 +116,7 @@ export async function fireTrigger(event: TriggerEvent): Promise<string | null> {
   const traceId = uuid();
 
   const jobData: JobData = {
+    workspaceId,
     agentId: trigger.agent_id,
     channelId: event.sourceChannel || '',
     threadTs: event.sourceThreadTs || '',
@@ -165,6 +166,7 @@ function normalizeEventPayload(triggerType: TriggerType, payload: Record<string,
 
 // ── Schedule Trigger Helpers ──
 
+// CROSS-WORKSPACE: returns triggers from all workspaces
 export async function getScheduledTriggersDue(): Promise<Trigger[]> {
   return query<Trigger>(
     `SELECT * FROM triggers WHERE trigger_type = 'schedule' AND status = 'active'`,
@@ -172,30 +174,28 @@ export async function getScheduledTriggersDue(): Promise<Trigger[]> {
   );
 }
 
-export async function updateTriggerLastFired(triggerId: string): Promise<void> {
-  await execute('UPDATE triggers SET last_fired_at = NOW() WHERE id = $1', [triggerId]);
+export async function updateTriggerLastFired(workspaceId: string, triggerId: string): Promise<void> {
+  await execute('UPDATE triggers SET last_fired_at = NOW() WHERE id = $1 AND workspace_id = $2', [triggerId, workspaceId]);
 }
 
-export async function getTriggerLastFiredAt(triggerId: string): Promise<Date | null> {
+export async function getTriggerLastFiredAt(workspaceId: string, triggerId: string): Promise<Date | null> {
   const row = await queryOne<{ last_fired_at: string | null }>(
-    'SELECT last_fired_at FROM triggers WHERE id = $1',
-    [triggerId]
+    'SELECT last_fired_at FROM triggers WHERE id = $1 AND workspace_id = $2',
+    [triggerId, workspaceId]
   );
   return row?.last_fired_at ? new Date(row.last_fired_at) : null;
 }
 
 // ── Trigger Storm Detection ──
 
-const STORM_THRESHOLD = 100; // events per minute
-
-export async function checkTriggerStorm(agentId: string): Promise<boolean> {
+export async function checkTriggerStorm(workspaceId: string, agentId: string): Promise<boolean> {
   return false;
 }
 
 // ── Slack Channel Trigger Matching ──
 
-export async function findSlackChannelTriggers(channelId: string): Promise<Trigger[]> {
-  const triggers = await getActiveTriggersByType('slack_channel');
+export async function findSlackChannelTriggers(workspaceId: string, channelId: string): Promise<Trigger[]> {
+  const triggers = await getActiveTriggersByType(workspaceId, 'slack_channel');
   return triggers.filter(t => {
     const config = JSON.parse(t.config_json);
     return config.channel_id === channelId;

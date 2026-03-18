@@ -29,6 +29,8 @@ import {
   clearAgentMemory,
 } from '../../src/modules/sources/memory';
 
+const TEST_WORKSPACE_ID = 'W_TEST_123';
+
 describe('Agent Memory Module', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -42,7 +44,7 @@ describe('Agent Memory Module', () => {
 
   describe('storeMemory', () => {
     it('should insert a memory with generated UUID', async () => {
-      const result = await storeMemory({
+      const result = await storeMemory(TEST_WORKSPACE_ID, {
         agentId: 'agent-1',
         runId: 'run-1',
         fact: 'The customer prefers email communication',
@@ -64,7 +66,7 @@ describe('Agent Memory Module', () => {
     });
 
     it('should use custom relevance score when provided', async () => {
-      const result = await storeMemory({
+      const result = await storeMemory(TEST_WORKSPACE_ID, {
         agentId: 'agent-1',
         runId: 'run-1',
         fact: 'A technical detail',
@@ -76,7 +78,7 @@ describe('Agent Memory Module', () => {
     });
 
     it('should default relevance_score to 1.0', async () => {
-      const result = await storeMemory({
+      const result = await storeMemory(TEST_WORKSPACE_ID, {
         agentId: 'agent-1',
         runId: 'run-1',
         fact: 'some fact',
@@ -87,7 +89,7 @@ describe('Agent Memory Module', () => {
     });
 
     it('should prune memories after storing', async () => {
-      await storeMemory({
+      await storeMemory(TEST_WORKSPACE_ID, {
         agentId: 'agent-1',
         runId: 'run-1',
         fact: 'fact',
@@ -97,7 +99,7 @@ describe('Agent Memory Module', () => {
       // pruneMemories calls queryOne for count
       expect(mockQueryOne).toHaveBeenCalledWith(
         expect.stringContaining('COUNT(*)'),
-        ['agent-1']
+        ['agent-1', TEST_WORKSPACE_ID]
       );
     });
 
@@ -105,7 +107,7 @@ describe('Agent Memory Module', () => {
       // Simulate 510 memories
       mockQueryOne.mockResolvedValue({ count: '510' });
 
-      await storeMemory({
+      await storeMemory(TEST_WORKSPACE_ID, {
         agentId: 'agent-1',
         runId: 'run-1',
         fact: 'fact',
@@ -116,14 +118,14 @@ describe('Agent Memory Module', () => {
       expect(mockExecute).toHaveBeenCalledTimes(2);
       expect(mockExecute).toHaveBeenLastCalledWith(
         expect.stringContaining('DELETE FROM agent_memory'),
-        ['agent-1', 10] // 510 - 500 = 10 excess
+        ['agent-1', TEST_WORKSPACE_ID, 10] // 510 - 500 = 10 excess
       );
     });
 
     it('should not prune when memory count is at or under the cap', async () => {
       mockQueryOne.mockResolvedValue({ count: '500' });
 
-      await storeMemory({
+      await storeMemory(TEST_WORKSPACE_ID, {
         agentId: 'agent-1',
         runId: 'run-1',
         fact: 'fact',
@@ -145,7 +147,7 @@ describe('Agent Memory Module', () => {
         mockQueryOne.mockResolvedValue({ count: '10' });
         mockExecute.mockResolvedValue({ rowCount: 0 });
 
-        const result = await storeMemory({
+        const result = await storeMemory(TEST_WORKSPACE_ID, {
           agentId: 'agent-1',
           runId: 'run-1',
           fact: `fact for ${category}`,
@@ -167,7 +169,7 @@ describe('Agent Memory Module', () => {
         { fact: 'Fact three', category: 'decision' as const },
       ];
 
-      const results = await storeMemories('agent-1', 'run-1', facts);
+      const results = await storeMemories(TEST_WORKSPACE_ID, 'agent-1', 'run-1', facts);
 
       expect(results).toHaveLength(3);
       // Each memory triggers an INSERT + a prune check
@@ -175,7 +177,7 @@ describe('Agent Memory Module', () => {
     });
 
     it('should return empty array for empty facts list', async () => {
-      const results = await storeMemories('agent-1', 'run-1', []);
+      const results = await storeMemories(TEST_WORKSPACE_ID, 'agent-1', 'run-1', []);
       expect(results).toEqual([]);
       expect(mockExecute).not.toHaveBeenCalled();
     });
@@ -185,7 +187,7 @@ describe('Agent Memory Module', () => {
         { fact: 'Fact A', category: 'context' as const },
       ];
 
-      const results = await storeMemories('agent-99', 'run-42', facts);
+      const results = await storeMemories(TEST_WORKSPACE_ID, 'agent-99', 'run-42', facts);
 
       expect(results[0].agent_id).toBe('agent-99');
       expect(results[0].run_id).toBe('run-42');
@@ -200,7 +202,7 @@ describe('Agent Memory Module', () => {
         { id: 'm1', fact: 'Customer likes email', category: 'customer_preference', relevance_score: 1.0, rank: 0.5 },
       ]);
 
-      const results = await retrieveMemories('agent-1', 'customer email preference');
+      const results = await retrieveMemories(TEST_WORKSPACE_ID, 'agent-1', 'customer email preference');
 
       expect(results).toHaveLength(1);
       expect(mockQuery).toHaveBeenCalledWith(
@@ -212,7 +214,7 @@ describe('Agent Memory Module', () => {
     it('should filter out short words (2 chars or less)', async () => {
       mockQuery.mockResolvedValue([]);
 
-      await retrieveMemories('agent-1', 'the a to big data');
+      await retrieveMemories(TEST_WORKSPACE_ID, 'agent-1', 'the a to big data');
 
       expect(mockQuery).toHaveBeenCalledWith(
         expect.any(String),
@@ -221,7 +223,7 @@ describe('Agent Memory Module', () => {
     });
 
     it('should return empty array when query produces no FTS terms', async () => {
-      const results = await retrieveMemories('agent-1', 'a b c');
+      const results = await retrieveMemories(TEST_WORKSPACE_ID, 'agent-1', 'a b c');
 
       expect(results).toEqual([]);
       expect(mockQuery).not.toHaveBeenCalled();
@@ -230,7 +232,7 @@ describe('Agent Memory Module', () => {
     it('should strip special characters from query text', async () => {
       mockQuery.mockResolvedValue([]);
 
-      await retrieveMemories('agent-1', 'hello@world! how are you?');
+      await retrieveMemories(TEST_WORKSPACE_ID, 'agent-1', 'hello@world! how are you?');
 
       expect(mockQuery).toHaveBeenCalledWith(
         expect.any(String),
@@ -247,7 +249,7 @@ describe('Agent Memory Module', () => {
       mockQuery.mockResolvedValue([]);
 
       const longQuery = 'one two three four five six seven eight nine ten eleven twelve thirteen';
-      await retrieveMemories('agent-1', longQuery);
+      await retrieveMemories(TEST_WORKSPACE_ID, 'agent-1', longQuery);
 
       const ftsArg = mockQuery.mock.calls[0][1][0] as string;
       const terms = ftsArg.split(' | ');
@@ -263,7 +265,7 @@ describe('Agent Memory Module', () => {
 
       // Use a small token budget: 'Short fact' is ~3 tokens (10 chars / 4)
       // The 8000-char fact is ~2000 tokens
-      const results = await retrieveMemories('agent-1', 'some query', 50);
+      const results = await retrieveMemories(TEST_WORKSPACE_ID, 'agent-1', 'some query', 50);
 
       // First fact fits (~3 tokens), second doesn't (2000 tokens > 50 budget remaining),
       // third fits (~5 tokens)
@@ -280,7 +282,7 @@ describe('Agent Memory Module', () => {
           { id: 'm1', fact: 'fallback result', category: 'general', relevance_score: 0.9 },
         ]);
 
-      const results = await retrieveMemories('agent-1', 'search term');
+      const results = await retrieveMemories(TEST_WORKSPACE_ID, 'agent-1', 'search term');
 
       expect(results).toHaveLength(1);
       expect(results[0].fact).toBe('fallback result');
@@ -299,7 +301,7 @@ describe('Agent Memory Module', () => {
       ]);
 
       // 7996 chars / 4 = 1999 tokens, fits. Second fact is 5 chars / 4 = 2 tokens, total 2001 > 2000
-      const results = await retrieveMemories('agent-1', 'some query');
+      const results = await retrieveMemories(TEST_WORKSPACE_ID, 'agent-1', 'some query');
 
       expect(results).toHaveLength(1);
     });
@@ -315,19 +317,19 @@ describe('Agent Memory Module', () => {
       ];
       mockQuery.mockResolvedValue(mockMemories);
 
-      const results = await getAgentMemories('agent-1');
+      const results = await getAgentMemories(TEST_WORKSPACE_ID, 'agent-1');
 
       expect(results).toHaveLength(2);
       expect(mockQuery).toHaveBeenCalledWith(
         expect.stringContaining('ORDER BY created_at DESC'),
-        ['agent-1']
+        ['agent-1', TEST_WORKSPACE_ID]
       );
     });
 
     it('should return empty array for agent with no memories', async () => {
       mockQuery.mockResolvedValue([]);
 
-      const results = await getAgentMemories('agent-empty');
+      const results = await getAgentMemories(TEST_WORKSPACE_ID, 'agent-empty');
       expect(results).toEqual([]);
     });
   });
@@ -338,30 +340,30 @@ describe('Agent Memory Module', () => {
     it('should delete memories matching search term with LIKE', async () => {
       mockExecute.mockResolvedValue({ rowCount: 3 });
 
-      const count = await forgetMemory('agent-1', 'customer preference');
+      const count = await forgetMemory(TEST_WORKSPACE_ID, 'agent-1', 'customer preference');
 
       expect(count).toBe(3);
       expect(mockExecute).toHaveBeenCalledWith(
         expect.stringContaining('DELETE FROM agent_memory'),
-        ['agent-1', '%customer preference%']
+        ['agent-1', TEST_WORKSPACE_ID, '%customer preference%']
       );
     });
 
     it('should return 0 when no memories match', async () => {
       mockExecute.mockResolvedValue({ rowCount: 0 });
 
-      const count = await forgetMemory('agent-1', 'nonexistent topic');
+      const count = await forgetMemory(TEST_WORKSPACE_ID, 'agent-1', 'nonexistent topic');
       expect(count).toBe(0);
     });
 
     it('should use the agentId to scope deletion', async () => {
       mockExecute.mockResolvedValue({ rowCount: 1 });
 
-      await forgetMemory('agent-specific', 'some fact');
+      await forgetMemory(TEST_WORKSPACE_ID, 'agent-specific', 'some fact');
 
       expect(mockExecute).toHaveBeenCalledWith(
         expect.stringContaining('agent_id = $1'),
-        ['agent-specific', '%some fact%']
+        ['agent-specific', TEST_WORKSPACE_ID, '%some fact%']
       );
     });
   });
@@ -372,19 +374,19 @@ describe('Agent Memory Module', () => {
     it('should delete all memories for the agent', async () => {
       mockExecute.mockResolvedValue({ rowCount: 42 });
 
-      const count = await clearAgentMemory('agent-1');
+      const count = await clearAgentMemory(TEST_WORKSPACE_ID, 'agent-1');
 
       expect(count).toBe(42);
       expect(mockExecute).toHaveBeenCalledWith(
         expect.stringContaining('DELETE FROM agent_memory WHERE agent_id = $1'),
-        ['agent-1']
+        ['agent-1', TEST_WORKSPACE_ID]
       );
     });
 
     it('should return 0 when agent has no memories', async () => {
       mockExecute.mockResolvedValue({ rowCount: 0 });
 
-      const count = await clearAgentMemory('agent-empty');
+      const count = await clearAgentMemory(TEST_WORKSPACE_ID, 'agent-empty');
       expect(count).toBe(0);
     });
   });
@@ -395,7 +397,7 @@ describe('Agent Memory Module', () => {
     it('should delete lowest-relevance memories first when pruning', async () => {
       mockQueryOne.mockResolvedValue({ count: '505' });
 
-      await storeMemory({
+      await storeMemory(TEST_WORKSPACE_ID, {
         agentId: 'agent-1',
         runId: 'run-1',
         fact: 'new fact',
@@ -405,7 +407,7 @@ describe('Agent Memory Module', () => {
       // The DELETE for pruning should order by relevance_score ASC, created_at ASC
       expect(mockExecute).toHaveBeenCalledWith(
         expect.stringContaining('ORDER BY relevance_score ASC, created_at ASC'),
-        ['agent-1', 5] // 505 - 500 = 5
+        ['agent-1', TEST_WORKSPACE_ID, 5] // 505 - 500 = 5
       );
     });
 
@@ -413,7 +415,7 @@ describe('Agent Memory Module', () => {
       mockQueryOne.mockResolvedValue(null);
 
       // Should not throw
-      await storeMemory({
+      await storeMemory(TEST_WORKSPACE_ID, {
         agentId: 'agent-1',
         runId: 'run-1',
         fact: 'fact',
@@ -427,7 +429,7 @@ describe('Agent Memory Module', () => {
     it('should handle count result with undefined count field', async () => {
       mockQueryOne.mockResolvedValue({ count: undefined });
 
-      await storeMemory({
+      await storeMemory(TEST_WORKSPACE_ID, {
         agentId: 'agent-1',
         runId: 'run-1',
         fact: 'fact',
@@ -443,7 +445,7 @@ describe('Agent Memory Module', () => {
 
   describe('edge cases', () => {
     it('should handle empty fact string', async () => {
-      const result = await storeMemory({
+      const result = await storeMemory(TEST_WORKSPACE_ID, {
         agentId: 'agent-1',
         runId: 'run-1',
         fact: '',
@@ -456,7 +458,7 @@ describe('Agent Memory Module', () => {
 
     it('should handle very long fact strings', async () => {
       const longFact = 'A'.repeat(10000);
-      const result = await storeMemory({
+      const result = await storeMemory(TEST_WORKSPACE_ID, {
         agentId: 'agent-1',
         runId: 'run-1',
         fact: longFact,
@@ -472,16 +474,16 @@ describe('Agent Memory Module', () => {
         .mockResolvedValueOnce([]);
 
       const longQuery = 'A'.repeat(100);
-      await retrieveMemories('agent-1', longQuery);
+      await retrieveMemories(TEST_WORKSPACE_ID, 'agent-1', longQuery);
 
       // The LIKE fallback should use .slice(0, 50)
-      const likeArg = mockQuery.mock.calls[1][1][1];
+      const likeArg = mockQuery.mock.calls[1][1][2];
       // %...% wraps the 50-char slice
       expect(likeArg.length).toBe(52); // % + 50 chars + %
     });
 
     it('retrieveMemories should handle query with only special chars', async () => {
-      const results = await retrieveMemories('agent-1', '!@#$%');
+      const results = await retrieveMemories(TEST_WORKSPACE_ID, 'agent-1', '!@#$%');
       expect(results).toEqual([]);
     });
   });

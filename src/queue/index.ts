@@ -69,18 +69,24 @@ export async function enqueueRun(
 // ── Token Bucket Rate Limiter ──
 // Tracks TPM and RPM against Anthropic API tier limits.
 // Pre-flight check before dispatch, in-flight estimation, backpressure at 90%.
+// All keys are scoped by workspaceId for multi-tenant isolation.
 
-const RATE_LIMITER_KEY = 'tinyhands:rate_limiter';
-const INFLIGHT_KEY = 'tinyhands:inflight_tokens';
+function rateLimiterKey(workspaceId: string): string {
+  return `tinyhands:${workspaceId}:rate_limiter`;
+}
 
-export async function checkRateLimit(): Promise<{ allowed: boolean; usage: number }> {
+function inflightKey(workspaceId: string): string {
+  return `tinyhands:${workspaceId}:inflight_tokens`;
+}
+
+export async function checkRateLimit(workspaceId: string): Promise<{ allowed: boolean; usage: number }> {
   const redis = getRedisConnection();
   const now = Math.floor(Date.now() / 60000); // minute window
-  const key = `${RATE_LIMITER_KEY}:tpm:${now}`;
+  const key = `${rateLimiterKey(workspaceId)}:tpm:${now}`;
 
   const [current, inflight] = await Promise.all([
     redis.get(key),
-    redis.get(INFLIGHT_KEY),
+    redis.get(inflightKey(workspaceId)),
   ]);
 
   const actualUsage = current ? parseInt(current, 10) : 0;
@@ -96,32 +102,34 @@ export async function checkRateLimit(): Promise<{ allowed: boolean; usage: numbe
   };
 }
 
-export async function recordTokenUsage(tokens: number): Promise<void> {
+export async function recordTokenUsage(workspaceId: string, tokens: number): Promise<void> {
   const redis = getRedisConnection();
   const now = Math.floor(Date.now() / 60000);
-  const key = `${RATE_LIMITER_KEY}:tpm:${now}`;
+  const key = `${rateLimiterKey(workspaceId)}:tpm:${now}`;
+  const iKey = inflightKey(workspaceId);
 
   await redis.incrby(key, tokens);
   await redis.expire(key, 120); // 2 minute TTL
 
   // Reconcile: reduce in-flight estimate
-  await redis.decrby(INFLIGHT_KEY, tokens);
-  const remaining = await redis.get(INFLIGHT_KEY);
+  await redis.decrby(iKey, tokens);
+  const remaining = await redis.get(iKey);
   if (remaining && parseInt(remaining, 10) < 0) {
-    await redis.set(INFLIGHT_KEY, '0');
+    await redis.set(iKey, '0');
   }
 }
 
-export async function estimateInflightUsage(estimatedTokens: number): Promise<void> {
+export async function estimateInflightUsage(workspaceId: string, estimatedTokens: number): Promise<void> {
   const redis = getRedisConnection();
-  await redis.incrby(INFLIGHT_KEY, estimatedTokens);
-  await redis.expire(INFLIGHT_KEY, 300);
+  const iKey = inflightKey(workspaceId);
+  await redis.incrby(iKey, estimatedTokens);
+  await redis.expire(iKey, 300);
 }
 
-export async function checkRequestRate(): Promise<boolean> {
+export async function checkRequestRate(workspaceId: string): Promise<boolean> {
   const redis = getRedisConnection();
   const now = Math.floor(Date.now() / 60000);
-  const key = `${RATE_LIMITER_KEY}:rpm:${now}`;
+  const key = `${rateLimiterKey(workspaceId)}:rpm:${now}`;
 
   const current = await redis.incr(key);
   await redis.expire(key, 120);
@@ -129,16 +137,16 @@ export async function checkRequestRate(): Promise<boolean> {
   return current <= config.anthropic.rpmLimit;
 }
 
-export async function handleRateLimitResponse(retryAfterSec: number): Promise<void> {
+export async function handleRateLimitResponse(workspaceId: string, retryAfterSec: number): Promise<void> {
   const redis = getRedisConnection();
   // Mark rate limit hit — workers check this before dispatch
-  await redis.set('tinyhands:rate_limited', '1', 'EX', retryAfterSec);
-  logger.warn('Anthropic 429 recorded', { retryAfter: retryAfterSec });
+  await redis.set(`tinyhands:${workspaceId}:rate_limited`, '1', 'EX', retryAfterSec);
+  logger.warn('Anthropic 429 recorded', { workspaceId, retryAfter: retryAfterSec });
 }
 
-export async function isRateLimited(): Promise<boolean> {
+export async function isRateLimited(workspaceId: string): Promise<boolean> {
   const redis = getRedisConnection();
-  const limited = await redis.get('tinyhands:rate_limited');
+  const limited = await redis.get(`tinyhands:${workspaceId}:rate_limited`);
   return limited === '1';
 }
 
@@ -150,12 +158,11 @@ export async function getQueueDepth(): Promise<number> {
 
 // ── Trigger Dedup ──
 
-const DEDUP_PREFIX = 'tinyhands:dedup:';
 const DEDUP_WINDOW_SECONDS = 300; // 5 minutes
 
-export async function isDuplicateEvent(idempotencyKey: string): Promise<boolean> {
+export async function isDuplicateEvent(workspaceId: string, idempotencyKey: string): Promise<boolean> {
   const redis = getRedisConnection();
-  const key = `${DEDUP_PREFIX}${idempotencyKey}`;
+  const key = `tinyhands:${workspaceId}:dedup:${idempotencyKey}`;
   const result = await redis.set(key, '1', 'EX', DEDUP_WINDOW_SECONDS, 'NX');
   return result === null; // null means key already existed
 }

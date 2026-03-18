@@ -23,6 +23,7 @@ export function getBuiltinTools(): string[] {
 // ── Tool Management ──
 
 export async function addToolToAgent(
+  workspaceId: string,
   agentId: string,
   toolName: string,
   userId: string
@@ -41,7 +42,7 @@ export async function addToolToAgent(
 
   // Verify tool exists
   if (!isBuiltinTool(toolName)) {
-    const custom = await getCustomTool(toolName);
+    const custom = await getCustomTool(workspaceId, toolName);
     if (!custom) throw new Error(`Tool "${toolName}" not found`);
   }
 
@@ -53,6 +54,7 @@ export async function addToolToAgent(
 }
 
 export async function removeToolFromAgent(
+  workspaceId: string,
   agentId: string,
   toolName: string,
   userId: string
@@ -75,6 +77,7 @@ export async function removeToolFromAgent(
 // NOTE: Custom tools are created by admins via code only — not via Slack.
 
 export async function registerCustomTool(
+  workspaceId: string,
   name: string,
   schemaJson: string,
   scriptPathOrCode: string | null,
@@ -89,7 +92,7 @@ export async function registerCustomTool(
 ): Promise<CustomTool> {
   const id = uuid();
 
-  const existing = await queryOne('SELECT id FROM custom_tools WHERE name = $1', [name]);
+  const existing = await queryOne('SELECT id FROM custom_tools WHERE workspace_id = $1 AND name = $2', [workspaceId, name]);
   if (existing) throw new Error(`Tool "${name}" already registered`);
 
   const scriptCode = options?.code || null;
@@ -114,9 +117,9 @@ export async function registerCustomTool(
   };
 
   await execute(`
-    INSERT INTO custom_tools (id, name, tool_type, schema_json, script_code, script_path, language, registered_by, approved, access_level, config_json, created_at)
-    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-  `, [tool.id, tool.name, tool.tool_type, tool.schema_json,
+    INSERT INTO custom_tools (id, workspace_id, name, tool_type, schema_json, script_code, script_path, language, registered_by, approved, access_level, config_json, created_at)
+    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+  `, [tool.id, workspaceId, tool.name, tool.tool_type, tool.schema_json,
     tool.script_code, tool.script_path, tool.language, tool.registered_by,
     tool.approved, tool.access_level, tool.config_json, tool.created_at]);
 
@@ -124,60 +127,63 @@ export async function registerCustomTool(
   return tool;
 }
 
-export async function approveCustomTool(name: string, userId: string): Promise<void> {
+export async function approveCustomTool(workspaceId: string, name: string, userId: string): Promise<void> {
   const isSuperadmin = await queryOne('SELECT user_id FROM superadmins WHERE user_id = $1', [userId]);
   if (!isSuperadmin) throw new Error('Only admins can approve tools');
 
-  await execute('UPDATE custom_tools SET approved = TRUE WHERE name = $1', [name]);
+  await execute('UPDATE custom_tools SET approved = TRUE WHERE workspace_id = $1 AND name = $2', [workspaceId, name]);
   logger.info('Custom tool approved', { name, userId });
 }
 
-export async function getToolCode(name: string): Promise<{ code: string; language: string } | null> {
-  const tool = await getCustomTool(name);
+export async function getToolCode(workspaceId: string, name: string): Promise<{ code: string; language: string } | null> {
+  const tool = await getCustomTool(workspaceId, name);
   if (!tool || !tool.script_code) return null;
   return { code: tool.script_code, language: tool.language };
 }
 
-export async function getCustomTool(name: string): Promise<CustomTool | null> {
-  const row = await queryOne<CustomTool>('SELECT * FROM custom_tools WHERE name = $1', [name]);
+export async function getCustomTool(workspaceId: string, name: string): Promise<CustomTool | null> {
+  const row = await queryOne<CustomTool>('SELECT * FROM custom_tools WHERE workspace_id = $1 AND name = $2', [workspaceId, name]);
   return row || null;
 }
 
-export async function listCustomTools(): Promise<CustomTool[]> {
-  return query<CustomTool>('SELECT * FROM custom_tools ORDER BY name');
+export async function listCustomTools(workspaceId: string): Promise<CustomTool[]> {
+  return query<CustomTool>('SELECT * FROM custom_tools WHERE workspace_id = $1 ORDER BY name', [workspaceId]);
 }
 
 /**
  * List only approved read-only custom tools — safe for user-created agents.
  */
-export async function listUserAvailableTools(): Promise<CustomTool[]> {
+export async function listUserAvailableTools(workspaceId: string): Promise<CustomTool[]> {
   return query<CustomTool>(
-    `SELECT * FROM custom_tools WHERE approved = TRUE AND access_level = 'read-only' ORDER BY name`
+    `SELECT * FROM custom_tools WHERE workspace_id = $1 AND approved = TRUE AND access_level = 'read-only' ORDER BY name`,
+    [workspaceId]
   );
 }
 
 /**
  * List approved read-write custom tools — requires admin approval to attach.
  */
-export async function listWriteTools(): Promise<CustomTool[]> {
+export async function listWriteTools(workspaceId: string): Promise<CustomTool[]> {
   return query<CustomTool>(
-    `SELECT * FROM custom_tools WHERE approved = TRUE AND access_level = 'read-write' ORDER BY name`
+    `SELECT * FROM custom_tools WHERE workspace_id = $1 AND approved = TRUE AND access_level = 'read-write' ORDER BY name`,
+    [workspaceId]
   );
 }
 
-export async function deleteCustomTool(name: string, userId: string): Promise<void> {
+export async function deleteCustomTool(workspaceId: string, name: string, userId: string): Promise<void> {
   const isSuperadminRow = await queryOne('SELECT user_id FROM superadmins WHERE user_id = $1', [userId]);
   if (!isSuperadminRow) {
     throw new Error('Only admins can delete custom tools');
   }
 
-  await execute('DELETE FROM custom_tools WHERE name = $1', [name]);
+  await execute('DELETE FROM custom_tools WHERE workspace_id = $1 AND name = $2', [workspaceId, name]);
   logger.info('Custom tool deleted', { name, userId });
 }
 
 // ── Tool Config & Access Level Management (admin only) ──
 
 export async function updateToolConfig(
+  workspaceId: string,
   name: string,
   configJson: string,
   userId: string,
@@ -185,14 +191,15 @@ export async function updateToolConfig(
   const isSuperadminRow = await queryOne('SELECT user_id FROM superadmins WHERE user_id = $1', [userId]);
   if (!isSuperadminRow) throw new Error('Only admins can update tool config');
 
-  const tool = await getCustomTool(name);
+  const tool = await getCustomTool(workspaceId, name);
   if (!tool) throw new Error(`Tool "${name}" not found`);
 
-  await execute('UPDATE custom_tools SET config_json = $1 WHERE name = $2', [configJson, name]);
+  await execute('UPDATE custom_tools SET config_json = $1 WHERE workspace_id = $2 AND name = $3', [configJson, workspaceId, name]);
   logger.info('Tool config updated', { name, userId });
 }
 
 export async function setToolConfigKey(
+  workspaceId: string,
   name: string,
   key: string,
   value: string,
@@ -201,19 +208,20 @@ export async function setToolConfigKey(
   const isSuperadminRow = await queryOne('SELECT user_id FROM superadmins WHERE user_id = $1', [userId]);
   if (!isSuperadminRow) throw new Error('Only admins can update tool config');
 
-  const tool = await getCustomTool(name);
+  const tool = await getCustomTool(workspaceId, name);
   if (!tool) throw new Error(`Tool "${name}" not found`);
 
   const config = JSON.parse(tool.config_json || '{}');
   config[key] = value;
   const newConfigJson = JSON.stringify(config);
 
-  await execute('UPDATE custom_tools SET config_json = $1 WHERE name = $2', [newConfigJson, name]);
+  await execute('UPDATE custom_tools SET config_json = $1 WHERE workspace_id = $2 AND name = $3', [newConfigJson, workspaceId, name]);
   logger.info('Tool config key set', { name, key, userId });
   return config;
 }
 
 export async function removeToolConfigKey(
+  workspaceId: string,
   name: string,
   key: string,
   userId: string,
@@ -221,32 +229,34 @@ export async function removeToolConfigKey(
   const isSuperadminRow = await queryOne('SELECT user_id FROM superadmins WHERE user_id = $1', [userId]);
   if (!isSuperadminRow) throw new Error('Only admins can update tool config');
 
-  const tool = await getCustomTool(name);
+  const tool = await getCustomTool(workspaceId, name);
   if (!tool) throw new Error(`Tool "${name}" not found`);
 
   const config = JSON.parse(tool.config_json || '{}');
   delete config[key];
   const newConfigJson = JSON.stringify(config);
 
-  await execute('UPDATE custom_tools SET config_json = $1 WHERE name = $2', [newConfigJson, name]);
+  await execute('UPDATE custom_tools SET config_json = $1 WHERE workspace_id = $2 AND name = $3', [newConfigJson, workspaceId, name]);
   logger.info('Tool config key removed', { name, key, userId });
   return config;
 }
 
 export async function getToolConfig(
+  workspaceId: string,
   name: string,
   userId: string,
 ): Promise<Record<string, any>> {
   const isSuperadminRow = await queryOne('SELECT user_id FROM superadmins WHERE user_id = $1', [userId]);
   if (!isSuperadminRow) throw new Error('Only admins can view tool config');
 
-  const tool = await getCustomTool(name);
+  const tool = await getCustomTool(workspaceId, name);
   if (!tool) throw new Error(`Tool "${name}" not found`);
 
   return JSON.parse(tool.config_json || '{}');
 }
 
 export async function updateToolAccessLevel(
+  workspaceId: string,
   name: string,
   accessLevel: ToolAccessLevel,
   userId: string,
@@ -254,16 +264,16 @@ export async function updateToolAccessLevel(
   const isSuperadminRow = await queryOne('SELECT user_id FROM superadmins WHERE user_id = $1', [userId]);
   if (!isSuperadminRow) throw new Error('Only admins can change tool access level');
 
-  const tool = await getCustomTool(name);
+  const tool = await getCustomTool(workspaceId, name);
   if (!tool) throw new Error(`Tool "${name}" not found`);
 
-  await execute('UPDATE custom_tools SET access_level = $1 WHERE name = $2', [accessLevel, name]);
+  await execute('UPDATE custom_tools SET access_level = $1 WHERE workspace_id = $2 AND name = $3', [accessLevel, workspaceId, name]);
   logger.info('Tool access level updated', { name, accessLevel, userId });
 }
 
 // ── Agent Tool Summary ──
 
-export async function getAgentToolSummary(agentId: string): Promise<{
+export async function getAgentToolSummary(workspaceId: string, agentId: string): Promise<{
   builtin: string[];
   custom: string[];
   mcp: string[];
@@ -279,7 +289,7 @@ export async function getAgentToolSummary(agentId: string): Promise<{
     if (isBuiltinTool(tool)) {
       builtin.push(tool);
     } else {
-      const customTool = await getCustomTool(tool);
+      const customTool = await getCustomTool(workspaceId, tool);
       if (customTool) {
         custom.push(tool);
       } else {

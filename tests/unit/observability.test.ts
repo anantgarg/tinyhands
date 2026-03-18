@@ -34,6 +34,8 @@ import {
   getRunByTraceId,
 } from '../../src/modules/observability';
 
+const TEST_WORKSPACE_ID = 'W_TEST_123';
+
 // ── getAlertRules ──
 
 describe('getAlertRules', () => {
@@ -92,7 +94,7 @@ describe('checkAlerts', () => {
       .mockResolvedValueOnce({ total: '5.00' }) // dailySpend (under 50 budget)
       .mockResolvedValueOnce(null); // longRun
 
-    const alerts = await checkAlerts();
+    const alerts = await checkAlerts(TEST_WORKSPACE_ID);
     expect(alerts).toEqual([]);
   });
 
@@ -103,7 +105,7 @@ describe('checkAlerts', () => {
       .mockResolvedValueOnce({ total: '10.00' }) // daily spend under budget
       .mockResolvedValueOnce(null); // no long run
 
-    const alerts = await checkAlerts();
+    const alerts = await checkAlerts(TEST_WORKSPACE_ID);
     const errorAlert = alerts.find((a) => a.condition === 'error_rate');
     expect(errorAlert).toBeDefined();
     expect(errorAlert!.triggered).toBe(true);
@@ -120,7 +122,7 @@ describe('checkAlerts', () => {
       .mockResolvedValueOnce({ total: '0' })
       .mockResolvedValueOnce(null);
 
-    const alerts = await checkAlerts();
+    const alerts = await checkAlerts(TEST_WORKSPACE_ID);
     const errorAlert = alerts.find((a) => a.condition === 'error_rate');
     expect(errorAlert).toBeUndefined(); // 10% is not > 10%, so not triggered
   });
@@ -132,7 +134,7 @@ describe('checkAlerts', () => {
       .mockResolvedValueOnce({ total: '0' })
       .mockResolvedValueOnce(null);
 
-    const alerts = await checkAlerts();
+    const alerts = await checkAlerts(TEST_WORKSPACE_ID);
     const errorAlert = alerts.find((a) => a.condition === 'error_rate');
     expect(errorAlert).toBeUndefined();
   });
@@ -148,7 +150,7 @@ describe('checkAlerts', () => {
       .mockResolvedValueOnce({ total: '10.00' })
       .mockResolvedValueOnce(null);
 
-    const alerts = await checkAlerts();
+    const alerts = await checkAlerts(TEST_WORKSPACE_ID);
     const costAlert = alerts.find((a) => a.condition === 'single_run_cost');
     expect(costAlert).toBeDefined();
     expect(costAlert!.triggered).toBe(true);
@@ -165,7 +167,7 @@ describe('checkAlerts', () => {
       .mockResolvedValueOnce({ total: '75.00' }) // 75 > 50 budget
       .mockResolvedValueOnce(null);
 
-    const alerts = await checkAlerts();
+    const alerts = await checkAlerts(TEST_WORKSPACE_ID);
     const spendAlert = alerts.find((a) => a.condition === 'daily_spend');
     expect(spendAlert).toBeDefined();
     expect(spendAlert!.triggered).toBe(true);
@@ -182,7 +184,7 @@ describe('checkAlerts', () => {
       .mockResolvedValueOnce({ total: '30.00' }) // 30 < 50 budget
       .mockResolvedValueOnce(null);
 
-    const alerts = await checkAlerts();
+    const alerts = await checkAlerts(TEST_WORKSPACE_ID);
     const spendAlert = alerts.find((a) => a.condition === 'daily_spend');
     expect(spendAlert).toBeUndefined(); // filtered out because not triggered
   });
@@ -198,7 +200,7 @@ describe('checkAlerts', () => {
         duration_ms: 900000, // 900s
       });
 
-    const alerts = await checkAlerts();
+    const alerts = await checkAlerts(TEST_WORKSPACE_ID);
     const durAlert = alerts.find((a) => a.condition === 'run_duration');
     expect(durAlert).toBeDefined();
     expect(durAlert!.triggered).toBe(true);
@@ -222,7 +224,7 @@ describe('checkAlerts', () => {
         duration_ms: 1200000,
       }); // long run
 
-    const alerts = await checkAlerts();
+    const alerts = await checkAlerts(TEST_WORKSPACE_ID);
     expect(alerts.length).toBe(4);
     const conditions = alerts.map((a) => a.condition);
     expect(conditions).toContain('error_rate');
@@ -238,7 +240,7 @@ describe('checkAlerts', () => {
       .mockResolvedValueOnce({ total: '0' })
       .mockResolvedValueOnce(null);
 
-    const alerts = await checkAlerts();
+    const alerts = await checkAlerts(TEST_WORKSPACE_ID);
     // No error_rate alert since hourStats is null
     expect(alerts.find((a) => a.condition === 'error_rate')).toBeUndefined();
   });
@@ -250,7 +252,7 @@ describe('checkAlerts', () => {
       .mockResolvedValueOnce(null) // null daily spend
       .mockResolvedValueOnce(null);
 
-    const alerts = await checkAlerts();
+    const alerts = await checkAlerts(TEST_WORKSPACE_ID);
     // dailySpend of 0 should not trigger (0 < 50)
     expect(alerts.find((a) => a.condition === 'daily_spend')).toBeUndefined();
   });
@@ -265,7 +267,7 @@ describe('getAgentErrorRates', () => {
 
   it('should return empty array when no agents have runs', async () => {
     mockQuery.mockResolvedValueOnce([]);
-    const rates = await getAgentErrorRates();
+    const rates = await getAgentErrorRates(TEST_WORKSPACE_ID);
     expect(rates).toEqual([]);
   });
 
@@ -275,7 +277,7 @@ describe('getAgentErrorRates', () => {
       { agent_id: 'a2', name: 'Beta', total: '10', failed: '1' },
     ]);
 
-    const rates = await getAgentErrorRates();
+    const rates = await getAgentErrorRates(TEST_WORKSPACE_ID);
     expect(rates).toHaveLength(2);
 
     expect(rates[0].agentId).toBe('a1');
@@ -294,7 +296,7 @@ describe('getAgentErrorRates', () => {
       { agent_id: 'a1', name: 'Perfect', total: '50', failed: '0' },
     ]);
 
-    const rates = await getAgentErrorRates();
+    const rates = await getAgentErrorRates(TEST_WORKSPACE_ID);
     expect(rates[0].errorRate).toBe(0);
   });
 
@@ -302,7 +304,7 @@ describe('getAgentErrorRates', () => {
     const before = Date.now();
     mockQuery.mockResolvedValueOnce([]);
 
-    await getAgentErrorRates();
+    await getAgentErrorRates(TEST_WORKSPACE_ID);
 
     expect(mockQuery).toHaveBeenCalledTimes(1);
     const param = mockQuery.mock.calls[0][1][0];
@@ -329,7 +331,7 @@ describe('generateDailyDigest', () => {
       .mockResolvedValueOnce([]) // errorAgents
       .mockResolvedValueOnce([]); // anomalous
 
-    const digest = await generateDailyDigest();
+    const digest = await generateDailyDigest(TEST_WORKSPACE_ID);
     expect(digest).toContain('TinyHands Daily Digest');
     expect(digest).toContain('Runs: *0*');
     expect(digest).toContain('Cost: *$0.00*');
@@ -344,7 +346,7 @@ describe('generateDailyDigest', () => {
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([]);
 
-    const digest = await generateDailyDigest();
+    const digest = await generateDailyDigest(TEST_WORKSPACE_ID);
     expect(digest).toContain('Runs: *42*');
     expect(digest).toContain('Tokens: *150,000*');
     expect(digest).toContain('Cost: *$23.45*');
@@ -359,7 +361,7 @@ describe('generateDailyDigest', () => {
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([]);
 
-    const digest = await generateDailyDigest();
+    const digest = await generateDailyDigest(TEST_WORKSPACE_ID);
     expect(digest).toContain('Top agent: *SuperBot*');
     expect(digest).toContain('7 runs');
   });
@@ -373,7 +375,7 @@ describe('generateDailyDigest', () => {
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([]);
 
-    const digest = await generateDailyDigest();
+    const digest = await generateDailyDigest(TEST_WORKSPACE_ID);
     expect(digest).toContain('Top user: <@U12345>');
     expect(digest).toContain('5 runs');
   });
@@ -390,7 +392,7 @@ describe('generateDailyDigest', () => {
       ]) // errorAgents
       .mockResolvedValueOnce([]); // anomalous
 
-    const digest = await generateDailyDigest();
+    const digest = await generateDailyDigest(TEST_WORKSPACE_ID);
     expect(digest).toContain('High error rate agents');
     expect(digest).toContain('FailBot');
     expect(digest).toContain('50%');
@@ -409,7 +411,7 @@ describe('generateDailyDigest', () => {
         { name: 'SpendyBot', yesterday_cost: '12.50', avg_daily_cost: '3.00' },
       ]); // anomalous
 
-    const digest = await generateDailyDigest();
+    const digest = await generateDailyDigest(TEST_WORKSPACE_ID);
     expect(digest).toContain('Anomalous cost agents');
     expect(digest).toContain('SpendyBot');
     expect(digest).toContain('$12.50');
@@ -425,7 +427,7 @@ describe('generateDailyDigest', () => {
       .mockResolvedValueOnce([]) // no error agents
       .mockResolvedValueOnce([]); // no anomalous
 
-    const digest = await generateDailyDigest();
+    const digest = await generateDailyDigest(TEST_WORKSPACE_ID);
     expect(digest).not.toContain('High error rate agents');
     expect(digest).not.toContain('Anomalous cost agents');
   });
@@ -439,7 +441,7 @@ describe('generateDailyDigest', () => {
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([]);
 
-    const digest = await generateDailyDigest();
+    const digest = await generateDailyDigest(TEST_WORKSPACE_ID);
     expect(digest).toContain('Runs: *0*');
     expect(digest).toContain('Cost: *$0.00*');
   });
@@ -453,7 +455,7 @@ describe('generateDailyDigest', () => {
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([]);
 
-    const digest = await generateDailyDigest();
+    const digest = await generateDailyDigest(TEST_WORKSPACE_ID);
     expect(digest).toContain('Top agent: *AlphaBot* (12 runs)');
     expect(digest).toContain('Top user: <@UADMIN> (8 runs)');
   });
@@ -470,12 +472,12 @@ describe('getRunByTraceId', () => {
     const fakeRun = { id: 'run-1', trace_id: 'abc-123', status: 'completed' };
     mockQueryOne.mockResolvedValueOnce(fakeRun);
 
-    const result = await getRunByTraceId('abc-123');
+    const result = await getRunByTraceId(TEST_WORKSPACE_ID, 'abc-123');
 
     expect(mockQueryOne).toHaveBeenCalledTimes(1);
     expect(mockQueryOne).toHaveBeenCalledWith(
-      'SELECT * FROM run_history WHERE trace_id = $1',
-      ['abc-123'],
+      'SELECT * FROM run_history WHERE trace_id = $1 AND workspace_id = $2',
+      ['abc-123', TEST_WORKSPACE_ID],
     );
     expect(result).toEqual(fakeRun);
   });
@@ -483,14 +485,14 @@ describe('getRunByTraceId', () => {
   it('should return null when trace ID not found', async () => {
     mockQueryOne.mockResolvedValueOnce(null);
 
-    const result = await getRunByTraceId('nonexistent');
+    const result = await getRunByTraceId(TEST_WORKSPACE_ID, 'nonexistent');
     expect(result).toBeNull();
   });
 
   it('should return undefined when queryOne returns undefined', async () => {
     mockQueryOne.mockResolvedValueOnce(undefined);
 
-    const result = await getRunByTraceId('missing');
+    const result = await getRunByTraceId(TEST_WORKSPACE_ID, 'missing');
     expect(result).toBeUndefined();
   });
 });

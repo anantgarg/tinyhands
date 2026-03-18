@@ -29,6 +29,8 @@ import {
   hasMinimumRole,
 } from '../../src/modules/access-control';
 
+const TEST_WORKSPACE_ID = 'W_TEST_123';
+
 beforeEach(() => {
   mockQuery.mockReset();
   mockQueryOne.mockReset();
@@ -42,20 +44,20 @@ describe('initSuperadmin', () => {
     mockQueryOne.mockResolvedValueOnce(null); // no existing superadmin
     mockExecute.mockResolvedValueOnce(undefined);
 
-    const result = await initSuperadmin('U_FIRST');
+    const result = await initSuperadmin(TEST_WORKSPACE_ID, 'U_FIRST');
 
     expect(result).toBe(true);
-    expect(mockQueryOne).toHaveBeenCalledWith('SELECT user_id FROM superadmins LIMIT 1');
+    expect(mockQueryOne).toHaveBeenCalledWith('SELECT user_id FROM superadmins WHERE workspace_id = $1 LIMIT 1', [TEST_WORKSPACE_ID]);
     expect(mockExecute).toHaveBeenCalledWith(
-      'INSERT INTO superadmins (user_id, granted_by) VALUES ($1, $2)',
-      ['U_FIRST', 'system']
+      'INSERT INTO superadmins (workspace_id, user_id, granted_by) VALUES ($1, $2, $3)',
+      [TEST_WORKSPACE_ID, 'U_FIRST', 'system']
     );
   });
 
   it('should return false and skip insert when a superadmin already exists', async () => {
     mockQueryOne.mockResolvedValueOnce({ user_id: 'U_EXISTING' });
 
-    const result = await initSuperadmin('U_NEW');
+    const result = await initSuperadmin(TEST_WORKSPACE_ID, 'U_NEW');
 
     expect(result).toBe(false);
     expect(mockExecute).not.toHaveBeenCalled();
@@ -68,19 +70,19 @@ describe('isSuperadmin', () => {
   it('should return true when user is a superadmin', async () => {
     mockQueryOne.mockResolvedValueOnce({ user_id: 'U_SUPER' });
 
-    const result = await isSuperadmin('U_SUPER');
+    const result = await isSuperadmin(TEST_WORKSPACE_ID, 'U_SUPER');
 
     expect(result).toBe(true);
     expect(mockQueryOne).toHaveBeenCalledWith(
-      'SELECT user_id FROM superadmins WHERE user_id = $1',
-      ['U_SUPER']
+      'SELECT user_id FROM superadmins WHERE workspace_id = $1 AND user_id = $2',
+      [TEST_WORKSPACE_ID, 'U_SUPER']
     );
   });
 
   it('should return false when user is not a superadmin', async () => {
     mockQueryOne.mockResolvedValueOnce(null);
 
-    const result = await isSuperadmin('U_NOBODY');
+    const result = await isSuperadmin(TEST_WORKSPACE_ID, 'U_NOBODY');
 
     expect(result).toBe(false);
   });
@@ -88,7 +90,7 @@ describe('isSuperadmin', () => {
   it('should return false when queryOne returns undefined', async () => {
     mockQueryOne.mockResolvedValueOnce(undefined);
 
-    const result = await isSuperadmin('U_NOBODY');
+    const result = await isSuperadmin(TEST_WORKSPACE_ID, 'U_NOBODY');
 
     expect(result).toBe(false);
   });
@@ -102,18 +104,18 @@ describe('addSuperadmin', () => {
     mockQueryOne.mockResolvedValueOnce({ user_id: 'U_GRANTER' });
     mockExecute.mockResolvedValueOnce(undefined);
 
-    await addSuperadmin('U_NEW', 'U_GRANTER');
+    await addSuperadmin(TEST_WORKSPACE_ID, 'U_NEW', 'U_GRANTER');
 
     expect(mockExecute).toHaveBeenCalledWith(
-      'INSERT INTO superadmins (user_id, granted_by) VALUES ($1, $2) ON CONFLICT DO NOTHING',
-      ['U_NEW', 'U_GRANTER']
+      'INSERT INTO superadmins (workspace_id, user_id, granted_by) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING',
+      [TEST_WORKSPACE_ID, 'U_NEW', 'U_GRANTER']
     );
   });
 
   it('should throw when grantedBy is not a superadmin', async () => {
     mockQueryOne.mockResolvedValueOnce(null); // grantedBy is not superadmin
 
-    await expect(addSuperadmin('U_NEW', 'U_NOBODY')).rejects.toThrow(
+    await expect(addSuperadmin(TEST_WORKSPACE_ID, 'U_NEW', 'U_NOBODY')).rejects.toThrow(
       'Only superadmins can add other superadmins'
     );
     expect(mockExecute).not.toHaveBeenCalled();
@@ -123,11 +125,11 @@ describe('addSuperadmin', () => {
     mockQueryOne.mockResolvedValueOnce({ user_id: 'U_GRANTER' });
     mockExecute.mockResolvedValueOnce(undefined);
 
-    await addSuperadmin('U_EXISTING', 'U_GRANTER');
+    await addSuperadmin(TEST_WORKSPACE_ID, 'U_EXISTING', 'U_GRANTER');
 
     expect(mockExecute).toHaveBeenCalledWith(
       expect.stringContaining('ON CONFLICT DO NOTHING'),
-      ['U_EXISTING', 'U_GRANTER']
+      [TEST_WORKSPACE_ID, 'U_EXISTING', 'U_GRANTER']
     );
   });
 });
@@ -142,18 +144,18 @@ describe('removeSuperadmin', () => {
     mockQueryOne.mockResolvedValueOnce({ count: '3' });
     mockExecute.mockResolvedValueOnce(undefined);
 
-    await removeSuperadmin('U_TARGET', 'U_REMOVER');
+    await removeSuperadmin(TEST_WORKSPACE_ID, 'U_TARGET', 'U_REMOVER');
 
     expect(mockExecute).toHaveBeenCalledWith(
-      'DELETE FROM superadmins WHERE user_id = $1',
-      ['U_TARGET']
+      'DELETE FROM superadmins WHERE workspace_id = $1 AND user_id = $2',
+      [TEST_WORKSPACE_ID, 'U_TARGET']
     );
   });
 
   it('should throw when removedBy is not a superadmin', async () => {
     mockQueryOne.mockResolvedValueOnce(null);
 
-    await expect(removeSuperadmin('U_TARGET', 'U_NOBODY')).rejects.toThrow(
+    await expect(removeSuperadmin(TEST_WORKSPACE_ID, 'U_TARGET', 'U_NOBODY')).rejects.toThrow(
       'Only superadmins can remove other superadmins'
     );
     expect(mockExecute).not.toHaveBeenCalled();
@@ -165,7 +167,7 @@ describe('removeSuperadmin', () => {
     // COUNT query — only 1 superadmin
     mockQueryOne.mockResolvedValueOnce({ count: '1' });
 
-    await expect(removeSuperadmin('U_LAST', 'U_LAST')).rejects.toThrow(
+    await expect(removeSuperadmin(TEST_WORKSPACE_ID, 'U_LAST', 'U_LAST')).rejects.toThrow(
       'Cannot remove the last superadmin'
     );
     expect(mockExecute).not.toHaveBeenCalled();
@@ -175,7 +177,7 @@ describe('removeSuperadmin', () => {
     mockQueryOne.mockResolvedValueOnce({ user_id: 'U_REMOVER' });
     mockQueryOne.mockResolvedValueOnce({ count: '0' });
 
-    await expect(removeSuperadmin('U_TARGET', 'U_REMOVER')).rejects.toThrow(
+    await expect(removeSuperadmin(TEST_WORKSPACE_ID, 'U_TARGET', 'U_REMOVER')).rejects.toThrow(
       'Cannot remove the last superadmin'
     );
   });
@@ -184,7 +186,7 @@ describe('removeSuperadmin', () => {
     mockQueryOne.mockResolvedValueOnce({ user_id: 'U_REMOVER' });
     mockQueryOne.mockResolvedValueOnce(null); // countResult is null
 
-    await expect(removeSuperadmin('U_TARGET', 'U_REMOVER')).rejects.toThrow(
+    await expect(removeSuperadmin(TEST_WORKSPACE_ID, 'U_TARGET', 'U_REMOVER')).rejects.toThrow(
       'Cannot remove the last superadmin'
     );
   });
@@ -194,11 +196,11 @@ describe('removeSuperadmin', () => {
     mockQueryOne.mockResolvedValueOnce({ count: '2' });
     mockExecute.mockResolvedValueOnce(undefined);
 
-    await removeSuperadmin('U_OTHER', 'U_REMOVER');
+    await removeSuperadmin(TEST_WORKSPACE_ID, 'U_OTHER', 'U_REMOVER');
 
     expect(mockExecute).toHaveBeenCalledWith(
-      'DELETE FROM superadmins WHERE user_id = $1',
-      ['U_OTHER']
+      'DELETE FROM superadmins WHERE workspace_id = $1 AND user_id = $2',
+      [TEST_WORKSPACE_ID, 'U_OTHER']
     );
   });
 });
@@ -213,16 +215,16 @@ describe('listSuperadmins', () => {
     ];
     mockQuery.mockResolvedValueOnce(superadmins);
 
-    const result = await listSuperadmins();
+    const result = await listSuperadmins(TEST_WORKSPACE_ID);
 
     expect(result).toEqual(superadmins);
-    expect(mockQuery).toHaveBeenCalledWith('SELECT * FROM superadmins');
+    expect(mockQuery).toHaveBeenCalledWith('SELECT * FROM superadmins WHERE workspace_id = $1', [TEST_WORKSPACE_ID]);
   });
 
   it('should return an empty array when no superadmins exist', async () => {
     mockQuery.mockResolvedValueOnce([]);
 
-    const result = await listSuperadmins();
+    const result = await listSuperadmins(TEST_WORKSPACE_ID);
 
     expect(result).toEqual([]);
   });
@@ -237,7 +239,7 @@ describe('addAgentAdmin', () => {
 
     mockExecute.mockResolvedValueOnce(undefined);
 
-    await addAgentAdmin('agent_1', 'U_NEW', 'admin', 'U_GRANTER');
+    await addAgentAdmin(TEST_WORKSPACE_ID, 'agent_1', 'U_NEW', 'admin', 'U_GRANTER');
 
     expect(mockExecute).toHaveBeenCalledWith(
       expect.stringContaining('INSERT INTO agent_admins'),
@@ -250,7 +252,7 @@ describe('addAgentAdmin', () => {
     mockQueryOne.mockResolvedValueOnce({ user_id: 'U_SUPER' });
     mockExecute.mockResolvedValueOnce(undefined);
 
-    await addAgentAdmin('agent_1', 'U_OWNER', 'owner', 'U_SUPER');
+    await addAgentAdmin(TEST_WORKSPACE_ID, 'agent_1', 'U_OWNER', 'owner', 'U_SUPER');
 
     expect(mockExecute).toHaveBeenCalledWith(
       expect.stringContaining('INSERT INTO agent_admins'),
@@ -266,7 +268,7 @@ describe('addAgentAdmin', () => {
 
     mockExecute.mockResolvedValueOnce(undefined);
 
-    await addAgentAdmin('agent_1', 'U_NEW_ADMIN', 'admin', 'U_OWNER');
+    await addAgentAdmin(TEST_WORKSPACE_ID, 'agent_1', 'U_NEW_ADMIN', 'admin', 'U_OWNER');
 
     expect(mockExecute).toHaveBeenCalled();
   });
@@ -279,7 +281,7 @@ describe('addAgentAdmin', () => {
 
     mockExecute.mockResolvedValueOnce(undefined);
 
-    await addAgentAdmin('agent_1', 'U_NEW', 'admin', 'U_ADMIN');
+    await addAgentAdmin(TEST_WORKSPACE_ID, 'agent_1', 'U_NEW', 'admin', 'U_ADMIN');
 
     expect(mockExecute).toHaveBeenCalled();
   });
@@ -293,7 +295,7 @@ describe('addAgentAdmin', () => {
     mockQueryOne.mockResolvedValueOnce({ created_by: 'U_OTHER' });
 
     await expect(
-      addAgentAdmin('agent_1', 'U_NEW', 'admin', 'U_MEMBER')
+      addAgentAdmin(TEST_WORKSPACE_ID, 'agent_1', 'U_NEW', 'admin', 'U_MEMBER')
     ).rejects.toThrow('Insufficient permissions to add agent admin');
     expect(mockExecute).not.toHaveBeenCalled();
   });
@@ -302,7 +304,7 @@ describe('addAgentAdmin', () => {
     mockQueryOne.mockResolvedValueOnce({ user_id: 'U_SUPER' }); // is superadmin
     mockExecute.mockResolvedValueOnce(undefined);
 
-    await addAgentAdmin('agent_1', 'U_EXISTING', 'owner', 'U_SUPER');
+    await addAgentAdmin(TEST_WORKSPACE_ID, 'agent_1', 'U_EXISTING', 'owner', 'U_SUPER');
 
     expect(mockExecute).toHaveBeenCalledWith(
       expect.stringContaining('ON CONFLICT (agent_id, user_id) DO UPDATE'),
@@ -319,7 +321,7 @@ describe('removeAgentAdmin', () => {
     mockQueryOne.mockResolvedValueOnce({ user_id: 'U_SUPER' });
     mockExecute.mockResolvedValueOnce(undefined);
 
-    await removeAgentAdmin('agent_1', 'U_TARGET', 'U_SUPER');
+    await removeAgentAdmin(TEST_WORKSPACE_ID, 'agent_1', 'U_TARGET', 'U_SUPER');
 
     expect(mockExecute).toHaveBeenCalledWith(
       'DELETE FROM agent_admins WHERE agent_id = $1 AND user_id = $2',
@@ -334,7 +336,7 @@ describe('removeAgentAdmin', () => {
     mockQueryOne.mockResolvedValueOnce({ role: 'owner' });
     mockExecute.mockResolvedValueOnce(undefined);
 
-    await removeAgentAdmin('agent_1', 'U_ADMIN', 'U_OWNER');
+    await removeAgentAdmin(TEST_WORKSPACE_ID, 'agent_1', 'U_ADMIN', 'U_OWNER');
 
     expect(mockExecute).toHaveBeenCalledWith(
       'DELETE FROM agent_admins WHERE agent_id = $1 AND user_id = $2',
@@ -351,7 +353,7 @@ describe('removeAgentAdmin', () => {
     mockQueryOne.mockResolvedValueOnce({ created_by: 'U_OTHER' });
 
     await expect(
-      removeAgentAdmin('agent_1', 'U_TARGET', 'U_MEMBER')
+      removeAgentAdmin(TEST_WORKSPACE_ID, 'agent_1', 'U_TARGET', 'U_MEMBER')
     ).rejects.toThrow('Insufficient permissions to remove agent admin');
     expect(mockExecute).not.toHaveBeenCalled();
   });
@@ -367,7 +369,7 @@ describe('getAgentAdmins', () => {
     ];
     mockQuery.mockResolvedValueOnce(admins);
 
-    const result = await getAgentAdmins('agent_1');
+    const result = await getAgentAdmins(TEST_WORKSPACE_ID, 'agent_1');
 
     expect(result).toEqual(admins);
     expect(mockQuery).toHaveBeenCalledWith(
@@ -379,7 +381,7 @@ describe('getAgentAdmins', () => {
   it('should return an empty array when agent has no admins', async () => {
     mockQuery.mockResolvedValueOnce([]);
 
-    const result = await getAgentAdmins('agent_nonexistent');
+    const result = await getAgentAdmins(TEST_WORKSPACE_ID, 'agent_nonexistent');
 
     expect(result).toEqual([]);
   });
@@ -391,7 +393,7 @@ describe('getUserRole', () => {
   it('should return superadmin if user is a superadmin', async () => {
     mockQueryOne.mockResolvedValueOnce({ user_id: 'U_SUPER' }); // isSuperadmin
 
-    const role = await getUserRole('agent_1', 'U_SUPER');
+    const role = await getUserRole(TEST_WORKSPACE_ID, 'agent_1', 'U_SUPER');
 
     expect(role).toBe('superadmin');
     // Should not query agent_admins when user is superadmin
@@ -402,7 +404,7 @@ describe('getUserRole', () => {
     mockQueryOne.mockResolvedValueOnce(null); // not superadmin
     mockQueryOne.mockResolvedValueOnce({ role: 'owner' }); // agent_admins
 
-    const role = await getUserRole('agent_1', 'U_OWNER');
+    const role = await getUserRole(TEST_WORKSPACE_ID, 'agent_1', 'U_OWNER');
 
     expect(role).toBe('owner');
   });
@@ -411,7 +413,7 @@ describe('getUserRole', () => {
     mockQueryOne.mockResolvedValueOnce(null); // not superadmin
     mockQueryOne.mockResolvedValueOnce({ role: 'admin' }); // agent_admins
 
-    const role = await getUserRole('agent_1', 'U_ADMIN');
+    const role = await getUserRole(TEST_WORKSPACE_ID, 'agent_1', 'U_ADMIN');
 
     expect(role).toBe('admin');
   });
@@ -421,7 +423,7 @@ describe('getUserRole', () => {
     mockQueryOne.mockResolvedValueOnce(null); // not in agent_admins
     mockQueryOne.mockResolvedValueOnce({ created_by: 'U_CREATOR' }); // different creator
 
-    const role = await getUserRole('agent_1', 'U_NOBODY');
+    const role = await getUserRole(TEST_WORKSPACE_ID, 'agent_1', 'U_NOBODY');
 
     expect(role).toBe('member');
   });
@@ -431,7 +433,7 @@ describe('getUserRole', () => {
     mockQueryOne.mockResolvedValueOnce(null); // not in agent_admins
     mockQueryOne.mockResolvedValueOnce({ created_by: 'U_CREATOR' }); // user IS the creator
 
-    const role = await getUserRole('agent_1', 'U_CREATOR');
+    const role = await getUserRole(TEST_WORKSPACE_ID, 'agent_1', 'U_CREATOR');
 
     expect(role).toBe('owner');
   });
@@ -441,7 +443,7 @@ describe('getUserRole', () => {
     mockQueryOne.mockResolvedValueOnce(null); // not in agent_admins
     mockQueryOne.mockResolvedValueOnce(null); // agent not found or no created_by
 
-    const role = await getUserRole('agent_1', 'U_NOBODY');
+    const role = await getUserRole(TEST_WORKSPACE_ID, 'agent_1', 'U_NOBODY');
 
     expect(role).toBe('member');
   });
@@ -451,7 +453,7 @@ describe('getUserRole', () => {
     mockQueryOne.mockResolvedValueOnce({ role: 'viewer' }); // unexpected role
     mockQueryOne.mockResolvedValueOnce({ created_by: 'U_OTHER' }); // different creator
 
-    const role = await getUserRole('agent_1', 'U_VIEWER');
+    const role = await getUserRole(TEST_WORKSPACE_ID, 'agent_1', 'U_VIEWER');
 
     expect(role).toBe('member');
   });
@@ -461,7 +463,7 @@ describe('getUserRole', () => {
     mockQueryOne.mockResolvedValueOnce(null); // not in agent_admins
     mockQueryOne.mockResolvedValueOnce({ created_by: 'U_OTHER' }); // not the creator
 
-    await getUserRole('agent_42', 'U_123');
+    await getUserRole(TEST_WORKSPACE_ID, 'agent_42', 'U_123');
 
     expect(mockQueryOne).toHaveBeenCalledWith(
       'SELECT role FROM agent_admins WHERE agent_id = $1 AND user_id = $2',
@@ -476,7 +478,7 @@ describe('canModifyAgent', () => {
   it('should return true for superadmin', async () => {
     mockQueryOne.mockResolvedValueOnce({ user_id: 'U_SUPER' });
 
-    const result = await canModifyAgent('agent_1', 'U_SUPER');
+    const result = await canModifyAgent(TEST_WORKSPACE_ID, 'agent_1', 'U_SUPER');
 
     expect(result).toBe(true);
   });
@@ -485,7 +487,7 @@ describe('canModifyAgent', () => {
     mockQueryOne.mockResolvedValueOnce(null); // not superadmin
     mockQueryOne.mockResolvedValueOnce({ role: 'owner' });
 
-    const result = await canModifyAgent('agent_1', 'U_OWNER');
+    const result = await canModifyAgent(TEST_WORKSPACE_ID, 'agent_1', 'U_OWNER');
 
     expect(result).toBe(true);
   });
@@ -494,7 +496,7 @@ describe('canModifyAgent', () => {
     mockQueryOne.mockResolvedValueOnce(null); // not superadmin
     mockQueryOne.mockResolvedValueOnce({ role: 'admin' });
 
-    const result = await canModifyAgent('agent_1', 'U_ADMIN');
+    const result = await canModifyAgent(TEST_WORKSPACE_ID, 'agent_1', 'U_ADMIN');
 
     expect(result).toBe(true);
   });
@@ -504,7 +506,7 @@ describe('canModifyAgent', () => {
     mockQueryOne.mockResolvedValueOnce(null); // not in agent_admins
     mockQueryOne.mockResolvedValueOnce({ created_by: 'U_OTHER' }); // not the creator
 
-    const result = await canModifyAgent('agent_1', 'U_MEMBER');
+    const result = await canModifyAgent(TEST_WORKSPACE_ID, 'agent_1', 'U_MEMBER');
 
     expect(result).toBe(false);
   });
@@ -516,7 +518,7 @@ describe('canSendTask', () => {
   it('should return true for public agents', async () => {
     // canAccessAgent checks agent visibility — public agents are accessible to all
     mockQueryOne.mockResolvedValueOnce({ id: 'agent_1', visibility: 'public', tools: '[]', relevance_keywords: '[]', channel_ids: ['C1'] });
-    const result = await canSendTask('agent_1', 'U_ANYONE');
+    const result = await canSendTask(TEST_WORKSPACE_ID, 'agent_1', 'U_ANYONE');
 
     expect(result).toBe(true);
   });
@@ -526,7 +528,7 @@ describe('canSendTask', () => {
     mockQueryOne.mockResolvedValueOnce(null); // not superadmin
     mockQueryOne.mockResolvedValueOnce(null); // not agent admin
     mockQueryOne.mockResolvedValueOnce({ user_id: 'U_MEMBER' }); // is member
-    const result = await canSendTask('agent_1', 'U_MEMBER');
+    const result = await canSendTask(TEST_WORKSPACE_ID, 'agent_1', 'U_MEMBER');
 
     expect(result).toBe(true);
   });

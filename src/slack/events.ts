@@ -10,7 +10,7 @@ import { checkMessageRelevance } from '../modules/agents/goal-analyzer';
 import { findSlackChannelTriggers, fireTrigger } from '../modules/triggers';
 import { buildDashboardBlocks } from '../modules/dashboard';
 import { initSuperadmin } from '../modules/access-control';
-import { queryOne } from '../db';
+import { queryOne, getDefaultWorkspaceId } from '../db';
 import type { JobData, ModelAlias } from '../types';
 import { logger } from '../utils/logger';
 
@@ -34,8 +34,9 @@ async function getOwnBotIdentity(): Promise<void> {
 
 export function registerEvents(app: App): void {
   // ── Message Events ──
-  app.event('message', async ({ event, client }) => {
+  app.event('message', async ({ event, client, context }) => {
     try {
+    const workspaceId = context.teamId || getDefaultWorkspaceId();
     const msg = event as any;
 
     logger.info('Message event received', {
@@ -89,7 +90,7 @@ export function registerEvents(app: App): void {
     // Check if this is a thread reply to a conversational /new-agent or /update-agent flow
     if (msg.thread_ts) {
       try {
-        const handled = await handleConversationReply(userId, channelId, msg.thread_ts, text);
+        const handled = await handleConversationReply(workspaceId, userId, channelId, msg.thread_ts, text);
         if (handled) {
           logger.info('Thread reply handled by conversation flow', { threadTs: msg.thread_ts });
           return;
@@ -122,12 +123,12 @@ export function registerEvents(app: App): void {
     }
 
     // Check if message is in an agent channel (supports multiple agents per channel)
-    const allAgents = await getAgentsByChannel(channelId);
+    const allAgents = await getAgentsByChannel(workspaceId, channelId);
     // Filter out private agents the user doesn't have access to
     const agentAccessResults = await Promise.all(
       allAgents.map(async (a) => {
         if (a.visibility !== 'private') return true;
-        return canAccessAgent(a.id, userId);
+        return canAccessAgent(workspaceId, a.id, userId);
       })
     );
     const agents = allAgents.filter((_, i) => agentAccessResults[i]);
@@ -153,7 +154,7 @@ export function registerEvents(app: App): void {
       const candidateAgents = agents;
 
       if (candidateAgents.length === 1) {
-        await enqueueAgentRun(candidateAgents[0], cleanInput, channelId, threadTs, userId, modelOverride, msg, isThreadReply);
+        await enqueueAgentRun(workspaceId, candidateAgents[0], cleanInput, channelId, threadTs, userId, modelOverride, msg, isThreadReply);
         return;
       }
 
@@ -174,7 +175,7 @@ export function registerEvents(app: App): void {
       const matches = relevanceResults.filter(r => r.relevant);
 
       if (matches.length === 1) {
-        await enqueueAgentRun(matches[0].agent, cleanInput, channelId, threadTs, userId, modelOverride, msg, isThreadReply);
+        await enqueueAgentRun(workspaceId, matches[0].agent, cleanInput, channelId, threadTs, userId, modelOverride, msg, isThreadReply);
         return;
       }
 
@@ -196,7 +197,7 @@ export function registerEvents(app: App): void {
 
     if (agents.length > 0) {
       // Handle interactive agent-channel commands (use first agent for channel-level commands)
-      const interactiveResult = await handleAgentChannelCommand(text, agents[0], channelId, userId, threadTs);
+      const interactiveResult = await handleAgentChannelCommand(workspaceId, text, agents[0], channelId, userId, threadTs);
       if (interactiveResult) return;
 
       // Check for model override
@@ -261,6 +262,7 @@ export function registerEvents(app: App): void {
         }
 
         const jobData: JobData = {
+          workspaceId,
           agentId: agent.id,
           channelId,
           threadTs,
@@ -306,7 +308,7 @@ export function registerEvents(app: App): void {
 
     // ── DM handling (superadmin commands + agent routing) ──
     if (msg.channel_type === 'im') {
-      await initSuperadmin(userId);
+      await initSuperadmin(workspaceId, userId);
 
       // Handle superadmin commands via DM
       const lower = text.toLowerCase();
@@ -315,7 +317,7 @@ export function registerEvents(app: App): void {
         const match = text.match(/add\s+<@(\w+)>\s+as\s+superadmin/i);
         if (match) {
           try {
-            await addSuperadmin(match[1], userId);
+            await addSuperadmin(workspaceId, match[1], userId);
             await postMessage(channelId, `:white_check_mark: <@${match[1]}> added as superadmin`);
           } catch (err: any) {
             await postMessage(channelId, `:x: ${err.message}`);
@@ -326,13 +328,13 @@ export function registerEvents(app: App): void {
 
       // Thread reply: route to existing DM conversation
       if (msg.thread_ts) {
-        const dmConv = await getDmConversation(channelId, msg.thread_ts);
+        const dmConv = await getDmConversation(workspaceId, channelId, msg.thread_ts);
         if (dmConv) {
           const { getAgent } = await import('../modules/agents');
-          const agent = await getAgent(dmConv.agent_id);
+          const agent = await getAgent(workspaceId, dmConv.agent_id);
           if (agent && agent.status === 'active') {
-            await touchDmConversation(channelId, msg.thread_ts);
-            await routeDmToAgent(agent, text, userId, channelId, msg.thread_ts);
+            await touchDmConversation(workspaceId, channelId, msg.thread_ts);
+            await routeDmToAgent(workspaceId, agent, text, userId, channelId, msg.thread_ts);
             return;
           }
         }
@@ -350,7 +352,7 @@ export function registerEvents(app: App): void {
 
       // New DM message: smart-route to an agent
       try {
-        const accessible = await getAccessibleAgents(userId);
+        const accessible = await getAccessibleAgents(workspaceId, userId);
         const activeAgents = accessible.filter(a => a.status === 'active');
 
         if (activeAgents.length === 0) {
@@ -366,8 +368,8 @@ export function registerEvents(app: App): void {
             `${agent.name} is on it...`,
           );
           const replyThreadTs = statusTs || msg.ts;
-          await createDmConversation(userId, agent.id, channelId, replyThreadTs);
-          await routeDmToAgent(agent, text, userId, channelId, replyThreadTs);
+          await createDmConversation(workspaceId, userId, agent.id, channelId, replyThreadTs);
+          await routeDmToAgent(workspaceId, agent, text, userId, channelId, replyThreadTs);
           return;
         }
 
@@ -395,8 +397,8 @@ export function registerEvents(app: App): void {
             `${agent.name} is on it...`,
           );
           const replyThreadTs = statusTs || msg.ts;
-          await createDmConversation(userId, agent.id, channelId, replyThreadTs);
-          await routeDmToAgent(agent, text, userId, channelId, replyThreadTs);
+          await createDmConversation(workspaceId, userId, agent.id, channelId, replyThreadTs);
+          await routeDmToAgent(workspaceId, agent, text, userId, channelId, replyThreadTs);
           return;
         }
 
@@ -422,9 +424,9 @@ export function registerEvents(app: App): void {
     }
 
     // Check for Slack channel triggers
-    const triggers = await findSlackChannelTriggers(channelId);
+    const triggers = await findSlackChannelTriggers(workspaceId, channelId);
     for (const trigger of triggers) {
-      await fireTrigger({
+      await fireTrigger(workspaceId, {
         triggerId: trigger.id,
         idempotencyKey: `slack:${channelId}:${msg.ts}`,
         payload: { text, user: userId, channel: channelId, ts: msg.ts },
@@ -438,9 +440,10 @@ export function registerEvents(app: App): void {
   });
 
   // ── File Upload for KB ──
-  app.event('file_shared' as any, async ({ event }: any) => {
+  app.event('file_shared' as any, async ({ event, context }: any) => {
+    const workspaceId = context?.teamId || getDefaultWorkspaceId();
     const channelId = event.channel_id;
-    const agent = await getAgentByChannel(channelId);
+    const agent = await getAgentByChannel(workspaceId, channelId);
     if (!agent) return;
 
     try {
@@ -465,9 +468,10 @@ export function registerEvents(app: App): void {
       const payload = JSON.parse(action.value);
       const { agentId, originalText, dmChannelId } = payload;
       const userId = body.user.id;
+      const workspaceId = body.team?.id || getDefaultWorkspaceId();
 
       const { getAgent } = await import('../modules/agents');
-      const agent = await getAgent(agentId);
+      const agent = await getAgent(workspaceId, agentId);
       if (!agent || agent.status !== 'active') {
         await postMessage(dmChannelId, ':x: Agent not available.');
         return;
@@ -479,8 +483,8 @@ export function registerEvents(app: App): void {
         `${agent.name} is on it...`,
       );
       const replyThreadTs = statusTs || body.message?.ts || Date.now().toString();
-      await createDmConversation(userId, agentId, dmChannelId, replyThreadTs);
-      await routeDmToAgent(agent, originalText, userId, dmChannelId, replyThreadTs);
+      await createDmConversation(workspaceId, userId, agentId, dmChannelId, replyThreadTs);
+      await routeDmToAgent(workspaceId, agent, originalText, userId, dmChannelId, replyThreadTs);
     } catch (err: any) {
       logger.error('DM agent pick failed', { error: err.message });
     }
@@ -493,9 +497,10 @@ export function registerEvents(app: App): void {
       const payload = JSON.parse(action.value);
       const { agentId, originalText, channelId, threadTs } = payload;
       const userId = body.user.id;
+      const workspaceId = body.team?.id || getDefaultWorkspaceId();
 
       const { getAgent } = await import('../modules/agents');
-      const agent = await getAgent(agentId);
+      const agent = await getAgent(workspaceId, agentId);
       if (!agent || agent.status !== 'active') {
         await postMessage(channelId, ':x: Agent not available.', threadTs);
         return;
@@ -518,6 +523,7 @@ export function registerEvents(app: App): void {
       }
 
       const jobData: JobData = {
+        workspaceId,
         agentId: agent.id,
         channelId,
         threadTs,
@@ -548,8 +554,9 @@ export function registerEvents(app: App): void {
   });
 
   // ── App Home Opened ──
-  app.event('app_home_opened', async ({ event }) => {
-    const blocks = await buildDashboardBlocks();
+  app.event('app_home_opened', async ({ event, context }) => {
+    const workspaceId = context.teamId || getDefaultWorkspaceId();
+    const blocks = await buildDashboardBlocks(workspaceId);
     await publishHomeTab(event.user, blocks);
   });
 }
@@ -557,6 +564,7 @@ export function registerEvents(app: App): void {
 // ── Channel Agent Enqueue Helper ──
 
 async function enqueueAgentRun(
+  workspaceId: string,
   agent: any,
   cleanInput: string,
   channelId: string,
@@ -578,6 +586,7 @@ async function enqueueAgentRun(
   }
 
   const jobData: JobData = {
+    workspaceId,
     agentId: agent.id,
     channelId,
     threadTs,
@@ -621,7 +630,7 @@ async function enqueueAgentRun(
 
 // ── DM-to-Agent Routing ──
 
-async function routeDmToAgent(agent: any, text: string, userId: string, dmChannelId: string, threadTs: string): Promise<void> {
+async function routeDmToAgent(workspaceId: string, agent: any, text: string, userId: string, dmChannelId: string, threadTs: string): Promise<void> {
   const traceId = uuid();
 
   // Fetch thread history for context in follow-up messages
@@ -632,6 +641,7 @@ async function routeDmToAgent(agent: any, text: string, userId: string, dmChanne
   }
 
   const jobData: JobData = {
+    workspaceId,
     agentId: agent.id,
     channelId: dmChannelId,
     threadTs,
@@ -664,6 +674,7 @@ async function routeDmToAgent(agent: any, text: string, userId: string, dmChanne
 // ── Interactive Agent Channel Commands ──
 
 async function handleAgentChannelCommand(
+  workspaceId: string,
   text: string,
   agent: any,
   channelId: string,
@@ -684,7 +695,7 @@ async function handleAgentChannelCommand(
         await postMessage(channelId, ':x: Invalid GitHub URL. Use format: `connect to owner/repo`', threadTs);
         return true;
       }
-      const source = await connectSource({
+      const source = await connectSource(workspaceId, {
         agentId: agent.id,
         sourceType: 'github',
         uri: `https://github.com/${parsed.owner}/${parsed.repo}`,
@@ -721,7 +732,7 @@ async function handleAgentChannelCommand(
         await postMessage(channelId, ':x: Invalid Google Drive URL.', threadTs);
         return true;
       }
-      const source = await connectSource({
+      const source = await connectSource(workspaceId, {
         agentId: agent.id,
         sourceType: 'google_drive',
         uri,
@@ -764,7 +775,7 @@ async function handleAgentChannelCommand(
         triggerConfig = { channel_id: channelId, description };
       }
 
-      const trigger = await createTrigger({
+      const trigger = await createTrigger(workspaceId, {
         agentId: agent.id,
         triggerType,
         config: triggerConfig,
@@ -791,7 +802,7 @@ async function handleAgentChannelCommand(
       const skillName = skillMatch[1];
       const permLevel = (skillMatch[2] as any) || 'read';
 
-      const agentSkill = await attachSkillToAgent(agent.id, skillName, permLevel, userId);
+      const agentSkill = await attachSkillToAgent(workspaceId, agent.id, skillName, permLevel, userId);
       await postMessage(
         channelId,
         `:jigsaw: Skill *${skillName}* attached with \`${permLevel}\` permissions.`,
@@ -809,12 +820,12 @@ async function handleAgentChannelCommand(
   if (addMemberMatch) {
     try {
       const { canModifyAgent } = await import('../modules/access-control');
-      if (!(await canModifyAgent(agent.id, userId))) {
+      if (!(await canModifyAgent(workspaceId, agent.id, userId))) {
         await postMessage(channelId, ':x: You don\'t have permission to manage members.', threadTs);
         return true;
       }
       const { addAgentMember } = await import('../modules/agents');
-      await addAgentMember(agent.id, addMemberMatch[1], userId);
+      await addAgentMember(workspaceId, agent.id, addMemberMatch[1], userId);
       await postMessage(channelId, `:white_check_mark: <@${addMemberMatch[1]}> added as a member of *${agent.name}*`, threadTs);
       return true;
     } catch (err: any) {
@@ -826,12 +837,12 @@ async function handleAgentChannelCommand(
   if (removeMemberMatch) {
     try {
       const { canModifyAgent } = await import('../modules/access-control');
-      if (!(await canModifyAgent(agent.id, userId))) {
+      if (!(await canModifyAgent(workspaceId, agent.id, userId))) {
         await postMessage(channelId, ':x: You don\'t have permission to manage members.', threadTs);
         return true;
       }
       const { removeAgentMember } = await import('../modules/agents');
-      await removeAgentMember(agent.id, removeMemberMatch[1]);
+      await removeAgentMember(workspaceId, agent.id, removeMemberMatch[1]);
       await postMessage(channelId, `:white_check_mark: <@${removeMemberMatch[1]}> removed from *${agent.name}*`, threadTs);
       return true;
     } catch (err: any) {
@@ -845,7 +856,7 @@ async function handleAgentChannelCommand(
   if (adminMatch) {
     try {
       const { addAgentAdmin } = await import('../modules/access-control');
-      await addAgentAdmin(agent.id, adminMatch[1], 'admin', userId);
+      await addAgentAdmin(workspaceId, agent.id, adminMatch[1], 'admin', userId);
       await postMessage(channelId, `:white_check_mark: <@${adminMatch[1]}> is now an admin of *${agent.name}*`, threadTs);
       return true;
     } catch (err: any) {
@@ -859,7 +870,7 @@ async function handleAgentChannelCommand(
   if (forgetMatch && agent.memory_enabled) {
     try {
       const { forgetMemory } = await import('../modules/sources/memory');
-      const count = await forgetMemory(agent.id, forgetMatch[1]);
+      const count = await forgetMemory(workspaceId, agent.id, forgetMatch[1]);
       await postMessage(
         channelId,
         count > 0
@@ -901,7 +912,7 @@ async function handleAgentChannelCommand(
   if (approveToolMatch) {
     try {
       const { approveCustomTool } = await import('../modules/tools');
-      await approveCustomTool(approveToolMatch[1], userId);
+      await approveCustomTool(workspaceId, approveToolMatch[1], userId);
       await postMessage(channelId, `:white_check_mark: Tool *${approveToolMatch[1]}* approved.`, threadTs);
       return true;
     } catch (err: any) {
@@ -915,7 +926,7 @@ async function handleAgentChannelCommand(
   if (shareToolMatch) {
     try {
       const { shareToolWithAgent } = await import('../modules/self-authoring');
-      await shareToolWithAgent(shareToolMatch[1], agent.id, shareToolMatch[2]);
+      await shareToolWithAgent(workspaceId, shareToolMatch[1], agent.id, shareToolMatch[2]);
       await postMessage(channelId, `:handshake: Tool *${shareToolMatch[1]}* shared with *${shareToolMatch[2]}*.`, threadTs);
       return true;
     } catch (err: any) {
@@ -929,7 +940,7 @@ async function handleAgentChannelCommand(
   if (rollbackMatch) {
     try {
       const { rollbackTool } = await import('../modules/self-authoring');
-      await rollbackTool(rollbackMatch[1], parseInt(rollbackMatch[2], 10), userId);
+      await rollbackTool(workspaceId, rollbackMatch[1], parseInt(rollbackMatch[2], 10), userId);
       await postMessage(channelId, `:rewind: Tool *${rollbackMatch[1]}* rolled back to version ${rollbackMatch[2]}.`, threadTs);
       return true;
     } catch (err: any) {
@@ -942,7 +953,7 @@ async function handleAgentChannelCommand(
   if (lower === 'tool stats' || lower === 'tool analytics') {
     try {
       const { getAllToolAnalytics } = await import('../modules/self-authoring');
-      const analytics = await getAllToolAnalytics(agent.id);
+      const analytics = await getAllToolAnalytics(workspaceId, agent.id);
       if (analytics.length === 0) {
         await postMessage(channelId, ':bar_chart: No tool usage data yet.', threadTs);
         return true;
@@ -965,7 +976,7 @@ async function handleAgentChannelCommand(
   if (versionsMatch) {
     try {
       const { getToolVersions } = await import('../modules/self-authoring');
-      const versions = await getToolVersions(versionsMatch[1]);
+      const versions = await getToolVersions(workspaceId, versionsMatch[1]);
       if (versions.length === 0) {
         await postMessage(channelId, `:file_folder: No version history for *${versionsMatch[1]}*.`, threadTs);
         return true;
@@ -987,7 +998,7 @@ async function handleAgentChannelCommand(
   if (findToolMatch) {
     try {
       const { discoverTools } = await import('../modules/self-authoring');
-      const tools = await discoverTools(findToolMatch[1]);
+      const tools = await discoverTools(workspaceId, findToolMatch[1]);
       if (tools.length === 0) {
         await postMessage(channelId, `:mag: No tools found matching "${findToolMatch[1]}".`, threadTs);
         return true;
@@ -1010,10 +1021,10 @@ async function handleAgentChannelCommand(
       const { getAgentToolSummary } = await import('../modules/tools');
       const { getAuthoredSkills, getMcpConfigs, getCodeArtifacts } = await import('../modules/self-authoring');
 
-      const summary = await getAgentToolSummary(agent.id);
-      const authored = await getAuthoredSkills(agent.id);
-      const mcpConfigs = await getMcpConfigs(agent.id);
-      const artifacts = await getCodeArtifacts(agent.id);
+      const summary = await getAgentToolSummary(workspaceId, agent.id);
+      const authored = await getAuthoredSkills(workspaceId, agent.id);
+      const mcpConfigs = await getMcpConfigs(workspaceId, agent.id);
+      const artifacts = await getCodeArtifacts(workspaceId, agent.id);
 
       const lines = [
         `:toolbox: *Capabilities for ${agent.name}*`,

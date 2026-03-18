@@ -24,6 +24,8 @@ import { buildDashboardBlocks, getMetrics } from '../../src/modules/dashboard';
 import { listAgents } from '../../src/modules/agents';
 import { getRecentRuns } from '../../src/modules/execution';
 
+const TEST_WORKSPACE_ID = 'W_TEST_123';
+
 // ── Helpers ──
 
 function makeAgent(overrides: Partial<Record<string, any>> = {}) {
@@ -78,7 +80,7 @@ describe('getMetrics', () => {
       .mockResolvedValueOnce([]) // runsByAgent
       .mockResolvedValueOnce([]); // waits
 
-    const m = await getMetrics(30);
+    const m = await getMetrics(TEST_WORKSPACE_ID, 30);
 
     expect(m.totalRuns).toBe(0);
     expect(m.totalTokens).toBe(0);
@@ -113,7 +115,7 @@ describe('getMetrics', () => {
       .mockResolvedValueOnce([]) // runsByAgent
       .mockResolvedValueOnce([]); // waits
 
-    const m = await getMetrics(7);
+    const m = await getMetrics(TEST_WORKSPACE_ID, 7);
 
     expect(m.totalRuns).toBe(100);
     expect(m.totalTokens).toBe(50000);
@@ -136,7 +138,7 @@ describe('getMetrics', () => {
       .mockResolvedValueOnce([]) // runsByAgent
       .mockResolvedValueOnce([]); // waits
 
-    const m = await getMetrics(30);
+    const m = await getMetrics(TEST_WORKSPACE_ID, 30);
 
     // percentile: idx = ceil(p/100 * n) - 1
     // p50: ceil(0.5*10)-1 = 4 => durations[4] = 500
@@ -156,7 +158,7 @@ describe('getMetrics', () => {
       .mockResolvedValueOnce([]) // runsByAgent
       .mockResolvedValueOnce([]); // waits
 
-    const m = await getMetrics(30);
+    const m = await getMetrics(TEST_WORKSPACE_ID, 30);
 
     expect(m.p50DurationMs).toBe(777);
     expect(m.p95DurationMs).toBe(777);
@@ -181,7 +183,7 @@ describe('getMetrics', () => {
       ]) // runsByAgent
       .mockResolvedValueOnce([]); // waits
 
-    const m = await getMetrics(30);
+    const m = await getMetrics(TEST_WORKSPACE_ID, 30);
 
     expect(m.tokensByAgent).toEqual({ a1: 10000, a2: 5000 });
     expect(m.tokensByModel).toEqual({ sonnet: 12000, haiku: 3000 });
@@ -202,7 +204,7 @@ describe('getMetrics', () => {
       .mockResolvedValueOnce([]) // runsByAgent
       .mockResolvedValueOnce(waits); // waits
 
-    const m = await getMetrics(30);
+    const m = await getMetrics(TEST_WORKSPACE_ID, 30);
 
     // p50: ceil(0.5*10)-1 = 4 => waits[4] = 50
     expect(m.queueWaitP50Ms).toBe(50);
@@ -220,7 +222,7 @@ describe('getMetrics', () => {
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([]);
 
-    await getMetrics(7);
+    await getMetrics(TEST_WORKSPACE_ID, 7);
 
     // queryOne called once (stats), query called 5 times
     expect(mockQueryOne).toHaveBeenCalledTimes(1);
@@ -243,7 +245,7 @@ describe('getMetrics', () => {
       .mockResolvedValueOnce([])
       .mockResolvedValueOnce([]);
 
-    const m = await getMetrics(30);
+    const m = await getMetrics(TEST_WORKSPACE_ID, 30);
 
     expect(m.totalRuns).toBe(0);
     expect(m.totalTokens).toBe(0);
@@ -270,13 +272,13 @@ describe('buildDashboardBlocks', () => {
   });
 
   it('should return an array of blocks', async () => {
-    const blocks = await buildDashboardBlocks();
+    const blocks = await buildDashboardBlocks(TEST_WORKSPACE_ID);
     expect(Array.isArray(blocks)).toBe(true);
     expect(blocks.length).toBeGreaterThan(0);
   });
 
   it('should include a header block with version number', async () => {
-    const blocks = await buildDashboardBlocks();
+    const blocks = await buildDashboardBlocks(TEST_WORKSPACE_ID);
     const header = blocks.find(
       (b) => b.type === 'header' && b.text?.text?.includes('TinyHands Dashboard') && b.text?.text?.includes('v'),
     );
@@ -285,14 +287,14 @@ describe('buildDashboardBlocks', () => {
   });
 
   it('should include divider blocks', async () => {
-    const blocks = await buildDashboardBlocks();
+    const blocks = await buildDashboardBlocks(TEST_WORKSPACE_ID);
     const dividers = blocks.filter((b) => b.type === 'divider');
     // Header, Usage Snapshot, Power Users, Agent Creators, Popular Agents, Agent Fleet = 6 dividers
     expect(dividers.length).toBeGreaterThanOrEqual(6);
   });
 
   it('should show "No recent runs" when there are no runs', async () => {
-    const blocks = await buildDashboardBlocks();
+    const blocks = await buildDashboardBlocks(TEST_WORKSPACE_ID);
     const noRuns = blocks.find(
       (b) =>
         b.type === 'context' &&
@@ -305,7 +307,7 @@ describe('buildDashboardBlocks', () => {
     const agents = [makeAgent({ name: 'Alpha' }), makeAgent({ name: 'Beta', id: 'agent-002' })];
     vi.mocked(listAgents).mockResolvedValueOnce(agents as any);
 
-    const blocks = await buildDashboardBlocks();
+    const blocks = await buildDashboardBlocks(TEST_WORKSPACE_ID);
     const fleetHeader = blocks.find(
       (b) => b.type === 'section' && b.text?.text?.includes('Agent Fleet') && b.text.text.includes('2 agents'),
     );
@@ -316,7 +318,7 @@ describe('buildDashboardBlocks', () => {
     const agents = [makeAgent({ name: 'MyBot', avatar_emoji: ':star:' })];
     vi.mocked(listAgents).mockResolvedValueOnce(agents as any);
 
-    const blocks = await buildDashboardBlocks();
+    const blocks = await buildDashboardBlocks(TEST_WORKSPACE_ID);
     const agentBlock = blocks.find(
       (b) => b.type === 'section' && b.text?.text?.includes('MyBot'),
     );
@@ -331,7 +333,7 @@ describe('buildDashboardBlocks', () => {
     );
     vi.mocked(listAgents).mockResolvedValueOnce(agents as any);
 
-    const blocks = await buildDashboardBlocks();
+    const blocks = await buildDashboardBlocks(TEST_WORKSPACE_ID);
 
     // Should see context block with "...and 2 more agents"
     const moreBlock = blocks.find(
@@ -354,7 +356,7 @@ describe('buildDashboardBlocks', () => {
     );
     vi.mocked(listAgents).mockResolvedValueOnce(agents as any);
 
-    const blocks = await buildDashboardBlocks();
+    const blocks = await buildDashboardBlocks(TEST_WORKSPACE_ID);
 
     const moreBlock = blocks.find(
       (b) =>
@@ -372,7 +374,7 @@ describe('buildDashboardBlocks', () => {
     ];
     vi.mocked(getRecentRuns).mockResolvedValueOnce(runs as any);
 
-    const blocks = await buildDashboardBlocks();
+    const blocks = await buildDashboardBlocks(TEST_WORKSPACE_ID);
 
     const contextBlocks = blocks.filter(
       (b) => b.type === 'context' && b.elements?.some((e: any) => e.text?.includes('`')),
@@ -388,7 +390,7 @@ describe('buildDashboardBlocks', () => {
     const runs = [makeRun({ duration_ms: 2345, estimated_cost_usd: 0.1234 })];
     vi.mocked(getRecentRuns).mockResolvedValueOnce(runs as any);
 
-    const blocks = await buildDashboardBlocks();
+    const blocks = await buildDashboardBlocks(TEST_WORKSPACE_ID);
     const runBlock = blocks.find(
       (b) =>
         b.type === 'context' &&
@@ -401,7 +403,7 @@ describe('buildDashboardBlocks', () => {
     const runs = [makeRun({ duration_ms: null, estimated_cost_usd: null })];
     vi.mocked(getRecentRuns).mockResolvedValueOnce(runs as any);
 
-    const blocks = await buildDashboardBlocks();
+    const blocks = await buildDashboardBlocks(TEST_WORKSPACE_ID);
     const runBlock = blocks.find(
       (b) =>
         b.type === 'context' &&
@@ -423,7 +425,7 @@ describe('buildDashboardBlocks', () => {
       }),
     );
 
-    const blocks = await buildDashboardBlocks();
+    const blocks = await buildDashboardBlocks(TEST_WORKSPACE_ID);
     const usageBlock = blocks.find(
       (b) =>
         b.type === 'section' &&
@@ -440,7 +442,7 @@ describe('buildDashboardBlocks', () => {
   });
 
   it('should show "No user activity yet" when no power users', async () => {
-    const blocks = await buildDashboardBlocks();
+    const blocks = await buildDashboardBlocks(TEST_WORKSPACE_ID);
     const noUsers = blocks.find(
       (b) =>
         b.type === 'context' &&
@@ -450,7 +452,7 @@ describe('buildDashboardBlocks', () => {
   });
 
   it('should show "No agents created yet" when no agent creators', async () => {
-    const blocks = await buildDashboardBlocks();
+    const blocks = await buildDashboardBlocks(TEST_WORKSPACE_ID);
     const noCreators = blocks.find(
       (b) =>
         b.type === 'context' &&
@@ -460,7 +462,7 @@ describe('buildDashboardBlocks', () => {
   });
 
   it('should show "No agent runs yet" when no popular agents', async () => {
-    const blocks = await buildDashboardBlocks();
+    const blocks = await buildDashboardBlocks(TEST_WORKSPACE_ID);
     const noPopular = blocks.find(
       (b) =>
         b.type === 'context' &&
@@ -489,7 +491,7 @@ describe('buildDashboardBlocks', () => {
     // Most Popular Agents query
     mockQuery.mockResolvedValueOnce([]);
 
-    const blocks = await buildDashboardBlocks();
+    const blocks = await buildDashboardBlocks(TEST_WORKSPACE_ID);
 
     // Check header
     const powerHeader = blocks.find(
@@ -531,7 +533,7 @@ describe('buildDashboardBlocks', () => {
     // Most Popular Agents query
     mockQuery.mockResolvedValueOnce([]);
 
-    const blocks = await buildDashboardBlocks();
+    const blocks = await buildDashboardBlocks(TEST_WORKSPACE_ID);
 
     const creatorHeader = blocks.find(
       (b) => b.type === 'section' && b.text?.text?.includes('Top Agent Creators'),
@@ -575,7 +577,7 @@ describe('buildDashboardBlocks', () => {
       { agent_id: 'a2', name: 'BetaBot', avatar_emoji: ':star:', run_count: '80', total_cost: '5.67' },
     ]);
 
-    const blocks = await buildDashboardBlocks();
+    const blocks = await buildDashboardBlocks(TEST_WORKSPACE_ID);
 
     const popularHeader = blocks.find(
       (b) => b.type === 'section' && b.text?.text?.includes('Most Popular Agents'),
@@ -621,14 +623,14 @@ describe('buildDashboardBlocks', () => {
     );
     vi.mocked(getRecentRuns).mockResolvedValueOnce(bigRuns as any);
 
-    const blocks = await buildDashboardBlocks();
+    const blocks = await buildDashboardBlocks(TEST_WORKSPACE_ID);
 
     // When JSON exceeds 48KB, blocks.slice(0, 20) is returned
     expect(blocks.length).toBe(20);
   });
 
   it('should have correct section order: header, usage, power users, creators, popular, fleet, runs', async () => {
-    const blocks = await buildDashboardBlocks();
+    const blocks = await buildDashboardBlocks(TEST_WORKSPACE_ID);
 
     // Find index of each section header
     const headerIdx = blocks.findIndex(
@@ -667,7 +669,7 @@ describe('buildDashboardBlocks', () => {
     ];
     vi.mocked(getRecentRuns).mockResolvedValueOnce(runs as any);
 
-    const blocks = await buildDashboardBlocks();
+    const blocks = await buildDashboardBlocks(TEST_WORKSPACE_ID);
 
     const contextBlocks = blocks.filter(
       (b) => b.type === 'context' && b.elements?.some((e: any) => e.text?.includes('qqqqqqqq')),
@@ -691,7 +693,7 @@ describe('buildDashboardBlocks', () => {
     mockQuery.mockResolvedValueOnce([]);
     mockQuery.mockResolvedValueOnce([]);
 
-    const blocks = await buildDashboardBlocks();
+    const blocks = await buildDashboardBlocks(TEST_WORKSPACE_ID);
 
     const userBlock = blocks.find(
       (b) =>
@@ -718,7 +720,7 @@ describe('buildDashboardBlocks', () => {
     ]);
     mockQuery.mockResolvedValueOnce([]);
 
-    const blocks = await buildDashboardBlocks();
+    const blocks = await buildDashboardBlocks(TEST_WORKSPACE_ID);
 
     const creatorBlock = blocks.find(
       (b) =>
@@ -751,7 +753,7 @@ describe('buildDashboardBlocks', () => {
     // Most Popular Agents query
     mockQuery.mockResolvedValueOnce([]);
 
-    const blocks = await buildDashboardBlocks();
+    const blocks = await buildDashboardBlocks(TEST_WORKSPACE_ID);
 
     const userBlocks = blocks.filter(
       (b) =>
