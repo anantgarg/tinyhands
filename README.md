@@ -412,13 +412,14 @@ Run `/agents` to see all agents. Use the overflow menu on any agent to:
 | `DAILY_BUDGET_USD` | No | Daily spend alert threshold (default: `50`) |
 | `MAX_CONCURRENT_WORKERS` | No | Worker concurrency (default: `3`) |
 | `DOCKER_BASE_IMAGE` | No | Docker image for agent runs (default: `tinyhands-runner:latest`) |
-| `ENCRYPTION_KEY` | No | AES-256 key for encrypting tool credentials (required for connections) |
-| `GOOGLE_CLIENT_ID` | No | OAuth client ID for Google integrations |
-| `GOOGLE_CLIENT_SECRET` | No | OAuth client secret for Google integrations |
-| `NOTION_CLIENT_ID` | No | OAuth client ID for Notion integration |
-| `NOTION_CLIENT_SECRET` | No | OAuth client secret for Notion integration |
-| `GITHUB_CLIENT_ID` | No | OAuth client ID for GitHub integration |
-| `GITHUB_CLIENT_SECRET` | No | OAuth client secret for GitHub integration |
+| `ENCRYPTION_KEY` | No | AES-256 key for encrypting tool credentials (32+ chars, required for connections) |
+| `GOOGLE_OAUTH_CLIENT_ID` | No | OAuth client ID for Google integrations |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | No | OAuth client secret for Google integrations |
+| `NOTION_OAUTH_CLIENT_ID` | No | OAuth client ID for Notion integration |
+| `NOTION_OAUTH_CLIENT_SECRET` | No | OAuth client secret for Notion integration |
+| `GITHUB_OAUTH_CLIENT_ID` | No | OAuth client ID for GitHub integration |
+| `GITHUB_OAUTH_CLIENT_SECRET` | No | OAuth client secret for GitHub integration |
+| `OAUTH_REDIRECT_BASE_URL` | No | Public URL for OAuth callbacks (default: `http://localhost:3000`) |
 
 ---
 

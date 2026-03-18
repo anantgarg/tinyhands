@@ -260,13 +260,23 @@ Supported personal connection types:
 To enable personal connections, configure these environment variables:
 
 ```env
-ENCRYPTION_KEY=<32-byte hex key for AES-256>
-GOOGLE_CLIENT_ID=<from Google Cloud Console>
-GOOGLE_CLIENT_SECRET=<from Google Cloud Console>
-NOTION_CLIENT_ID=<from Notion integrations>
-NOTION_CLIENT_SECRET=<from Notion integrations>
-GITHUB_CLIENT_ID=<from GitHub OAuth apps>
-GITHUB_CLIENT_SECRET=<from GitHub OAuth apps>
+# Generate with: openssl rand -base64 32
+ENCRYPTION_KEY=<at least 32 characters>
+
+# From Google Cloud Console → APIs & Services → Credentials → OAuth 2.0
+GOOGLE_OAUTH_CLIENT_ID=<your-client-id>
+GOOGLE_OAUTH_CLIENT_SECRET=<your-client-secret>
+
+# From notion.so/my-integrations → Create integration → OAuth
+NOTION_OAUTH_CLIENT_ID=<your-client-id>
+NOTION_OAUTH_CLIENT_SECRET=<your-client-secret>
+
+# From github.com/settings/developers → OAuth Apps → New
+GITHUB_OAUTH_CLIENT_ID=<your-client-id>
+GITHUB_OAUTH_CLIENT_SECRET=<your-client-secret>
+
+# Your server's public URL (for OAuth callbacks)
+OAUTH_REDIRECT_BASE_URL=https://your-domain.com
 ```
 
 OAuth callbacks are handled at `GET /auth/callback/:integration` on the Express server.
