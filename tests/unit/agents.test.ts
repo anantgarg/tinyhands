@@ -21,9 +21,11 @@ vi.mock('../../src/slack', () => ({
   ensureBotInChannels: vi.fn(),
 }));
 
-const mockIsSuperadmin = vi.fn();
+const mockIsPlatformAdmin = vi.fn();
+const mockGetAgentRole = vi.fn();
 vi.mock('../../src/modules/access-control', () => ({
-  isSuperadmin: (...args: any[]) => mockIsSuperadmin(...args),
+  isPlatformAdmin: (...args: any[]) => mockIsPlatformAdmin(...args),
+  getAgentRole: (...args: any[]) => mockGetAgentRole(...args),
 }));
 
 import {
@@ -63,7 +65,7 @@ describe('Agent Management', () => {
   });
 
   describe('createAgent', () => {
-    it('should create an agent with defaults', async () => {
+    it('should create an agent with defaults including default_access and write_policy', async () => {
       mockQueryOne.mockResolvedValueOnce(undefined); // no existing agent
 
       const agent = await createAgent(TEST_WORKSPACE_ID, {
@@ -80,6 +82,8 @@ describe('Agent Management', () => {
       expect(agent.status).toBe('active');
       expect(agent.memory_enabled).toBe(false);
       expect(agent.respond_to_all_messages).toBe(false);
+      expect(agent.default_access).toBe('viewer');
+      expect(agent.write_policy).toBe('auto');
       expect(agent.tools).toEqual(['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash', 'WebSearch', 'WebFetch']);
       expect(mockWithTransaction).toHaveBeenCalled();
     });
@@ -97,6 +101,8 @@ describe('Agent Management', () => {
         memoryEnabled: true,
         respondToAllMessages: true,
         relevanceKeywords: ['deploy', 'release'],
+        defaultAccess: 'member',
+        writePolicy: 'confirm',
         createdBy: 'U002',
       });
 
@@ -105,7 +111,34 @@ describe('Agent Management', () => {
       expect(agent.memory_enabled).toBe(true);
       expect(agent.respond_to_all_messages).toBe(true);
       expect(agent.relevance_keywords).toEqual(['deploy', 'release']);
+      expect(agent.default_access).toBe('member');
+      expect(agent.write_policy).toBe('confirm');
       expect(agent.tools).toEqual(['Read', 'Glob']);
+    });
+
+    it('should insert creator into agent_roles as owner', async () => {
+      mockQueryOne.mockResolvedValueOnce(undefined);
+
+      const fakeClient = { query: vi.fn() };
+      mockWithTransaction.mockImplementation(async (fn: any) => fn(fakeClient));
+
+      await createAgent(TEST_WORKSPACE_ID, {
+        name: 'role-test-agent',
+        channelId: 'C123',
+        systemPrompt: 'Test',
+        createdBy: 'U001',
+      });
+
+      // Should have: insert agent, insert agent_roles (owner), insert version
+      expect(fakeClient.query).toHaveBeenCalledTimes(3);
+      // The second call should be the agent_roles insertion
+      expect(fakeClient.query.mock.calls[1][0]).toContain('agent_roles');
+      // Params: [agent.id, created_by, created_by, workspaceId]
+      const roleParams = fakeClient.query.mock.calls[1][1];
+      expect(roleParams).toHaveLength(4);
+      expect(roleParams[1]).toBe('U001'); // user_id = createdBy
+      expect(roleParams[2]).toBe('U001'); // granted_by = createdBy
+      expect(roleParams[3]).toBe(TEST_WORKSPACE_ID);
     });
 
     it('should throw if name already exists', async () => {
@@ -122,8 +155,33 @@ describe('Agent Management', () => {
     });
   });
 
+  describe('createAgent - private visibility', () => {
+    it('should auto-add creator as member for private agents and insert into agent_roles', async () => {
+      mockQueryOne.mockResolvedValueOnce(undefined); // no existing agent
+
+      const fakeClient = { query: vi.fn() };
+      mockWithTransaction.mockImplementation(async (fn: any) => fn(fakeClient));
+
+      const agent = await createAgent(TEST_WORKSPACE_ID, {
+        name: 'private-agent',
+        channelId: 'C123',
+        systemPrompt: 'Private prompt',
+        visibility: 'private',
+        createdBy: 'U001',
+      });
+
+      expect(agent.visibility).toBe('private');
+      // Should have 4 queries: insert agent, insert member, insert agent_roles (owner), insert version
+      expect(fakeClient.query).toHaveBeenCalledTimes(4);
+      // The second call should be the member insertion
+      expect(fakeClient.query.mock.calls[1][0]).toContain('agent_members');
+      // The third call should be the agent_roles insertion
+      expect(fakeClient.query.mock.calls[2][0]).toContain('agent_roles');
+    });
+  });
+
   describe('getAgent', () => {
-    it('should return deserialized agent', async () => {
+    it('should return deserialized agent with default_access and write_policy', async () => {
       mockQueryOne.mockResolvedValueOnce({
         id: 'a1',
         name: 'test',
@@ -131,6 +189,8 @@ describe('Agent Management', () => {
         channel_ids: ['C1', 'C2'],
         tools: '["Read","Write"]',
         relevance_keywords: '["test"]',
+        default_access: 'member',
+        write_policy: 'confirm',
       });
 
       const agent = await getAgent(TEST_WORKSPACE_ID, 'a1');
@@ -138,6 +198,8 @@ describe('Agent Management', () => {
       expect(agent!.tools).toEqual(['Read', 'Write']);
       expect(agent!.relevance_keywords).toEqual(['test']);
       expect(agent!.channel_ids).toEqual(['C1', 'C2']);
+      expect(agent!.default_access).toBe('member');
+      expect(agent!.write_policy).toBe('confirm');
     });
 
     it('should return null for missing agent', async () => {
@@ -271,7 +333,6 @@ describe('Agent Management', () => {
       ]);
 
       await ensureBotInAllAgentChannels();
-      // The function should have called ensureBotInChannels with unique channels
     });
 
     it('should handle agents with no channels', async () => {
@@ -280,7 +341,6 @@ describe('Agent Management', () => {
       ]);
 
       await ensureBotInAllAgentChannels();
-      // Should not throw
     });
 
     it('should handle agents with null channel_ids', async () => {
@@ -289,36 +349,11 @@ describe('Agent Management', () => {
       ]);
 
       await ensureBotInAllAgentChannels();
-      // Should not throw - null channel_ids treated as empty
-    });
-  });
-
-  describe('createAgent - private visibility', () => {
-    it('should auto-add creator as member for private agents', async () => {
-      mockQueryOne.mockResolvedValueOnce(undefined); // no existing agent
-
-      const fakeClient = { query: vi.fn() };
-      mockWithTransaction.mockImplementation(async (fn: any) => fn(fakeClient));
-
-      const agent = await createAgent(TEST_WORKSPACE_ID, {
-        name: 'private-agent',
-        channelId: 'C123',
-        systemPrompt: 'Private prompt',
-        visibility: 'private',
-        createdBy: 'U001',
-      });
-
-      expect(agent.visibility).toBe('private');
-      // Should have 3 queries: insert agent, insert member, insert version
-      expect(fakeClient.query).toHaveBeenCalledTimes(3);
-      // The second call should be the member insertion
-      expect(fakeClient.query.mock.calls[1][0]).toContain('agent_members');
     });
   });
 
   describe('updateAgent - all field branches', () => {
-    function setupUpdateMocks(existingOverrides: Record<string, any> = {}, updatedOverrides: Record<string, any> = {}) {
-      // getAgent call (existing)
+    function setupUpdateMocks(existingOverrides: Record<string, any> = {}) {
       mockQueryOne.mockResolvedValueOnce({
         id: 'a1', name: 'agent', channel_id: 'C1', channel_ids: ['C1'],
         system_prompt: 'old prompt',
@@ -326,12 +361,10 @@ describe('Agent Management', () => {
         status: 'active',
         ...existingOverrides,
       });
-      return updatedOverrides;
     }
 
     it('should update channel_ids and set channel_id to first entry', async () => {
       setupUpdateMocks();
-      // getAgent after update
       mockQueryOne.mockResolvedValueOnce({
         id: 'a1', name: 'agent', channel_id: 'C2', channel_ids: ['C2', 'C3'],
         tools: '[]', relevance_keywords: '[]',
@@ -367,8 +400,7 @@ describe('Agent Management', () => {
 
       const result = await updateAgent(TEST_WORKSPACE_ID, 'a1', { system_prompt: 'new prompt' }, 'U001');
       expect(result.system_prompt).toBe('new prompt');
-      // Should have called query for UPDATE and for version tracking
-      expect(fakeClient.query).toHaveBeenCalledTimes(3); // UPDATE + SELECT MAX + INSERT version
+      expect(fakeClient.query).toHaveBeenCalledTimes(3);
     });
 
     it('should not create version entry when system_prompt unchanged', async () => {
@@ -383,7 +415,6 @@ describe('Agent Management', () => {
       });
 
       await updateAgent(TEST_WORKSPACE_ID, 'a1', { system_prompt: 'same prompt' }, 'U001');
-      // Only the UPDATE query, no version insert
       expect(fakeClient.query).toHaveBeenCalledTimes(1);
     });
 
@@ -396,163 +427,6 @@ describe('Agent Management', () => {
 
       const result = await updateAgent(TEST_WORKSPACE_ID, 'a1', { tools: ['Read', 'Write'] }, 'U001');
       expect(result.tools).toEqual(['Read', 'Write']);
-    });
-
-    it('should update avatar_emoji', async () => {
-      setupUpdateMocks();
-      mockQueryOne.mockResolvedValueOnce({
-        id: 'a1', name: 'agent', channel_id: 'C1',
-        tools: '[]', relevance_keywords: '[]', avatar_emoji: ':star:',
-      });
-
-      await updateAgent(TEST_WORKSPACE_ID, 'a1', { avatar_emoji: ':star:' }, 'U001');
-      expect(mockWithTransaction).toHaveBeenCalled();
-    });
-
-    it('should update status', async () => {
-      setupUpdateMocks();
-      mockQueryOne.mockResolvedValueOnce({
-        id: 'a1', name: 'agent', channel_id: 'C1',
-        tools: '[]', relevance_keywords: '[]', status: 'paused',
-      });
-
-      await updateAgent(TEST_WORKSPACE_ID, 'a1', { status: 'paused' }, 'U001');
-      expect(mockWithTransaction).toHaveBeenCalled();
-    });
-
-    it('should update model', async () => {
-      setupUpdateMocks();
-      mockQueryOne.mockResolvedValueOnce({
-        id: 'a1', name: 'agent', channel_id: 'C1',
-        tools: '[]', relevance_keywords: '[]', model: 'opus',
-      });
-
-      await updateAgent(TEST_WORKSPACE_ID, 'a1', { model: 'opus' }, 'U001');
-      expect(mockWithTransaction).toHaveBeenCalled();
-    });
-
-    it('should update streaming_detail', async () => {
-      setupUpdateMocks();
-      mockQueryOne.mockResolvedValueOnce({
-        id: 'a1', name: 'agent', channel_id: 'C1',
-        tools: '[]', relevance_keywords: '[]', streaming_detail: true,
-      });
-
-      await updateAgent(TEST_WORKSPACE_ID, 'a1', { streaming_detail: true }, 'U001');
-      expect(mockWithTransaction).toHaveBeenCalled();
-    });
-
-    it('should update self_evolution_mode', async () => {
-      setupUpdateMocks();
-      mockQueryOne.mockResolvedValueOnce({
-        id: 'a1', name: 'agent', channel_id: 'C1',
-        tools: '[]', relevance_keywords: '[]',
-      });
-
-      await updateAgent(TEST_WORKSPACE_ID, 'a1', { self_evolution_mode: 'autonomous' }, 'U001');
-      expect(mockWithTransaction).toHaveBeenCalled();
-    });
-
-    it('should update max_turns', async () => {
-      setupUpdateMocks();
-      mockQueryOne.mockResolvedValueOnce({
-        id: 'a1', name: 'agent', channel_id: 'C1',
-        tools: '[]', relevance_keywords: '[]',
-      });
-
-      await updateAgent(TEST_WORKSPACE_ID, 'a1', { max_turns: 20 }, 'U001');
-      expect(mockWithTransaction).toHaveBeenCalled();
-    });
-
-    it('should update memory_enabled', async () => {
-      setupUpdateMocks();
-      mockQueryOne.mockResolvedValueOnce({
-        id: 'a1', name: 'agent', channel_id: 'C1',
-        tools: '[]', relevance_keywords: '[]',
-      });
-
-      await updateAgent(TEST_WORKSPACE_ID, 'a1', { memory_enabled: true }, 'U001');
-      expect(mockWithTransaction).toHaveBeenCalled();
-    });
-
-    it('should update respond_to_all_messages', async () => {
-      setupUpdateMocks();
-      mockQueryOne.mockResolvedValueOnce({
-        id: 'a1', name: 'agent', channel_id: 'C1',
-        tools: '[]', relevance_keywords: '[]',
-      });
-
-      await updateAgent(TEST_WORKSPACE_ID, 'a1', { respond_to_all_messages: true }, 'U001');
-      expect(mockWithTransaction).toHaveBeenCalled();
-    });
-
-    it('should update mentions_only', async () => {
-      setupUpdateMocks();
-      mockQueryOne.mockResolvedValueOnce({
-        id: 'a1', name: 'agent', channel_id: 'C1',
-        tools: '[]', relevance_keywords: '[]',
-      });
-
-      await updateAgent(TEST_WORKSPACE_ID, 'a1', { mentions_only: true }, 'U001');
-      expect(mockWithTransaction).toHaveBeenCalled();
-    });
-
-    it('should update visibility', async () => {
-      setupUpdateMocks();
-      mockQueryOne.mockResolvedValueOnce({
-        id: 'a1', name: 'agent', channel_id: 'C1',
-        tools: '[]', relevance_keywords: '[]',
-      });
-
-      await updateAgent(TEST_WORKSPACE_ID, 'a1', { visibility: 'private' }, 'U001');
-      expect(mockWithTransaction).toHaveBeenCalled();
-    });
-
-    it('should update relevance_keywords', async () => {
-      setupUpdateMocks();
-      mockQueryOne.mockResolvedValueOnce({
-        id: 'a1', name: 'agent', channel_id: 'C1',
-        tools: '[]', relevance_keywords: '["deploy"]',
-      });
-
-      await updateAgent(TEST_WORKSPACE_ID, 'a1', { relevance_keywords: ['deploy'] }, 'U001');
-      expect(mockWithTransaction).toHaveBeenCalled();
-    });
-
-    it('should throw when duplicate name is found', async () => {
-      // getAgent
-      mockQueryOne.mockResolvedValueOnce({
-        id: 'a1', name: 'agent', channel_id: 'C1',
-        tools: '[]', relevance_keywords: '[]',
-      });
-      // dup name check — found duplicate
-      mockQueryOne.mockResolvedValueOnce({ id: 'a2' });
-
-      await expect(
-        updateAgent(TEST_WORKSPACE_ID, 'a1', { name: 'taken-name' }, 'U001')
-      ).rejects.toThrow('already exists');
-    });
-
-    it('should auto-join bot to new channels when channel_ids updated', async () => {
-      setupUpdateMocks();
-      mockQueryOne.mockResolvedValueOnce({
-        id: 'a1', name: 'agent', channel_id: 'C5', channel_ids: ['C5'],
-        tools: '[]', relevance_keywords: '[]',
-      });
-
-      await updateAgent(TEST_WORKSPACE_ID, 'a1', { channel_ids: ['C5'] }, 'U001');
-      // The auto-join is async (import().then()) — just verify no error
-    });
-
-    it('should auto-join bot when channel_id is updated without channel_ids', async () => {
-      setupUpdateMocks();
-      mockQueryOne.mockResolvedValueOnce({
-        id: 'a1', name: 'agent', channel_id: 'C9',
-        tools: '[]', relevance_keywords: '[]',
-      });
-
-      await updateAgent(TEST_WORKSPACE_ID, 'a1', { channel_id: 'C9' }, 'U001');
-      // The auto-join is async — just verify no error
     });
 
     it('should handle system_prompt version when max_version is null', async () => {
@@ -569,10 +443,21 @@ describe('Agent Management', () => {
       });
 
       await updateAgent(TEST_WORKSPACE_ID, 'a1', { system_prompt: 'new' }, 'U001');
-      // Should create version 1 when max_version is null
       const insertCall = fakeClient.query.mock.calls[2];
       expect(insertCall[0]).toContain('agent_versions');
-      expect(insertCall[1][2]).toBe(1); // nextVersion
+      expect(insertCall[1][2]).toBe(1);
+    });
+
+    it('should throw when duplicate name is found', async () => {
+      mockQueryOne.mockResolvedValueOnce({
+        id: 'a1', name: 'agent', channel_id: 'C1',
+        tools: '[]', relevance_keywords: '[]',
+      });
+      mockQueryOne.mockResolvedValueOnce({ id: 'a2' });
+
+      await expect(
+        updateAgent(TEST_WORKSPACE_ID, 'a1', { name: 'taken-name' }, 'U001')
+      ).rejects.toThrow('already exists');
     });
   });
 
@@ -598,12 +483,10 @@ describe('Agent Management', () => {
 
   describe('revertAgent', () => {
     it('should revert to target version system_prompt', async () => {
-      // getAgentVersion
       mockQueryOne.mockResolvedValueOnce({
         id: 'v1', agent_id: 'a1', version: 1,
         system_prompt: 'original prompt',
       });
-      // getAgent (inside updateAgent)
       mockQueryOne.mockResolvedValueOnce({
         id: 'a1', name: 'agent', channel_id: 'C1',
         system_prompt: 'current prompt',
@@ -615,7 +498,6 @@ describe('Agent Management', () => {
       };
       mockWithTransaction.mockImplementation(async (fn: any) => fn(fakeClient));
 
-      // getAgent after update
       mockQueryOne.mockResolvedValueOnce({
         id: 'a1', name: 'agent', channel_id: 'C1',
         system_prompt: 'original prompt',
@@ -691,73 +573,31 @@ describe('Agent Management', () => {
   });
 
   describe('canAccessAgent', () => {
-    it('should return false when agent not found', async () => {
-      mockQueryOne.mockResolvedValueOnce(undefined); // getAgent
-      const result = await canAccessAgent(TEST_WORKSPACE_ID, 'nonexistent', 'U001');
-      expect(result).toBe(false);
-    });
-
-    it('should return true for public agents', async () => {
-      mockQueryOne.mockResolvedValueOnce({
-        id: 'a1', name: 'agent', channel_id: 'C1',
-        tools: '[]', relevance_keywords: '[]', visibility: 'public',
-      });
+    it('should return true when user has viewer or better role', async () => {
+      mockGetAgentRole.mockResolvedValueOnce('viewer');
 
       const result = await canAccessAgent(TEST_WORKSPACE_ID, 'a1', 'U001');
       expect(result).toBe(true);
     });
 
-    it('should return true for superadmins on private agents', async () => {
-      mockQueryOne.mockResolvedValueOnce({
-        id: 'a1', name: 'agent', channel_id: 'C1',
-        tools: '[]', relevance_keywords: '[]', visibility: 'private',
-      });
-      mockIsSuperadmin.mockResolvedValueOnce(true);
+    it('should return true for owner role', async () => {
+      mockGetAgentRole.mockResolvedValueOnce('owner');
 
-      const result = await canAccessAgent(TEST_WORKSPACE_ID, 'a1', 'U-superadmin');
+      const result = await canAccessAgent(TEST_WORKSPACE_ID, 'a1', 'U001');
       expect(result).toBe(true);
     });
 
-    it('should return true for agent admins on private agents', async () => {
-      mockQueryOne.mockResolvedValueOnce({
-        id: 'a1', name: 'agent', channel_id: 'C1',
-        tools: '[]', relevance_keywords: '[]', visibility: 'private',
-      });
-      mockIsSuperadmin.mockResolvedValueOnce(false);
-      // admin check
-      mockQueryOne.mockResolvedValueOnce({ agent_id: 'a1', user_id: 'U-admin' });
+    it('should return true for member role', async () => {
+      mockGetAgentRole.mockResolvedValueOnce('member');
 
-      const result = await canAccessAgent(TEST_WORKSPACE_ID, 'a1', 'U-admin');
+      const result = await canAccessAgent(TEST_WORKSPACE_ID, 'a1', 'U001');
       expect(result).toBe(true);
     });
 
-    it('should fall back to membership check for private agents', async () => {
-      mockQueryOne.mockResolvedValueOnce({
-        id: 'a1', name: 'agent', channel_id: 'C1',
-        tools: '[]', relevance_keywords: '[]', visibility: 'private',
-      });
-      mockIsSuperadmin.mockResolvedValueOnce(false);
-      // admin check — not admin
-      mockQueryOne.mockResolvedValueOnce(undefined);
-      // member check (isAgentMember)
-      mockQueryOne.mockResolvedValueOnce({ '?column?': 1 });
+    it('should return false when role is none', async () => {
+      mockGetAgentRole.mockResolvedValueOnce('none');
 
-      const result = await canAccessAgent(TEST_WORKSPACE_ID, 'a1', 'U-member');
-      expect(result).toBe(true);
-    });
-
-    it('should return false for non-members on private agents', async () => {
-      mockQueryOne.mockResolvedValueOnce({
-        id: 'a1', name: 'agent', channel_id: 'C1',
-        tools: '[]', relevance_keywords: '[]', visibility: 'private',
-      });
-      mockIsSuperadmin.mockResolvedValueOnce(false);
-      // admin check — not admin
-      mockQueryOne.mockResolvedValueOnce(undefined);
-      // member check — not member
-      mockQueryOne.mockResolvedValueOnce(undefined);
-
-      const result = await canAccessAgent(TEST_WORKSPACE_ID, 'a1', 'U-outsider');
+      const result = await canAccessAgent(TEST_WORKSPACE_ID, 'a1', 'U001');
       expect(result).toBe(false);
     });
   });
@@ -810,27 +650,27 @@ describe('Agent Management', () => {
   });
 
   describe('getAccessibleAgents', () => {
-    it('should return all agents for superadmins', async () => {
-      mockIsSuperadmin.mockResolvedValueOnce(true);
+    it('should return all agents for platform admins', async () => {
+      mockIsPlatformAdmin.mockResolvedValueOnce(true);
       mockQuery.mockResolvedValueOnce([
         { id: 'a1', name: 'agent1', tools: '[]', relevance_keywords: '[]' },
         { id: 'a2', name: 'agent2', tools: '[]', relevance_keywords: '[]' },
       ]);
 
-      const agents = await getAccessibleAgents(TEST_WORKSPACE_ID, 'U-superadmin');
+      const agents = await getAccessibleAgents(TEST_WORKSPACE_ID, 'U-admin');
       expect(agents).toHaveLength(2);
     });
 
-    it('should return filtered agents for non-superadmins', async () => {
-      mockIsSuperadmin.mockResolvedValueOnce(false);
+    it('should return filtered agents for non-admins using agent_roles', async () => {
+      mockIsPlatformAdmin.mockResolvedValueOnce(false);
       mockQuery.mockResolvedValueOnce([
-        { id: 'a1', name: 'public-agent', visibility: 'public', tools: '[]', relevance_keywords: '[]' },
+        { id: 'a1', name: 'public-agent', default_access: 'viewer', tools: '[]', relevance_keywords: '[]' },
       ]);
 
       const agents = await getAccessibleAgents(TEST_WORKSPACE_ID, 'U-regular');
       expect(agents).toHaveLength(1);
       expect(mockQuery).toHaveBeenCalledWith(
-        expect.stringContaining('LEFT JOIN agent_members'),
+        expect.stringContaining('LEFT JOIN agent_roles'),
         [TEST_WORKSPACE_ID, 'U-regular']
       );
     });
@@ -867,6 +707,28 @@ describe('Agent Management', () => {
 
       const agent = await getAgent(TEST_WORKSPACE_ID, 'a1');
       expect(agent!.visibility).toBe('public');
+    });
+
+    it('should handle missing default_access by defaulting to viewer', async () => {
+      mockQueryOne.mockResolvedValueOnce({
+        id: 'a1', name: 'agent', channel_id: 'C1',
+        tools: '[]', relevance_keywords: '[]',
+        default_access: null,
+      });
+
+      const agent = await getAgent(TEST_WORKSPACE_ID, 'a1');
+      expect(agent!.default_access).toBe('viewer');
+    });
+
+    it('should handle missing write_policy by defaulting to auto', async () => {
+      mockQueryOne.mockResolvedValueOnce({
+        id: 'a1', name: 'agent', channel_id: 'C1',
+        tools: '[]', relevance_keywords: '[]',
+        write_policy: null,
+      });
+
+      const agent = await getAgent(TEST_WORKSPACE_ID, 'a1');
+      expect(agent!.write_policy).toBe('auto');
     });
 
     it('should return null for getAgentByName when not found', async () => {

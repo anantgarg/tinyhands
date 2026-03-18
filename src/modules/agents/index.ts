@@ -1,6 +1,6 @@
 import { v4 as uuid } from 'uuid';
 import { query, queryOne, execute, withTransaction } from '../../db';
-import type { Agent, AgentVersion, ModelAlias, SelfEvolutionMode, AgentVisibility, DmConversation } from '../../types';
+import type { Agent, AgentVersion, ModelAlias, SelfEvolutionMode, AgentVisibility, AgentAccessLevel, WritePolicy, DmConversation } from '../../types';
 import { logger } from '../../utils/logger';
 
 export interface CreateAgentParams {
@@ -18,6 +18,8 @@ export interface CreateAgentParams {
   respondToAllMessages?: boolean;
   mentionsOnly?: boolean;
   visibility?: AgentVisibility;
+  defaultAccess?: AgentAccessLevel;
+  writePolicy?: WritePolicy;
   relevanceKeywords?: string[];
   createdBy: string;
 }
@@ -49,6 +51,8 @@ export async function createAgent(workspaceId: string, params: CreateAgentParams
     respond_to_all_messages: params.respondToAllMessages || false,
     mentions_only: params.mentionsOnly || false,
     visibility: params.visibility || 'public',
+    default_access: params.defaultAccess || 'viewer',
+    write_policy: params.writePolicy || 'auto',
     relevance_keywords: params.relevanceKeywords || [],
     created_by: params.createdBy,
     created_at: new Date().toISOString(),
@@ -59,14 +63,15 @@ export async function createAgent(workspaceId: string, params: CreateAgentParams
     await client.query(`
       INSERT INTO agents (id, workspace_id, name, channel_id, channel_ids, system_prompt, tools, avatar_emoji, status,
         model, streaming_detail, docker_image, self_evolution_mode, max_turns, memory_enabled,
-        respond_to_all_messages, mentions_only, visibility, relevance_keywords, created_by, created_at, updated_at)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
+        respond_to_all_messages, mentions_only, visibility, default_access, write_policy, relevance_keywords, created_by, created_at, updated_at)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
     `, [
       agent.id, workspaceId, agent.name, agent.channel_id, agent.channel_ids,
       agent.system_prompt, JSON.stringify(agent.tools), agent.avatar_emoji, agent.status,
       agent.model, agent.streaming_detail, agent.docker_image,
       agent.self_evolution_mode, agent.max_turns, agent.memory_enabled,
       agent.respond_to_all_messages, agent.mentions_only, agent.visibility,
+      agent.default_access, agent.write_policy,
       JSON.stringify(agent.relevance_keywords),
       agent.created_by, agent.created_at, agent.updated_at
     ]);
@@ -78,6 +83,12 @@ export async function createAgent(workspaceId: string, params: CreateAgentParams
         [agent.id, agent.created_by, agent.created_by]
       );
     }
+
+    // Insert creator into agent_roles as 'owner'
+    await client.query(
+      `INSERT INTO agent_roles (agent_id, user_id, role, granted_by, workspace_id) VALUES ($1, $2, 'owner', $3, $4) ON CONFLICT DO NOTHING`,
+      [agent.id, agent.created_by, agent.created_by, workspaceId]
+    );
 
     await client.query(
       'INSERT INTO agent_versions (id, agent_id, version, system_prompt, change_note, changed_by) VALUES ($1, $2, $3, $4, $5, $6)',
@@ -326,18 +337,12 @@ export async function addAgentMembers(workspaceId: string, agentId: string, user
   }
 }
 
-// ── Agent Access Check (visibility-aware) ──
+// ── Agent Access Check (role-based) ──
 
 export async function canAccessAgent(workspaceId: string, agentId: string, userId: string): Promise<boolean> {
-  const agent = await getAgent(workspaceId, agentId);
-  if (!agent) return false;
-  if (agent.visibility === 'public') return true;
-  // Private agent: check membership, admin, or superadmin
-  const { isSuperadmin } = await import('../access-control');
-  if (await isSuperadmin(workspaceId, userId)) return true;
-  const adminRow = await queryOne('SELECT 1 FROM agent_admins WHERE agent_id = $1 AND user_id = $2', [agentId, userId]);
-  if (adminRow) return true;
-  return isAgentMember(workspaceId, agentId, userId);
+  const { getAgentRole } = await import('../access-control');
+  const role = await getAgentRole(workspaceId, agentId, userId);
+  return role !== 'none';
 }
 
 // ── DM Conversations ──
@@ -367,18 +372,17 @@ export async function touchDmConversation(workspaceId: string, dmChannelId: stri
 }
 
 export async function getAccessibleAgents(workspaceId: string, userId: string): Promise<Agent[]> {
-  const { isSuperadmin } = await import('../access-control');
-  if (await isSuperadmin(workspaceId, userId)) {
+  const { isPlatformAdmin } = await import('../access-control');
+  if (await isPlatformAdmin(workspaceId, userId)) {
     return listAgents(workspaceId);
   }
-  // Public agents + private agents where user is member or admin
+  // Agents where user has an explicit agent_role OR agent.default_access != 'none'
   const rows = await query(
     `SELECT DISTINCT a.* FROM agents a
-     LEFT JOIN agent_members m ON a.id = m.agent_id AND m.user_id = $2
-     LEFT JOIN agent_admins aa ON a.id = aa.agent_id AND aa.user_id = $2
+     LEFT JOIN agent_roles ar ON a.id = ar.agent_id AND ar.user_id = $2
      WHERE a.workspace_id = $1
        AND a.status != 'archived'
-       AND (a.visibility = 'public' OR m.user_id IS NOT NULL OR aa.user_id IS NOT NULL)
+       AND (ar.user_id IS NOT NULL OR a.default_access != 'none')
      ORDER BY a.created_at DESC`,
     [workspaceId, userId]
   );
@@ -392,5 +396,7 @@ function deserializeAgent(row: any): Agent {
     relevance_keywords: JSON.parse(row.relevance_keywords || '[]'),
     channel_ids: row.channel_ids || [row.channel_id],
     visibility: row.visibility || 'public',
+    default_access: row.default_access || 'viewer',
+    write_policy: row.write_policy || 'auto',
   };
 }

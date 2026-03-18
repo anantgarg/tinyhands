@@ -8,6 +8,37 @@ export type AccessRole = 'superadmin' | 'owner' | 'admin' | 'member';
 export type IntegrationAccess = 'read' | 'write' | 'admin';
 export type AgentVisibility = 'public' | 'private';
 
+// ── Unified Access Model Types ──
+
+export type PlatformRole = 'superadmin' | 'admin' | 'member';
+export type AgentAccessLevel = 'owner' | 'member' | 'viewer' | 'none';
+export type WritePolicy = 'auto' | 'confirm' | 'admin_confirm' | 'deny';
+
+export interface AgentRoleRecord {
+  agent_id: string;
+  user_id: string;
+  role: AgentAccessLevel;
+  granted_by: string;
+  granted_at: string;
+  workspace_id: string;
+}
+
+export interface PlatformRoleRecord {
+  workspace_id: string;
+  user_id: string;
+  role: PlatformRole;
+  granted_by: string;
+  granted_at: string;
+}
+
+export interface WorkspaceSetting {
+  workspace_id: string;
+  key: string;
+  value: string;
+  updated_by: string | null;
+  updated_at: string;
+}
+
 export interface Agent {
   id: string;
   name: string;
@@ -26,6 +57,8 @@ export interface Agent {
   respond_to_all_messages: boolean;
   mentions_only: boolean;
   visibility: AgentVisibility;
+  default_access: AgentAccessLevel;
+  write_policy: WritePolicy;
   relevance_keywords: string[];
   created_by: string;
   created_at: string;

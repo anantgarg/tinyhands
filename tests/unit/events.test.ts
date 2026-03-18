@@ -104,11 +104,15 @@ const mockInitSuperadmin = vi.fn();
 const mockAddSuperadmin = vi.fn();
 const mockAddAgentAdmin = vi.fn();
 const mockCanModifyAgent = vi.fn().mockResolvedValue(true);
+const mockIsPlatformAdmin = vi.fn().mockResolvedValue(true);
+const mockListPlatformAdmins = vi.fn().mockResolvedValue([{ user_id: 'UADMIN' }]);
 vi.mock('../../src/modules/access-control', () => ({
   initSuperadmin: (...args: any[]) => mockInitSuperadmin(...args),
   addSuperadmin: (...args: any[]) => mockAddSuperadmin(...args),
   addAgentAdmin: (...args: any[]) => mockAddAgentAdmin(...args),
   canModifyAgent: (...args: any[]) => mockCanModifyAgent(...args),
+  isPlatformAdmin: (...args: any[]) => mockIsPlatformAdmin(...args),
+  listPlatformAdmins: (...args: any[]) => mockListPlatformAdmins(...args),
 }));
 
 // ── Mock dynamic imports for handleAgentChannelCommand ──
@@ -252,7 +256,7 @@ function makeAgent(overrides: Record<string, any> = {}) {
     model: 'sonnet',
     memory_enabled: false,
     respond_to_all_messages: false,
-    visibility: 'public',
+    default_access: 'viewer',
     relevance_keywords: [],
     ...overrides,
   };
@@ -282,6 +286,7 @@ describe('Slack Events -- registerEvents', () => {
     mockHandleConversationReply.mockResolvedValue(false);
     mockGetAgentsByChannel.mockResolvedValue([]);
     mockGetAgentByChannel.mockResolvedValue(null);
+    mockCanAccessAgent.mockResolvedValue(true);
     mockFindSlackChannelTriggers.mockResolvedValue([]);
     mockParseModelOverride.mockReturnValue(null);
     mockStripModelOverride.mockImplementation((t: string) => t);
@@ -3001,21 +3006,21 @@ describe('Slack Events -- registerEvents', () => {
     });
   });
 
-  // ── Private Agent Access Control ──
+  // ── Role-Based Agent Access Control ──
 
-  describe('message event -- private agent access control', () => {
-    it('should filter out private agents the user cannot access', async () => {
-      const publicAgent = makeAgent({ id: 'a1', name: 'public-bot', visibility: 'public' });
-      const privateAgent = makeAgent({ id: 'a2', name: 'private-bot', visibility: 'private' });
-      mockGetAgentsByChannel.mockResolvedValue([publicAgent, privateAgent]);
-      // canAccessAgent is only called for private agents; for public agents the code skips the call
-      mockCanAccessAgent.mockResolvedValue(false);
+  describe('message event -- role-based agent access control', () => {
+    it('should filter out agents the user cannot access', async () => {
+      const agent1 = makeAgent({ id: 'a1', name: 'accessible-bot', default_access: 'viewer' });
+      const agent2 = makeAgent({ id: 'a2', name: 'restricted-bot', default_access: 'none' });
+      mockGetAgentsByChannel.mockResolvedValue([agent1, agent2]);
+      // canAccessAgent is called for ALL agents; first returns true, second returns false
+      mockCanAccessAgent.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
       mockCheckMessageRelevance.mockResolvedValue(true);
 
       registerEvents(mockApp as any);
       await mockApp._trigger('message', { event: makeMessageEvent(), client: {}, context: { teamId: 'W_TEST_123' } });
 
-      // Only the public agent should get enqueued, private is filtered out
+      // Only the accessible agent should get enqueued, restricted is filtered out
       expect(mockEnqueueRun).toHaveBeenCalledTimes(1);
       expect(mockEnqueueRun).toHaveBeenCalledWith(
         expect.objectContaining({ agentId: 'a1' }),
@@ -3023,9 +3028,9 @@ describe('Slack Events -- registerEvents', () => {
       );
     });
 
-    it('should allow private agents the user can access', async () => {
-      const privateAgent = makeAgent({ id: 'a1', name: 'private-bot', visibility: 'private' });
-      mockGetAgentsByChannel.mockResolvedValue([privateAgent]);
+    it('should allow agents the user can access', async () => {
+      const agent = makeAgent({ id: 'a1', name: 'restricted-bot', default_access: 'none' });
+      mockGetAgentsByChannel.mockResolvedValue([agent]);
       mockCanAccessAgent.mockResolvedValue(true);
       mockCheckMessageRelevance.mockResolvedValue(true);
 

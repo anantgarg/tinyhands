@@ -41,14 +41,16 @@ vi.mock('../../src/modules/agents', () => ({
 
 const mockInitSuperadmin = vi.fn().mockResolvedValue(undefined);
 const mockCanModifyAgent = vi.fn().mockResolvedValue(true);
-const mockListSuperadmins = vi.fn().mockResolvedValue([{ user_id: 'UADMIN' }]);
-const mockIsSuperadmin = vi.fn().mockResolvedValue(true);
+const mockListPlatformAdmins = vi.fn().mockResolvedValue([{ user_id: 'UADMIN' }]);
+const mockIsPlatformAdmin = vi.fn().mockResolvedValue(true);
 
 vi.mock('../../src/modules/access-control', () => ({
   initSuperadmin: (...args: any[]) => mockInitSuperadmin(...args),
   canModifyAgent: (...args: any[]) => mockCanModifyAgent(...args),
-  listSuperadmins: (...args: any[]) => mockListSuperadmins(...args),
-  isSuperadmin: (...args: any[]) => mockIsSuperadmin(...args),
+  listPlatformAdmins: (...args: any[]) => mockListPlatformAdmins(...args),
+  isPlatformAdmin: (...args: any[]) => mockIsPlatformAdmin(...args),
+  listSuperadmins: (...args: any[]) => mockListPlatformAdmins(...args),
+  isSuperadmin: (...args: any[]) => mockIsPlatformAdmin(...args),
 }));
 
 const mockPostMessage = vi.fn().mockResolvedValue('msg-ts-123');
@@ -353,7 +355,8 @@ function makeFakeAgent(overrides: Record<string, any> = {}) {
     permission_level: 'standard',
     memory_enabled: true,
     respond_to_all_messages: false,
-    visibility: 'public',
+    default_access: 'viewer',
+    write_policy: 'auto',
     relevance_keywords: ['help', 'support'],
     status: 'active',
     created_by: 'user-1',
@@ -413,8 +416,8 @@ describe('Commands Module', () => {
     mockGetAgentMembers.mockResolvedValue([]);
     mockInitSuperadmin.mockResolvedValue(undefined);
     mockCanModifyAgent.mockResolvedValue(true);
-    mockListSuperadmins.mockResolvedValue([{ user_id: 'UADMIN' }]);
-    mockIsSuperadmin.mockResolvedValue(true);
+    mockListPlatformAdmins.mockResolvedValue([{ user_id: 'UADMIN' }]);
+    mockIsPlatformAdmin.mockResolvedValue(true);
     mockPostMessage.mockResolvedValue('msg-ts-123');
     mockPostBlocks.mockResolvedValue('msg-ts-456');
     mockCreateChannel.mockResolvedValue('C_NEW_CHANNEL');
@@ -912,7 +915,7 @@ describe('Commands Module', () => {
       const app = createMockApp();
       registerCommands(app as any);
 
-      mockIsSuperadmin.mockResolvedValue(false);
+      mockIsPlatformAdmin.mockResolvedValue(false);
       const ack = vi.fn();
       const command = { user_id: 'U_REGULAR', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
@@ -926,7 +929,7 @@ describe('Commands Module', () => {
       const app = createMockApp();
       registerCommands(app as any);
 
-      mockIsSuperadmin.mockResolvedValue(true);
+      mockIsPlatformAdmin.mockResolvedValue(true);
       mockListCustomTools.mockResolvedValue([]);
       const ack = vi.fn();
       const command = { user_id: 'U_ADMIN', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
@@ -941,7 +944,7 @@ describe('Commands Module', () => {
       const app = createMockApp();
       registerCommands(app as any);
 
-      mockIsSuperadmin.mockResolvedValue(true);
+      mockIsPlatformAdmin.mockResolvedValue(true);
       mockListCustomTools.mockResolvedValue([
         {
           name: 'zendesk-read',
@@ -968,7 +971,7 @@ describe('Commands Module', () => {
       const app = createMockApp();
       registerCommands(app as any);
 
-      mockIsSuperadmin.mockResolvedValue(true);
+      mockIsPlatformAdmin.mockResolvedValue(true);
       mockListCustomTools.mockResolvedValue([
         {
           name: 'my-tool',
@@ -993,7 +996,7 @@ describe('Commands Module', () => {
       const app = createMockApp();
       registerCommands(app as any);
 
-      mockIsSuperadmin.mockResolvedValue(true);
+      mockIsPlatformAdmin.mockResolvedValue(true);
       mockListCustomTools.mockResolvedValue([]);
       const ack = vi.fn();
       const command = { user_id: 'U_ADMIN', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
@@ -1057,7 +1060,7 @@ describe('Commands Module', () => {
       const app = createMockApp();
       registerCommands(app as any);
 
-      mockIsSuperadmin.mockResolvedValue(true);
+      mockIsPlatformAdmin.mockResolvedValue(true);
       mockSearchKB.mockResolvedValue([
         { id: 'kb-1', title: 'Result', category: 'general', summary: 'A summary' },
       ]);
@@ -1091,7 +1094,7 @@ describe('Commands Module', () => {
       const app = createMockApp();
       registerCommands(app as any);
 
-      mockIsSuperadmin.mockResolvedValue(false);
+      mockIsPlatformAdmin.mockResolvedValue(false);
       const ack = vi.fn();
       const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '', trigger_id: 'trig-1' };
 
@@ -1104,7 +1107,7 @@ describe('Commands Module', () => {
       const app = createMockApp();
       registerCommands(app as any);
 
-      mockIsSuperadmin.mockResolvedValue(true);
+      mockIsPlatformAdmin.mockResolvedValue(true);
       mockListKBEntries.mockResolvedValue([]);
       mockListPendingEntries.mockResolvedValue([]);
       mockGetCategories.mockResolvedValue([]);
@@ -1129,7 +1132,7 @@ describe('Commands Module', () => {
       const app = createMockApp();
       registerCommands(app as any);
 
-      mockIsSuperadmin.mockResolvedValue(true);
+      mockIsPlatformAdmin.mockResolvedValue(true);
       mockListKBEntries.mockResolvedValue([]);
       mockListPendingEntries.mockResolvedValue([]);
       mockGetCategories.mockResolvedValue([]);
@@ -1155,7 +1158,7 @@ describe('Commands Module', () => {
       const app = createMockApp();
       registerCommands(app as any);
 
-      mockIsSuperadmin.mockResolvedValue(true);
+      mockIsPlatformAdmin.mockResolvedValue(true);
       mockListKBEntries.mockResolvedValue([]);
       mockListPendingEntries.mockResolvedValue([
         { id: 'pend-1', title: 'Pending Doc', category: 'support', summary: 'Needs review', contributed_by: 'U_CONTRIBUTOR' },
@@ -1177,7 +1180,7 @@ describe('Commands Module', () => {
       const app = createMockApp();
       registerCommands(app as any);
 
-      mockIsSuperadmin.mockResolvedValue(true);
+      mockIsPlatformAdmin.mockResolvedValue(true);
       mockListKBEntries.mockResolvedValue([
         { id: 'e-1', title: 'API Guide', category: 'engineering', summary: 'How to use our API', tags: ['api', 'guide'] },
       ]);
@@ -1197,7 +1200,7 @@ describe('Commands Module', () => {
       const app = createMockApp();
       registerCommands(app as any);
 
-      mockIsSuperadmin.mockResolvedValue(true);
+      mockIsPlatformAdmin.mockResolvedValue(true);
       mockListKBEntries.mockResolvedValue([]);
       mockListPendingEntries.mockResolvedValue([]);
       mockGetCategories.mockResolvedValue([]);
@@ -2399,7 +2402,7 @@ describe('Commands Module', () => {
         feasible: false,
         blockers: ['No SSH access', 'No CI/CD integration'],
       }));
-      mockListSuperadmins.mockResolvedValue([{ user_id: 'UADMIN' }]);
+      mockListPlatformAdmins.mockResolvedValue([{ user_id: 'UADMIN' }]);
 
       await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'on every push to main');
 
@@ -2721,7 +2724,7 @@ describe('Commands Module', () => {
       await app.handlers.action['tool_overflow']({ action, ack, body });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockIsSuperadmin).not.toHaveBeenCalled();
+      expect(mockIsPlatformAdmin).not.toHaveBeenCalled();
     });
 
     it('should deny non-superadmins', async () => {
@@ -2730,7 +2733,7 @@ describe('Commands Module', () => {
 
       if (!app.handlers.action['tool_overflow']) return;
 
-      mockIsSuperadmin.mockResolvedValue(false);
+      mockIsPlatformAdmin.mockResolvedValue(false);
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'configure:my-tool' } };
@@ -2748,7 +2751,7 @@ describe('Commands Module', () => {
 
       if (!app.handlers.action['tool_overflow']) return;
 
-      mockIsSuperadmin.mockResolvedValue(true);
+      mockIsPlatformAdmin.mockResolvedValue(true);
       mockGetCustomTool.mockResolvedValue({
         name: 'my-tool',
         config_json: '{"api_key":"sk-123456789012"}',
@@ -2774,7 +2777,7 @@ describe('Commands Module', () => {
 
       if (!app.handlers.action['tool_overflow']) return;
 
-      mockIsSuperadmin.mockResolvedValue(true);
+      mockIsPlatformAdmin.mockResolvedValue(true);
       mockGetCustomTool.mockResolvedValue(null);
 
       const ack = vi.fn();
@@ -2792,7 +2795,7 @@ describe('Commands Module', () => {
 
       if (!app.handlers.action['tool_overflow']) return;
 
-      mockIsSuperadmin.mockResolvedValue(true);
+      mockIsPlatformAdmin.mockResolvedValue(true);
       mockGetCustomTool.mockResolvedValue({
         name: 'my-tool',
         config_json: '{}',
@@ -2817,7 +2820,7 @@ describe('Commands Module', () => {
 
       if (!app.handlers.action['tool_overflow']) return;
 
-      mockIsSuperadmin.mockResolvedValue(true);
+      mockIsPlatformAdmin.mockResolvedValue(true);
       mockListAgents.mockResolvedValue([makeFakeAgent()]);
 
       const ack = vi.fn();
@@ -2838,7 +2841,7 @@ describe('Commands Module', () => {
 
       if (!app.handlers.action['tool_overflow']) return;
 
-      mockIsSuperadmin.mockResolvedValue(true);
+      mockIsPlatformAdmin.mockResolvedValue(true);
       mockListAgents.mockResolvedValue([]);
 
       const ack = vi.fn();
@@ -2856,7 +2859,7 @@ describe('Commands Module', () => {
 
       if (!app.handlers.action['tool_overflow']) return;
 
-      mockIsSuperadmin.mockResolvedValue(true);
+      mockIsPlatformAdmin.mockResolvedValue(true);
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'approve:my-tool' } };
@@ -2874,7 +2877,7 @@ describe('Commands Module', () => {
 
       if (!app.handlers.action['tool_overflow']) return;
 
-      mockIsSuperadmin.mockResolvedValue(true);
+      mockIsPlatformAdmin.mockResolvedValue(true);
       mockApproveCustomTool.mockRejectedValue(new Error('Already approved'));
 
       const ack = vi.fn();
@@ -2892,7 +2895,7 @@ describe('Commands Module', () => {
 
       if (!app.handlers.action['tool_overflow']) return;
 
-      mockIsSuperadmin.mockResolvedValue(true);
+      mockIsPlatformAdmin.mockResolvedValue(true);
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'delete:my-tool' } };
@@ -2910,7 +2913,7 @@ describe('Commands Module', () => {
 
       if (!app.handlers.action['tool_overflow']) return;
 
-      mockIsSuperadmin.mockResolvedValue(true);
+      mockIsPlatformAdmin.mockResolvedValue(true);
       mockDeleteCustomTool.mockRejectedValue(new Error('Tool in use'));
 
       const ack = vi.fn();
@@ -2941,7 +2944,7 @@ describe('Commands Module', () => {
       await app.handlers.action['kb_source_overflow']({ action, ack, body });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockIsSuperadmin).not.toHaveBeenCalled();
+      expect(mockIsPlatformAdmin).not.toHaveBeenCalled();
     });
 
     it('should deny non-superadmins', async () => {
@@ -2950,7 +2953,7 @@ describe('Commands Module', () => {
 
       if (!app.handlers.action['kb_source_overflow']) return;
 
-      mockIsSuperadmin.mockResolvedValue(false);
+      mockIsPlatformAdmin.mockResolvedValue(false);
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'sync:src-1' } };
@@ -2968,7 +2971,7 @@ describe('Commands Module', () => {
 
       if (!app.handlers.action['kb_source_overflow']) return;
 
-      mockIsSuperadmin.mockResolvedValue(true);
+      mockIsPlatformAdmin.mockResolvedValue(true);
       mockGetSource.mockResolvedValue(null);
 
       const ack = vi.fn();
@@ -2986,7 +2989,7 @@ describe('Commands Module', () => {
 
       if (!app.handlers.action['kb_source_overflow']) return;
 
-      mockIsSuperadmin.mockResolvedValue(true);
+      mockIsPlatformAdmin.mockResolvedValue(true);
       mockGetSource.mockResolvedValue({ id: 'src-1', name: 'My Source', source_type: 'google_drive', config_json: '{}', auto_sync: true });
 
       const ack = vi.fn();
@@ -3005,7 +3008,7 @@ describe('Commands Module', () => {
 
       if (!app.handlers.action['kb_source_overflow']) return;
 
-      mockIsSuperadmin.mockResolvedValue(true);
+      mockIsPlatformAdmin.mockResolvedValue(true);
       mockGetSource.mockResolvedValue({ id: 'src-1', name: 'My Source', source_type: 'google_drive', config_json: '{}', auto_sync: true });
       mockStartSync.mockRejectedValue(new Error('Provider not configured'));
 
@@ -3024,7 +3027,7 @@ describe('Commands Module', () => {
 
       if (!app.handlers.action['kb_source_overflow']) return;
 
-      mockIsSuperadmin.mockResolvedValue(true);
+      mockIsPlatformAdmin.mockResolvedValue(true);
       mockGetSource.mockResolvedValue({ id: 'src-1', name: 'My Source', source_type: 'google_drive', config_json: '{}', auto_sync: true });
       mockStartSync.mockRejectedValue(new Error('Network error'));
 
@@ -3043,7 +3046,7 @@ describe('Commands Module', () => {
 
       if (!app.handlers.action['kb_source_overflow']) return;
 
-      mockIsSuperadmin.mockResolvedValue(true);
+      mockIsPlatformAdmin.mockResolvedValue(true);
       mockGetSource.mockResolvedValue({ id: 'src-1', name: 'My Source', source_type: 'google_drive', config_json: '{}', auto_sync: true });
 
       const ack = vi.fn();
@@ -3062,7 +3065,7 @@ describe('Commands Module', () => {
 
       if (!app.handlers.action['kb_source_overflow']) return;
 
-      mockIsSuperadmin.mockResolvedValue(true);
+      mockIsPlatformAdmin.mockResolvedValue(true);
       mockGetSource.mockResolvedValue({ id: 'src-1', name: 'My Source', source_type: 'google_drive', config_json: '{}', auto_sync: true });
 
       const ack = vi.fn();
@@ -3082,7 +3085,7 @@ describe('Commands Module', () => {
 
       if (!app.handlers.action['kb_source_overflow']) return;
 
-      mockIsSuperadmin.mockResolvedValue(true);
+      mockIsPlatformAdmin.mockResolvedValue(true);
       mockGetSource.mockResolvedValue({ id: 'src-1', name: 'My Source', source_type: 'google_drive', config_json: '{}', auto_sync: true });
 
       const ack = vi.fn();
@@ -3101,7 +3104,7 @@ describe('Commands Module', () => {
 
       if (!app.handlers.action['kb_source_overflow']) return;
 
-      mockIsSuperadmin.mockResolvedValue(true);
+      mockIsPlatformAdmin.mockResolvedValue(true);
       mockGetSource.mockResolvedValue({ id: 'src-1', name: 'Config Source', source_type: 'google_drive', config_json: '{"folder_id":"abc"}', auto_sync: true });
 
       const ack = vi.fn();
@@ -3786,7 +3789,7 @@ describe('Commands Module', () => {
       const app = createMockApp();
       registerCommands(app as any);
 
-      mockListAgents.mockResolvedValue([makeFakeAgent({ visibility: 'private' })]);
+      mockListAgents.mockResolvedValue([makeFakeAgent({ default_access: 'none' })]);
       mockCanModifyAgent.mockResolvedValue(true);
       const ack = vi.fn();
       const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
@@ -3798,11 +3801,11 @@ describe('Commands Module', () => {
       expect(allText).toContain(':lock:');
     });
 
-    it('should not show members option for private agents when user cannot modify', async () => {
+    it('should not show members option for restricted agents when user cannot modify', async () => {
       const app = createMockApp();
       registerCommands(app as any);
 
-      mockListAgents.mockResolvedValue([makeFakeAgent({ visibility: 'private' })]);
+      mockListAgents.mockResolvedValue([makeFakeAgent({ default_access: 'none' })]);
       mockCanModifyAgent.mockResolvedValue(false);
       const ack = vi.fn();
       const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
@@ -3823,7 +3826,7 @@ describe('Commands Module', () => {
       const app = createMockApp();
       registerCommands(app as any);
 
-      mockIsSuperadmin.mockResolvedValue(true);
+      mockIsPlatformAdmin.mockResolvedValue(true);
       // All integration tools are already registered
       mockListCustomTools.mockResolvedValue([
         { name: 'test-tool-read', access_level: 'read-only', language: 'docker', config_json: '{}', schema_json: '{}', approved: true },
@@ -3849,7 +3852,7 @@ describe('Commands Module', () => {
       const app = createMockApp();
       registerCommands(app as any);
 
-      mockIsSuperadmin.mockResolvedValue(true);
+      mockIsPlatformAdmin.mockResolvedValue(true);
       mockListKBEntries.mockResolvedValue([]);
       mockListPendingEntries.mockResolvedValue([]);
       mockGetCategories.mockResolvedValue([]);
@@ -3881,7 +3884,7 @@ describe('Commands Module', () => {
       const app = createMockApp();
       registerCommands(app as any);
 
-      mockIsSuperadmin.mockResolvedValue(true);
+      mockIsPlatformAdmin.mockResolvedValue(true);
       mockListKBEntries.mockResolvedValue([]);
       mockListPendingEntries.mockResolvedValue([]);
       mockGetCategories.mockResolvedValue([]);
@@ -3938,7 +3941,7 @@ describe('Commands Module', () => {
         response_type: 'ephemeral',
         text: expect.stringContaining('Please use this command in a DM'),
       });
-      expect(mockIsSuperadmin).not.toHaveBeenCalled();
+      expect(mockIsPlatformAdmin).not.toHaveBeenCalled();
     });
 
     it('/kb should reject commands not sent from a DM', async () => {
@@ -3979,12 +3982,12 @@ describe('Commands Module', () => {
       expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('permission'), );
     });
 
-    it('should deny members when agent is not private', async () => {
+    it('should deny members when agent does not have restricted access', async () => {
       const app = createMockApp();
       await safeRegisterInlineActions(app);
 
       mockCanModifyAgent.mockResolvedValue(true);
-      mockGetAgent.mockResolvedValue(makeFakeAgent({ visibility: 'public' }));
+      mockGetAgent.mockResolvedValue(makeFakeAgent({ default_access: 'viewer' }));
 
       const ack = vi.fn();
       const action = { selected_option: { value: 'members:agent-1' } };
@@ -3992,15 +3995,15 @@ describe('Commands Module', () => {
 
       await app.handlers.action['agent_overflow']({ action, ack, body });
 
-      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('not private'));
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('restricted'));
     });
 
-    it('should show member list for private agent when user can modify', async () => {
+    it('should show member list for restricted agent when user can modify', async () => {
       const app = createMockApp();
       await safeRegisterInlineActions(app);
 
       mockCanModifyAgent.mockResolvedValue(true);
-      mockGetAgent.mockResolvedValue(makeFakeAgent({ visibility: 'private' }));
+      mockGetAgent.mockResolvedValue(makeFakeAgent({ default_access: 'none' }));
       mockGetAgentMembers.mockResolvedValue(['UMEMBER1', 'UMEMBER2']);
 
       const ack = vi.fn();
@@ -4020,7 +4023,7 @@ describe('Commands Module', () => {
       await safeRegisterInlineActions(app);
 
       mockCanModifyAgent.mockResolvedValue(true);
-      mockGetAgent.mockResolvedValue(makeFakeAgent({ visibility: 'private' }));
+      mockGetAgent.mockResolvedValue(makeFakeAgent({ default_access: 'none' }));
       mockGetAgentMembers.mockResolvedValue([]);
 
       const ack = vi.fn();
@@ -4091,7 +4094,7 @@ describe('Commands Module', () => {
 
       if (!app.handlers.action['kb_source_overflow']) return;
 
-      mockIsSuperadmin.mockResolvedValue(true);
+      mockIsPlatformAdmin.mockResolvedValue(true);
       mockGetSource.mockResolvedValue({ id: 'src-1', name: 'My Source', source_type: 'google_drive', config_json: '{}', auto_sync: true });
       mockFlushAndResync.mockRejectedValue(new Error('Flush failed'));
 
@@ -4445,7 +4448,7 @@ describe('Commands Module', () => {
 
       if (!app.handlers.action['register_tool_integration']) return;
 
-      mockIsSuperadmin.mockResolvedValue(true);
+      mockIsPlatformAdmin.mockResolvedValue(true);
 
       const ack = vi.fn();
       const action = { value: 'test-integration' };
@@ -4470,7 +4473,7 @@ describe('Commands Module', () => {
 
       if (!app.handlers.action['register_tool_integration']) return;
 
-      mockIsSuperadmin.mockResolvedValue(false);
+      mockIsPlatformAdmin.mockResolvedValue(false);
 
       const ack = vi.fn();
       const action = { value: 'test-integration' };
@@ -4488,7 +4491,7 @@ describe('Commands Module', () => {
 
       if (!app.handlers.action['register_tool_integration']) return;
 
-      mockIsSuperadmin.mockResolvedValue(true);
+      mockIsPlatformAdmin.mockResolvedValue(true);
 
       const ack = vi.fn();
       const action = { value: 'unknown-integration' };
@@ -4506,7 +4509,7 @@ describe('Commands Module', () => {
 
       if (!app.handlers.action['register_tool_integration']) return;
 
-      mockIsSuperadmin.mockResolvedValue(true);
+      mockIsPlatformAdmin.mockResolvedValue(true);
       mockOpenModal.mockRejectedValue(new Error('Modal failed'));
 
       const ack = vi.fn();
@@ -6185,7 +6188,7 @@ describe('Commands Module', () => {
   });
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  // Additional coverage: confirm_new_agent with private visibility and members
+  // Additional coverage: confirm_new_agent with private access and members
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   describe('confirm_new_agent - private with members', () => {
@@ -6220,7 +6223,7 @@ describe('Commands Module', () => {
         channel_id: 'C_EXISTING',
         channel_ids: ['C_EXISTING'],
       });
-      mockListSuperadmins.mockResolvedValue([{ user_id: 'UADMIN' }]);
+      mockListPlatformAdmins.mockResolvedValue([{ user_id: 'UADMIN' }]);
 
       const ack = vi.fn();
       const action = { value: 'confirm-private' };
@@ -6439,7 +6442,7 @@ describe('Commands Module', () => {
         blockers: ["Tool 'zendesk-write' is registered but not configured by admin."],
         feasible: false,
       }));
-      mockListSuperadmins.mockResolvedValue([{ user_id: 'UADMIN' }]);
+      mockListPlatformAdmins.mockResolvedValue([{ user_id: 'UADMIN' }]);
 
       const result = await handleConversationReply('W_TEST_123', 'U_REQ', 'C1', 'thread-1', 'every message');
       expect(result).toBe(true);
@@ -6619,7 +6622,7 @@ describe('Commands Module', () => {
       mockGetSlackApp.mockReturnValue({
         client: { users: { info: vi.fn().mockResolvedValue({ user: { tz: 'America/Chicago' } }) } },
       });
-      mockListSuperadmins.mockResolvedValue([{ user_id: 'UADMIN' }]);
+      mockListPlatformAdmins.mockResolvedValue([{ user_id: 'UADMIN' }]);
 
       const ack = vi.fn();
       const action = { value: 'conf-upd-post-err' };
@@ -6661,7 +6664,7 @@ describe('Commands Module', () => {
       mockGetSlackApp.mockReturnValue({
         client: { users: { info: vi.fn().mockResolvedValue({ user: { tz: 'Europe/London' } }) } },
       });
-      mockListSuperadmins.mockResolvedValue([{ user_id: 'UADMIN' }]);
+      mockListPlatformAdmins.mockResolvedValue([{ user_id: 'UADMIN' }]);
 
       const ack = vi.fn();
       const action = { value: 'retry-req-1' };
@@ -6946,7 +6949,7 @@ describe('Commands Module', () => {
       });
       mockCreateAgent.mockResolvedValue({ id: 'agent-bg-err', name: 'BG Error Bot' });
       // Make listSuperadmins throw to trigger background error
-      mockListSuperadmins.mockRejectedValueOnce(new Error('DB connection error'));
+      mockListPlatformAdmins.mockRejectedValueOnce(new Error('DB connection error'));
 
       const ack = vi.fn();
       const action = { value: 'conf-bg-err' };
@@ -7555,7 +7558,7 @@ describe('Commands Module', () => {
         expires_at: futureDate,
       });
       mockCreateAgent.mockResolvedValue({ id: 'agent-tool-req', name: 'Tool Request Bot' });
-      mockListSuperadmins.mockResolvedValue([{ user_id: 'UADMIN' }]);
+      mockListPlatformAdmins.mockResolvedValue([{ user_id: 'UADMIN' }]);
 
       const ack = vi.fn();
       const action = { value: 'conf-tool-req' };
@@ -7596,7 +7599,7 @@ describe('Commands Module', () => {
         expires_at: futureDate,
       });
       mockCreateAgent.mockResolvedValue({ id: 'agent-no-admin', name: 'No Admin Bot' });
-      mockListSuperadmins.mockResolvedValue([]);
+      mockListPlatformAdmins.mockResolvedValue([]);
 
       const ack = vi.fn();
       const action = { value: 'conf-no-admin' };
@@ -7676,7 +7679,7 @@ describe('Commands Module', () => {
 
       expect(app.handlers.action['register_tool_integration']).toBeDefined();
 
-      mockIsSuperadmin.mockResolvedValue(true);
+      mockIsPlatformAdmin.mockResolvedValue(true);
 
       const ack = vi.fn();
       const action = { value: 'test-integration' };

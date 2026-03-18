@@ -1,7 +1,7 @@
 import type { App } from '@slack/bolt';
 import { v4 as uuid } from 'uuid';
 import { createAgent, listAgents, getAgent, getAgentByName, updateAgent, getAccessibleAgents, addAgentMembers, getAgentMembers, addAgentMember, removeAgentMember } from '../modules/agents';
-import { initSuperadmin, canModifyAgent, listSuperadmins } from '../modules/access-control';
+import { initSuperadmin, canModifyAgent, listPlatformAdmins, isPlatformAdmin } from '../modules/access-control';
 import { createChannel, postMessage, postBlocks, getSlackApp, sendDMBlocks, openModal, pushModal } from './index';
 import { analyzeGoal } from '../modules/agents/goal-analyzer';
 import { attachSkillToAgent } from '../modules/skills';
@@ -182,7 +182,7 @@ export function registerCommands(app: App): void {
       for (const a of agents) {
         const channels = (a.channel_ids?.length > 0 ? a.channel_ids : [a.channel_id]).map((c: string) => `<#${c}>`).join(', ');
         const statusIcon = a.status === 'active' ? ':large_green_circle:' : a.status === 'paused' ? ':double_vertical_bar:' : ':red_circle:';
-        const visibilityIcon = a.visibility === 'private' ? ' :lock:' : '';
+        const accessIcon = a.default_access === 'none' ? ' :lock:' : '';
 
         const overflowOptions: any[] = [
           { text: { type: 'plain_text', text: ':gear: View Config' }, value: `view_config:${a.id}` },
@@ -200,7 +200,7 @@ export function registerCommands(app: App): void {
           overflowOptions.push({ text: { type: 'plain_text', text: ':arrow_forward: Resume' }, value: `resume:${a.id}` });
         }
 
-        if (a.visibility === 'private' && canModify) {
+        if (a.default_access === 'none' && canModify) {
           overflowOptions.push({ text: { type: 'plain_text', text: ':busts_in_silhouette: Members' }, value: `members:${a.id}` });
         }
 
@@ -212,7 +212,7 @@ export function registerCommands(app: App): void {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `${statusIcon} *${a.avatar_emoji} ${a.name}*${visibilityIcon}\n${channels} · ${a.model} · ${maxTurnsToEffort(a.max_turns)} effort · ${a.tools.length} tools · memory ${a.memory_enabled ? 'on' : 'off'}${a.created_by ? ` · by <@${a.created_by}>` : ''}`,
+            text: `${statusIcon} *${a.avatar_emoji} ${a.name}*${accessIcon}\n${channels} · ${a.model} · ${maxTurnsToEffort(a.max_turns)} effort · ${a.tools.length} tools · memory ${a.memory_enabled ? 'on' : 'off'}${a.created_by ? ` · by <@${a.created_by}>` : ''}`,
           },
           accessory: {
             type: 'overflow',
@@ -268,8 +268,8 @@ export function registerCommands(app: App): void {
     const workspaceId = command.team_id || getDefaultWorkspaceId();
     const userId = command.user_id;
 
-    const { isSuperadmin } = await import('../modules/access-control');
-    if (!(await isSuperadmin(workspaceId, userId))) {
+    const { isPlatformAdmin } = await import('../modules/access-control');
+    if (!(await isPlatformAdmin(workspaceId, userId))) {
       await respond({ response_type: 'ephemeral', text: ':lock: Only admins can manage tools. Use `/agents` to create agents with existing tools.' });
       return;
     }
@@ -358,8 +358,8 @@ export function registerCommands(app: App): void {
     const workspaceId = command.team_id || getDefaultWorkspaceId();
     const userId = command.user_id;
     const subcommand = command.text.trim().split(/\s+/)[0]?.toLowerCase() || '';
-    const { isSuperadmin } = await import('../modules/access-control');
-    const isAdmin = await isSuperadmin(workspaceId, userId);
+    const { isPlatformAdmin } = await import('../modules/access-control');
+    const isAdmin = await isPlatformAdmin(workspaceId, userId);
 
     if (subcommand === 'search') {
       const queryText = command.text.trim().slice('search'.length).trim();
@@ -679,7 +679,7 @@ export function registerInlineActions(app: App): void {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `*Status:* ${agent.status}\n*Model:* ${agent.model}\n*Effort:* ${maxTurnsToEffort(agent.max_turns)}\n*Memory:* ${agent.memory_enabled ? 'on' : 'off'}\n*Visibility:* ${agent.visibility === 'private' ? ':lock: private' : 'public'}\n*Channels:* ${channels}\n*Tools:* ${agent.tools.join(', ') || 'none'}\n*Responds to:* ${respondModeLabelFromAgent(agent)}`,
+              text: `*Status:* ${agent.status}\n*Model:* ${agent.model}\n*Effort:* ${maxTurnsToEffort(agent.max_turns)}\n*Memory:* ${agent.memory_enabled ? 'on' : 'off'}\n*Access:* ${agent.default_access === 'none' ? ':lock: restricted' : agent.default_access}\n*Channels:* ${channels}\n*Tools:* ${agent.tools.join(', ') || 'none'}\n*Responds to:* ${respondModeLabelFromAgent(agent)}`,
             },
           },
           { type: 'divider' },
@@ -769,8 +769,8 @@ export function registerInlineActions(app: App): void {
           return;
         }
         const agent = await getAgent(workspaceId, agentId);
-        if (!agent || agent.visibility !== 'private') {
-          if (channelId) await postMessage(channelId, ':x: This agent is not private.');
+        if (!agent || agent.default_access !== 'none') {
+          if (channelId) await postMessage(channelId, ':x: This agent does not have restricted access.');
           return;
         }
         const members = await getAgentMembers(workspaceId, agentId);
@@ -1064,8 +1064,8 @@ export function registerInlineActions(app: App): void {
     const triggerId = (body as any).trigger_id;
     const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
 
-    const { isSuperadmin } = await import('../modules/access-control');
-    if (!(await isSuperadmin(workspaceId, userId))) return;
+    const { isPlatformAdmin } = await import('../modules/access-control');
+    if (!(await isPlatformAdmin(workspaceId, userId))) return;
 
     const { getSource, startSync, flushAndResync, toggleAutoSync, deleteSource } = await import('../modules/kb-sources');
     const source = await getSource(workspaceId, sourceId);
@@ -1298,8 +1298,8 @@ export function registerInlineActions(app: App): void {
     const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
 
     try {
-      const { isSuperadmin } = await import('../modules/access-control');
-      if (!(await isSuperadmin(workspaceId, userId))) return;
+      const { isPlatformAdmin } = await import('../modules/access-control');
+      if (!(await isPlatformAdmin(workspaceId, userId))) return;
 
       const integration = TOOL_INTEGRATIONS.find(i => i.id === integrationId);
       if (!integration) {
@@ -1591,8 +1591,8 @@ export function registerInlineActions(app: App): void {
     const triggerId = (body as any).trigger_id;
     const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
 
-    const { isSuperadmin } = await import('../modules/access-control');
-    if (!(await isSuperadmin(workspaceId, userId))) return;
+    const { isPlatformAdmin } = await import('../modules/access-control');
+    if (!(await isPlatformAdmin(workspaceId, userId))) return;
 
     const {
       getCustomTool, getToolConfig, approveCustomTool, deleteCustomTool,
@@ -2379,10 +2379,10 @@ async function handleInfeasibleRequest(
     if (match) unconfiguredToolNames.push(match[1]);
   }
 
-  // DM the owner (first superadmin)
-  const superadmins = await listSuperadmins(workspaceId);
-  if (superadmins.length > 0) {
-    const ownerId = superadmins[0].user_id;
+  // DM the owner (first platform admin)
+  const platformAdmins = await listPlatformAdmins(workspaceId);
+  if (platformAdmins.length > 0) {
+    const ownerId = platformAdmins[0].user_id;
 
     const dmBlocks: any[] = [
       {
@@ -3590,8 +3590,8 @@ function buildConfigSummary(name: string, analysis: any, goal: string, existingA
 async function notifyAdminWriteToolRequest(
   workspaceId: string, agentId: string, agentName: string, writeTools: string[], requestedBy: string,
 ): Promise<void> {
-  const superadmins = await listSuperadmins(workspaceId);
-  if (superadmins.length === 0) return;
+  const admins = await listPlatformAdmins(workspaceId);
+  if (admins.length === 0) return;
 
   const requestId = uuid();
   await execute(
@@ -3606,7 +3606,7 @@ async function notifyAdminWriteToolRequest(
   );
 
   const toolList = writeTools.map(t => `• \`${t}\``).join('\n');
-  await sendDMBlocks(superadmins[0].user_id, [
+  await sendDMBlocks(admins[0].user_id, [
     {
       type: 'header',
       text: { type: 'plain_text', text: ':lock: Write Tool Approval Request' },
@@ -3644,8 +3644,8 @@ async function notifyAdminNewToolRequest(
   newTools: Array<{ name: string; description: string }>,
   goal: string, requestedBy: string,
 ): Promise<void> {
-  const superadmins = await listSuperadmins(workspaceId);
-  if (superadmins.length === 0) return;
+  const admins = await listPlatformAdmins(workspaceId);
+  if (admins.length === 0) return;
 
   const requestId = uuid();
   await execute(
@@ -3661,7 +3661,7 @@ async function notifyAdminNewToolRequest(
   );
 
   const toolList = newTools.map(t => `• *${t.name}*: ${t.description}`).join('\n');
-  await sendDMBlocks(superadmins[0].user_id, [
+  await sendDMBlocks(admins[0].user_id, [
     {
       type: 'header',
       text: { type: 'plain_text', text: ':wrench: New Tool Request' },

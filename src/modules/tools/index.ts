@@ -1,7 +1,7 @@
 import { v4 as uuid } from 'uuid';
 import { query, queryOne, execute } from '../../db';
 import { getAgent, updateAgent } from '../agents';
-import { canModifyAgent } from '../access-control';
+import { canModifyAgent, isPlatformAdmin } from '../access-control';
 import type { CustomTool, ToolType, ToolAccessLevel } from '../../types';
 import { logger } from '../../utils/logger';
 
@@ -28,11 +28,11 @@ export async function addToolToAgent(
   toolName: string,
   userId: string
 ): Promise<string[]> {
-  if (!(await canModifyAgent(agentId, userId))) {
+  if (!(await canModifyAgent(workspaceId, agentId, userId))) {
     throw new Error('Insufficient permissions to modify agent tools');
   }
 
-  const agent = await getAgent(agentId);
+  const agent = await getAgent(workspaceId, agentId);
   if (!agent) throw new Error(`Agent ${agentId} not found`);
 
   const tools = [...agent.tools];
@@ -47,7 +47,7 @@ export async function addToolToAgent(
   }
 
   tools.push(toolName);
-  await updateAgent(agentId, { tools }, userId);
+  await updateAgent(workspaceId, agentId, { tools }, userId);
 
   logger.info('Tool added to agent', { agentId, toolName, userId });
   return tools;
@@ -59,15 +59,15 @@ export async function removeToolFromAgent(
   toolName: string,
   userId: string
 ): Promise<string[]> {
-  if (!(await canModifyAgent(agentId, userId))) {
+  if (!(await canModifyAgent(workspaceId, agentId, userId))) {
     throw new Error('Insufficient permissions to modify agent tools');
   }
 
-  const agent = await getAgent(agentId);
+  const agent = await getAgent(workspaceId, agentId);
   if (!agent) throw new Error(`Agent ${agentId} not found`);
 
   const tools = agent.tools.filter(t => t !== toolName);
-  await updateAgent(agentId, { tools }, userId);
+  await updateAgent(workspaceId, agentId, { tools }, userId);
 
   logger.info('Tool removed from agent', { agentId, toolName, userId });
   return tools;
@@ -128,8 +128,7 @@ export async function registerCustomTool(
 }
 
 export async function approveCustomTool(workspaceId: string, name: string, userId: string): Promise<void> {
-  const isSuperadmin = await queryOne('SELECT user_id FROM superadmins WHERE user_id = $1', [userId]);
-  if (!isSuperadmin) throw new Error('Only admins can approve tools');
+  if (!(await isPlatformAdmin(workspaceId, userId))) throw new Error('Only admins can approve tools');
 
   await execute('UPDATE custom_tools SET approved = TRUE WHERE workspace_id = $1 AND name = $2', [workspaceId, name]);
   logger.info('Custom tool approved', { name, userId });
@@ -171,8 +170,7 @@ export async function listWriteTools(workspaceId: string): Promise<CustomTool[]>
 }
 
 export async function deleteCustomTool(workspaceId: string, name: string, userId: string): Promise<void> {
-  const isSuperadminRow = await queryOne('SELECT user_id FROM superadmins WHERE user_id = $1', [userId]);
-  if (!isSuperadminRow) {
+  if (!(await isPlatformAdmin(workspaceId, userId))) {
     throw new Error('Only admins can delete custom tools');
   }
 
@@ -188,8 +186,7 @@ export async function updateToolConfig(
   configJson: string,
   userId: string,
 ): Promise<void> {
-  const isSuperadminRow = await queryOne('SELECT user_id FROM superadmins WHERE user_id = $1', [userId]);
-  if (!isSuperadminRow) throw new Error('Only admins can update tool config');
+  if (!(await isPlatformAdmin(workspaceId, userId))) throw new Error('Only admins can update tool config');
 
   const tool = await getCustomTool(workspaceId, name);
   if (!tool) throw new Error(`Tool "${name}" not found`);
@@ -205,8 +202,7 @@ export async function setToolConfigKey(
   value: string,
   userId: string,
 ): Promise<Record<string, any>> {
-  const isSuperadminRow = await queryOne('SELECT user_id FROM superadmins WHERE user_id = $1', [userId]);
-  if (!isSuperadminRow) throw new Error('Only admins can update tool config');
+  if (!(await isPlatformAdmin(workspaceId, userId))) throw new Error('Only admins can update tool config');
 
   const tool = await getCustomTool(workspaceId, name);
   if (!tool) throw new Error(`Tool "${name}" not found`);
@@ -226,8 +222,7 @@ export async function removeToolConfigKey(
   key: string,
   userId: string,
 ): Promise<Record<string, any>> {
-  const isSuperadminRow = await queryOne('SELECT user_id FROM superadmins WHERE user_id = $1', [userId]);
-  if (!isSuperadminRow) throw new Error('Only admins can update tool config');
+  if (!(await isPlatformAdmin(workspaceId, userId))) throw new Error('Only admins can update tool config');
 
   const tool = await getCustomTool(workspaceId, name);
   if (!tool) throw new Error(`Tool "${name}" not found`);
@@ -246,8 +241,7 @@ export async function getToolConfig(
   name: string,
   userId: string,
 ): Promise<Record<string, any>> {
-  const isSuperadminRow = await queryOne('SELECT user_id FROM superadmins WHERE user_id = $1', [userId]);
-  if (!isSuperadminRow) throw new Error('Only admins can view tool config');
+  if (!(await isPlatformAdmin(workspaceId, userId))) throw new Error('Only admins can view tool config');
 
   const tool = await getCustomTool(workspaceId, name);
   if (!tool) throw new Error(`Tool "${name}" not found`);
@@ -261,8 +255,7 @@ export async function updateToolAccessLevel(
   accessLevel: ToolAccessLevel,
   userId: string,
 ): Promise<void> {
-  const isSuperadminRow = await queryOne('SELECT user_id FROM superadmins WHERE user_id = $1', [userId]);
-  if (!isSuperadminRow) throw new Error('Only admins can change tool access level');
+  if (!(await isPlatformAdmin(workspaceId, userId))) throw new Error('Only admins can change tool access level');
 
   const tool = await getCustomTool(workspaceId, name);
   if (!tool) throw new Error(`Tool "${name}" not found`);
@@ -278,7 +271,7 @@ export async function getAgentToolSummary(workspaceId: string, agentId: string):
   custom: string[];
   mcp: string[];
 }> {
-  const agent = await getAgent(agentId);
+  const agent = await getAgent(workspaceId, agentId);
   if (!agent) throw new Error(`Agent ${agentId} not found`);
 
   const builtin: string[] = [];

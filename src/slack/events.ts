@@ -124,12 +124,9 @@ export function registerEvents(app: App): void {
 
     // Check if message is in an agent channel (supports multiple agents per channel)
     const allAgents = await getAgentsByChannel(workspaceId, channelId);
-    // Filter out private agents the user doesn't have access to
+    // Filter out agents the user doesn't have access to (role-based)
     const agentAccessResults = await Promise.all(
-      allAgents.map(async (a) => {
-        if (a.visibility !== 'private') return true;
-        return canAccessAgent(workspaceId, a.id, userId);
-      })
+      allAgents.map(async (a) => canAccessAgent(workspaceId, a.id, userId))
     );
     const agents = allAgents.filter((_, i) => agentAccessResults[i]);
     logger.info('Agent lookup result', { channelId, agentCount: agents.length, totalInChannel: allAgents.length, agentNames: agents.map(a => a.name) });
