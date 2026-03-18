@@ -841,10 +841,10 @@ describe('Commands Module', () => {
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
       const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
-      expect(allText).toContain(':lock: restricted');
+      expect(allText).toContain(':lock: invite only');
     });
 
-    it('should show open access badge for non-restricted agents', async () => {
+    it('should show everyone access badge for non-restricted agents', async () => {
       const app = createMockApp();
       registerCommands(app as any);
 
@@ -856,7 +856,7 @@ describe('Commands Module', () => {
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
       const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
-      expect(allText).toContain(':globe_with_meridians: open');
+      expect(allText).toContain(':globe_with_meridians: everyone');
     });
 
     it('should show user role for the agent', async () => {
@@ -872,7 +872,7 @@ describe('Commands Module', () => {
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
       const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
-      expect(allText).toContain('Your role: member');
+      expect(allText).toContain('Your role: Full access');
     });
 
     it('should show write policy in agent card', async () => {
@@ -887,7 +887,7 @@ describe('Commands Module', () => {
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
       const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
-      expect(allText).toContain('Write: confirm');
+      expect(allText).toContain('Writes: User confirms');
     });
 
     it('should not show pause/resume options for non-owners', async () => {
@@ -2024,12 +2024,12 @@ describe('Commands Module', () => {
       await app.handlers.action['agent_overflow']({ action, ack, body });
 
       const allText = JSON.stringify(mockPostBlocks.mock.calls[0][1]);
-      expect(allText).toContain('Write Policy');
-      expect(allText).toContain('confirm');
+      expect(allText).toContain('Writes');
+      expect(allText).toContain('User confirms');
       expect(allText).toContain('Access Control');
       expect(allText).toContain(':crown: Owner');
       expect(allText).toContain('<@U_OWNER>');
-      expect(allText).toContain(':busts_in_silhouette: Member');
+      expect(allText).toContain(':busts_in_silhouette: Full access');
       expect(allText).toContain('<@U_MEMBER>');
     });
 
@@ -2047,8 +2047,8 @@ describe('Commands Module', () => {
       await app.handlers.action['agent_overflow']({ action, ack, body });
 
       const allText = JSON.stringify(mockPostBlocks.mock.calls[0][1]);
-      expect(allText).toContain('Default access: viewer');
-      expect(allText).toContain('Write policy: auto');
+      expect(allText).toContain('Default access: Everyone (view)');
+      expect(allText).toContain('Writes: No approval needed');
       expect(allText).not.toContain(':crown:');
     });
 

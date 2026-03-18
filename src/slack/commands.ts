@@ -182,7 +182,7 @@ export function registerCommands(app: App): void {
       for (const a of agents) {
         const channels = (a.channel_ids?.length > 0 ? a.channel_ids : [a.channel_id]).map((c: string) => `<#${c}>`).join(', ');
         const statusIcon = a.status === 'active' ? ':large_green_circle:' : a.status === 'paused' ? ':double_vertical_bar:' : ':red_circle:';
-        const accessBadge = a.default_access === 'none' ? ' :lock: restricted' : ' :globe_with_meridians: open';
+        const accessBadge = a.default_access === 'none' ? ' :lock: invite only' : ' :globe_with_meridians: everyone';
 
         // Format tools list with truncation
         let toolsDisplay: string;
@@ -227,7 +227,7 @@ export function registerCommands(app: App): void {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `${statusIcon} *${a.avatar_emoji} ${a.name}*${accessBadge}\n${channels} · ${a.model} · ${maxTurnsToEffort(a.max_turns)} effort · memory ${a.memory_enabled ? 'on' : 'off'}${a.created_by ? ` · by <@${a.created_by}>` : ''}\nTools: ${toolsDisplay}\nAccess: ${a.default_access === 'none' ? 'restricted' : a.default_access} · Write: ${a.write_policy || 'auto'} · Your role: ${userRole}`,
+            text: `${statusIcon} *${a.avatar_emoji} ${a.name}*${accessBadge}\n${channels} · ${a.model} · ${maxTurnsToEffort(a.max_turns)} effort · memory ${a.memory_enabled ? 'on' : 'off'}${a.created_by ? ` · by <@${a.created_by}>` : ''}\nTools: ${toolsDisplay}\nAccess: ${formatAccessLevel(a.default_access)} · Writes: ${formatWritePolicy(a.write_policy || 'auto')} · Your role: ${formatUserRole(userRole)}`,
           },
           accessory: {
             type: 'overflow',
@@ -757,12 +757,12 @@ export function registerInlineActions(app: App): void {
         const memberUsers = agentRoles.filter(r => r.role === 'member').map(r => `<@${r.user_id}>`);
         const viewerUsers = agentRoles.filter(r => r.role === 'viewer').map(r => `<@${r.user_id}>`);
 
-        let rolesText = `*Access Control:*\nDefault access: ${agent.default_access} · Write policy: ${agent.write_policy || 'auto'}`;
+        let rolesText = `*Access Control:*\nDefault access: ${formatAccessLevel(agent.default_access)} · Writes: ${formatWritePolicy(agent.write_policy || 'auto')}`;
         if (ownerUsers.length > 0 || memberUsers.length > 0 || viewerUsers.length > 0) {
           rolesText += '\n*Roles:*';
           if (ownerUsers.length > 0) rolesText += `\n:crown: Owner: ${ownerUsers.join(', ')}`;
-          if (memberUsers.length > 0) rolesText += `\n:busts_in_silhouette: Member: ${memberUsers.join(', ')}`;
-          if (viewerUsers.length > 0) rolesText += `\n:eye: Viewer: ${viewerUsers.join(', ')}`;
+          if (memberUsers.length > 0) rolesText += `\n:busts_in_silhouette: Full access: ${memberUsers.join(', ')}`;
+          if (viewerUsers.length > 0) rolesText += `\n:eye: View only: ${viewerUsers.join(', ')}`;
         }
 
         const blocks: any[] = [
@@ -771,7 +771,7 @@ export function registerInlineActions(app: App): void {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `*Status:* ${agent.status}\n*Model:* ${agent.model}\n*Effort:* ${maxTurnsToEffort(agent.max_turns)}\n*Memory:* ${agent.memory_enabled ? 'on' : 'off'}\n*Access:* ${agent.default_access === 'none' ? ':lock: restricted' : agent.default_access}\n*Write Policy:* ${agent.write_policy || 'auto'}\n*Channels:* ${channels}\n*Tools:* ${agent.tools.join(', ') || 'none'}\n*Responds to:* ${respondModeLabelFromAgent(agent)}`,
+              text: `*Status:* ${agent.status}\n*Model:* ${agent.model}\n*Effort:* ${maxTurnsToEffort(agent.max_turns)}\n*Memory:* ${agent.memory_enabled ? 'on' : 'off'}\n*Access:* ${agent.default_access === 'none' ? ':lock: Invite only' : formatAccessLevel(agent.default_access)}\n*Writes:* ${formatWritePolicy(agent.write_policy || 'auto')}\n*Channels:* ${channels}\n*Tools:* ${agent.tools.join(', ') || 'none'}\n*Responds to:* ${respondModeLabelFromAgent(agent)}`,
             },
           },
           { type: 'divider' },
@@ -875,10 +875,10 @@ export function registerInlineActions(app: App): void {
         const memberRoleList = roles.filter(r => r.role === 'member').map(r => `<@${r.user_id}>`);
         const viewerList = roles.filter(r => r.role === 'viewer').map(r => `<@${r.user_id}>`);
 
-        let rolesSection = `*Default access:* ${agent.default_access} · *Write policy:* ${agent.write_policy || 'auto'}`;
+        let rolesSection = `*Default access:* ${formatAccessLevel(agent.default_access)} · *Writes:* ${formatWritePolicy(agent.write_policy || 'auto')}`;
         if (ownerList.length > 0) rolesSection += `\n:crown: *Owner:* ${ownerList.join(', ')}`;
-        if (memberRoleList.length > 0) rolesSection += `\n:busts_in_silhouette: *Member:* ${memberRoleList.join(', ')}`;
-        if (viewerList.length > 0) rolesSection += `\n:eye: *Viewer:* ${viewerList.join(', ')}`;
+        if (memberRoleList.length > 0) rolesSection += `\n:busts_in_silhouette: *Full access:* ${memberRoleList.join(', ')}`;
+        if (viewerList.length > 0) rolesSection += `\n:eye: *View only:* ${viewerList.join(', ')}`;
         if (ownerList.length === 0 && memberRoleList.length === 0 && viewerList.length === 0) {
           rolesSection += '\n_No explicit roles assigned — all users have default access._';
         }
@@ -3531,6 +3531,36 @@ function maxTurnsToEffort(maxTurns: number): string {
   if (maxTurns <= 15) return 'medium';
   if (maxTurns <= 25) return 'high';
   return 'max';
+}
+
+function formatAccessLevel(level: string): string {
+  switch (level) {
+    case 'none': return 'Invite only';
+    case 'viewer': return 'Everyone (view)';
+    case 'member': return 'Everyone (full access)';
+    case 'owner': return 'Owner';
+    default: return level;
+  }
+}
+
+function formatWritePolicy(policy: string): string {
+  switch (policy) {
+    case 'auto': return 'No approval needed';
+    case 'confirm': return 'User confirms';
+    case 'admin_confirm': return 'Owner approves';
+    case 'deny': return 'Blocked';
+    default: return policy;
+  }
+}
+
+function formatUserRole(role: string): string {
+  switch (role) {
+    case 'owner': return 'Owner';
+    case 'member': return 'Full access';
+    case 'viewer': return 'View only';
+    case 'none': return 'No access';
+    default: return role;
+  }
 }
 
 function respondModeLabel(analysis: { respond_to_all_messages: boolean; mentions_only?: boolean }): string {
