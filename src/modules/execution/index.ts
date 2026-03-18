@@ -430,12 +430,15 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
     if (data.channelId) {
       if (exitCode !== 0) {
         // Container failed — report the error to the user
-        cleanupStatusMessage(data.channelId, data.threadTs, data.agentId);
+        await cleanupStatusMessage(data.channelId, data.threadTs, data.agentId);
+        const errorMessage = exitCode === 137
+          ? `Task was interrupted after ${(durationMs / 1000 / 60).toFixed(0)} minutes — the agent ran out of time or resources. Try simplifying the request or breaking it into smaller steps.`
+          : (outputData.output || `Task failed with exit code ${exitCode}`);
         bufferEvent(
           data.channelId,
           data.threadTs,
           'error',
-          outputData.output || `Task failed with exit code ${exitCode}`,
+          errorMessage,
           agent.name,
           agent.avatar_emoji,
           false,
@@ -485,7 +488,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
 
     // Clean up status message and stream error to Slack
     if (data.channelId) {
-      cleanupStatusMessage(data.channelId, data.threadTs, data.agentId);
+      await cleanupStatusMessage(data.channelId, data.threadTs, data.agentId);
       bufferEvent(
         data.channelId,
         data.threadTs,

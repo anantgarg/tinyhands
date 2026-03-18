@@ -100,7 +100,7 @@ vi.mock('bullmq', () => ({
 
 const mockBufferEvent = vi.fn();
 const mockSetStatusMessageTs = vi.fn();
-const mockCleanupStatusMessage = vi.fn();
+const mockCleanupStatusMessage = vi.fn().mockResolvedValue(undefined);
 vi.mock('../../src/slack/buffer', () => ({
   bufferEvent: (...args: any[]) => mockBufferEvent(...args),
   setStatusMessageTs: (...args: any[]) => mockSetStatusMessageTs(...args),
@@ -690,6 +690,31 @@ describe('Execution Module – executeAgentRun', () => {
     const errorCalls = mockBufferEvent.mock.calls.filter((c: any[]) => c[2] === 'error');
     expect(errorCalls.length).toBe(1);
     expect(errorCalls[0][3]).toContain('Error occurred');
+  });
+
+  it('should report user-friendly error message for exit code 137 (SIGKILL)', async () => {
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 137,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"some raw container logs","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+    });
+
+    const job = makeFakeJob(makeJobData());
+    const result = await executeAgentRun(job);
+
+    expect(result).toContain('Task failed with exit code 137');
+
+    // Should await cleanupStatusMessage before posting error
+    expect(mockCleanupStatusMessage).toHaveBeenCalledWith('C123', '1700000000.000000', 'agent-1');
+
+    // Error message posted to Slack should be user-friendly, not raw logs
+    const errorCalls = mockBufferEvent.mock.calls.filter((c: any[]) => c[2] === 'error');
+    expect(errorCalls.length).toBe(1);
+    expect(errorCalls[0][3]).toContain('ran out of time or resources');
+    expect(errorCalls[0][3]).toContain('minutes');
+    // Should NOT contain the raw container output
+    expect(errorCalls[0][3]).not.toContain('some raw container logs');
   });
 
   it('should handle missing TINYHANDS_OUTPUT with stream-json fallback', async () => {
