@@ -18,11 +18,30 @@ interface OAuthIntegrationConfig {
 }
 
 const OAUTH_INTEGRATIONS: Record<string, OAuthIntegrationConfig> = {
+  google: {
+    id: 'google',
+    authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+    tokenUrl: 'https://oauth2.googleapis.com/token',
+    scopes: [
+      'https://www.googleapis.com/auth/drive',
+      'https://www.googleapis.com/auth/spreadsheets',
+      'https://www.googleapis.com/auth/documents',
+      'https://mail.google.com/',
+    ],
+    clientId: () => config.oauth.googleClientId,
+    clientSecret: () => config.oauth.googleClientSecret,
+  },
+  // Keep google_drive as alias for backward compat with existing connections
   google_drive: {
     id: 'google_drive',
     authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
     tokenUrl: 'https://oauth2.googleapis.com/token',
-    scopes: ['https://www.googleapis.com/auth/drive.readonly'],
+    scopes: [
+      'https://www.googleapis.com/auth/drive',
+      'https://www.googleapis.com/auth/spreadsheets',
+      'https://www.googleapis.com/auth/documents',
+      'https://mail.google.com/',
+    ],
     clientId: () => config.oauth.googleClientId,
     clientSecret: () => config.oauth.googleClientSecret,
   },
@@ -82,6 +101,12 @@ export async function getOAuthUrl(
 
   if (integration.scopes.length > 0) {
     params.set('scope', integration.scopes.join(' '));
+  }
+
+  // Google requires access_type=offline + prompt=consent to get a refresh token
+  if (integrationId === 'google' || integrationId === 'google_drive') {
+    params.set('access_type', 'offline');
+    params.set('prompt', 'consent');
   }
 
   const url = `${integration.authUrl}?${params.toString()}`;
@@ -144,18 +169,24 @@ async function exchangeCodeForToken(
   clientSecret: string,
   integrationId: string,
 ): Promise<Record<string, string>> {
-  const body = JSON.stringify({
+  // Google and GitHub require form-encoded body; Notion uses JSON with Basic auth
+  const isFormEncoded = integrationId !== 'notion';
+  const bodyParams: Record<string, string> = {
     grant_type: 'authorization_code',
     code,
     redirect_uri: redirectUri,
     client_id: clientId,
     client_secret: clientSecret,
-  });
+  };
+
+  const body = isFormEncoded
+    ? new URLSearchParams(bodyParams).toString()
+    : JSON.stringify(bodyParams);
 
   return new Promise((resolve, reject) => {
     const url = new URL(tokenUrl);
     const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
+      'Content-Type': isFormEncoded ? 'application/x-www-form-urlencoded' : 'application/json',
       'Accept': 'application/json',
     };
 

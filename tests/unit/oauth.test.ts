@@ -54,6 +54,7 @@ describe('getSupportedOAuthIntegrations', () => {
   it('should return only integrations with configured client credentials', () => {
     const supported = getSupportedOAuthIntegrations();
 
+    expect(supported).toContain('google');
     expect(supported).toContain('google_drive');
     expect(supported).toContain('github');
     expect(supported).not.toContain('notion'); // no client id/secret configured
@@ -82,6 +83,39 @@ describe('getOAuthUrl', () => {
 
   it('should throw when client ID is not configured', async () => {
     await expect(getOAuthUrl('notion', 'W1', 'U001')).rejects.toThrow('OAuth not configured');
+  });
+
+  it('should generate a Google OAuth URL with all scopes and offline access', async () => {
+    mockExecute.mockResolvedValueOnce(undefined);
+
+    const { url, state } = await getOAuthUrl('google', 'W1', 'U001', 'C456');
+
+    expect(state).toBe('oauth-state-uuid');
+    expect(url).toContain('accounts.google.com');
+    expect(url).toContain('client_id=google-client-id');
+    // Should include all 4 scopes: drive, spreadsheets, documents, gmail
+    expect(url).toContain('drive');
+    expect(url).toContain('spreadsheets');
+    expect(url).toContain('documents');
+    expect(url).toContain('mail.google.com');
+    // Should include access_type=offline and prompt=consent for refresh tokens
+    expect(url).toContain('access_type=offline');
+    expect(url).toContain('prompt=consent');
+    // Should use the google redirect callback path
+    expect(url).toContain('callback%2Fgoogle');
+    expect(mockExecute).toHaveBeenCalledWith(
+      expect.stringContaining('INSERT INTO oauth_states'),
+      ['oauth-state-uuid', 'W1', 'U001', 'google', 'C456']
+    );
+  });
+
+  it('should include access_type=offline and prompt=consent for google_drive', async () => {
+    mockExecute.mockResolvedValueOnce(undefined);
+
+    const { url } = await getOAuthUrl('google_drive', 'W1', 'U001', 'C123');
+
+    expect(url).toContain('access_type=offline');
+    expect(url).toContain('prompt=consent');
   });
 
   it('should generate a GitHub OAuth URL', async () => {
