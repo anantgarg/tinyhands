@@ -286,7 +286,7 @@ export async function getExpiredTimers(): Promise<WorkflowRun[]> {
 export async function processExpiredTimers(): Promise<number> {
   const expired = await getExpiredTimers();
   for (const run of expired) {
-    await advanceWorkflow((run as any).workspace_id, run.id);
+    await advanceWorkflow(run.workspace_id, run.id);
   }
   return expired.length;
 }

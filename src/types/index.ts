@@ -235,6 +235,7 @@ export interface WorkflowDefinition {
 
 export interface WorkflowRun {
   id: string;
+  workspace_id: string;
   workflow_id: string;
   run_id: string;
   current_step: number;
