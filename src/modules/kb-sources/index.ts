@@ -187,7 +187,7 @@ export async function startSync(workspaceId: string, sourceId: string): Promise<
   }
 
   // Run sync in the background — don't block the caller
-  syncSource(source).catch(err => {
+  syncSource(workspaceId, source).catch(err => {
     logger.error('Background sync failed', { sourceId, error: err.message });
   });
 }

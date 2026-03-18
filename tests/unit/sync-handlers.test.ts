@@ -48,6 +48,8 @@ vi.mock('https', () => {
 import { syncSource } from '../../src/modules/kb-sources/sync-handlers';
 import type { KBSource } from '../../src/types';
 
+const TEST_WORKSPACE_ID = 'W_TEST_123';
+
 // ── Helpers ──
 
 function makeFakeSource(overrides: Partial<KBSource> = {}): KBSource {
@@ -171,7 +173,7 @@ describe('KB Source Sync Handlers', () => {
       mockNormalizeConnectorType.mockReturnValue('unknown_type');
       const source = makeFakeSource({ source_type: 'github', config_json: '{}' });
 
-      await expect(syncSource(source)).rejects.toThrow('No sync handler for source type');
+      await expect(syncSource(TEST_WORKSPACE_ID, source)).rejects.toThrow('No sync handler for source type');
       // The handler lookup happens before the try block, so updateSourceStatus is NOT called
       expect(mockUpdateSourceStatus).not.toHaveBeenCalled();
     });
@@ -186,8 +188,8 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo' }),
       });
 
-      await expect(syncSource(source)).rejects.toThrow();
-      expect(mockUpdateSourceStatus).toHaveBeenCalledWith('src-1', 'syncing');
+      await expect(syncSource(TEST_WORKSPACE_ID, source)).rejects.toThrow();
+      expect(mockUpdateSourceStatus).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 'src-1', 'syncing');
     });
 
     it('should update source with error status on failure', async () => {
@@ -199,8 +201,8 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo' }),
       });
 
-      await expect(syncSource(source)).rejects.toThrow();
-      expect(mockUpdateSource).toHaveBeenCalledWith('src-1', expect.objectContaining({
+      await expect(syncSource(TEST_WORKSPACE_ID, source)).rejects.toThrow();
+      expect(mockUpdateSource).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 'src-1', expect.objectContaining({
         status: 'error',
         error_message: expect.any(String),
       }));
@@ -226,10 +228,10 @@ describe('KB Source Sync Handlers', () => {
       });
 
       // The sync will succeed with 0 entries since the API returns no articles
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(0);
 
-      expect(mockUpdateSource).toHaveBeenCalledWith('src-1', expect.objectContaining({
+      expect(mockUpdateSource).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 'src-1', expect.objectContaining({
         status: 'active',
         entry_count: 0,
         last_sync_at: expect.any(String),
@@ -247,9 +249,9 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo' }),
       });
 
-      await expect(syncSource(source)).rejects.toThrow();
+      await expect(syncSource(TEST_WORKSPACE_ID, source)).rejects.toThrow();
       const updateCall = mockUpdateSource.mock.calls[0];
-      expect(updateCall[1].error_message.length).toBeLessThanOrEqual(500);
+      expect(updateCall[2].error_message.length).toBeLessThanOrEqual(500);
     });
   });
 
@@ -267,7 +269,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo' }),
       });
 
-      await expect(syncSource(source)).rejects.toThrow('not configured');
+      await expect(syncSource(TEST_WORKSPACE_ID, source)).rejects.toThrow('not configured');
     });
 
     it('should throw when provider setup is incomplete', async () => {
@@ -284,7 +286,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo' }),
       });
 
-      await expect(syncSource(source)).rejects.toThrow('not configured');
+      await expect(syncSource(TEST_WORKSPACE_ID, source)).rejects.toThrow('not configured');
     });
   });
 
@@ -304,7 +306,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({}), // no repo
       });
 
-      await expect(syncSource(source)).rejects.toThrow('Repository (repo) is required');
+      await expect(syncSource(TEST_WORKSPACE_ID, source)).rejects.toThrow('Repository (repo) is required');
     });
 
     it('should check for Mintlify config files (docs.json, mint.json)', async () => {
@@ -323,9 +325,9 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo', branch: 'main', content_type: 'docs' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(0);
-      expect(mockUpdateSource).toHaveBeenCalledWith('src-1', expect.objectContaining({ status: 'active' }));
+      expect(mockUpdateSource).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 'src-1', expect.objectContaining({ status: 'active' }));
     });
 
     it('should fall back to standard sync when Mintlify navigation is empty', async () => {
@@ -356,9 +358,9 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo', branch: 'main', content_type: 'docs' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(1);
-      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
         sourceType: 'github',
         category: 'docs',
       }));
@@ -385,9 +387,9 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo', branch: 'main', content_type: 'docs' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(0);
-      expect(mockUpdateSource).toHaveBeenCalledWith('src-1', expect.objectContaining({ status: 'active' }));
+      expect(mockUpdateSource).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 'src-1', expect.objectContaining({ status: 'active' }));
     });
 
     it('should skip files larger than 500KB', async () => {
@@ -414,7 +416,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo', branch: 'main', content_type: 'docs' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       // Only the small file should be synced (big one skipped)
       expect(result).toBe(1);
       expect(mockCreateKBEntry).toHaveBeenCalledTimes(1);
@@ -444,9 +446,9 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(1);
-      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
         sourceType: 'github',
         category: 'docs',
       }));
@@ -476,9 +478,9 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'source_code' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(1);
-      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
         category: 'source_code',
       }));
     });
@@ -503,7 +505,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(0);
     });
 
@@ -530,9 +532,9 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(1);
-      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
         title: 'My Page',
         summary: 'A page about things',
       }));
@@ -562,7 +564,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo', paths: 'docs, guides', content_type: 'docs' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(2);
       expect(mockCreateKBEntry).toHaveBeenCalledTimes(2);
     });
@@ -598,7 +600,7 @@ describe('KB Source Sync Handlers', () => {
       });
 
       // Should not throw -- errors are caught per-file
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       // At least one file should succeed (exact count depends on mock timing)
       expect(result).toBeGreaterThanOrEqual(0);
     });
@@ -646,10 +648,10 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ locale: 'en-us' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(1); // draft skipped
       expect(mockCreateKBEntry).toHaveBeenCalledTimes(1);
-      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
         title: 'How to reset password',
         category: 'section-123',
         tags: expect.arrayContaining(['password', 'account', 'zendesk']),
@@ -687,9 +689,9 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({}),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(1);
-      const call = mockCreateKBEntry.mock.calls[0][0];
+      const call = mockCreateKBEntry.mock.calls[0][1];
       // HTML tags are stripped but entities like &lt; and &gt; are decoded
       expect(call.content).not.toContain('<h1>');
       expect(call.content).not.toContain('</p>');
@@ -730,7 +732,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({}),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(2);
       expect(mockCreateKBEntry).toHaveBeenCalledTimes(2);
     });
@@ -751,7 +753,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({}),
       });
 
-      await expect(syncSource(source)).rejects.toThrow('Zendesk API error (401)');
+      await expect(syncSource(TEST_WORKSPACE_ID, source)).rejects.toThrow('Zendesk API error (401)');
     });
 
     it('should filter by category_id when provided', async () => {
@@ -773,7 +775,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ category_id: '999' }),
       });
 
-      await syncSource(source);
+      await syncSource(TEST_WORKSPACE_ID, source);
 
       // Verify the request was made with category path
       expect(mockHttpsRequest).toHaveBeenCalledWith(
@@ -800,7 +802,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({}),
       });
 
-      await syncSource(source);
+      await syncSource(TEST_WORKSPACE_ID, source);
 
       expect(mockHttpsRequest).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -838,8 +840,8 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({}),
       });
 
-      await syncSource(source);
-      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+      await syncSource(TEST_WORKSPACE_ID, source);
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
         category: 'help-center',
       }));
     });
@@ -858,7 +860,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({}),
       });
 
-      await expect(syncSource(source)).rejects.toThrow('Website URL is required');
+      await expect(syncSource(TEST_WORKSPACE_ID, source)).rejects.toThrow('Website URL is required');
     });
 
     it('should throw when Firecrawl crawl returns an error', async () => {
@@ -873,7 +875,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ url: 'https://docs.example.com' }),
       });
 
-      await expect(syncSource(source)).rejects.toThrow('Firecrawl crawl failed');
+      await expect(syncSource(TEST_WORKSPACE_ID, source)).rejects.toThrow('Firecrawl crawl failed');
     });
 
     it('should throw when Firecrawl returns no crawl ID', async () => {
@@ -888,7 +890,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ url: 'https://docs.example.com' }),
       });
 
-      await expect(syncSource(source)).rejects.toThrow('Firecrawl did not return a crawl ID');
+      await expect(syncSource(TEST_WORKSPACE_ID, source)).rejects.toThrow('Firecrawl did not return a crawl ID');
     });
   });
 
@@ -914,7 +916,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({}),
       });
 
-      await expect(syncSource(source)).rejects.toThrow('Google Drive Folder ID is required');
+      await expect(syncSource(TEST_WORKSPACE_ID, source)).rejects.toThrow('Google Drive Folder ID is required');
     });
 
     it('should throw when OAuth token refresh fails', async () => {
@@ -933,7 +935,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ folder_id: 'folder_123' }),
       });
 
-      await expect(syncSource(source)).rejects.toThrow('Google OAuth refresh failed');
+      await expect(syncSource(TEST_WORKSPACE_ID, source)).rejects.toThrow('Google OAuth refresh failed');
     });
 
     it('should throw when Drive API returns error', async () => {
@@ -955,7 +957,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ folder_id: 'folder_123' }),
       });
 
-      await expect(syncSource(source)).rejects.toThrow('Google Drive API error');
+      await expect(syncSource(TEST_WORKSPACE_ID, source)).rejects.toThrow('Google Drive API error');
     });
 
     it('should export Google Docs as plain text', async () => {
@@ -990,9 +992,9 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ folder_id: 'folder_123' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(1);
-      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
         title: 'My Document',
         content: 'This is the document content',
         category: 'google-drive',
@@ -1026,7 +1028,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ folder_id: 'folder_123' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(0);
       expect(mockCreateKBEntry).not.toHaveBeenCalled();
     });
@@ -1061,7 +1063,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ folder_id: 'folder_123' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(0);
     });
   });
@@ -1096,9 +1098,9 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({}),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(1);
-      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
         title: 'Getting Started',
         category: 'category-cat-1',
         tags: expect.arrayContaining(['tag-tag-a', 'tag-tag-b', 'hubspot']),
@@ -1129,7 +1131,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({}),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(0);
       expect(mockCreateKBEntry).not.toHaveBeenCalled();
     });
@@ -1159,7 +1161,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({}),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(2);
     });
 
@@ -1175,7 +1177,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({}),
       });
 
-      await expect(syncSource(source)).rejects.toThrow('HubSpot API error (401)');
+      await expect(syncSource(TEST_WORKSPACE_ID, source)).rejects.toThrow('HubSpot API error (401)');
     });
 
     it('should use PUBLISHED state by default', async () => {
@@ -1190,7 +1192,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({}),
       });
 
-      await syncSource(source);
+      await syncSource(TEST_WORKSPACE_ID, source);
       expect(mockHttpsRequest).toHaveBeenCalledWith(
         expect.objectContaining({
           path: expect.stringContaining('state=PUBLISHED'),
@@ -1211,7 +1213,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ state: 'DRAFT' }),
       });
 
-      await syncSource(source);
+      await syncSource(TEST_WORKSPACE_ID, source);
       expect(mockHttpsRequest).toHaveBeenCalledWith(
         expect.objectContaining({
           path: expect.stringContaining('state=DRAFT'),
@@ -1238,8 +1240,8 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({}),
       });
 
-      await syncSource(source);
-      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+      await syncSource(TEST_WORKSPACE_ID, source);
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
         category: 'hubspot-kb',
       }));
     });
@@ -1267,8 +1269,8 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({}),
       });
 
-      await syncSource(source);
-      const call = mockCreateKBEntry.mock.calls[0][0];
+      await syncSource(TEST_WORKSPACE_ID, source);
+      const call = mockCreateKBEntry.mock.calls[0][1];
       expect(call.content).toContain('Hello World');
       expect(call.content).toContain('& friends');
       expect(call.content).not.toContain('&nbsp;');
@@ -1292,8 +1294,8 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({}),
       });
 
-      await syncSource(source);
-      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+      await syncSource(TEST_WORKSPACE_ID, source);
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
         title: 'HTML Title',
       }));
     });
@@ -1340,14 +1342,14 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ include_issues: 'false', include_projects: 'true' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(2); // 1 project + 1 document
-      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
         title: 'Project: Alpha',
         category: 'linear-project',
         sourceType: 'linear_docs',
       }));
-      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
         title: 'Architecture',
         category: 'linear-docs',
       }));
@@ -1382,7 +1384,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({}),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(0);
     });
 
@@ -1422,7 +1424,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({}),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(0);
     });
 
@@ -1443,7 +1445,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({}),
       });
 
-      await expect(syncSource(source)).rejects.toThrow('Linear GraphQL error');
+      await expect(syncSource(TEST_WORKSPACE_ID, source)).rejects.toThrow('Linear GraphQL error');
     });
 
     it('should throw on HTTP-level API errors', async () => {
@@ -1458,7 +1460,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({}),
       });
 
-      await expect(syncSource(source)).rejects.toThrow('Linear API error (500)');
+      await expect(syncSource(TEST_WORKSPACE_ID, source)).rejects.toThrow('Linear API error (500)');
     });
 
     it('should sync issues when include_issues is true', async () => {
@@ -1503,9 +1505,9 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ include_issues: 'true' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(1);
-      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
         title: 'ENG-123: Fix login bug',
         category: 'linear-issues',
         tags: expect.arrayContaining(['linear', 'issue', 'In Progress', 'bug', 'urgent']),
@@ -1535,7 +1537,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ include_issues: 'false' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(0);
       // Only one request should be made (projects only, no issues)
       expect(mockHttpsRequest).toHaveBeenCalledTimes(1);
@@ -1581,7 +1583,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ include_issues: 'true' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(0);
     });
 
@@ -1628,7 +1630,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ include_issues: 'false' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(2);
     });
   });
@@ -1661,9 +1663,9 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo', branch: 'main', content_type: 'docs' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(1);
-      const entry = mockCreateKBEntry.mock.calls[0][0];
+      const entry = mockCreateKBEntry.mock.calls[0][1];
       expect(entry.title).toBe('Intro');
       expect(entry.content).toContain('Hello World');
       expect(entry.content).toContain('Some text inside JSX');
@@ -1703,9 +1705,9 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(1);
-      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
         title: 'Quoted Title',
         summary: 'Single Quoted',
       }));
@@ -1727,8 +1729,8 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo' }),
       });
 
-      await expect(syncSource(source)).rejects.toBeDefined();
-      expect(mockUpdateSource).toHaveBeenCalledWith('src-1', expect.objectContaining({
+      await expect(syncSource(TEST_WORKSPACE_ID, source)).rejects.toBeDefined();
+      expect(mockUpdateSource).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 'src-1', expect.objectContaining({
         status: 'error',
         error_message: 'Unknown error',
       }));
@@ -1752,7 +1754,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo' }),
       });
 
-      await expect(syncSource(source)).rejects.toThrow('GitHub token is invalid or lacks access');
+      await expect(syncSource(TEST_WORKSPACE_ID, source)).rejects.toThrow('GitHub token is invalid or lacks access');
     });
 
     it('should throw on 403 repo check', async () => {
@@ -1767,7 +1769,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo' }),
       });
 
-      await expect(syncSource(source)).rejects.toThrow('GitHub token is invalid or lacks access');
+      await expect(syncSource(TEST_WORKSPACE_ID, source)).rejects.toThrow('GitHub token is invalid or lacks access');
     });
 
     it('should throw on 404 repo check', async () => {
@@ -1782,7 +1784,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo' }),
       });
 
-      await expect(syncSource(source)).rejects.toThrow('GitHub repository "owner/repo" not found');
+      await expect(syncSource(TEST_WORKSPACE_ID, source)).rejects.toThrow('GitHub repository "owner/repo" not found');
     });
 
     it('should throw on generic repo check error (e.g. 500)', async () => {
@@ -1797,7 +1799,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo' }),
       });
 
-      await expect(syncSource(source)).rejects.toThrow('GitHub API error (500) checking repo');
+      await expect(syncSource(TEST_WORKSPACE_ID, source)).rejects.toThrow('GitHub API error (500) checking repo');
     });
 
     it('should throw when GitHub token is missing from credentials', async () => {
@@ -1808,7 +1810,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo' }),
       });
 
-      await expect(syncSource(source)).rejects.toThrow('GitHub token is not configured');
+      await expect(syncSource(TEST_WORKSPACE_ID, source)).rejects.toThrow('GitHub token is not configured');
     });
   });
 
@@ -1833,7 +1835,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
       });
 
-      await expect(syncSource(source)).rejects.toThrow('GitHub API auth failed');
+      await expect(syncSource(TEST_WORKSPACE_ID, source)).rejects.toThrow('GitHub API auth failed');
     });
 
     it('should throw on 404 when listing directory', async () => {
@@ -1852,7 +1854,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
       });
 
-      await expect(syncSource(source)).rejects.toThrow('GitHub path not found');
+      await expect(syncSource(TEST_WORKSPACE_ID, source)).rejects.toThrow('GitHub path not found');
     });
 
     it('should throw on generic error when listing directory', async () => {
@@ -1871,7 +1873,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
       });
 
-      await expect(syncSource(source)).rejects.toThrow('GitHub API error (422)');
+      await expect(syncSource(TEST_WORKSPACE_ID, source)).rejects.toThrow('GitHub API error (422)');
     });
 
     it('should handle non-array response for directory listing', async () => {
@@ -1890,7 +1892,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(0);
     });
 
@@ -1920,7 +1922,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       // Only the file should be synced, subdir error is caught
       expect(result).toBe(1);
     });
@@ -1951,7 +1953,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(0);
     });
 
@@ -1983,18 +1985,18 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo', branch: 'main', content_type: 'mintlify' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(2);
 
       // First entry has frontmatter with tags
-      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
         title: 'Getting Started',
         category: 'Guide',
         tags: expect.arrayContaining(['mintlify', 'guide', 'intro']),
       }));
 
       // Second entry has no frontmatter
-      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
         title: 'advanced',
         category: 'Guide',
       }));
@@ -2022,7 +2024,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(0);
     });
 
@@ -2055,7 +2057,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       // First page fails but second succeeds
       expect(result).toBe(1);
     });
@@ -2082,7 +2084,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo', paths: 'docs/', content_type: 'docs' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(1);
     });
   });
@@ -2126,7 +2128,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(4);
     });
 
@@ -2150,7 +2152,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(1);
     });
 
@@ -2174,7 +2176,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(1);
     });
 
@@ -2200,7 +2202,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(0);
     });
 
@@ -2226,9 +2228,9 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(1);
-      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
         category: 'Endpoints',
       }));
     });
@@ -2255,9 +2257,9 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(1);
-      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
         category: 'docs',
       }));
     });
@@ -2291,9 +2293,9 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(1);
-      const entry = mockCreateKBEntry.mock.calls[0][0];
+      const entry = mockCreateKBEntry.mock.calls[0][1];
       expect(entry.content).not.toContain('import X');
       expect(entry.content).not.toContain('export default');
       expect(entry.content).toContain('Hello');
@@ -2344,7 +2346,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ url: 'https://example.com', max_pages: '10' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(2);
       expect(mockCreateKBEntry).toHaveBeenCalledTimes(2);
     });
@@ -2363,7 +2365,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ url: 'https://example.com' }),
       });
 
-      await expect(syncSource(source)).rejects.toThrow('Firecrawl crawl failed');
+      await expect(syncSource(TEST_WORKSPACE_ID, source)).rejects.toThrow('Firecrawl crawl failed');
     });
 
     it('should throw when status check returns an error', async () => {
@@ -2380,7 +2382,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ url: 'https://example.com' }),
       });
 
-      await expect(syncSource(source)).rejects.toThrow('Firecrawl status check failed');
+      await expect(syncSource(TEST_WORKSPACE_ID, source)).rejects.toThrow('Firecrawl status check failed');
     });
 
     it('should skip pages with empty markdown content', async () => {
@@ -2406,7 +2408,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ url: 'https://example.com' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(1);
     });
 
@@ -2434,9 +2436,9 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ url: 'https://example.com' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(1);
-      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
         content: 'Fallback content from page.content',
       }));
     });
@@ -2465,9 +2467,9 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ url: 'https://example.com' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(1);
-      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
         title: '/some/path',
       }));
     });
@@ -2500,7 +2502,7 @@ describe('KB Source Sync Handlers', () => {
         }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(1);
       // Verify include/exclude paths were included in the crawl request body
       expect(mockHttpsWrite).toHaveBeenCalled();
@@ -2530,7 +2532,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ url: 'https://example.com' }),
       });
 
-      await expect(syncSource(source)).rejects.toThrow('Firecrawl crawl timed out after 10 minutes');
+      await expect(syncSource(TEST_WORKSPACE_ID, source)).rejects.toThrow('Firecrawl crawl timed out after 10 minutes');
     });
   });
 
@@ -2569,9 +2571,9 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ folder_id: 'folder_123' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(1);
-      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
         title: 'My Spreadsheet',
         content: 'Name,Age\nAlice,30\nBob,25',
       }));
@@ -2607,9 +2609,9 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ folder_id: 'folder_123' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(1);
-      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
         title: 'My Presentation',
         content: 'Slide 1: Introduction\nSlide 2: Details',
       }));
@@ -2645,9 +2647,9 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ folder_id: 'folder_123' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(1);
-      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
         title: 'notes.txt',
         content: 'Plain text content of the file',
       }));
@@ -2683,7 +2685,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ folder_id: 'folder_123' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(1);
     });
 
@@ -2715,7 +2717,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ folder_id: 'folder_123' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(0);
     });
 
@@ -2765,7 +2767,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ folder_id: 'folder_123' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(2);
     });
 
@@ -2795,7 +2797,7 @@ describe('KB Source Sync Handlers', () => {
         }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(0);
 
       // Verify the query included mime type filters
@@ -2841,7 +2843,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ folder_id: 'folder_123' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       // First file fails, second succeeds
       expect(result).toBe(1);
     });
@@ -2876,7 +2878,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ folder_id: 'folder_123' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(0);
     });
 
@@ -2909,7 +2911,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ folder_id: 'folder_123' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(0);
     });
 
@@ -2942,7 +2944,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ folder_id: 'folder_123' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(0);
     });
 
@@ -2975,7 +2977,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ folder_id: 'folder_123' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(0);
     });
   });
@@ -3010,8 +3012,8 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({}),
       });
 
-      await syncSource(source);
-      const call = mockCreateKBEntry.mock.calls[0][0];
+      await syncSource(TEST_WORKSPACE_ID, source);
+      const call = mockCreateKBEntry.mock.calls[0][1];
       expect(call.summary.length).toBeLessThanOrEqual(500);
     });
 
@@ -3039,8 +3041,8 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({}),
       });
 
-      await syncSource(source);
-      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+      await syncSource(TEST_WORKSPACE_ID, source);
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
         title: 'Untitled',
       }));
     });
@@ -3104,9 +3106,9 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ include_issues: 'true', team_key: 'ENG' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(1);
-      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
         title: 'ENG-42: Team-filtered issue',
       }));
     });
@@ -3157,7 +3159,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ include_issues: 'true', team_key: 'UNKNOWN' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(0);
     });
   });
@@ -3217,7 +3219,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ include_issues: 'true', include_projects: 'false' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(500);
       expect(mockCreateKBEntry).toHaveBeenCalledTimes(500);
     });
@@ -3264,9 +3266,9 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ include_issues: 'true' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(1);
-      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
         tags: expect.arrayContaining(['linear', 'issue', 'unknown']),
       }));
     });
@@ -3334,7 +3336,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ include_issues: 'true' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(2);
     });
   });
@@ -3376,9 +3378,9 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({}),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(1);
-      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
         title: 'MyProject Doc',
       }));
     });
@@ -3416,7 +3418,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({}), // no include_projects key
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(1);
     });
 
@@ -3430,7 +3432,7 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ include_projects: 'false', include_issues: 'false' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(0);
       // No API calls should be made
       expect(mockHttpsRequest).not.toHaveBeenCalled();
@@ -3462,7 +3464,7 @@ describe('KB Source Sync Handlers', () => {
       // This will cause the Zendesk handler to try accessing res.data.articles
       // on a string, which will be undefined, so it will loop with articles = []
       // and immediately stop pagination since next_page will be null
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(0);
     });
   });
@@ -3560,9 +3562,9 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(1);
-      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
         content: '# Redirected Content\nHello',
       }));
     });
@@ -3603,9 +3605,9 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(1);
-      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
         title: 'nested',
         content: '# Nested Doc\nContent from subdirectory',
       }));
@@ -3645,9 +3647,9 @@ describe('KB Source Sync Handlers', () => {
         config_json: JSON.stringify({ repo: 'owner/repo', content_type: 'docs' }),
       });
 
-      const result = await syncSource(source);
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(1);
-      expect(mockCreateKBEntry).toHaveBeenCalledWith(expect.objectContaining({
+      expect(mockCreateKBEntry).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
         category: 'NestedGroup',
       }));
     });
@@ -3675,7 +3677,7 @@ describe('KB Source Sync Handlers', () => {
 
       // Force a quick failure after normalization
       // We just want to verify normalizeConnectorType was called
-      try { await syncSource(source); } catch { /* expected */ }
+      try { await syncSource(TEST_WORKSPACE_ID, source); } catch { /* expected */ }
       expect(mockNormalizeConnectorType).toHaveBeenCalledWith('github');
     });
   });

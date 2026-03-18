@@ -454,7 +454,7 @@ describe('startSync', () => {
 
     await startSync(TEST_WORKSPACE_ID, 's1');
 
-    expect(mockSyncSource).toHaveBeenCalledWith(source);
+    expect(mockSyncSource).toHaveBeenCalledWith(TEST_WORKSPACE_ID, source);
   });
 
   it('should throw when source does not exist', async () => {
@@ -502,7 +502,7 @@ describe('flushAndResync', () => {
       expect.arrayContaining([0]),
     );
     // Should call syncSource
-    expect(mockSyncSource).toHaveBeenCalledWith(source);
+    expect(mockSyncSource).toHaveBeenCalledWith(TEST_WORKSPACE_ID, source);
   });
 
   it('should throw when source does not exist', async () => {

@@ -89,9 +89,9 @@ function httpsGetRaw(
 
 // ── Shared Helpers ──
 
-async function getProviderCredentials(sourceType: KBConnectorType): Promise<Record<string, string>> {
+async function getProviderCredentials(workspaceId: string, sourceType: KBConnectorType): Promise<Record<string, string>> {
   const provider = getProviderForConnector(sourceType);
-  const apiKey = await getApiKey(provider);
+  const apiKey = await getApiKey(workspaceId, provider);
   if (!apiKey || !apiKey.setup_complete) {
     throw new Error(`Provider "${provider}" is not configured. Set up API keys first.`);
   }
@@ -136,16 +136,16 @@ function parseFrontmatter(content: string): { frontmatter: Record<string, string
 
 // ── Dispatch ──
 
-export async function syncSource(source: KBSource): Promise<number> {
+export async function syncSource(workspaceId: string, source: KBSource): Promise<number> {
   const config = JSON.parse(source.config_json);
   const resolvedType = normalizeConnectorType(source.source_type);
   const handler = SYNC_HANDLERS[resolvedType];
   if (!handler) throw new Error(`No sync handler for source type: ${source.source_type}`);
 
   try {
-    await updateSourceStatus(source.id, 'syncing');
-    const count = await handler(source, config);
-    await updateSource(source.id, {
+    await updateSourceStatus(workspaceId, source.id, 'syncing');
+    const count = await handler(workspaceId, source, config);
+    await updateSource(workspaceId, source.id, {
       status: 'active',
       entry_count: count,
       last_sync_at: new Date().toISOString(),
@@ -154,7 +154,7 @@ export async function syncSource(source: KBSource): Promise<number> {
     logger.info('KB source sync completed', { sourceId: source.id, type: source.source_type, entries: count });
     return count;
   } catch (err: any) {
-    await updateSource(source.id, {
+    await updateSource(workspaceId, source.id, {
       status: 'error',
       error_message: err.message?.slice(0, 500) || 'Unknown error',
     });
@@ -163,7 +163,7 @@ export async function syncSource(source: KBSource): Promise<number> {
   }
 }
 
-type SyncHandler = (source: KBSource, config: Record<string, string>) => Promise<number>;
+type SyncHandler = (workspaceId: string, source: KBSource, config: Record<string, string>) => Promise<number>;
 
 const SYNC_HANDLERS: Record<KBConnectorType, SyncHandler> = {
   github: syncGitHub,
@@ -350,8 +350,8 @@ function getMintlifyCategory(nav: any, pagePath: string): string {
   return 'docs';
 }
 
-async function syncGitHub(source: KBSource, config: Record<string, string>): Promise<number> {
-  const creds = await getProviderCredentials('github');
+async function syncGitHub(workspaceId: string, source: KBSource, config: Record<string, string>): Promise<number> {
+  const creds = await getProviderCredentials(workspaceId, 'github');
   const token = creds.token;
   const repo = config.repo; // e.g. "owner/repo"
   const branch = config.branch || 'main';
@@ -422,7 +422,7 @@ async function syncGitHub(source: KBSource, config: Record<string, string>): Pro
             const description = frontmatter.description || '';
             const category = getMintlifyCategory(nav, pageRef);
 
-            await createKBEntry({
+            await createKBEntry(workspaceId, {
               title,
               summary: description || cleanBody.slice(0, 200),
               content: cleanBody,
@@ -470,7 +470,7 @@ async function syncGitHub(source: KBSource, config: Record<string, string>): Pro
         const cleanBody = ext === '.mdx' ? stripJsx(body) : body;
         const title = frontmatter.title || file.path.split('/').pop()?.replace(/\.\w+$/, '') || file.path;
 
-        await createKBEntry({
+        await createKBEntry(workspaceId, {
           title,
           summary: frontmatter.description || cleanBody.slice(0, 200),
           content: cleanBody,
@@ -508,8 +508,8 @@ async function syncGitHub(source: KBSource, config: Record<string, string>): Pro
 // Zendesk Help Center Sync
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-async function syncZendeskHelpCenter(source: KBSource, config: Record<string, string>): Promise<number> {
-  const creds = await getProviderCredentials('zendesk_help_center');
+async function syncZendeskHelpCenter(workspaceId: string, source: KBSource, config: Record<string, string>): Promise<number> {
+  const creds = await getProviderCredentials(workspaceId, 'zendesk_help_center');
   const subdomain = creds.subdomain;
   const email = creds.email;
   const apiToken = creds.api_token;
@@ -544,7 +544,7 @@ async function syncZendeskHelpCenter(source: KBSource, config: Record<string, st
         .replace(/\s+/g, ' ')
         .trim();
 
-      await createKBEntry({
+      await createKBEntry(workspaceId, {
         title: article.title,
         summary: plainContent.slice(0, 200),
         content: plainContent,
@@ -569,8 +569,8 @@ async function syncZendeskHelpCenter(source: KBSource, config: Record<string, st
 // Website Sync (Firecrawl)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-async function syncWebsite(source: KBSource, config: Record<string, string>): Promise<number> {
-  const creds = await getProviderCredentials('website');
+async function syncWebsite(workspaceId: string, source: KBSource, config: Record<string, string>): Promise<number> {
+  const creds = await getProviderCredentials(workspaceId, 'website');
   const apiKey = creds.api_key;
   const url = config.url;
   const maxPages = parseInt(config.max_pages || '50', 10);
@@ -625,7 +625,7 @@ async function syncWebsite(source: KBSource, config: Record<string, string>): Pr
 
         if (!markdown.trim()) continue;
 
-        await createKBEntry({
+        await createKBEntry(workspaceId, {
           title,
           summary: (page.metadata?.description || markdown.slice(0, 200)).slice(0, 500),
           content: markdown,
@@ -671,8 +671,8 @@ async function refreshGoogleAccessToken(creds: Record<string, string>): Promise<
   return res.data.access_token;
 }
 
-async function syncGoogleDrive(source: KBSource, config: Record<string, string>): Promise<number> {
-  const creds = await getProviderCredentials('google_drive');
+async function syncGoogleDrive(workspaceId: string, source: KBSource, config: Record<string, string>): Promise<number> {
+  const creds = await getProviderCredentials(workspaceId, 'google_drive');
   const accessToken = await refreshGoogleAccessToken(creds);
   const folderId = config.folder_id;
   const fileTypes = config.file_types ? config.file_types.split(',').map(t => t.trim()) : [];
@@ -743,7 +743,7 @@ async function syncGoogleDrive(source: KBSource, config: Record<string, string>)
 
         if (!content.trim()) continue;
 
-        await createKBEntry({
+        await createKBEntry(workspaceId, {
           title: file.name,
           summary: content.slice(0, 200),
           content,
@@ -770,8 +770,8 @@ async function syncGoogleDrive(source: KBSource, config: Record<string, string>)
 // HubSpot Knowledge Base Sync
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-async function syncHubSpotKB(source: KBSource, config: Record<string, string>): Promise<number> {
-  const creds = await getProviderCredentials('hubspot_kb');
+async function syncHubSpotKB(workspaceId: string, source: KBSource, config: Record<string, string>): Promise<number> {
+  const creds = await getProviderCredentials(workspaceId, 'hubspot_kb');
   const accessToken = creds.access_token;
   const state = config.state || 'PUBLISHED';
 
@@ -797,7 +797,7 @@ async function syncHubSpotKB(source: KBSource, config: Record<string, string>): 
 
       if (!plainContent) continue;
 
-      await createKBEntry({
+      await createKBEntry(workspaceId, {
         title: article.name || article.htmlTitle || 'Untitled',
         summary: (article.metaDescription || plainContent.slice(0, 200)).slice(0, 500),
         content: plainContent,
@@ -832,8 +832,8 @@ async function linearGraphQL(query: string, variables: Record<string, any>, apiK
   return res.data.data;
 }
 
-async function syncLinearDocs(source: KBSource, config: Record<string, string>): Promise<number> {
-  const creds = await getProviderCredentials('linear_docs');
+async function syncLinearDocs(workspaceId: string, source: KBSource, config: Record<string, string>): Promise<number> {
+  const creds = await getProviderCredentials(workspaceId, 'linear_docs');
   const apiKey = creds.api_key;
   const teamKey = config.team_key;
   const includeIssues = config.include_issues === 'true';
@@ -869,7 +869,7 @@ async function syncLinearDocs(source: KBSource, config: Record<string, string>):
       for (const project of projects) {
         // Add project description if substantial
         if (project.content && project.content.trim().length > 50) {
-          await createKBEntry({
+          await createKBEntry(workspaceId, {
             title: `Project: ${project.name}`,
             summary: project.description || project.content.slice(0, 200),
             content: project.content,
@@ -886,7 +886,7 @@ async function syncLinearDocs(source: KBSource, config: Record<string, string>):
         // Add project documents
         for (const doc of (project.documents?.nodes || [])) {
           if (!doc.content || doc.content.trim().length < 20) continue;
-          await createKBEntry({
+          await createKBEntry(workspaceId, {
             title: doc.title || `${project.name} Doc`,
             summary: doc.content.slice(0, 200),
             content: doc.content,
@@ -943,7 +943,7 @@ async function syncLinearDocs(source: KBSource, config: Record<string, string>):
         if (!issue.description || issue.description.trim().length < 20) continue;
         if (issueCount >= maxIssues) break;
 
-        await createKBEntry({
+        await createKBEntry(workspaceId, {
           title: `${issue.identifier}: ${issue.title}`,
           summary: issue.description.slice(0, 200),
           content: issue.description,
