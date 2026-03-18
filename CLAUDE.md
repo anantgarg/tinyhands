@@ -206,6 +206,7 @@ Optional per-agent. Categories: customer_preference, decision, context, technica
 | `channels:history` | Read messages in public channels |
 | `channels:join` | Auto-join public channels |
 | `channels:manage` | Create channels for agents |
+| `channels:read` | View public channel info (conversations.info) |
 | `chat:write` | Send messages |
 | `chat:write.customize` | Send messages with custom username/emoji |
 | `commands` | Slash commands (/agents, /new-agent, etc.) |
