@@ -1,6 +1,6 @@
 import { createSlackApp } from './slack';
 import { startWebhookServer } from './server';
-import { initDb, upsertWorkspace, setDefaultWorkspaceId } from './db';
+import { initDb, upsertWorkspace, setDefaultWorkspaceId, execute } from './db';
 import { config } from './config';
 import { logger } from './utils/logger';
 import { startWatchdog } from './utils/watchdog';
@@ -29,6 +29,30 @@ async function main(): Promise<void> {
   });
   setDefaultWorkspaceId(authResult.team_id as string);
   logger.info('Workspace bootstrapped', { workspaceId: authResult.team_id });
+
+  // Backfill workspace_id for any existing data that predates multi-tenancy
+  try {
+    const tables = [
+      'agents', 'agent_versions', 'run_history', 'sources', 'source_chunks',
+      'agent_memory', 'triggers', 'skills', 'agent_skills', 'kb_entries',
+      'kb_chunks', 'custom_tools', 'evolution_proposals', 'authored_skills',
+      'mcp_configs', 'code_artifacts', 'tool_versions', 'tool_runs',
+      'workflow_definitions', 'workflow_runs', 'side_effects_log',
+      'superadmins', 'agent_admins', 'team_runs', 'sub_agent_runs',
+      'agent_members', 'dm_conversations', 'pending_confirmations',
+      'kb_sources', 'kb_api_keys',
+    ];
+    for (const table of tables) {
+      try {
+        await execute(
+          `UPDATE ${table} SET workspace_id = $1 WHERE workspace_id IS NULL`,
+          [authResult.team_id as string],
+        );
+      } catch { /* table may not exist */ }
+    }
+  } catch (err: any) {
+    logger.warn('Workspace backfill failed', { error: err.message });
+  }
 
   // Ensure bot is a member of all agent channels (for receiving events)
   ensureBotInAllAgentChannels().catch(err =>
