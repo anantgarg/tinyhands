@@ -796,7 +796,8 @@ describe('Commands Module', () => {
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
       const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
-      expect(allText).toContain('Tools: web-search, hubspot-read, linear-write');
+      // Friendly names: web-search -> Web Search, hubspot-read -> HubSpot, linear-write -> Linear
+      expect(allText).toContain('Tools: Web Search, HubSpot, Linear');
     });
 
     it('should show "none" when agent has no tools', async () => {
@@ -826,7 +827,24 @@ describe('Commands Module', () => {
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
       const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
-      expect(allText).toContain('t1, t2, t3, t4, t5 +3 more');
+      // Friendly names: t1 -> T1, etc. (deduplicated, so all 8 are unique)
+      expect(allText).toContain('T1, T2, T3, T4, T5 +3 more');
+    });
+
+    it('should deduplicate integration tool names (e.g. chargebee-read + chargebee-write = Chargebee)', async () => {
+      const app = createMockApp();
+      registerCommands(app as any);
+
+      mockListAgents.mockResolvedValue([makeFakeAgent({ tools: ['chargebee-read', 'chargebee-write', 'hubspot-read', 'hubspot-write'] })]);
+      mockCanModifyAgent.mockResolvedValue(false);
+      const ack = vi.fn();
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
+
+      await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
+
+      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
+      // chargebee-read + chargebee-write deduplicated to Chargebee, same for hubspot
+      expect(allText).toContain('Tools: Chargebee, HubSpot');
     });
 
     it('should show access level badge', async () => {
@@ -1076,7 +1094,8 @@ describe('Commands Module', () => {
       await app.handlers.command['/tools']({ command, ack, respond: mockRespond });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockRespond).toHaveBeenCalledWith({ response_type: 'ephemeral', blocks: expect.any(Array), text: 'Tools' });
+      // Now posts via postBlocks instead of ephemeral respond
+      expect(mockPostBlocks).toHaveBeenCalledWith('C_CHAN', expect.any(Array), 'Tools');
     });
 
     it('should list registered tools with overflow menus', async () => {
@@ -1086,11 +1105,11 @@ describe('Commands Module', () => {
       mockIsPlatformAdmin.mockResolvedValue(true);
       mockListCustomTools.mockResolvedValue([
         {
-          name: 'zendesk-read',
+          name: 'test-tool-read',
           access_level: 'read-only',
           language: 'docker',
-          config_json: JSON.stringify({ subdomain: 'acme' }),
-          schema_json: JSON.stringify({ description: 'Read Zendesk tickets' }),
+          config_json: JSON.stringify({ api_key: 'sk-123' }),
+          schema_json: JSON.stringify({ description: 'Read test data' }),
           approved: true,
         },
       ]);
@@ -1099,21 +1118,23 @@ describe('Commands Module', () => {
 
       await app.handlers.command['/tools']({ command, ack, respond: mockRespond });
 
-      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
-      expect(allText).toContain('zendesk-read');
+      // Now uses postBlocks and groups by integration
+      const allText = JSON.stringify(mockPostBlocks.mock.calls[0]);
+      expect(allText).toContain('Test Integration');
       expect(allText).toContain('tool_overflow');
       expect(allText).toContain('large_green_circle');
-      expect(allText).toContain('configure:zendesk-read');
+      expect(allText).toContain('configure:test-tool-read');
     });
 
-    it('should show unapproved tools with approve action', async () => {
+    it('should show unapproved tools as available (needs setup)', async () => {
       const app = createMockApp();
       registerCommands(app as any);
 
       mockIsPlatformAdmin.mockResolvedValue(true);
+      // Registered tool with no config shows as unconfigured / needs setup
       mockListCustomTools.mockResolvedValue([
         {
-          name: 'my-tool',
+          name: 'test-tool-read',
           access_level: 'read-write',
           language: 'python',
           config_json: '{}',
@@ -1126,9 +1147,10 @@ describe('Commands Module', () => {
 
       await app.handlers.command['/tools']({ command, ack, respond: mockRespond });
 
-      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
-      expect(allText).toContain('approve:my-tool');
-      expect(allText).toContain('yellow_circle');
+      // Now uses postBlocks - unconfigured tools show in Available section
+      const allText = JSON.stringify(mockPostBlocks.mock.calls[0]);
+      expect(allText).toContain('Needs setup');
+      expect(allText).toContain('Available');
     });
 
     it('should show available integrations not yet registered', async () => {
@@ -1142,8 +1164,9 @@ describe('Commands Module', () => {
 
       await app.handlers.command['/tools']({ command, ack, respond: mockRespond });
 
-      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
-      expect(allText).toContain('Available Integrations');
+      // Now uses postBlocks
+      const allText = JSON.stringify(mockPostBlocks.mock.calls[0]);
+      expect(allText).toContain('Available');
       expect(allText).toContain('register_tool_integration');
     });
   });
@@ -4002,7 +4025,7 @@ describe('Commands Module', () => {
     it('registerConfirmationActions should register action handlers', () => {
       const app = createMockApp();
       registerConfirmationActions(app as any);
-      expect(app.action).toHaveBeenCalledTimes(14);
+      expect(app.action).toHaveBeenCalledTimes(16);
     });
 
     it('all registration functions should be idempotent (safe to call twice)', async () => {
@@ -4086,7 +4109,7 @@ describe('Commands Module', () => {
       registerCommands(app as any);
 
       mockIsPlatformAdmin.mockResolvedValue(true);
-      // All integration tools are already registered
+      // All integration tools are already registered but without config (unconfigured)
       mockListCustomTools.mockResolvedValue([
         { name: 'test-tool-read', access_level: 'read-only', language: 'docker', config_json: '{}', schema_json: '{}', approved: true },
         { name: 'test-tool-write', access_level: 'read-write', language: 'docker', config_json: '{}', schema_json: '{}', approved: true },
@@ -4096,9 +4119,9 @@ describe('Commands Module', () => {
 
       await app.handlers.command['/tools']({ command, ack, respond: mockRespond });
 
-      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
-      // When all tools are registered, there are no available integrations
-      expect(allText).not.toContain('Available Integrations');
+      // Now uses postBlocks; registered but unconfigured tools show as Available with Needs setup
+      const allText = JSON.stringify(mockPostBlocks.mock.calls[0]);
+      expect(allText).toContain('Needs setup');
     });
   });
 
@@ -5293,6 +5316,80 @@ describe('Commands Module', () => {
 
       const ack = vi.fn();
       const action = { selected_users: ['U1'], action_id: 'member_select:' };
+
+      await app.handlers.action[regexHandlerKey]({ action, ack });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockExecute).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('access_select action', () => {
+    it('should update defaultAccess in pending confirmation', async () => {
+      const app = createMockApp();
+      registerConfirmationActions(app as any);
+
+      const regexHandlerKey = Object.keys(app.handlers.action).find(k => k.toString().includes('access_select'));
+      if (!regexHandlerKey) return;
+
+      const ack = vi.fn();
+      const action = { selected_option: { value: 'none' }, action_id: 'access_select:confirm-abc' };
+
+      await app.handlers.action[regexHandlerKey]({ action, ack });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockExecute).toHaveBeenCalledWith(
+        expect.stringContaining('defaultAccess'),
+        [JSON.stringify('none'), 'confirm-abc'],
+      );
+    });
+
+    it('should no-op when selected access is empty', async () => {
+      const app = createMockApp();
+      registerConfirmationActions(app as any);
+
+      const regexHandlerKey = Object.keys(app.handlers.action).find(k => k.toString().includes('access_select'));
+      if (!regexHandlerKey) return;
+
+      const ack = vi.fn();
+      const action = { selected_option: null, action_id: 'access_select:confirm-abc' };
+
+      await app.handlers.action[regexHandlerKey]({ action, ack });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockExecute).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('write_policy_select action', () => {
+    it('should update writePolicy in pending confirmation', async () => {
+      const app = createMockApp();
+      registerConfirmationActions(app as any);
+
+      const regexHandlerKey = Object.keys(app.handlers.action).find(k => k.toString().includes('write_policy_select'));
+      if (!regexHandlerKey) return;
+
+      const ack = vi.fn();
+      const action = { selected_option: { value: 'confirm' }, action_id: 'write_policy_select:confirm-xyz' };
+
+      await app.handlers.action[regexHandlerKey]({ action, ack });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockExecute).toHaveBeenCalledWith(
+        expect.stringContaining('writePolicy'),
+        [JSON.stringify('confirm'), 'confirm-xyz'],
+      );
+    });
+
+    it('should no-op when selected policy is empty', async () => {
+      const app = createMockApp();
+      registerConfirmationActions(app as any);
+
+      const regexHandlerKey = Object.keys(app.handlers.action).find(k => k.toString().includes('write_policy_select'));
+      if (!regexHandlerKey) return;
+
+      const ack = vi.fn();
+      const action = { selected_option: null, action_id: 'write_policy_select:confirm-xyz' };
 
       await app.handlers.action[regexHandlerKey]({ action, ack });
 
@@ -6582,11 +6679,10 @@ describe('Commands Module', () => {
       mockGetToolIntegrations.mockReturnValue([]);
 
       const respond = vi.fn();
-      await app.handlers.command['/tools']({ ack: vi.fn(), command: { user_id: 'U1', channel_name: 'directmessage' }, respond });
+      await app.handlers.command['/tools']({ ack: vi.fn(), command: { user_id: 'U1', channel_id: 'C_CHAN', channel_name: 'directmessage' }, respond });
 
-      expect(respond).toHaveBeenCalledWith(expect.objectContaining({
-        response_type: 'ephemeral',
-      }));
+      // Now uses postBlocks instead of ephemeral respond
+      expect(mockPostBlocks).toHaveBeenCalledWith('C_CHAN', expect.any(Array), 'Tools');
     });
   });
 
@@ -7391,25 +7487,16 @@ describe('Commands Module', () => {
       const app = createMockApp();
       registerCommands(app as any);
 
-      // Return custom tools whose names match ALL integration tool names
-      // This makes availableIntegrations empty (all tools registered)
-      // But tools array is non-empty, so line 187 still won't be reached.
-      // Instead, we need TOOL_INTEGRATIONS to be empty. Since it's set at module load,
-      // we rely on the tools list being empty AND mock the integrations.
-      // Since TOOL_INTEGRATIONS is const from module init, the only way to empty it
-      // is if getToolIntegrations returned [] at module load. But it returned non-empty.
-      // We test the closest alternative: empty custom tools with integration tools shown.
       mockListCustomTools.mockResolvedValue([]);
 
       const respond = vi.fn();
-      await app.handlers.command['/tools']({ ack: vi.fn(), command: { user_id: 'U1', channel_name: 'directmessage' }, respond });
+      await app.handlers.command['/tools']({ ack: vi.fn(), command: { user_id: 'U1', channel_id: 'C_CHAN', channel_name: 'directmessage' }, respond });
 
-      expect(respond).toHaveBeenCalledWith(expect.objectContaining({
-        response_type: 'ephemeral',
-      }));
-      // Verify the response includes Available Integrations section
-      const responseText = JSON.stringify(respond.mock.calls[0][0]);
-      expect(responseText).toContain('Available Integrations');
+      // Now uses postBlocks instead of ephemeral respond
+      expect(mockPostBlocks).toHaveBeenCalledWith('C_CHAN', expect.any(Array), 'Tools');
+      // Verify the response includes Available section
+      const responseText = JSON.stringify(mockPostBlocks.mock.calls[0]);
+      expect(responseText).toContain('Available');
     });
   });
 
@@ -7757,9 +7844,9 @@ describe('Commands Module', () => {
       const blocksStr = JSON.stringify(mockPostBlocks.mock.calls);
       expect(blocksStr).toContain('test-bot');
       expect(blocksStr).toContain('C_SEL1');
-      // Should include model/effort selectors and visibility
+      // Should include model/effort selectors and access controls
       expect(blocksStr).toContain('Confirm');
-      expect(blocksStr).toContain('Visibility');
+      expect(blocksStr).toContain('Access');
     });
 
     it('should show confirmation with null channels (new channel)', async () => {

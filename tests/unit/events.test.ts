@@ -22,6 +22,7 @@ const mockCreateDmConversation = vi.fn().mockResolvedValue({ id: 'dm1', user_id:
 const mockGetAccessibleAgents = vi.fn().mockResolvedValue([]);
 const mockAddAgentMember = vi.fn();
 const mockRemoveAgentMember = vi.fn();
+const mockGetAgentByName = vi.fn();
 vi.mock('../../src/modules/agents', () => ({
   getAgentByChannel: (...args: any[]) => mockGetAgentByChannel(...args),
   getAgentsByChannel: (...args: any[]) => mockGetAgentsByChannel(...args),
@@ -33,6 +34,7 @@ vi.mock('../../src/modules/agents', () => ({
   getAgent: (...args: any[]) => mockGetAgentByChannel(...args), // reuse for simplicity
   addAgentMember: (...args: any[]) => mockAddAgentMember(...args),
   removeAgentMember: (...args: any[]) => mockRemoveAgentMember(...args),
+  getAgentByName: (...args: any[]) => mockGetAgentByName(...args),
 }));
 
 const mockEnqueueRun = vi.fn();
@@ -112,6 +114,8 @@ const mockGetAgentRole = vi.fn().mockResolvedValue('member');
 const mockRequestUpgrade = vi.fn().mockResolvedValue('req-id-1');
 const mockGetAgentOwners = vi.fn().mockResolvedValue([{ user_id: 'U_OWNER' }]);
 const mockGetPendingUpgradeRequest = vi.fn().mockResolvedValue(null);
+const mockSetAgentRole = vi.fn();
+const mockRemoveAgentRole = vi.fn();
 vi.mock('../../src/modules/access-control', () => ({
   initSuperadmin: (...args: any[]) => mockInitSuperadmin(...args),
   addSuperadmin: (...args: any[]) => mockAddSuperadmin(...args),
@@ -123,6 +127,8 @@ vi.mock('../../src/modules/access-control', () => ({
   requestUpgrade: (...args: any[]) => mockRequestUpgrade(...args),
   getAgentOwners: (...args: any[]) => mockGetAgentOwners(...args),
   getPendingUpgradeRequest: (...args: any[]) => mockGetPendingUpgradeRequest(...args),
+  setAgentRole: (...args: any[]) => mockSetAgentRole(...args),
+  removeAgentRole: (...args: any[]) => mockRemoveAgentRole(...args),
 }));
 
 // ── Mock dynamic imports for handleAgentChannelCommand ──
@@ -206,6 +212,8 @@ import { registerEvents } from '../../src/slack/events';
 
 // ── Helpers ──
 
+const mockConversationsReplies = vi.fn().mockResolvedValue({ messages: [] });
+
 function createMockApp() {
   const handlers: Record<string, Function[]> = {};
   const actionHandlers: { pattern: string | RegExp; handler: Function }[] = [];
@@ -217,6 +225,11 @@ function createMockApp() {
     action: vi.fn((pattern: string | RegExp, handler: Function) => {
       actionHandlers.push({ pattern, handler });
     }),
+    client: {
+      conversations: {
+        replies: (...args: any[]) => mockConversationsReplies(...args),
+      },
+    },
     _handlers: handlers,
     _actionHandlers: actionHandlers,
     _trigger: async (eventName: string, payload: any) => {
@@ -3008,6 +3021,162 @@ describe('Slack Events -- registerEvents', () => {
         context: { teamId: 'W_TEST_123' },
       });
 
+      expect(mockPostMessage).toHaveBeenCalledWith(
+        'D_DM_CHAN',
+        expect.stringContaining('expired'),
+        '1700000000.100',
+      );
+    });
+  });
+
+  // ── DM Thread: Add/Remove Member Commands ──
+
+  describe('message event -- DM thread add/remove member', () => {
+    it('should handle "add member @user" in DM thread with Access & Roles context', async () => {
+      mockGetDmConversation.mockResolvedValue(null);
+      mockConversationsReplies.mockResolvedValue({
+        messages: [{ text: '*test-agent \u2014 Access & Roles*' }],
+      });
+      const agent = makeAgent({ id: 'agent-1', name: 'test-agent' });
+      mockGetAgentByName.mockResolvedValue(agent);
+      mockCanModifyAgent.mockResolvedValue(true);
+      mockSetAgentRole.mockResolvedValue(undefined);
+
+      registerEvents(mockApp as any);
+
+      await mockApp._trigger('message', {
+        event: {
+          channel: 'D_DM_CHAN',
+          channel_type: 'im',
+          user: 'U_USER',
+          text: 'add member <@U_NEW_MEMBER>',
+          thread_ts: '1700000000.100',
+          ts: '1700000000.200',
+        },
+        context: { teamId: 'W_TEST_123' },
+      });
+
+      expect(mockSetAgentRole).toHaveBeenCalledWith('W_TEST_123', 'agent-1', 'U_NEW_MEMBER', 'member', 'U_USER');
+      expect(mockPostMessage).toHaveBeenCalledWith(
+        'D_DM_CHAN',
+        expect.stringContaining('full access'),
+        '1700000000.100',
+      );
+    });
+
+    it('should handle "remove member @user" in DM thread with Access & Roles context', async () => {
+      mockGetDmConversation.mockResolvedValue(null);
+      mockConversationsReplies.mockResolvedValue({
+        messages: [{ text: '*test-agent \u2014 Access & Roles*' }],
+      });
+      const agent = makeAgent({ id: 'agent-1', name: 'test-agent' });
+      mockGetAgentByName.mockResolvedValue(agent);
+      mockCanModifyAgent.mockResolvedValue(true);
+      mockRemoveAgentRole.mockResolvedValue(undefined);
+
+      registerEvents(mockApp as any);
+
+      await mockApp._trigger('message', {
+        event: {
+          channel: 'D_DM_CHAN',
+          channel_type: 'im',
+          user: 'U_USER',
+          text: 'remove member <@U_OLD_MEMBER>',
+          thread_ts: '1700000000.100',
+          ts: '1700000000.200',
+        },
+        context: { teamId: 'W_TEST_123' },
+      });
+
+      expect(mockRemoveAgentRole).toHaveBeenCalledWith('W_TEST_123', 'agent-1', 'U_OLD_MEMBER');
+      expect(mockPostMessage).toHaveBeenCalledWith(
+        'D_DM_CHAN',
+        expect.stringContaining('removed'),
+        '1700000000.100',
+      );
+    });
+
+    it('should deny add member when user lacks permission', async () => {
+      mockGetDmConversation.mockResolvedValue(null);
+      mockConversationsReplies.mockResolvedValue({
+        messages: [{ text: '*test-agent \u2014 Access & Roles*' }],
+      });
+      const agent = makeAgent({ id: 'agent-1', name: 'test-agent' });
+      mockGetAgentByName.mockResolvedValue(agent);
+      mockCanModifyAgent.mockResolvedValue(false);
+
+      registerEvents(mockApp as any);
+
+      await mockApp._trigger('message', {
+        event: {
+          channel: 'D_DM_CHAN',
+          channel_type: 'im',
+          user: 'U_USER',
+          text: 'add member <@U_NEW_MEMBER>',
+          thread_ts: '1700000000.100',
+          ts: '1700000000.200',
+        },
+        context: { teamId: 'W_TEST_123' },
+      });
+
+      expect(mockSetAgentRole).not.toHaveBeenCalled();
+      expect(mockPostMessage).toHaveBeenCalledWith(
+        'D_DM_CHAN',
+        expect.stringContaining("don't have permission"),
+        '1700000000.100',
+      );
+    });
+
+    it('should fall through to expired message when parent text does not match', async () => {
+      mockGetDmConversation.mockResolvedValue(null);
+      mockConversationsReplies.mockResolvedValue({
+        messages: [{ text: 'Some other message without access pattern' }],
+      });
+
+      registerEvents(mockApp as any);
+
+      await mockApp._trigger('message', {
+        event: {
+          channel: 'D_DM_CHAN',
+          channel_type: 'im',
+          user: 'U_USER',
+          text: 'add member <@U_NEW_MEMBER>',
+          thread_ts: '1700000000.100',
+          ts: '1700000000.200',
+        },
+        context: { teamId: 'W_TEST_123' },
+      });
+
+      expect(mockSetAgentRole).not.toHaveBeenCalled();
+      expect(mockPostMessage).toHaveBeenCalledWith(
+        'D_DM_CHAN',
+        expect.stringContaining('expired'),
+        '1700000000.100',
+      );
+    });
+
+    it('should fall through to expired when agent not found by name', async () => {
+      mockGetDmConversation.mockResolvedValue(null);
+      mockConversationsReplies.mockResolvedValue({
+        messages: [{ text: '*nonexistent-agent \u2014 Access & Roles*' }],
+      });
+      mockGetAgentByName.mockResolvedValue(null);
+
+      registerEvents(mockApp as any);
+
+      await mockApp._trigger('message', {
+        event: {
+          channel: 'D_DM_CHAN',
+          channel_type: 'im',
+          user: 'U_USER',
+          text: 'add member <@U_NEW_MEMBER>',
+          thread_ts: '1700000000.100',
+          ts: '1700000000.200',
+        },
+        context: { teamId: 'W_TEST_123' },
+      });
+
+      expect(mockSetAgentRole).not.toHaveBeenCalled();
       expect(mockPostMessage).toHaveBeenCalledWith(
         'D_DM_CHAN',
         expect.stringContaining('expired'),

@@ -335,6 +335,52 @@ export function registerEvents(app: App): void {
             return;
           }
         }
+        // Handle "add member" / "remove member" in DM threads (e.g. Access & Roles thread)
+        const addMemberDmMatch = text.match(/^add\s+member\s+<@(\w+)>/i);
+        const removeMemberDmMatch = text.match(/^remove\s+member\s+<@(\w+)>/i);
+        if (addMemberDmMatch || removeMemberDmMatch) {
+          try {
+            // Try to find agent name from the thread's parent message text
+            const parentMessages = await app.client.conversations.replies({
+              channel: channelId,
+              ts: msg.thread_ts,
+              limit: 1,
+            });
+            const parentText = parentMessages.messages?.[0]?.text || '';
+            const agentNameMatch = parentText.match(/\*?([^*\u2014]+?)\s*\u2014\s*Access/);
+
+            if (agentNameMatch) {
+              const agentName = agentNameMatch[1].replace(/[^\w\s-]/g, '').trim();
+              const { getAgentByName } = await import('../modules/agents');
+              const agent = await getAgentByName(workspaceId, agentName);
+
+              if (agent) {
+                const { canModifyAgent, setAgentRole, removeAgentRole } = await import('../modules/access-control');
+                if (!(await canModifyAgent(workspaceId, agent.id, userId))) {
+                  await postMessage(channelId, ':x: You don\'t have permission to manage roles for this agent.', msg.thread_ts);
+                  return;
+                }
+
+                if (addMemberDmMatch) {
+                  const targetUserId = addMemberDmMatch[1];
+                  await setAgentRole(workspaceId, agent.id, targetUserId, 'member', userId);
+                  await postMessage(channelId, `:white_check_mark: <@${targetUserId}> now has full access to *${agent.name}*.`, msg.thread_ts);
+                  return;
+                }
+
+                if (removeMemberDmMatch) {
+                  const targetUserId = removeMemberDmMatch[1];
+                  await removeAgentRole(workspaceId, agent.id, targetUserId);
+                  await postMessage(channelId, `:white_check_mark: <@${targetUserId}> has been removed from *${agent.name}*.`, msg.thread_ts);
+                  return;
+                }
+              }
+            }
+          } catch (err: any) {
+            logger.error('Failed to handle member management in DM thread', { error: err.message });
+          }
+        }
+
         // Expired DM thread
         logger.info('DM thread reply not handled by any flow', { threadTs: msg.thread_ts, channelId, userId });
         await postMessage(channelId, `This conversation has expired or was already completed. Please use \`/agents\` to start a new update.`, msg.thread_ts);

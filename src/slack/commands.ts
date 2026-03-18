@@ -184,14 +184,15 @@ export function registerCommands(app: App): void {
         const statusIcon = a.status === 'active' ? ':large_green_circle:' : a.status === 'paused' ? ':double_vertical_bar:' : ':red_circle:';
         const accessBadge = a.default_access === 'none' ? ' :lock: invite only' : ' :globe_with_meridians: everyone';
 
-        // Format tools list with truncation
+        // Format tools list with truncation (deduplicated friendly names)
+        const friendlyTools = [...new Set(a.tools.map(friendlyToolName))];
         let toolsDisplay: string;
-        if (a.tools.length === 0) {
+        if (friendlyTools.length === 0) {
           toolsDisplay = 'none';
-        } else if (a.tools.length <= 5) {
-          toolsDisplay = a.tools.join(', ');
+        } else if (friendlyTools.length <= 5) {
+          toolsDisplay = friendlyTools.join(', ');
         } else {
-          toolsDisplay = a.tools.slice(0, 5).join(', ') + ` +${a.tools.length - 5} more`;
+          toolsDisplay = friendlyTools.slice(0, 5).join(', ') + ` +${friendlyTools.length - 5} more`;
         }
 
         // Get user's role for this agent
@@ -293,39 +294,57 @@ export function registerCommands(app: App): void {
     const tools = await listAll(workspaceId);
     const registeredNames = new Set(tools.map(t => t.name));
 
+    // Build a lookup: tool name → tool record
+    const toolByName = new Map(tools.map(t => [t.name, t]));
+
     const blocks: any[] = [
       { type: 'header', text: { type: 'plain_text', text: `:toolbox: Tools` } },
     ];
 
-    // ── Registered Tools ──
-    if (tools.length > 0) {
-      blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `:white_check_mark: *Registered (${tools.length})*` } });
+    // ── Connected Integrations (grouped by integration) ──
+    const connectedIntegrations: typeof TOOL_INTEGRATIONS = [];
+    const availableIntegrations: typeof TOOL_INTEGRATIONS = [];
 
-      for (const t of tools) {
-        const config = JSON.parse(t.config_json || '{}');
-        const configKeys = Object.keys(config);
-        const schema = JSON.parse(t.schema_json || '{}');
-        const desc = schema.description ? schema.description.slice(0, 100) : '';
-        const statusIcon = configKeys.length > 0 ? ':large_green_circle:' : ':yellow_circle:';
-        const configNote = configKeys.length > 0
-          ? `Config: ${configKeys.map(k => `\`${k}\``).join(', ')}`
-          : '_Needs config — click :gear: Configure_';
+    for (const integration of TOOL_INTEGRATIONS) {
+      const registeredTools = integration.tools.filter(t => registeredNames.has(t));
+      if (registeredTools.length > 0) {
+        // Check if ANY tool has config set (meaning it's "connected")
+        const hasConfig = registeredTools.some(t => {
+          const tool = toolByName.get(t);
+          if (!tool) return false;
+          const config = JSON.parse(tool.config_json || '{}');
+          return Object.keys(config).length > 0;
+        });
+        if (hasConfig) {
+          connectedIntegrations.push(integration);
+        } else {
+          // Registered but not configured — show as available with "Needs setup"
+          availableIntegrations.push(integration);
+        }
+      } else {
+        availableIntegrations.push(integration);
+      }
+    }
 
+    if (connectedIntegrations.length > 0) {
+      blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `:white_check_mark: *Connected (${connectedIntegrations.length})*` } });
+
+      for (const integration of connectedIntegrations) {
+        // Use the first registered tool name for overflow actions
+        const firstTool = integration.tools.find(t => registeredNames.has(t)) || integration.tools[0];
         blocks.push({
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `${statusIcon} *${t.name}* — \`${t.access_level}\` · \`${t.language}\`\n${desc}\n${configNote}`,
+            text: `:large_green_circle: ${integration.icon} *${integration.label}* — ${integration.description}`,
           },
           accessory: {
             type: 'overflow',
             action_id: 'tool_overflow',
             options: [
-              { text: { type: 'plain_text', text: ':gear: Configure' }, value: `configure:${t.name}` },
-              { text: { type: 'plain_text', text: ':shield: Change Access Level' }, value: `access:${t.name}` },
-              { text: { type: 'plain_text', text: ':link: Add to Agent' }, value: `add_to_agent:${t.name}` },
-              ...(!t.approved ? [{ text: { type: 'plain_text' as const, text: ':white_check_mark: Approve' }, value: `approve:${t.name}` }] : []),
-              { text: { type: 'plain_text', text: ':wastebasket: Delete' }, value: `delete:${t.name}` },
+              { text: { type: 'plain_text', text: ':gear: Configure' }, value: `configure:${firstTool}` },
+              { text: { type: 'plain_text', text: ':link: Add to Agent' }, value: `add_to_agent:${firstTool}` },
+              { text: { type: 'plain_text', text: ':wastebasket: Delete' }, value: `delete:${firstTool}` },
             ],
           },
         });
@@ -333,21 +352,18 @@ export function registerCommands(app: App): void {
       blocks.push({ type: 'divider' });
     }
 
-    // ── Available Integrations (not yet registered) ──
-    const availableIntegrations = TOOL_INTEGRATIONS.filter(
-      i => i.tools.some(t => !registeredNames.has(t)),
-    );
-
+    // ── Available Integrations ──
     if (availableIntegrations.length > 0) {
-      blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `:heavy_plus_sign: *Available Integrations*` } });
+      blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `:heavy_plus_sign: *Available*` } });
 
       for (const integration of availableIntegrations) {
-        const unregistered = integration.tools.filter(t => !registeredNames.has(t));
+        const isRegisteredButUnconfigured = integration.tools.some(t => registeredNames.has(t));
+        const statusNote = isRegisteredButUnconfigured ? ' · _Needs setup_' : '';
         blocks.push({
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `${integration.icon} *${integration.label}*\n${integration.description}\nTools: ${unregistered.map(t => `\`${t}\``).join(', ')}`,
+            text: `${integration.icon} *${integration.label}* — ${integration.description}${statusNote}`,
           },
           accessory: {
             type: 'button',
@@ -359,11 +375,11 @@ export function registerCommands(app: App): void {
       }
     }
 
-    if (tools.length === 0 && availableIntegrations.length === 0) {
+    if (connectedIntegrations.length === 0 && availableIntegrations.length === 0) {
       blocks.push({ type: 'section', text: { type: 'mrkdwn', text: '_No tools available._' } });
     }
 
-    await respond({ response_type: 'ephemeral', blocks, text: 'Tools' });
+    await postBlocks(command.channel_id, blocks, 'Tools');
   });
 
   // /audit — View audit log (platform admin only)
@@ -887,7 +903,7 @@ export function registerInlineActions(app: App): void {
           await postBlocks(channelId, [
             { type: 'header', text: { type: 'plain_text', text: `:busts_in_silhouette: ${agent.name} — Access & Roles` } },
             { type: 'section', text: { type: 'mrkdwn', text: rolesSection } },
-            { type: 'section', text: { type: 'mrkdwn', text: `_To add members, say \`add member @user\` in the agent's channel.\nTo remove, say \`remove member @user\`._` } },
+            { type: 'section', text: { type: 'mrkdwn', text: `To manage roles, use \`add member @user\` or \`remove member @user\` in the agent's channel.` } },
           ], `Access & Roles: ${agent.name}`);
         }
         break;
@@ -1771,12 +1787,12 @@ export function registerInlineActions(app: App): void {
             element: {
               type: 'static_select', action_id: 'access_select',
               initial_option: {
-                text: { type: 'plain_text', text: tool.access_level },
+                text: { type: 'plain_text', text: tool.access_level === 'read-write' ? 'Can read and write' : 'Can read' },
                 value: tool.access_level,
               },
               options: [
-                { text: { type: 'plain_text', text: 'read-only' }, value: 'read-only' },
-                { text: { type: 'plain_text', text: 'read-write' }, value: 'read-write' },
+                { text: { type: 'plain_text', text: 'Can read' }, value: 'read-only' },
+                { text: { type: 'plain_text', text: 'Can read and write' }, value: 'read-write' },
               ],
             },
           }],
@@ -2573,7 +2589,7 @@ async function showNewAgentConfirmation(
   const defaultEffort = maxTurnsToEffort(analysis.max_turns || 25);
   await execute(
     `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
-    [confirmId, JSON.stringify({ analysis, name: agentName, goal, userId, existingChannelIds: selectedChannels, selectedModel: analysis.model, selectedEffort: defaultEffort, visibility: 'public', memberIds: [] })],
+    [confirmId, JSON.stringify({ analysis, name: agentName, goal, userId, existingChannelIds: selectedChannels, selectedModel: analysis.model, selectedEffort: defaultEffort, visibility: 'public', defaultAccess: 'viewer', writePolicy: 'auto', memberIds: [] })],
   );
 
   const configSummary = buildConfigSummary(agentName, analysis, goal);
@@ -2587,18 +2603,39 @@ async function showNewAgentConfirmation(
     { type: 'divider' },
     {
       type: 'section',
-      text: { type: 'mrkdwn', text: '*:lock: Visibility*' },
+      text: { type: 'mrkdwn', text: '*:shield: Access*' },
     },
     {
       type: 'actions',
       elements: [
         {
           type: 'radio_buttons',
-          action_id: `visibility_select:${confirmId}`,
-          initial_option: { text: { type: 'plain_text', text: 'Public — everyone can use' }, value: 'public' },
+          action_id: `access_select:${confirmId}`,
+          initial_option: { text: { type: 'plain_text', text: 'Everyone (view only)' }, value: 'viewer' },
           options: [
-            { text: { type: 'plain_text', text: 'Public — everyone can use' }, value: 'public' },
-            { text: { type: 'plain_text', text: 'Private — members only' }, value: 'private' },
+            { text: { type: 'plain_text', text: 'Everyone (full access)' }, value: 'member' },
+            { text: { type: 'plain_text', text: 'Everyone (view only)' }, value: 'viewer' },
+            { text: { type: 'plain_text', text: 'Invite only' }, value: 'none' },
+          ],
+        },
+      ],
+    },
+    {
+      type: 'section',
+      text: { type: 'mrkdwn', text: '*:pencil2: Write approval*' },
+    },
+    {
+      type: 'actions',
+      elements: [
+        {
+          type: 'radio_buttons',
+          action_id: `write_policy_select:${confirmId}`,
+          initial_option: { text: { type: 'plain_text', text: 'No approval needed' }, value: 'auto' },
+          options: [
+            { text: { type: 'plain_text', text: 'No approval needed' }, value: 'auto' },
+            { text: { type: 'plain_text', text: 'User confirms each action' }, value: 'confirm' },
+            { text: { type: 'plain_text', text: 'Owner approves each action' }, value: 'admin_confirm' },
+            { text: { type: 'plain_text', text: 'Block all write actions' }, value: 'deny' },
           ],
         },
       ],
@@ -2927,7 +2964,7 @@ export function registerConfirmationActions(app: App): void {
     }
 
     try {
-      const { analysis, name, goal, userId, existingChannelIds, existingChannelId, selectedModel, selectedEffort, visibility, memberIds } = row.data;
+      const { analysis, name, goal, userId, existingChannelIds, existingChannelId, selectedModel, selectedEffort, visibility, defaultAccess, writePolicy, memberIds } = row.data;
 
       // Apply user-selected model and effort overrides
       const finalModel = selectedModel || analysis.model;
@@ -2996,6 +3033,8 @@ export function registerConfirmationActions(app: App): void {
         respondToAllMessages: analysis.respond_to_all_messages,
         mentionsOnly: analysis.mentions_only,
         visibility: visibility || 'public',
+        defaultAccess: defaultAccess || 'viewer',
+        writePolicy: writePolicy || 'auto',
         relevanceKeywords: analysis.relevance_keywords,
         createdBy: userId,
         maxTurns: finalMaxTurns,
@@ -3007,14 +3046,16 @@ export function registerConfirmationActions(app: App): void {
       }
 
       const allTools = [...analysis.tools, ...resolvedCustomTools];
-      const visibilityLabel = visibility === 'private' ? ':lock: Private' : 'Public';
+      const accessLabel = formatAccessLevel(defaultAccess || 'viewer');
+      const writePolicyLabel = formatWritePolicy(writePolicy || 'auto');
+      const friendlyAllTools = [...new Set(allTools.map(friendlyToolName))];
       const lines = [
         `✋ Meet *${agent.name}*! Deployed by <@${userId}> and ready to get to work. It's small, but it's ready.`,
         '',
         `*Goal:* ${goal.slice(0, 300)}`,
-        `*Model:* ${finalModel} | *Memory:* ${analysis.memory_enabled ? 'on' : 'off'} | *Visibility:* ${visibilityLabel}`,
+        `*Model:* ${finalModel} | *Memory:* ${analysis.memory_enabled ? 'on' : 'off'} | *Access:* ${accessLabel} | *Writes:* ${writePolicyLabel}`,
         `*Responds to:* ${respondModeLabel(analysis)}`,
-        `*Tools:* ${allTools.join(', ')}`,
+        `*Tools:* ${friendlyAllTools.join(', ')}`,
         analysis.skills.length > 0 ? `*Skills:* ${analysis.skills.join(', ')}` : '',
         analysis.triggers.length > 0 ? `*Triggers:* ${analysis.triggers.map((t: any) => t.description).join(', ')}` : '',
         visibility === 'private' && memberIds?.length > 0 ? `*Members:* ${memberIds.map((m: string) => `<@${m}>`).join(', ')}` : '',
@@ -3264,6 +3305,34 @@ export function registerConfirmationActions(app: App): void {
     await execute(
       `UPDATE pending_confirmations SET data = jsonb_set(data, '{visibility}', $1::jsonb) WHERE id = $2`,
       [JSON.stringify(selectedVisibility), confirmId],
+    );
+  });
+
+  app.action(/^access_select:/, async ({ action, ack }: any) => {
+    await ack();
+    const selectedAccess = action.selected_option?.value;
+    if (!selectedAccess) return;
+
+    const confirmId = action.action_id.replace('access_select:', '');
+    if (!confirmId) return;
+
+    await execute(
+      `UPDATE pending_confirmations SET data = jsonb_set(data, '{defaultAccess}', $1::jsonb) WHERE id = $2`,
+      [JSON.stringify(selectedAccess), confirmId],
+    );
+  });
+
+  app.action(/^write_policy_select:/, async ({ action, ack }: any) => {
+    await ack();
+    const selectedPolicy = action.selected_option?.value;
+    if (!selectedPolicy) return;
+
+    const confirmId = action.action_id.replace('write_policy_select:', '');
+    if (!confirmId) return;
+
+    await execute(
+      `UPDATE pending_confirmations SET data = jsonb_set(data, '{writePolicy}', $1::jsonb) WHERE id = $2`,
+      [JSON.stringify(selectedPolicy), confirmId],
     );
   });
 
@@ -3567,6 +3636,34 @@ function respondModeLabel(analysis: { respond_to_all_messages: boolean; mentions
   if (analysis.respond_to_all_messages) return 'all messages';
   if (analysis.mentions_only) return '@mentions only';
   return 'relevant messages + @mentions';
+}
+
+function friendlyToolName(name: string): string {
+  const map: Record<string, string> = {
+    // Built-in Claude tools
+    'WebSearch': 'Web search',
+    'WebFetch': 'Web browse',
+    'Read': 'Read files',
+    'Glob': 'Find files',
+    'Grep': 'Search code',
+    'Edit': 'Edit files',
+    'Write': 'Write files',
+    'Bash': 'Run commands',
+    'NotebookEdit': 'Edit notebooks',
+    // Integration tools — use the integration label
+    'chargebee-read': 'Chargebee',
+    'chargebee-write': 'Chargebee',
+    'hubspot-read': 'HubSpot',
+    'hubspot-write': 'HubSpot',
+    'linear-read': 'Linear',
+    'linear-write': 'Linear',
+    'zendesk-read': 'Zendesk',
+    'zendesk-write': 'Zendesk',
+    'posthog-read': 'PostHog',
+    'serpapi-read': 'SerpAPI',
+    'kb-search': 'Knowledge base',
+  };
+  return map[name] || name.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
 function respondModeLabelFromAgent(agent: { respond_to_all_messages: boolean; mentions_only: boolean }): string {
