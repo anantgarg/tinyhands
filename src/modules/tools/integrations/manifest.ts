@@ -34,6 +34,8 @@ export interface ToolManifest {
   configPlaceholders?: Record<string, string>;
   /** Optional setup instructions shown in registration modal (Slack mrkdwn) */
   setupGuide?: string;
+  /** Connection model for this integration */
+  connectionModel?: 'team' | 'personal' | 'hybrid';
   /** The tool definitions (read-only and optionally read-write) */
   tools: ToolDefinition[];
   /** Register both tools into the database */

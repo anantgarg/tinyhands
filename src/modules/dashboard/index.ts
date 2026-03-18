@@ -41,6 +41,10 @@ export async function buildDashboardBlocks(workspaceId: string): Promise<Record<
   // Recent Runs
   blocks.push(...(await buildRecentRunsSection(workspaceId)));
 
+  // Recent Activity (from audit log)
+  blocks.push({ type: 'divider' });
+  blocks.push(...(await buildRecentActivitySection(workspaceId)));
+
   // Ensure under 50KB Block Kit limit
   const json = JSON.stringify(blocks);
   if (json.length > 48000) {
@@ -272,6 +276,33 @@ async function buildRecentRunsSection(workspaceId: string): Promise<Record<strin
       type: 'context',
       elements: [{ type: 'mrkdwn', text: '_No recent runs_' }],
     });
+  }
+
+  return blocks;
+}
+
+async function buildRecentActivitySection(workspaceId: string): Promise<Record<string, any>[]> {
+  const blocks: Record<string, any>[] = [];
+  blocks.push({ type: 'section', text: { type: 'mrkdwn', text: '*Recent Activity*' } });
+
+  try {
+    const { getAuditLog } = await import('../audit');
+    const entries = await getAuditLog(workspaceId, { limit: 10 });
+
+    if (entries.length === 0) {
+      blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: '_No recent activity_' }] });
+      return blocks;
+    }
+
+    for (const entry of entries) {
+      const agent = entry.agent_name ? ` on *${entry.agent_name}*` : '';
+      blocks.push({
+        type: 'context',
+        elements: [{ type: 'mrkdwn', text: `\`${entry.action_type}\` by <@${entry.actor_user_id}>${agent} — ${entry.status}` }],
+      });
+    }
+  } catch {
+    blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: '_Audit log unavailable_' }] });
   }
 
   return blocks;

@@ -55,6 +55,7 @@ const mockPublishHomeTab = vi.fn();
 const mockUpdateMessage = vi.fn();
 const mockGetSlackApp = vi.fn();
 const mockGetThreadHistory = vi.fn();
+const mockSendDMBlocks = vi.fn();
 vi.mock('../../src/slack/index', () => ({
   postMessage: (...args: any[]) => mockPostMessage(...args),
   postBlocks: (...args: any[]) => mockPostBlocks(...args),
@@ -62,6 +63,7 @@ vi.mock('../../src/slack/index', () => ({
   updateMessage: (...args: any[]) => mockUpdateMessage(...args),
   getSlackApp: () => mockGetSlackApp(),
   getThreadHistory: (...args: any[]) => mockGetThreadHistory(...args),
+  sendDMBlocks: (...args: any[]) => mockSendDMBlocks(...args),
 }));
 
 const mockDetectCritique = vi.fn();
@@ -106,6 +108,10 @@ const mockAddAgentAdmin = vi.fn();
 const mockCanModifyAgent = vi.fn().mockResolvedValue(true);
 const mockIsPlatformAdmin = vi.fn().mockResolvedValue(true);
 const mockListPlatformAdmins = vi.fn().mockResolvedValue([{ user_id: 'UADMIN' }]);
+const mockGetAgentRole = vi.fn().mockResolvedValue('member');
+const mockRequestUpgrade = vi.fn().mockResolvedValue('req-id-1');
+const mockGetAgentOwners = vi.fn().mockResolvedValue([{ user_id: 'U_OWNER' }]);
+const mockGetPendingUpgradeRequest = vi.fn().mockResolvedValue(null);
 vi.mock('../../src/modules/access-control', () => ({
   initSuperadmin: (...args: any[]) => mockInitSuperadmin(...args),
   addSuperadmin: (...args: any[]) => mockAddSuperadmin(...args),
@@ -113,6 +119,10 @@ vi.mock('../../src/modules/access-control', () => ({
   canModifyAgent: (...args: any[]) => mockCanModifyAgent(...args),
   isPlatformAdmin: (...args: any[]) => mockIsPlatformAdmin(...args),
   listPlatformAdmins: (...args: any[]) => mockListPlatformAdmins(...args),
+  getAgentRole: (...args: any[]) => mockGetAgentRole(...args),
+  requestUpgrade: (...args: any[]) => mockRequestUpgrade(...args),
+  getAgentOwners: (...args: any[]) => mockGetAgentOwners(...args),
+  getPendingUpgradeRequest: (...args: any[]) => mockGetPendingUpgradeRequest(...args),
 }));
 
 // ── Mock dynamic imports for handleAgentChannelCommand ──
@@ -3947,6 +3957,83 @@ describe('Slack Events -- registerEvents', () => {
       });
 
       expect(mockCreateDmConversation).toHaveBeenCalledWith('W_TEST_123', 'U_USER', 'a1', 'D_DM_CHAN', '1700000000.100');
+    });
+  });
+
+  // ── Viewer Write Interception ──
+
+  describe('Viewer write interception', () => {
+    it('should block viewer with write_policy=deny', async () => {
+      mockGetAgentRole.mockResolvedValue('viewer');
+      mockGetAgentsByChannel.mockResolvedValue([
+        makeAgent({ id: 'a1', name: 'Agent1', write_policy: 'deny', mentions_only: false, respond_to_all_messages: true }),
+      ]);
+      mockCanAccessAgent.mockResolvedValue(true);
+      mockParseModelOverride.mockReturnValue(null);
+      mockCheckMessageRelevance.mockResolvedValue(true);
+      mockPostMessage.mockResolvedValue(undefined);
+
+      registerEvents(mockApp as any);
+      await mockApp._trigger('message', {
+        event: { channel: 'C123', user: 'U_VIEWER', text: '<@U_BOT> do something', ts: '1.1', channel_type: 'channel' },
+        context: { teamId: 'W_TEST_123' },
+      });
+
+      expect(mockPostMessage).toHaveBeenCalledWith(
+        'C123',
+        'Write operations are disabled for this agent.',
+        expect.any(String)
+      );
+      expect(mockEnqueueRun).not.toHaveBeenCalled();
+    });
+
+    it('should trigger upgrade request for viewer with auto policy', async () => {
+      mockGetAgentRole.mockResolvedValue('viewer');
+      mockGetPendingUpgradeRequest.mockResolvedValue(null);
+      mockRequestUpgrade.mockResolvedValue('req-id-new');
+      mockGetAgentOwners.mockResolvedValue([{ user_id: 'U_OWNER' }]);
+      mockGetAgentsByChannel.mockResolvedValue([
+        makeAgent({ id: 'a1', name: 'Agent1', mentions_only: false, respond_to_all_messages: true }),
+      ]);
+      mockCanAccessAgent.mockResolvedValue(true);
+      mockParseModelOverride.mockReturnValue(null);
+      mockCheckMessageRelevance.mockResolvedValue(true);
+      mockPostMessage.mockResolvedValue(undefined);
+      mockSendDMBlocks.mockResolvedValue(undefined);
+
+      registerEvents(mockApp as any);
+      await mockApp._trigger('message', {
+        event: { channel: 'C123', user: 'U_VIEWER', text: '<@U_BOT> help me', ts: '1.1', channel_type: 'channel' },
+        context: { teamId: 'W_TEST_123' },
+      });
+
+      expect(mockRequestUpgrade).toHaveBeenCalled();
+      expect(mockSendDMBlocks).toHaveBeenCalledWith('U_OWNER', expect.any(Array), 'Upgrade request');
+      expect(mockPostMessage).toHaveBeenCalledWith(
+        'C123',
+        expect.stringContaining('member access'),
+        expect.any(String)
+      );
+      expect(mockEnqueueRun).not.toHaveBeenCalled();
+    });
+
+    it('should bypass viewer check for member role', async () => {
+      mockGetAgentRole.mockResolvedValue('member');
+      mockGetAgentsByChannel.mockResolvedValue([
+        makeAgent({ id: 'a1', name: 'Agent1', mentions_only: false, respond_to_all_messages: true }),
+      ]);
+      mockCanAccessAgent.mockResolvedValue(true);
+      mockParseModelOverride.mockReturnValue(null);
+      mockCheckMessageRelevance.mockResolvedValue(true);
+      mockPostBlocks.mockResolvedValue('status-ts');
+
+      registerEvents(mockApp as any);
+      await mockApp._trigger('message', {
+        event: { channel: 'C123', user: 'U_MEMBER', text: '<@U_BOT> do work', ts: '1.1', channel_type: 'channel' },
+        context: { teamId: 'W_TEST_123' },
+      });
+
+      expect(mockEnqueueRun).toHaveBeenCalled();
     });
   });
 });

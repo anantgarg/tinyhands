@@ -1,5 +1,6 @@
+import { v4 as uuid } from 'uuid';
 import { query, queryOne, execute } from '../../db';
-import type { AccessRole, Superadmin, AgentAdmin, PlatformRole, AgentAccessLevel, PlatformRoleRecord, AgentRoleRecord } from '../../types';
+import type { AccessRole, Superadmin, AgentAdmin, PlatformRole, AgentAccessLevel, PlatformRoleRecord, AgentRoleRecord, UpgradeRequest } from '../../types';
 import { logger } from '../../utils/logger';
 
 // ── Role Hierarchies ──
@@ -264,4 +265,93 @@ export async function canModifyAgent(workspaceId: string, agentId: string, userI
 export async function canSendTask(workspaceId: string, agentId: string, userId: string): Promise<boolean> {
   const { canAccessAgent } = await import('../agents');
   return canAccessAgent(workspaceId, agentId, userId);
+}
+
+// ── Upgrade Request Management ──
+
+export async function requestUpgrade(workspaceId: string, agentId: string, userId: string, reason?: string): Promise<string> {
+  const id = uuid();
+  await execute(
+    `INSERT INTO upgrade_requests (id, workspace_id, agent_id, user_id, requested_role, reason, status, created_at)
+     VALUES ($1, $2, $3, $4, 'member', $5, 'pending', NOW())`,
+    [id, workspaceId, agentId, userId, reason || null]
+  );
+  logger.info('Upgrade request created', { id, workspaceId, agentId, userId });
+
+  // Fire-and-forget audit
+  import('../audit').then(({ logAuditEvent }) => {
+    logAuditEvent({
+      workspaceId,
+      actorUserId: userId,
+      actorRole: 'user',
+      actionType: 'role_change',
+      agentId,
+      details: { action: 'upgrade_requested', requestedRole: 'member' },
+    });
+  }).catch(() => {});
+
+  return id;
+}
+
+export async function approveUpgrade(workspaceId: string, requestId: string, approvedBy: string): Promise<UpgradeRequest | null> {
+  const req = await queryOne<UpgradeRequest>(
+    'SELECT * FROM upgrade_requests WHERE id = $1 AND workspace_id = $2 AND status = $3',
+    [requestId, workspaceId, 'pending']
+  );
+  if (!req) return null;
+
+  await execute(
+    'UPDATE upgrade_requests SET status = $1, resolved_by = $2, resolved_at = NOW() WHERE id = $3',
+    ['approved', approvedBy, requestId]
+  );
+
+  // Grant the requested role
+  await setAgentRole(workspaceId, req.agent_id, req.user_id, 'member', approvedBy);
+
+  // Fire-and-forget audit
+  import('../audit').then(({ logAuditEvent }) => {
+    logAuditEvent({
+      workspaceId,
+      actorUserId: approvedBy,
+      actorRole: 'user',
+      actionType: 'upgrade_approved',
+      agentId: req.agent_id,
+      targetUserId: req.user_id,
+    });
+  }).catch(() => {});
+
+  return { ...req, status: 'approved', resolved_by: approvedBy };
+}
+
+export async function denyUpgrade(workspaceId: string, requestId: string, deniedBy: string): Promise<void> {
+  const req = await queryOne<UpgradeRequest>(
+    'SELECT * FROM upgrade_requests WHERE id = $1 AND workspace_id = $2 AND status = $3',
+    [requestId, workspaceId, 'pending']
+  );
+  if (!req) return;
+
+  await execute(
+    'UPDATE upgrade_requests SET status = $1, resolved_by = $2, resolved_at = NOW() WHERE id = $3',
+    ['denied', deniedBy, requestId]
+  );
+
+  // Fire-and-forget audit
+  import('../audit').then(({ logAuditEvent }) => {
+    logAuditEvent({
+      workspaceId,
+      actorUserId: deniedBy,
+      actorRole: 'user',
+      actionType: 'upgrade_denied',
+      agentId: req.agent_id,
+      targetUserId: req.user_id,
+    });
+  }).catch(() => {});
+}
+
+export async function getPendingUpgradeRequest(workspaceId: string, agentId: string, userId: string): Promise<UpgradeRequest | null> {
+  const result = await queryOne<UpgradeRequest>(
+    "SELECT * FROM upgrade_requests WHERE workspace_id = $1 AND agent_id = $2 AND user_id = $3 AND status = 'pending'",
+    [workspaceId, agentId, userId]
+  );
+  return result || null;
 }

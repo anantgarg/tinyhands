@@ -129,6 +129,49 @@ export function createWebhookServer(): express.Application {
     res.status(200).json({ message: 'OK' });
   });
 
+  // ── OAuth Callback ──
+  app.get('/auth/callback/:integration', async (req, res) => {
+    const { integration } = req.params;
+    const { code, state } = req.query;
+
+    if (!code || !state) {
+      res.status(400).json({ error: 'Missing code or state parameter' });
+      return;
+    }
+
+    try {
+      const { handleOAuthCallback } = await import('./modules/connections/oauth');
+      const { channelId } = await handleOAuthCallback(
+        integration,
+        code as string,
+        state as string,
+      );
+
+      // Notify user in Slack
+      try {
+        const { postMessage } = await import('./slack');
+        if (channelId) {
+          await postMessage(channelId, `:white_check_mark: Successfully connected *${integration}*! You can now use it with your agents.`);
+        }
+      } catch { /* Slack notification is best-effort */ }
+
+      res.status(200).send(`
+        <html><body style="font-family: sans-serif; text-align: center; padding: 40px;">
+          <h2>Connected!</h2>
+          <p>Your ${integration} account has been connected successfully. You can close this window.</p>
+        </body></html>
+      `);
+    } catch (err: any) {
+      logger.error('OAuth callback failed', { integration, error: err.message });
+      res.status(400).send(`
+        <html><body style="font-family: sans-serif; text-align: center; padding: 40px;">
+          <h2>Connection Failed</h2>
+          <p>${err.message}</p>
+        </body></html>
+      `);
+    }
+  });
+
   // ── Internal KB API (used by in-container kb-search tool) ──
 
   app.post('/internal/kb/search', async (req, res) => {

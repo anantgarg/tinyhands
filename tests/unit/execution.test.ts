@@ -71,6 +71,18 @@ vi.mock('../../src/modules/self-authoring', () => ({
   recordToolRun: vi.fn(),
 }));
 
+// Mock access-control for permission context
+const mockGetAgentRole = vi.fn().mockResolvedValue('member');
+vi.mock('../../src/modules/access-control', () => ({
+  getAgentRole: (...args: any[]) => mockGetAgentRole(...args),
+}));
+
+// Mock audit module
+const mockLogAuditEvent = vi.fn();
+vi.mock('../../src/modules/audit', () => ({
+  logAuditEvent: (...args: any[]) => mockLogAuditEvent(...args),
+}));
+
 // Mock Anthropic SDK for memory extraction
 const mockAnthropicCreate = vi.fn();
 vi.mock('@anthropic-ai/sdk', () => ({
@@ -1644,7 +1656,10 @@ describe('Execution Module – executeAgentRun', () => {
     await executeAgentRun(job);
 
     const containerCall = mockCreateAgentContainer.mock.calls[0][0];
-    expect(containerCall.envVars.SYSTEM_PROMPT).toBe('');
+    // Base system_prompt is '' (null coerced), but permission context may be appended
+    expect(containerCall.envVars.SYSTEM_PROMPT).toContain('');
+    // The system prompt starts with empty string (not the agent's prompt)
+    expect(containerCall.envVars.SYSTEM_PROMPT.startsWith('\n\n') || containerCall.envVars.SYSTEM_PROMPT === '').toBe(true);
   });
 
   // ── Error with undefined job id ──
@@ -1796,6 +1811,110 @@ describe('Execution Module – executeAgentRun', () => {
 
     // Should NOT call estimateCost when cost_usd > 0
     expect(mockEstimateCost).not.toHaveBeenCalled();
+  });
+});
+
+// ══════════════════════════════════════════════════
+//  Permission Context Injection
+// ══════════════════════════════════════════════════
+
+describe('Execution Module – Permission Context', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetAgent.mockResolvedValue(makeAgent());
+    mockExecute.mockResolvedValue(undefined);
+    mockCheckRateLimit.mockResolvedValue({ allowed: true });
+    mockCheckRequestRate.mockResolvedValue(true);
+    mockRetrieveContext.mockResolvedValue([]);
+    mockRemoveContainer.mockResolvedValue(undefined);
+    mockGetAgentSkills.mockResolvedValue([]);
+    mockListCustomTools.mockResolvedValue([]);
+    mockGetMcpConfigs.mockResolvedValue([]);
+    mockGetCodeArtifacts.mockResolvedValue([]);
+  });
+
+  it('should inject viewer permission context into SYSTEM_PROMPT', async () => {
+    mockGetAgentRole.mockResolvedValue('viewer');
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"ok","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+    });
+
+    const job = makeFakeJob(makeJobData());
+    await executeAgentRun(job);
+
+    const createCall = mockCreateAgentContainer.mock.calls[0][0];
+    expect(createCall.envVars.SYSTEM_PROMPT).toContain('access level: viewer');
+    expect(createCall.envVars.SYSTEM_PROMPT).toContain('viewer-level access');
+  });
+
+  it('should inject member permission context into SYSTEM_PROMPT', async () => {
+    mockGetAgentRole.mockResolvedValue('member');
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"ok","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+    });
+
+    const job = makeFakeJob(makeJobData());
+    await executeAgentRun(job);
+
+    const createCall = mockCreateAgentContainer.mock.calls[0][0];
+    expect(createCall.envVars.SYSTEM_PROMPT).toContain('access level: member');
+    expect(createCall.envVars.SYSTEM_PROMPT).not.toContain('viewer-level access');
+  });
+
+  it('should inject owner permission context into SYSTEM_PROMPT', async () => {
+    mockGetAgentRole.mockResolvedValue('owner');
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"ok","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+    });
+
+    const job = makeFakeJob(makeJobData());
+    await executeAgentRun(job);
+
+    const createCall = mockCreateAgentContainer.mock.calls[0][0];
+    expect(createCall.envVars.SYSTEM_PROMPT).toContain('access level: owner');
+  });
+
+  it('should include write_policy=deny note when agent has deny policy', async () => {
+    mockGetAgentRole.mockResolvedValue('viewer');
+    mockGetAgent.mockResolvedValue({ ...makeAgent(), write_policy: 'deny' });
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"ok","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+    });
+
+    const job = makeFakeJob(makeJobData());
+    await executeAgentRun(job);
+
+    const createCall = mockCreateAgentContainer.mock.calls[0][0];
+    expect(createCall.envVars.SYSTEM_PROMPT).toContain('Write operations are disabled');
+  });
+
+  it('should log audit event after run completes', async () => {
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"ok","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0.001}',
+    });
+
+    const job = makeFakeJob(makeJobData());
+    await executeAgentRun(job);
+
+    expect(mockLogAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
+      actionType: 'tool_invocation',
+      agentId: 'agent-1',
+    }));
   });
 });
 

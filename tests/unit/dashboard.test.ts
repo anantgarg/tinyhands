@@ -20,6 +20,11 @@ vi.mock('../../src/utils/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+const mockGetAuditLog = vi.fn().mockResolvedValue([]);
+vi.mock('../../src/modules/audit', () => ({
+  getAuditLog: (...args: any[]) => mockGetAuditLog(...args),
+}));
+
 import { buildDashboardBlocks, getMetrics } from '../../src/modules/dashboard';
 import { listAgents } from '../../src/modules/agents';
 import { getRecentRuns } from '../../src/modules/execution';
@@ -765,5 +770,57 @@ describe('buildDashboardBlocks', () => {
     expect(userBlocks[3].elements[0].text).toContain('<@U4>');
     expect(userBlocks[4].elements[0].text).toContain(':star:');
     expect(userBlocks[4].elements[0].text).toContain('<@U5>');
+  });
+
+  it('should include Recent Activity section', async () => {
+    mockGetAuditLog.mockResolvedValue([
+      {
+        id: '1',
+        action_type: 'agent_created',
+        actor_user_id: 'U001',
+        agent_name: 'TestAgent',
+        status: 'success',
+      },
+    ]);
+
+    const blocks = await buildDashboardBlocks(TEST_WORKSPACE_ID);
+
+    const activityHeader = blocks.find(
+      (b) => b.type === 'section' && b.text?.text?.includes('Recent Activity'),
+    );
+    expect(activityHeader).toBeDefined();
+
+    const activityEntry = blocks.find(
+      (b) =>
+        b.type === 'context' &&
+        b.elements?.some((e: any) => e.text?.includes('agent_created')),
+    );
+    expect(activityEntry).toBeDefined();
+  });
+
+  it('should show "No recent activity" when audit log is empty', async () => {
+    mockGetAuditLog.mockResolvedValue([]);
+
+    const blocks = await buildDashboardBlocks(TEST_WORKSPACE_ID);
+
+    const noActivity = blocks.find(
+      (b) =>
+        b.type === 'context' &&
+        b.elements?.some((e: any) => e.text?.includes('No recent activity')),
+    );
+    expect(noActivity).toBeDefined();
+  });
+
+  it('should show "Audit log unavailable" when audit module throws', async () => {
+    mockGetAuditLog.mockRejectedValue(new Error('DB error'));
+
+    const blocks = await buildDashboardBlocks(TEST_WORKSPACE_ID);
+
+    const unavailable = blocks.find(
+      (b) =>
+        b.type === 'context' &&
+        b.elements?.some((e: any) => e.text?.includes('Audit log unavailable')),
+    );
+    expect(unavailable).toBeDefined();
   });
 });

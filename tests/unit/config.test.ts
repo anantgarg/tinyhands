@@ -48,6 +48,15 @@ describe('config', () => {
     expect(config.docker.defaultMemory).toBe(2147483648);
     expect(config.docker.defaultJobTimeoutMs).toBe(1800000);
     expect(config.docker.maxConcurrentWorkers).toBe(3);
+    // Encryption and OAuth defaults
+    expect(config.encryption.key).toBe('');
+    expect(config.oauth.googleClientId).toBe('');
+    expect(config.oauth.googleClientSecret).toBe('');
+    expect(config.oauth.notionClientId).toBe('');
+    expect(config.oauth.notionClientSecret).toBe('');
+    expect(config.oauth.githubClientId).toBe('');
+    expect(config.oauth.githubClientSecret).toBe('');
+    expect(config.oauth.redirectBaseUrl).toBe('http://localhost:3000');
   });
 
   it('should read env vars when set', async () => {

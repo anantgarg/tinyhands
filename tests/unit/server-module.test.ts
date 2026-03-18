@@ -48,6 +48,16 @@ vi.mock('../../src/utils/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+const mockHandleOAuthCallback = vi.fn();
+vi.mock('../../src/modules/connections/oauth', () => ({
+  handleOAuthCallback: (...args: any[]) => mockHandleOAuthCallback(...args),
+}));
+
+const mockSlackPostMessage = vi.fn();
+vi.mock('../../src/slack', () => ({
+  postMessage: (...args: any[]) => mockSlackPostMessage(...args),
+}));
+
 vi.mock('uuid', () => ({
   v4: () => 'test-uuid-1234',
 }));
@@ -692,6 +702,41 @@ describe('Webhook Server', () => {
 
       expect(res.status).toBe(500);
       expect(res.body).toEqual({ error: 'List failed' });
+    });
+  });
+
+  // ── OAuth Callback ──
+
+  describe('OAuth Callback', () => {
+    it('GET /auth/callback/:integration returns 400 when missing code or state', async () => {
+      const res = await makeTestRequest(app, 'GET', '/auth/callback/google_drive');
+
+      expect(res.status).toBe(400);
+    });
+
+    it('GET /auth/callback/:integration returns success HTML on valid callback', async () => {
+      mockHandleOAuthCallback.mockResolvedValueOnce({
+        wsId: 'W1',
+        userId: 'U001',
+        channelId: 'C123',
+      });
+
+      const res = await makeTestRequest(app, 'GET', '/auth/callback/google_drive?code=abc123&state=valid-state');
+
+      expect(res.status).toBe(200);
+      expect(typeof res.body).toBe('string');
+      expect(res.body).toContain('Connected');
+      expect(mockHandleOAuthCallback).toHaveBeenCalledWith('google_drive', 'abc123', 'valid-state');
+    });
+
+    it('GET /auth/callback/:integration returns 400 on error', async () => {
+      mockHandleOAuthCallback.mockRejectedValueOnce(new Error('Invalid or expired OAuth state'));
+
+      const res = await makeTestRequest(app, 'GET', '/auth/callback/github?code=bad&state=expired');
+
+      expect(res.status).toBe(400);
+      expect(typeof res.body).toBe('string');
+      expect(res.body).toContain('Connection Failed');
     });
   });
 });

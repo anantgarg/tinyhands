@@ -472,3 +472,89 @@ export interface SubAgentRun {
   task: string;
   result: string | null;
 }
+
+// ── Upgrade Request Types ──
+
+export interface UpgradeRequest {
+  id: string;
+  workspace_id: string;
+  agent_id: string;
+  user_id: string;
+  requested_role: string;
+  reason: string | null;
+  status: 'pending' | 'approved' | 'denied';
+  resolved_by: string | null;
+  created_at: string;
+  resolved_at: string | null;
+}
+
+// ── Connection Types ──
+
+export type ConnectionType = 'team' | 'personal';
+export type ConnectionMode = 'team' | 'delegated' | 'runtime';
+export type ConnectionStatus = 'active' | 'revoked' | 'expired';
+
+export interface Connection {
+  id: string;
+  workspace_id: string;
+  integration_id: string;
+  connection_type: ConnectionType;
+  user_id: string | null;
+  label: string;
+  credentials_encrypted: string;
+  credentials_iv: string;
+  status: ConnectionStatus;
+  oauth_refresh_token_encrypted: string | null;
+  oauth_token_expires_at: string | null;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AgentToolConnection {
+  id: string;
+  workspace_id: string;
+  agent_id: string;
+  tool_name: string;
+  connection_mode: ConnectionMode;
+  connection_id: string | null;
+  configured_by: string;
+  created_at: string;
+}
+
+export interface OAuthState {
+  state: string;
+  workspace_id: string;
+  user_id: string;
+  integration_id: string;
+  redirect_channel_id: string | null;
+  created_at: string;
+  expires_at: string;
+}
+
+// ── Audit Log Types ──
+
+export type AuditActionType =
+  | 'tool_invocation' | 'agent_config_change' | 'role_change'
+  | 'connection_created' | 'connection_deleted' | 'upgrade_approved'
+  | 'upgrade_denied' | 'agent_created' | 'agent_deleted' | 'platform_role_changed';
+
+export interface AuditLogEntry {
+  id: string;
+  workspace_id: string;
+  timestamp: string;
+  actor_user_id: string;
+  actor_role: string;
+  action_type: AuditActionType;
+  agent_id: string | null;
+  agent_name: string | null;
+  tool_name: string | null;
+  connection_id: string | null;
+  target_user_id: string | null;
+  details_json: string;
+  run_id: string | null;
+  trace_id: string | null;
+  channel_id: string | null;
+  status: string;
+  error_message: string | null;
+}

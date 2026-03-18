@@ -14,6 +14,11 @@ vi.mock('../../src/utils/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+const mockLogAuditEvent = vi.fn();
+vi.mock('../../src/modules/audit', () => ({
+  logAuditEvent: (...args: any[]) => mockLogAuditEvent(...args),
+}));
+
 import {
   // New platform role functions
   getPlatformRole,
@@ -44,6 +49,11 @@ import {
   canModifyAgent,
   canSendTask,
   hasMinimumRole,
+  // Upgrade requests (Phase 2)
+  requestUpgrade,
+  approveUpgrade,
+  denyUpgrade,
+  getPendingUpgradeRequest,
 } from '../../src/modules/access-control';
 
 const TEST_WORKSPACE_ID = 'W_TEST_123';
@@ -848,5 +858,128 @@ describe('canSendTask', () => {
     const result = await canSendTask(TEST_WORKSPACE_ID, 'agent_1', 'U_SUPER');
 
     expect(result).toBe(true);
+  });
+});
+
+// ── Upgrade Requests (Phase 2) ──
+
+describe('requestUpgrade', () => {
+  it('should create a pending upgrade request', async () => {
+    const reqId = await requestUpgrade(TEST_WORKSPACE_ID, 'agent-1', 'U_VIEWER', 'I need write access');
+
+    expect(reqId).toBeDefined();
+    expect(typeof reqId).toBe('string');
+    expect(mockExecute).toHaveBeenCalledWith(
+      expect.stringContaining('upgrade_requests'),
+      expect.arrayContaining([expect.any(String), TEST_WORKSPACE_ID, 'agent-1', 'U_VIEWER', 'I need write access'])
+    );
+  });
+
+  it('should create request with null reason when none provided', async () => {
+    await requestUpgrade(TEST_WORKSPACE_ID, 'agent-1', 'U_VIEWER');
+
+    expect(mockExecute).toHaveBeenCalledWith(
+      expect.stringContaining('upgrade_requests'),
+      expect.arrayContaining([null])
+    );
+  });
+
+  it('should fire audit event', async () => {
+    await requestUpgrade(TEST_WORKSPACE_ID, 'agent-1', 'U_VIEWER');
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    expect(mockLogAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
+      workspaceId: TEST_WORKSPACE_ID,
+      actorUserId: 'U_VIEWER',
+      actionType: 'role_change',
+    }));
+  });
+});
+
+describe('approveUpgrade', () => {
+  it('should approve a pending request and set agent role', async () => {
+    mockQueryOne.mockResolvedValueOnce({
+      id: 'req-1',
+      workspace_id: TEST_WORKSPACE_ID,
+      agent_id: 'agent-1',
+      user_id: 'U_VIEWER',
+      requested_role: 'member',
+      status: 'pending',
+    });
+
+    const result = await approveUpgrade(TEST_WORKSPACE_ID, 'req-1', 'U_APPROVER');
+
+    expect(result).toBeDefined();
+    expect(result!.status).toBe('approved');
+    expect(mockExecute).toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE upgrade_requests'),
+      ['approved', 'U_APPROVER', 'req-1']
+    );
+    // Should also set agent role
+    expect(mockExecute).toHaveBeenCalledWith(
+      expect.stringContaining('agent_roles'),
+      expect.arrayContaining(['agent-1', 'U_VIEWER', 'member', 'U_APPROVER'])
+    );
+  });
+
+  it('should return null for non-existent request', async () => {
+    mockQueryOne.mockResolvedValueOnce(null);
+
+    const result = await approveUpgrade(TEST_WORKSPACE_ID, 'nonexistent', 'U_APPROVER');
+
+    expect(result).toBeNull();
+  });
+});
+
+describe('denyUpgrade', () => {
+  it('should deny a pending request', async () => {
+    mockQueryOne.mockResolvedValueOnce({
+      id: 'req-1',
+      workspace_id: TEST_WORKSPACE_ID,
+      agent_id: 'agent-1',
+      user_id: 'U_VIEWER',
+      status: 'pending',
+    });
+
+    await denyUpgrade(TEST_WORKSPACE_ID, 'req-1', 'U_DENIER');
+
+    expect(mockExecute).toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE upgrade_requests'),
+      ['denied', 'U_DENIER', 'req-1']
+    );
+  });
+
+  it('should do nothing for non-existent request', async () => {
+    mockQueryOne.mockResolvedValueOnce(null);
+
+    await denyUpgrade(TEST_WORKSPACE_ID, 'nonexistent', 'U_DENIER');
+
+    // Should not call execute (beyond the query)
+    expect(mockExecute).not.toHaveBeenCalled();
+  });
+});
+
+describe('getPendingUpgradeRequest', () => {
+  it('should return pending request when found', async () => {
+    mockQueryOne.mockResolvedValueOnce({
+      id: 'req-1',
+      workspace_id: TEST_WORKSPACE_ID,
+      agent_id: 'agent-1',
+      user_id: 'U_VIEWER',
+      status: 'pending',
+    });
+
+    const result = await getPendingUpgradeRequest(TEST_WORKSPACE_ID, 'agent-1', 'U_VIEWER');
+
+    expect(result).toBeDefined();
+    expect(result!.status).toBe('pending');
+  });
+
+  it('should return null when no pending request', async () => {
+    mockQueryOne.mockResolvedValueOnce(null);
+
+    const result = await getPendingUpgradeRequest(TEST_WORKSPACE_ID, 'agent-1', 'U_VIEWER');
+
+    expect(result).toBeNull();
   });
 });

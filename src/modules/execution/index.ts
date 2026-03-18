@@ -196,6 +196,25 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
 
   // Build task prompt with system prompt + context
   const systemPrompt = agent.system_prompt || '';
+
+  // Inject permission context into system prompt
+  let permissionContext = '';
+  try {
+    const { getAgentRole } = await import('../access-control');
+    if (data.userId) {
+      const userRole = await getAgentRole(workspaceId, data.agentId, data.userId);
+      permissionContext = `\n\n## Current User Context\nUser: <@${data.userId}>, access level: ${userRole}\nWrite policy: ${(agent as any).write_policy || 'auto'}`;
+      if (userRole === 'viewer') {
+        permissionContext += '\nNote: This user has viewer-level access. Write actions should explain the limitation and suggest requesting an upgrade.';
+      }
+      if ((agent as any).write_policy === 'deny') {
+        permissionContext += '\nIMPORTANT: Write operations are disabled for this agent. Never attempt write actions.';
+      }
+    }
+  } catch (err) {
+    logger.warn('Failed to get user role for permission context', { error: String(err) });
+  }
+
   const taskPrompt = contextBlock
     ? `<user_message>\n${data.input}\n</user_message>\n${contextBlock}`
     : `<user_message>\n${data.input}\n</user_message>`;
@@ -269,7 +288,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
       traceId: data.traceId,
       workingDir,
       envVars: {
-        SYSTEM_PROMPT: systemPrompt,
+        SYSTEM_PROMPT: systemPrompt + permissionContext,
         TASK_PROMPT: taskPrompt,
         MODEL: getModelId(model),
         MAX_TURNS: String(agent.max_turns),
@@ -416,6 +435,30 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
       tool_calls_count: outputData.toolCallsCount,
       completed_at: new Date().toISOString(),
     });
+
+    // Fire-and-forget audit log for the run
+    try {
+      const { logAuditEvent } = await import('../audit');
+      logAuditEvent({
+        workspaceId,
+        actorUserId: data.userId || 'system',
+        actorRole: 'user',
+        actionType: 'tool_invocation',
+        agentId: data.agentId,
+        agentName: agent.name,
+        runId: runRecord.id,
+        traceId: data.traceId,
+        channelId: data.channelId,
+        status: status === 'completed' ? 'success' : 'failure',
+        details: {
+          inputTokens: outputData.inputTokens,
+          outputTokens: outputData.outputTokens,
+          costUsd: cost,
+          durationMs,
+          toolCallsCount: outputData.toolCallsCount,
+        },
+      });
+    } catch { /* audit logging is best-effort */ }
 
     // Extract and store 0-5 key facts as agent memory
     if (agent.memory_enabled && status === 'completed' && output) {

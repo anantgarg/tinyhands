@@ -1,7 +1,7 @@
 import type { App } from '@slack/bolt';
 import { v4 as uuid } from 'uuid';
 import { createAgent, listAgents, getAgent, getAgentByName, updateAgent, getAccessibleAgents, addAgentMembers, getAgentMembers, addAgentMember, removeAgentMember } from '../modules/agents';
-import { initSuperadmin, canModifyAgent, listPlatformAdmins, isPlatformAdmin } from '../modules/access-control';
+import { initSuperadmin, canModifyAgent, listPlatformAdmins } from '../modules/access-control';
 import { createChannel, postMessage, postBlocks, getSlackApp, sendDMBlocks, openModal, pushModal } from './index';
 import { analyzeGoal } from '../modules/agents/goal-analyzer';
 import { attachSkillToAgent } from '../modules/skills';
@@ -351,6 +351,43 @@ export function registerCommands(app: App): void {
     await respond({ response_type: 'ephemeral', blocks, text: 'Tools' });
   });
 
+  // /audit — View audit log (platform admin only)
+  app.command('/audit', async ({ command, ack, respond }) => {
+    if (!(await requireDM(command, ack, respond))) return;
+    await ack();
+    const workspaceId = command.team_id || getDefaultWorkspaceId();
+    const { isPlatformAdmin } = await import('../modules/access-control');
+    if (!(await isPlatformAdmin(workspaceId, command.user_id))) {
+      await respond({ response_type: 'ephemeral', text: ':lock: Only platform admins can view the audit log.' });
+      return;
+    }
+    const { getAuditLog } = await import('../modules/audit');
+    const entries = await getAuditLog(workspaceId, { limit: 20 });
+
+    const blocks: any[] = [
+      { type: 'header', text: { type: 'plain_text', text: ':clipboard: Audit Log (recent 20)' } },
+    ];
+
+    if (entries.length === 0) {
+      blocks.push({ type: 'section', text: { type: 'mrkdwn', text: '_No audit events yet._' } });
+    } else {
+      for (const entry of entries) {
+        const time = new Date(entry.timestamp).toLocaleString();
+        const agent = entry.agent_name ? ` on *${entry.agent_name}*` : '';
+        const target = entry.target_user_id ? ` → <@${entry.target_user_id}>` : '';
+        blocks.push({
+          type: 'context',
+          elements: [{
+            type: 'mrkdwn',
+            text: `\`${entry.action_type}\` by <@${entry.actor_user_id}>${agent}${target} — ${time} — ${entry.status}`,
+          }],
+        });
+      }
+    }
+
+    await respond({ response_type: 'ephemeral', blocks, text: 'Audit Log' });
+  });
+
   // /kb — Interactive knowledge base management
   app.command('/kb', async ({ command, ack, respond }) => {
     if (!(await requireDM(command, ack, respond))) return;
@@ -656,6 +693,31 @@ function timeAgo(dateStr: string): string {
 // ── Conversational Handlers ──
 
 export function registerInlineActions(app: App): void {
+  // ── Upgrade Request Handlers ──
+  app.action('approve_upgrade', async ({ action, ack, body }: any) => {
+    await ack();
+    const requestId = action.value;
+    const workspaceId = body.team?.id || getDefaultWorkspaceId();
+    const { approveUpgrade } = await import('../modules/access-control');
+    const { getAgent: getAgentForUpgrade } = await import('../modules/agents');
+    const result = await approveUpgrade(workspaceId, requestId, body.user.id);
+    if (result) {
+      const agent = await getAgentForUpgrade(workspaceId, result.agent_id);
+      await sendDMBlocks(result.user_id, [{
+        type: 'section',
+        text: { type: 'mrkdwn', text: `:white_check_mark: You now have *member* access to *${agent?.name || 'the agent'}*. Please re-run your request.` },
+      }], 'Upgrade approved');
+      await postMessage(body.channel?.id || body.user.id, `:white_check_mark: Upgrade approved for <@${result.user_id}>`);
+    }
+  });
+
+  app.action('deny_upgrade', async ({ action, ack, body }: any) => {
+    await ack();
+    const { denyUpgrade } = await import('../modules/access-control');
+    await denyUpgrade(body.team?.id || getDefaultWorkspaceId(), action.value, body.user.id);
+    await postMessage(body.channel?.id || body.user.id, `:no_entry: Upgrade request denied.`);
+  });
+
   // ── Agent overflow menu ──
   app.action('agent_overflow', async ({ action, ack, body }) => {
     await ack();

@@ -98,6 +98,18 @@ export async function createAgent(workspaceId: string, params: CreateAgentParams
 
   logger.info('Agent created', { agentId: id, name: params.name });
 
+  // Fire-and-forget audit
+  import('../audit').then(({ logAuditEvent }) => {
+    logAuditEvent({
+      workspaceId,
+      actorUserId: params.createdBy,
+      actorRole: 'user',
+      actionType: 'agent_created',
+      agentId: id,
+      agentName: params.name,
+    });
+  }).catch(() => {});
+
   // Auto-join the bot to assigned channels so it receives events
   import('../../slack').then(({ ensureBotInChannels }) =>
     ensureBotInChannels(channelIds)
@@ -256,6 +268,19 @@ export async function updateAgent(workspaceId: string, id: string, updates: Part
 
   logger.info('Agent updated', { agentId: id, fields: fields.map(f => f.split(' =')[0]) });
 
+  // Fire-and-forget audit
+  import('../audit').then(({ logAuditEvent }) => {
+    logAuditEvent({
+      workspaceId,
+      actorUserId: changedBy,
+      actorRole: 'user',
+      actionType: 'agent_config_change',
+      agentId: id,
+      agentName: existing.name,
+      details: { updatedFields: fields.map(f => f.split(' =')[0]) },
+    });
+  }).catch(() => {});
+
   // Auto-join the bot to any new channels
   const newChannelIds = updates.channel_ids || (updates.channel_id ? [updates.channel_id] : null);
   if (newChannelIds) {
@@ -278,8 +303,21 @@ export async function updateAgent(workspaceId: string, id: string, updates: Part
 }
 
 export async function deleteAgent(workspaceId: string, id: string): Promise<void> {
+  const agent = await getAgent(workspaceId, id);
   await execute('UPDATE agents SET status = $1 WHERE workspace_id = $2 AND id = $3', ['archived', workspaceId, id]);
   logger.info('Agent archived', { agentId: id });
+
+  // Fire-and-forget audit
+  import('../audit').then(({ logAuditEvent }) => {
+    logAuditEvent({
+      workspaceId,
+      actorUserId: 'system',
+      actorRole: 'system',
+      actionType: 'agent_deleted',
+      agentId: id,
+      agentName: agent?.name,
+    });
+  }).catch(() => {});
 }
 
 export async function getAgentVersions(workspaceId: string, agentId: string): Promise<AgentVersion[]> {

@@ -37,6 +37,18 @@ export const config = {
     intervalMs: parseInt(process.env.AUTO_UPDATE_INTERVAL || '300000', 10),
     branch: process.env.AUTO_UPDATE_BRANCH || 'main',
   },
+  encryption: {
+    key: process.env.ENCRYPTION_KEY || '',
+  },
+  oauth: {
+    googleClientId: process.env.GOOGLE_OAUTH_CLIENT_ID || '',
+    googleClientSecret: process.env.GOOGLE_OAUTH_CLIENT_SECRET || '',
+    notionClientId: process.env.NOTION_OAUTH_CLIENT_ID || '',
+    notionClientSecret: process.env.NOTION_OAUTH_CLIENT_SECRET || '',
+    githubClientId: process.env.GITHUB_OAUTH_CLIENT_ID || '',
+    githubClientSecret: process.env.GITHUB_OAUTH_CLIENT_SECRET || '',
+    redirectBaseUrl: process.env.OAUTH_REDIRECT_BASE_URL || 'http://localhost:3000',
+  },
   docker: {
     baseImage: process.env.DOCKER_BASE_IMAGE || 'tinyhands-runner:latest',
     defaultCpu: parseInt(process.env.DEFAULT_CONTAINER_CPU || '1', 10),

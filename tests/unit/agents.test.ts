@@ -28,6 +28,11 @@ vi.mock('../../src/modules/access-control', () => ({
   getAgentRole: (...args: any[]) => mockGetAgentRole(...args),
 }));
 
+const mockLogAuditEvent = vi.fn();
+vi.mock('../../src/modules/audit', () => ({
+  logAuditEvent: (...args: any[]) => mockLogAuditEvent(...args),
+}));
+
 import {
   createAgent,
   getAgent,
@@ -86,6 +91,15 @@ describe('Agent Management', () => {
       expect(agent.write_policy).toBe('auto');
       expect(agent.tools).toEqual(['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash', 'WebSearch', 'WebFetch']);
       expect(mockWithTransaction).toHaveBeenCalled();
+
+      // Flush fire-and-forget audit
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(mockLogAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
+        workspaceId: TEST_WORKSPACE_ID,
+        actorUserId: 'U001',
+        actionType: 'agent_created',
+        agentName: 'test-agent',
+      }));
     });
 
     it('should create with custom options', async () => {
@@ -281,6 +295,15 @@ describe('Agent Management', () => {
       const updated = await updateAgent(TEST_WORKSPACE_ID, 'a1', { name: 'new-name' }, 'U001');
       expect(updated.name).toBe('new-name');
       expect(mockWithTransaction).toHaveBeenCalled();
+
+      // Flush fire-and-forget audit
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(mockLogAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
+        workspaceId: TEST_WORKSPACE_ID,
+        actorUserId: 'U001',
+        actionType: 'agent_config_change',
+        agentId: 'a1',
+      }));
     });
 
     it('should throw if agent not found', async () => {
@@ -305,11 +328,25 @@ describe('Agent Management', () => {
 
   describe('deleteAgent', () => {
     it('should archive the agent', async () => {
+      mockQueryOne.mockResolvedValueOnce({
+        id: 'a1', name: 'deleted-agent', channel_id: 'C1',
+        tools: '[]', relevance_keywords: '[]',
+      });
+
       await deleteAgent(TEST_WORKSPACE_ID, 'a1');
       expect(mockExecute).toHaveBeenCalledWith(
         expect.stringContaining('status'),
         ['archived', TEST_WORKSPACE_ID, 'a1']
       );
+
+      // Flush fire-and-forget audit
+      await new Promise(resolve => setTimeout(resolve, 0));
+      expect(mockLogAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
+        workspaceId: TEST_WORKSPACE_ID,
+        actionType: 'agent_deleted',
+        agentId: 'a1',
+        agentName: 'deleted-agent',
+      }));
     });
   });
 

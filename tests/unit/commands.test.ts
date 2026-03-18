@@ -43,6 +43,8 @@ const mockInitSuperadmin = vi.fn().mockResolvedValue(undefined);
 const mockCanModifyAgent = vi.fn().mockResolvedValue(true);
 const mockListPlatformAdmins = vi.fn().mockResolvedValue([{ user_id: 'UADMIN' }]);
 const mockIsPlatformAdmin = vi.fn().mockResolvedValue(true);
+const mockApproveUpgrade = vi.fn().mockResolvedValue({ agent_id: 'agent-1', user_id: 'U_REQUESTER' });
+const mockDenyUpgrade = vi.fn().mockResolvedValue(undefined);
 
 vi.mock('../../src/modules/access-control', () => ({
   initSuperadmin: (...args: any[]) => mockInitSuperadmin(...args),
@@ -51,6 +53,14 @@ vi.mock('../../src/modules/access-control', () => ({
   isPlatformAdmin: (...args: any[]) => mockIsPlatformAdmin(...args),
   listSuperadmins: (...args: any[]) => mockListPlatformAdmins(...args),
   isSuperadmin: (...args: any[]) => mockIsPlatformAdmin(...args),
+  approveUpgrade: (...args: any[]) => mockApproveUpgrade(...args),
+  denyUpgrade: (...args: any[]) => mockDenyUpgrade(...args),
+}));
+
+const mockGetAuditLog = vi.fn().mockResolvedValue([]);
+vi.mock('../../src/modules/audit', () => ({
+  getAuditLog: (...args: any[]) => mockGetAuditLog(...args),
+  logAuditEvent: vi.fn(),
 }));
 
 const mockPostMessage = vi.fn().mockResolvedValue('msg-ts-123');
@@ -515,7 +525,7 @@ describe('Commands Module', () => {
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   describe('registerCommands', () => {
-    it('should register /agents, /new-agent, /update-agent, /tools, /kb, /templates commands', () => {
+    it('should register /agents, /new-agent, /update-agent, /tools, /kb, /templates, /audit commands', () => {
       const app = createMockApp();
       registerCommands(app as any);
 
@@ -525,7 +535,8 @@ describe('Commands Module', () => {
       expect(app.command).toHaveBeenCalledWith('/tools', expect.any(Function));
       expect(app.command).toHaveBeenCalledWith('/kb', expect.any(Function));
       expect(app.command).toHaveBeenCalledWith('/templates', expect.any(Function));
-      expect(app.command).toHaveBeenCalledTimes(6);
+      expect(app.command).toHaveBeenCalledWith('/audit', expect.any(Function));
+      expect(app.command).toHaveBeenCalledTimes(7);
     });
   });
 
@@ -3745,10 +3756,10 @@ describe('Commands Module', () => {
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   describe('handler registration counts', () => {
-    it('registerCommands should register exactly 6 commands', () => {
+    it('registerCommands should register exactly 7 commands', () => {
       const app = createMockApp();
       registerCommands(app as any);
-      expect(app.command).toHaveBeenCalledTimes(6);
+      expect(app.command).toHaveBeenCalledTimes(7);
     });
 
     it('registerModalHandlers should register exactly 5 view handlers', () => {
@@ -3777,7 +3788,7 @@ describe('Commands Module', () => {
       registerToolAndKBModals(app as any);
       registerToolAndKBModals(app as any);
 
-      expect(app.command).toHaveBeenCalledTimes(12);
+      expect(app.command).toHaveBeenCalledTimes(14);
     });
   });
 
@@ -8366,6 +8377,128 @@ describe('Commands Module', () => {
         expect.stringContaining('UPDATE pending_confirmations'),
         [JSON.stringify('C_TARGET'), 'pending-1'],
       );
+    });
+  });
+
+  // ── Upgrade Request Actions ──
+
+  describe('approve_upgrade action', () => {
+    it('should approve an upgrade request and notify user', async () => {
+      const app = createMockApp();
+      await safeRegisterInlineActions(app);
+
+      mockApproveUpgrade.mockResolvedValue({
+        agent_id: 'agent-1',
+        user_id: 'U_REQUESTER',
+        status: 'approved',
+      });
+      mockGetAgent.mockResolvedValue({ name: 'TestAgent' });
+
+      const ack = vi.fn();
+      const action = { value: 'req-id-1' };
+      const body = { user: { id: 'U_APPROVER' }, team: { id: 'W_TEST_123' }, channel: { id: 'C123' } };
+
+      await app.handlers.action['approve_upgrade']({ action, ack, body });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockApproveUpgrade).toHaveBeenCalledWith('W_TEST_123', 'req-id-1', 'U_APPROVER');
+      expect(mockSendDMBlocks).toHaveBeenCalledWith('U_REQUESTER', expect.any(Array), 'Upgrade approved');
+      expect(mockPostMessage).toHaveBeenCalledWith('C123', expect.stringContaining('Upgrade approved'));
+    });
+  });
+
+  describe('deny_upgrade action', () => {
+    it('should deny an upgrade request', async () => {
+      const app = createMockApp();
+      await safeRegisterInlineActions(app);
+
+      const ack = vi.fn();
+      const action = { value: 'req-id-1' };
+      const body = { user: { id: 'U_DENIER' }, team: { id: 'W_TEST_123' }, channel: { id: 'C123' } };
+
+      await app.handlers.action['deny_upgrade']({ action, ack, body });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockDenyUpgrade).toHaveBeenCalledWith('W_TEST_123', 'req-id-1', 'U_DENIER');
+      expect(mockPostMessage).toHaveBeenCalledWith('C123', expect.stringContaining('denied'));
+    });
+  });
+
+  // ── /audit Command ──
+
+  describe('/audit command', () => {
+    it('should show audit log for platform admin', async () => {
+      const app = createMockApp();
+      registerCommands(app as any);
+
+      mockIsPlatformAdmin.mockResolvedValue(true);
+      mockGetAuditLog.mockResolvedValue([
+        {
+          id: '1',
+          action_type: 'agent_created',
+          actor_user_id: 'U001',
+          agent_name: 'TestAgent',
+          target_user_id: null,
+          timestamp: '2025-01-01T00:00:00Z',
+          status: 'success',
+        },
+      ]);
+
+      const respond = vi.fn();
+      await app.handlers.command['/audit']({
+        command: { team_id: 'W_TEST_123', user_id: 'UADMIN', channel_name: 'directmessage' },
+        ack: vi.fn(),
+        respond,
+      });
+
+      expect(mockGetAuditLog).toHaveBeenCalledWith('W_TEST_123', { limit: 20 });
+      expect(respond).toHaveBeenCalledWith(expect.objectContaining({
+        blocks: expect.arrayContaining([
+          expect.objectContaining({ type: 'header' }),
+        ]),
+      }));
+    });
+
+    it('should deny non-platform admin', async () => {
+      const app = createMockApp();
+      registerCommands(app as any);
+
+      mockIsPlatformAdmin.mockResolvedValue(false);
+
+      const respond = vi.fn();
+      await app.handlers.command['/audit']({
+        command: { team_id: 'W_TEST_123', user_id: 'U_NONADMIN', channel_name: 'directmessage' },
+        ack: vi.fn(),
+        respond,
+      });
+
+      expect(respond).toHaveBeenCalledWith(expect.objectContaining({
+        text: expect.stringContaining('Only platform admins'),
+      }));
+    });
+
+    it('should show empty state when no audit events', async () => {
+      const app = createMockApp();
+      registerCommands(app as any);
+
+      mockIsPlatformAdmin.mockResolvedValue(true);
+      mockGetAuditLog.mockResolvedValue([]);
+
+      const respond = vi.fn();
+      await app.handlers.command['/audit']({
+        command: { team_id: 'W_TEST_123', user_id: 'UADMIN', channel_name: 'directmessage' },
+        ack: vi.fn(),
+        respond,
+      });
+
+      expect(respond).toHaveBeenCalledWith(expect.objectContaining({
+        blocks: expect.arrayContaining([
+          expect.objectContaining({
+            type: 'section',
+            text: expect.objectContaining({ text: expect.stringContaining('No audit events') }),
+          }),
+        ]),
+      }));
     });
   });
 });
