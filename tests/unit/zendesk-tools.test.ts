@@ -23,8 +23,10 @@ vi.mock('../../src/utils/logger', () => ({
 }));
 
 import { manifest as zendeskManifest } from '../../src/modules/tools/integrations/zendesk';
-const registerZendeskTools = (userId: string, config: Record<string, string>) => zendeskManifest.register(userId, config);
-const updateZendeskConfig = (config: Record<string, string>) => zendeskManifest.updateConfig(config);
+
+const TEST_WORKSPACE_ID = 'W_TEST_123';
+const registerZendeskTools = (userId: string, config: Record<string, string>) => zendeskManifest.register(TEST_WORKSPACE_ID, userId, config);
+const updateZendeskConfig = (config: Record<string, string>) => zendeskManifest.updateConfig(TEST_WORKSPACE_ID, config);
 
 // ── Helpers ──
 
@@ -53,9 +55,9 @@ describe('Zendesk Tools Module', () => {
 
       // First call is the read tool
       const readCall = mockRegisterCustomTool.mock.calls[0];
-      expect(readCall[0]).toBe('zendesk-read');
+      expect(readCall[1]).toBe('zendesk-read');
 
-      const readSchema = JSON.parse(readCall[1]);
+      const readSchema = JSON.parse(readCall[2]);
       expect(readSchema.type).toBe('object');
       expect(readSchema.description).toContain('Read-only access to Zendesk');
       expect(readSchema.properties.action.enum).toEqual([
@@ -74,9 +76,9 @@ describe('Zendesk Tools Module', () => {
 
       // Second call is the write tool
       const writeCall = mockRegisterCustomTool.mock.calls[1];
-      expect(writeCall[0]).toBe('zendesk-write');
+      expect(writeCall[1]).toBe('zendesk-write');
 
-      const writeSchema = JSON.parse(writeCall[1]);
+      const writeSchema = JSON.parse(writeCall[2]);
       expect(writeSchema.type).toBe('object');
       expect(writeSchema.description).toContain('Create and respond to Zendesk tickets');
       expect(writeSchema.description).toContain('No destructive actions');
@@ -93,7 +95,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const readSchema = JSON.parse(mockRegisterCustomTool.mock.calls[0][1]);
+      const readSchema = JSON.parse(mockRegisterCustomTool.mock.calls[0][2]);
       const propKeys = Object.keys(readSchema.properties);
       expect(propKeys).toContain('action');
       expect(propKeys).toContain('query');
@@ -113,7 +115,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const writeSchema = JSON.parse(mockRegisterCustomTool.mock.calls[1][1]);
+      const writeSchema = JSON.parse(mockRegisterCustomTool.mock.calls[1][2]);
       const propKeys = Object.keys(writeSchema.properties);
       expect(propKeys).toContain('action');
       expect(propKeys).toContain('subject');
@@ -132,7 +134,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const readSchema = JSON.parse(mockRegisterCustomTool.mock.calls[0][1]);
+      const readSchema = JSON.parse(mockRegisterCustomTool.mock.calls[0][2]);
       expect(readSchema.properties.sort_order.enum).toEqual(['asc', 'desc']);
     });
 
@@ -142,7 +144,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const writeSchema = JSON.parse(mockRegisterCustomTool.mock.calls[1][1]);
+      const writeSchema = JSON.parse(mockRegisterCustomTool.mock.calls[1][2]);
       expect(writeSchema.properties.priority.enum).toEqual(['low', 'normal', 'high', 'urgent']);
     });
 
@@ -152,7 +154,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const readSchema = JSON.parse(mockRegisterCustomTool.mock.calls[0][1]);
+      const readSchema = JSON.parse(mockRegisterCustomTool.mock.calls[0][2]);
       expect(readSchema.properties.ticket_id.type).toBe('number');
       expect(readSchema.properties.user_id.type).toBe('number');
       expect(readSchema.properties.organization_id.type).toBe('number');
@@ -165,7 +167,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const writeSchema = JSON.parse(mockRegisterCustomTool.mock.calls[1][1]);
+      const writeSchema = JSON.parse(mockRegisterCustomTool.mock.calls[1][2]);
       expect(writeSchema.properties.tags.type).toBe('array');
       expect(writeSchema.properties.tags.items.type).toBe('string');
     });
@@ -176,7 +178,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const writeSchema = JSON.parse(mockRegisterCustomTool.mock.calls[1][1]);
+      const writeSchema = JSON.parse(mockRegisterCustomTool.mock.calls[1][2]);
       expect(writeSchema.properties.public_reply.type).toBe('boolean');
     });
   });
@@ -191,7 +193,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const readOptions = mockRegisterCustomTool.mock.calls[0][4];
+      const readOptions = mockRegisterCustomTool.mock.calls[0][5];
       const code = readOptions.code;
       // Auth is constructed as: Buffer.from(email + '/token:' + apiToken).toString('base64')
       expect(code).toContain("Buffer.from(email + '/token:' + apiToken).toString('base64')");
@@ -204,7 +206,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const writeOptions = mockRegisterCustomTool.mock.calls[1][4];
+      const writeOptions = mockRegisterCustomTool.mock.calls[1][5];
       const code = writeOptions.code;
       expect(code).toContain("Buffer.from(email + '/token:' + apiToken).toString('base64')");
       expect(code).toContain("'Authorization': 'Basic ' + auth");
@@ -216,7 +218,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const readOptions = mockRegisterCustomTool.mock.calls[0][4];
+      const readOptions = mockRegisterCustomTool.mock.calls[0][5];
       const code = readOptions.code;
       expect(code).toContain("'https://' + subdomain + '.zendesk.com' + path");
     });
@@ -227,7 +229,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const writeOptions = mockRegisterCustomTool.mock.calls[1][4];
+      const writeOptions = mockRegisterCustomTool.mock.calls[1][5];
       const code = writeOptions.code;
       expect(code).toContain("'https://' + subdomain + '.zendesk.com' + path");
     });
@@ -238,7 +240,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const readOptions = mockRegisterCustomTool.mock.calls[0][4];
+      const readOptions = mockRegisterCustomTool.mock.calls[0][5];
       expect(readOptions.code).toContain("'zendesk-read.config.json'");
     });
 
@@ -248,7 +250,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const writeOptions = mockRegisterCustomTool.mock.calls[1][4];
+      const writeOptions = mockRegisterCustomTool.mock.calls[1][5];
       expect(writeOptions.code).toContain("'zendesk-write.config.json'");
     });
   });
@@ -263,7 +265,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("case 'search':");
       expect(code).toContain('/api/v2/search.json?query=');
       expect(code).toContain("if (!query) { result = { error: 'query is required for search' }");
@@ -275,7 +277,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("case 'get_ticket':");
       expect(code).toContain('/api/v2/tickets/');
       expect(code).toContain("if (!ticket_id) { result = { error: 'ticket_id is required' }");
@@ -287,7 +289,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("case 'get_ticket_comments':");
       expect(code).toContain('/comments.json');
     });
@@ -298,7 +300,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("case 'get_user':");
       expect(code).toContain('/api/v2/users/');
     });
@@ -309,7 +311,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("case 'get_organization':");
       expect(code).toContain('/api/v2/organizations/');
     });
@@ -320,7 +322,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("case 'list_views':");
       expect(code).toContain('/api/v2/views.json');
     });
@@ -331,7 +333,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("case 'get_view_tickets':");
       expect(code).toContain('/tickets.json');
     });
@@ -342,7 +344,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("case 'get_ticket_metrics':");
       expect(code).toContain('/metrics.json');
     });
@@ -353,7 +355,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("case 'get_satisfaction_ratings':");
       expect(code).toContain('/api/v2/satisfaction_ratings.json');
     });
@@ -364,7 +366,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("'Unknown action: ' + action");
     });
 
@@ -374,7 +376,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain('const pageParam = page || 1');
       expect(code).toContain('Math.min(per_page || 100, 100)');
     });
@@ -385,7 +387,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("if (sort_by) path += '&sort_by='");
       expect(code).toContain("if (sort_order) path += '&sort_order='");
     });
@@ -396,7 +398,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain('if (!subdomain || !email || !apiToken)');
       expect(code).toContain('Zendesk credentials not configured');
       expect(code).toContain('process.exit(0)');
@@ -408,7 +410,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain('req.setTimeout(30000');
     });
   });
@@ -423,7 +425,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[1][4].code;
+      const code = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(code).toContain("case 'create_ticket':");
       expect(code).toContain("if (!subject || !body) { result = { error: 'subject and body are required for create_ticket' }");
       expect(code).toContain("'/api/v2/tickets.json', 'POST'");
@@ -435,7 +437,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[1][4].code;
+      const code = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(code).toContain("case 'add_comment':");
       expect(code).toContain("if (!ticket_id || !body) { result = { error: 'ticket_id and body are required for add_comment' }");
       expect(code).toContain("'PUT'");
@@ -447,7 +449,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[1][4].code;
+      const code = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(code).toContain("case 'update_ticket_tags':");
       expect(code).toContain("if (!ticket_id || !tags) { result = { error: 'ticket_id and tags are required' }");
     });
@@ -458,7 +460,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[1][4].code;
+      const code = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(code).toContain("case 'update_ticket_priority':");
       expect(code).toContain("if (!ticket_id || !priority) { result = { error: 'ticket_id and priority are required' }");
     });
@@ -469,7 +471,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[1][4].code;
+      const code = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(code).toContain("case 'update_ticket_assignee':");
       expect(code).toContain("if (!ticket_id || !assignee_id) { result = { error: 'ticket_id and assignee_id are required' }");
     });
@@ -480,7 +482,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[1][4].code;
+      const code = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(code).toContain('const isPublic = public_reply !== false');
     });
 
@@ -490,7 +492,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[1][4].code;
+      const code = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(code).toContain('if (requester_email) ticket.ticket.requester = { email: requester_email }');
     });
 
@@ -500,7 +502,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[1][4].code;
+      const code = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(code).toContain("priority: priority || 'normal'");
     });
 
@@ -510,7 +512,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[1][4].code;
+      const code = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(code).toContain("'Unknown action: ' + action");
     });
   });
@@ -526,8 +528,8 @@ describe('Zendesk Tools Module', () => {
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
       expect(mockRegisterCustomTool).toHaveBeenCalledTimes(2);
-      expect(mockGetCustomTool).toHaveBeenCalledWith('zendesk-read');
-      expect(mockGetCustomTool).toHaveBeenCalledWith('zendesk-write');
+      expect(mockGetCustomTool).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 'zendesk-read');
+      expect(mockGetCustomTool).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 'zendesk-write');
     });
 
     it('passes configJson to both tools', async () => {
@@ -537,8 +539,8 @@ describe('Zendesk Tools Module', () => {
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
       const expectedConfigJson = JSON.stringify(ZENDESK_CONFIG);
-      expect(mockRegisterCustomTool.mock.calls[0][4].configJson).toBe(expectedConfigJson);
-      expect(mockRegisterCustomTool.mock.calls[1][4].configJson).toBe(expectedConfigJson);
+      expect(mockRegisterCustomTool.mock.calls[0][5].configJson).toBe(expectedConfigJson);
+      expect(mockRegisterCustomTool.mock.calls[1][5].configJson).toBe(expectedConfigJson);
     });
 
     it('registers read tool with correct options', async () => {
@@ -547,7 +549,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const readOptions = mockRegisterCustomTool.mock.calls[0][4];
+      const readOptions = mockRegisterCustomTool.mock.calls[0][5];
       expect(readOptions.language).toBe('javascript');
       expect(readOptions.autoApprove).toBe(true);
       expect(readOptions.accessLevel).toBe('read-only');
@@ -559,7 +561,7 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      const writeOptions = mockRegisterCustomTool.mock.calls[1][4];
+      const writeOptions = mockRegisterCustomTool.mock.calls[1][5];
       expect(writeOptions.language).toBe('javascript');
       expect(writeOptions.autoApprove).toBe(true);
       expect(writeOptions.accessLevel).toBe('read-write');
@@ -571,8 +573,8 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      expect(mockRegisterCustomTool.mock.calls[0][2]).toBeNull();
-      expect(mockRegisterCustomTool.mock.calls[1][2]).toBeNull();
+      expect(mockRegisterCustomTool.mock.calls[0][3]).toBeNull();
+      expect(mockRegisterCustomTool.mock.calls[1][3]).toBeNull();
     });
 
     it('passes adminUserId for both tools', async () => {
@@ -581,8 +583,8 @@ describe('Zendesk Tools Module', () => {
 
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
-      expect(mockRegisterCustomTool.mock.calls[0][3]).toBe('admin-user-1');
-      expect(mockRegisterCustomTool.mock.calls[1][3]).toBe('admin-user-1');
+      expect(mockRegisterCustomTool.mock.calls[0][4]).toBe('admin-user-1');
+      expect(mockRegisterCustomTool.mock.calls[1][4]).toBe('admin-user-1');
     });
 
     it('skips read tool registration when it already exists', async () => {
@@ -594,7 +596,7 @@ describe('Zendesk Tools Module', () => {
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
       expect(mockRegisterCustomTool).toHaveBeenCalledTimes(1);
-      expect(mockRegisterCustomTool.mock.calls[0][0]).toBe('zendesk-write');
+      expect(mockRegisterCustomTool.mock.calls[0][1]).toBe('zendesk-write');
     });
 
     it('skips write tool registration when it already exists', async () => {
@@ -606,7 +608,7 @@ describe('Zendesk Tools Module', () => {
       await registerZendeskTools('admin-user-1', ZENDESK_CONFIG);
 
       expect(mockRegisterCustomTool).toHaveBeenCalledTimes(1);
-      expect(mockRegisterCustomTool.mock.calls[0][0]).toBe('zendesk-read');
+      expect(mockRegisterCustomTool.mock.calls[0][1]).toBe('zendesk-read');
     });
 
     it('skips both when both already exist', async () => {
@@ -629,8 +631,8 @@ describe('Zendesk Tools Module', () => {
       await updateZendeskConfig(newConfig);
 
       expect(mockExecute).toHaveBeenCalledWith(
-        `UPDATE custom_tools SET config_json = $1 WHERE name = ANY($2)`,
-        [JSON.stringify(newConfig), ['zendesk-read', 'zendesk-write']],
+        `UPDATE custom_tools SET config_json = $1 WHERE workspace_id = $2 AND name = ANY($3)`,
+        [JSON.stringify(newConfig), TEST_WORKSPACE_ID, ['zendesk-read', 'zendesk-write']],
       );
     });
 

@@ -23,8 +23,10 @@ vi.mock('../../src/utils/logger', () => ({
 }));
 
 import { manifest as chargebeeManifest } from '../../src/modules/tools/integrations/chargebee';
-const registerChargebeeTools = (userId: string, config: Record<string, string>) => chargebeeManifest.register(userId, config);
-const updateChargebeeConfig = (config: Record<string, string>) => chargebeeManifest.updateConfig(config);
+
+const TEST_WORKSPACE_ID = 'W_TEST_123';
+const registerChargebeeTools = (userId: string, config: Record<string, string>) => chargebeeManifest.register(TEST_WORKSPACE_ID, userId, config);
+const updateChargebeeConfig = (config: Record<string, string>) => chargebeeManifest.updateConfig(TEST_WORKSPACE_ID, config);
 
 // ── Helpers ──
 
@@ -167,8 +169,8 @@ describe('Chargebee Tools Module', () => {
       await registerChargebeeTools('admin-1', CHARGEBEE_CONFIG);
 
       expect(mockRegisterCustomTool).toHaveBeenCalledTimes(2);
-      expect(mockGetCustomTool).toHaveBeenCalledWith('chargebee-read');
-      expect(mockGetCustomTool).toHaveBeenCalledWith('chargebee-write');
+      expect(mockGetCustomTool).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 'chargebee-read');
+      expect(mockGetCustomTool).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 'chargebee-write');
     });
 
     it('passes configJson to both tools', async () => {
@@ -178,8 +180,8 @@ describe('Chargebee Tools Module', () => {
       await registerChargebeeTools('admin-1', CHARGEBEE_CONFIG);
 
       const expectedConfigJson = JSON.stringify(CHARGEBEE_CONFIG);
-      expect(mockRegisterCustomTool.mock.calls[0][4].configJson).toBe(expectedConfigJson);
-      expect(mockRegisterCustomTool.mock.calls[1][4].configJson).toBe(expectedConfigJson);
+      expect(mockRegisterCustomTool.mock.calls[0][5].configJson).toBe(expectedConfigJson);
+      expect(mockRegisterCustomTool.mock.calls[1][5].configJson).toBe(expectedConfigJson);
     });
 
     it('registers read tool with read-only access level', async () => {
@@ -188,7 +190,7 @@ describe('Chargebee Tools Module', () => {
 
       await registerChargebeeTools('admin-1', CHARGEBEE_CONFIG);
 
-      const readOptions = mockRegisterCustomTool.mock.calls[0][4];
+      const readOptions = mockRegisterCustomTool.mock.calls[0][5];
       expect(readOptions.language).toBe('javascript');
       expect(readOptions.autoApprove).toBe(true);
       expect(readOptions.accessLevel).toBe('read-only');
@@ -200,7 +202,7 @@ describe('Chargebee Tools Module', () => {
 
       await registerChargebeeTools('admin-1', CHARGEBEE_CONFIG);
 
-      const writeOptions = mockRegisterCustomTool.mock.calls[1][4];
+      const writeOptions = mockRegisterCustomTool.mock.calls[1][5];
       expect(writeOptions.language).toBe('javascript');
       expect(writeOptions.autoApprove).toBe(true);
       expect(writeOptions.accessLevel).toBe('read-write');
@@ -212,10 +214,10 @@ describe('Chargebee Tools Module', () => {
 
       await registerChargebeeTools('admin-1', CHARGEBEE_CONFIG);
 
-      expect(mockRegisterCustomTool.mock.calls[0][2]).toBeNull();
-      expect(mockRegisterCustomTool.mock.calls[0][3]).toBe('admin-1');
-      expect(mockRegisterCustomTool.mock.calls[1][2]).toBeNull();
-      expect(mockRegisterCustomTool.mock.calls[1][3]).toBe('admin-1');
+      expect(mockRegisterCustomTool.mock.calls[0][3]).toBeNull();
+      expect(mockRegisterCustomTool.mock.calls[0][4]).toBe('admin-1');
+      expect(mockRegisterCustomTool.mock.calls[1][3]).toBeNull();
+      expect(mockRegisterCustomTool.mock.calls[1][4]).toBe('admin-1');
     });
 
     it('skips read tool registration when it already exists', async () => {
@@ -227,7 +229,7 @@ describe('Chargebee Tools Module', () => {
       await registerChargebeeTools('admin-1', CHARGEBEE_CONFIG);
 
       expect(mockRegisterCustomTool).toHaveBeenCalledTimes(1);
-      expect(mockRegisterCustomTool.mock.calls[0][0]).toBe('chargebee-write');
+      expect(mockRegisterCustomTool.mock.calls[0][1]).toBe('chargebee-write');
     });
 
     it('skips write tool registration when it already exists', async () => {
@@ -239,7 +241,7 @@ describe('Chargebee Tools Module', () => {
       await registerChargebeeTools('admin-1', CHARGEBEE_CONFIG);
 
       expect(mockRegisterCustomTool).toHaveBeenCalledTimes(1);
-      expect(mockRegisterCustomTool.mock.calls[0][0]).toBe('chargebee-read');
+      expect(mockRegisterCustomTool.mock.calls[0][1]).toBe('chargebee-read');
     });
 
     it('skips both when both already exist', async () => {
@@ -256,8 +258,8 @@ describe('Chargebee Tools Module', () => {
 
       await registerChargebeeTools('admin-1', CHARGEBEE_CONFIG);
 
-      const readCode = mockRegisterCustomTool.mock.calls[0][4].code;
-      const writeCode = mockRegisterCustomTool.mock.calls[1][4].code;
+      const readCode = mockRegisterCustomTool.mock.calls[0][5].code;
+      const writeCode = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(readCode).toContain('chargebeeRequest');
       expect(writeCode).toContain('chargebeeRequest');
     });
@@ -274,8 +276,8 @@ describe('Chargebee Tools Module', () => {
       await updateChargebeeConfig(newConfig);
 
       expect(mockExecute).toHaveBeenCalledWith(
-        `UPDATE custom_tools SET config_json = $1 WHERE name = ANY($2)`,
-        [JSON.stringify(newConfig), ['chargebee-read', 'chargebee-write']],
+        `UPDATE custom_tools SET config_json = $1 WHERE workspace_id = $2 AND name = ANY($3)`,
+        [JSON.stringify(newConfig), TEST_WORKSPACE_ID, ['chargebee-read', 'chargebee-write']],
       );
     });
 

@@ -37,7 +37,7 @@ export interface ToolManifest {
   /** The tool definitions (read-only and optionally read-write) */
   tools: ToolDefinition[];
   /** Register both tools into the database */
-  register(userId: string, config: Record<string, string>): Promise<void>;
+  register(workspaceId: string, userId: string, config: Record<string, string>): Promise<void>;
   /** Update credentials for already-registered tools */
-  updateConfig(config: Record<string, string>): Promise<void>;
+  updateConfig(workspaceId: string, config: Record<string, string>): Promise<void>;
 }

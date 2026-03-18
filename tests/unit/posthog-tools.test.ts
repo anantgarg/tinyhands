@@ -23,8 +23,10 @@ vi.mock('../../src/utils/logger', () => ({
 }));
 
 import { manifest as posthogManifest } from '../../src/modules/tools/integrations/posthog';
-const registerPostHogTools = (userId: string, config: Record<string, string>) => posthogManifest.register(userId, config);
-const updatePostHogConfig = (config: Record<string, string>) => posthogManifest.updateConfig(config);
+
+const TEST_WORKSPACE_ID = 'W_TEST_123';
+const registerPostHogTools = (userId: string, config: Record<string, string>) => posthogManifest.register(TEST_WORKSPACE_ID, userId, config);
+const updatePostHogConfig = (config: Record<string, string>) => posthogManifest.updateConfig(TEST_WORKSPACE_ID, config);
 
 // ── Helpers ──
 
@@ -57,9 +59,9 @@ describe('PostHog Tools Module', () => {
       await registerPostHogTools('admin-1', POSTHOG_CONFIG);
 
       const readCall = mockRegisterCustomTool.mock.calls[0];
-      expect(readCall[0]).toBe('posthog-read');
+      expect(readCall[1]).toBe('posthog-read');
 
-      const readSchema = JSON.parse(readCall[1]);
+      const readSchema = JSON.parse(readCall[2]);
       expect(readSchema.type).toBe('object');
       expect(readSchema.description).toContain('Read-only access to PostHog analytics');
       expect(readSchema.properties.action.enum).toEqual([
@@ -75,7 +77,7 @@ describe('PostHog Tools Module', () => {
 
       await registerPostHogTools('admin-1', POSTHOG_CONFIG);
 
-      const readSchema = JSON.parse(mockRegisterCustomTool.mock.calls[0][1]);
+      const readSchema = JSON.parse(mockRegisterCustomTool.mock.calls[0][2]);
       const propKeys = Object.keys(readSchema.properties);
       expect(propKeys).toContain('action');
       expect(propKeys).toContain('event_name');
@@ -94,7 +96,7 @@ describe('PostHog Tools Module', () => {
 
       await registerPostHogTools('admin-1', POSTHOG_CONFIG);
 
-      const readSchema = JSON.parse(mockRegisterCustomTool.mock.calls[0][1]);
+      const readSchema = JSON.parse(mockRegisterCustomTool.mock.calls[0][2]);
       expect(readSchema.properties.event_name.type).toBe('string');
       expect(readSchema.properties.person_id.type).toBe('string');
     });
@@ -105,7 +107,7 @@ describe('PostHog Tools Module', () => {
 
       await registerPostHogTools('admin-1', POSTHOG_CONFIG);
 
-      const readSchema = JSON.parse(mockRegisterCustomTool.mock.calls[0][1]);
+      const readSchema = JSON.parse(mockRegisterCustomTool.mock.calls[0][2]);
       expect(readSchema.properties.insight_id.type).toBe('number');
     });
 
@@ -115,7 +117,7 @@ describe('PostHog Tools Module', () => {
 
       await registerPostHogTools('admin-1', POSTHOG_CONFIG);
 
-      const readSchema = JSON.parse(mockRegisterCustomTool.mock.calls[0][1]);
+      const readSchema = JSON.parse(mockRegisterCustomTool.mock.calls[0][2]);
       expect(readSchema.properties.limit.type).toBe('number');
       expect(readSchema.properties.offset.type).toBe('number');
     });
@@ -126,7 +128,7 @@ describe('PostHog Tools Module', () => {
 
       await registerPostHogTools('admin-1', POSTHOG_CONFIG);
 
-      const readSchema = JSON.parse(mockRegisterCustomTool.mock.calls[0][1]);
+      const readSchema = JSON.parse(mockRegisterCustomTool.mock.calls[0][2]);
       expect(readSchema.properties.date_from.type).toBe('string');
       expect(readSchema.properties.date_to.type).toBe('string');
       expect(readSchema.properties.date_from.description).toContain('-7d');
@@ -138,7 +140,7 @@ describe('PostHog Tools Module', () => {
 
       await registerPostHogTools('admin-1', POSTHOG_CONFIG);
 
-      const readSchema = JSON.parse(mockRegisterCustomTool.mock.calls[0][1]);
+      const readSchema = JSON.parse(mockRegisterCustomTool.mock.calls[0][2]);
       expect(readSchema.properties.properties.type).toBe('object');
     });
   });
@@ -153,7 +155,7 @@ describe('PostHog Tools Module', () => {
 
       await registerPostHogTools('admin-1', POSTHOG_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("'Authorization': 'Bearer ' + apiKey");
     });
 
@@ -163,7 +165,7 @@ describe('PostHog Tools Module', () => {
 
       await registerPostHogTools('admin-1', POSTHOG_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("config.host || 'https://app.posthog.com'");
     });
 
@@ -173,7 +175,7 @@ describe('PostHog Tools Module', () => {
 
       await registerPostHogTools('admin-1', POSTHOG_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("hostRaw.replace(/\\/$/, '')");
     });
 
@@ -183,7 +185,7 @@ describe('PostHog Tools Module', () => {
 
       await registerPostHogTools('admin-1', POSTHOG_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("'posthog-read.config.json'");
     });
 
@@ -193,7 +195,7 @@ describe('PostHog Tools Module', () => {
 
       await registerPostHogTools('admin-1', POSTHOG_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain('if (!apiKey || !projectId)');
       expect(code).toContain('PostHog credentials not configured');
       expect(code).toContain('process.exit(0)');
@@ -205,7 +207,7 @@ describe('PostHog Tools Module', () => {
 
       await registerPostHogTools('admin-1', POSTHOG_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain('req.setTimeout(30000');
     });
 
@@ -215,7 +217,7 @@ describe('PostHog Tools Module', () => {
 
       await registerPostHogTools('admin-1', POSTHOG_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("var prefix = '/api/projects/' + projectId");
     });
 
@@ -225,7 +227,7 @@ describe('PostHog Tools Module', () => {
 
       await registerPostHogTools('admin-1', POSTHOG_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("url = new URL('https://app.posthog.com' + reqPath)");
     });
   });
@@ -240,7 +242,7 @@ describe('PostHog Tools Module', () => {
 
       await registerPostHogTools('admin-1', POSTHOG_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("case 'query_events':");
       expect(code).toContain("/events/?limit=");
       expect(code).toContain("if (input.event_name) p += '&event=' + encodeURIComponent(input.event_name)");
@@ -252,7 +254,7 @@ describe('PostHog Tools Module', () => {
 
       await registerPostHogTools('admin-1', POSTHOG_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("if (input.date_from) p += '&after=' + encodeURIComponent(input.date_from)");
       expect(code).toContain("if (input.date_to) p += '&before=' + encodeURIComponent(input.date_to)");
     });
@@ -263,7 +265,7 @@ describe('PostHog Tools Module', () => {
 
       await registerPostHogTools('admin-1', POSTHOG_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("if (input.properties) p += '&properties=' + encodeURIComponent(JSON.stringify(input.properties))");
     });
 
@@ -273,7 +275,7 @@ describe('PostHog Tools Module', () => {
 
       await registerPostHogTools('admin-1', POSTHOG_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("case 'get_person':");
       expect(code).toContain("if (!input.person_id) { result = { error: 'person_id (distinct_id) is required' }");
       expect(code).toContain("/persons/?distinct_id=");
@@ -285,7 +287,7 @@ describe('PostHog Tools Module', () => {
 
       await registerPostHogTools('admin-1', POSTHOG_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("case 'list_feature_flags':");
       expect(code).toContain("/feature_flags/?limit=");
     });
@@ -296,7 +298,7 @@ describe('PostHog Tools Module', () => {
 
       await registerPostHogTools('admin-1', POSTHOG_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("case 'get_insight':");
       expect(code).toContain("if (!input.insight_id) { result = { error: 'insight_id is required' }");
       expect(code).toContain("/insights/");
@@ -308,7 +310,7 @@ describe('PostHog Tools Module', () => {
 
       await registerPostHogTools('admin-1', POSTHOG_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("case 'list_insights':");
       expect(code).toContain("/insights/?limit=");
     });
@@ -319,7 +321,7 @@ describe('PostHog Tools Module', () => {
 
       await registerPostHogTools('admin-1', POSTHOG_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("case 'get_cohorts':");
       expect(code).toContain("/cohorts/?limit=");
     });
@@ -330,7 +332,7 @@ describe('PostHog Tools Module', () => {
 
       await registerPostHogTools('admin-1', POSTHOG_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("'Unknown action: ' + a");
     });
 
@@ -340,7 +342,7 @@ describe('PostHog Tools Module', () => {
 
       await registerPostHogTools('admin-1', POSTHOG_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain('Math.min(input.limit || 100, 1000)');
     });
 
@@ -350,7 +352,7 @@ describe('PostHog Tools Module', () => {
 
       await registerPostHogTools('admin-1', POSTHOG_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain('var offset = input.offset || 0');
     });
 
@@ -360,7 +362,7 @@ describe('PostHog Tools Module', () => {
 
       await registerPostHogTools('admin-1', POSTHOG_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("'&offset=' + offset");
     });
 
@@ -370,7 +372,7 @@ describe('PostHog Tools Module', () => {
 
       await registerPostHogTools('admin-1', POSTHOG_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       // list_feature_flags uses offset
       expect(code).toContain("'/feature_flags/?limit=' + lim + '&offset=' + offset");
     });
@@ -387,8 +389,8 @@ describe('PostHog Tools Module', () => {
       await registerPostHogTools('admin-1', POSTHOG_CONFIG);
 
       expect(mockRegisterCustomTool).toHaveBeenCalledTimes(1);
-      expect(mockGetCustomTool).toHaveBeenCalledWith('posthog-read');
-      expect(mockRegisterCustomTool.mock.calls[0][0]).toBe('posthog-read');
+      expect(mockGetCustomTool).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 'posthog-read');
+      expect(mockRegisterCustomTool.mock.calls[0][1]).toBe('posthog-read');
     });
 
     it('passes configJson with api_key and project_id', async () => {
@@ -398,7 +400,7 @@ describe('PostHog Tools Module', () => {
       await registerPostHogTools('admin-1', POSTHOG_CONFIG);
 
       const expectedConfigJson = JSON.stringify(POSTHOG_CONFIG);
-      expect(mockRegisterCustomTool.mock.calls[0][4].configJson).toBe(expectedConfigJson);
+      expect(mockRegisterCustomTool.mock.calls[0][5].configJson).toBe(expectedConfigJson);
     });
 
     it('passes configJson with optional host', async () => {
@@ -408,7 +410,7 @@ describe('PostHog Tools Module', () => {
       await registerPostHogTools('admin-1', POSTHOG_CONFIG_WITH_HOST);
 
       const expectedConfigJson = JSON.stringify(POSTHOG_CONFIG_WITH_HOST);
-      expect(mockRegisterCustomTool.mock.calls[0][4].configJson).toBe(expectedConfigJson);
+      expect(mockRegisterCustomTool.mock.calls[0][5].configJson).toBe(expectedConfigJson);
     });
 
     it('registers with read-only access level', async () => {
@@ -417,7 +419,7 @@ describe('PostHog Tools Module', () => {
 
       await registerPostHogTools('admin-1', POSTHOG_CONFIG);
 
-      const options = mockRegisterCustomTool.mock.calls[0][4];
+      const options = mockRegisterCustomTool.mock.calls[0][5];
       expect(options.language).toBe('javascript');
       expect(options.autoApprove).toBe(true);
       expect(options.accessLevel).toBe('read-only');
@@ -429,8 +431,8 @@ describe('PostHog Tools Module', () => {
 
       await registerPostHogTools('admin-1', POSTHOG_CONFIG);
 
-      expect(mockRegisterCustomTool.mock.calls[0][2]).toBeNull();
-      expect(mockRegisterCustomTool.mock.calls[0][3]).toBe('admin-1');
+      expect(mockRegisterCustomTool.mock.calls[0][3]).toBeNull();
+      expect(mockRegisterCustomTool.mock.calls[0][4]).toBe('admin-1');
     });
 
     it('skips registration when tool already exists', async () => {
@@ -462,8 +464,8 @@ describe('PostHog Tools Module', () => {
       await updatePostHogConfig(newConfig);
 
       expect(mockExecute).toHaveBeenCalledWith(
-        `UPDATE custom_tools SET config_json = $1 WHERE name = ANY($2)`,
-        [JSON.stringify(newConfig), ['posthog-read']],
+        `UPDATE custom_tools SET config_json = $1 WHERE workspace_id = $2 AND name = ANY($3)`,
+        [JSON.stringify(newConfig), TEST_WORKSPACE_ID, ['posthog-read']],
       );
     });
 
@@ -503,8 +505,8 @@ describe('PostHog Tools Module', () => {
       await updatePostHogConfig(POSTHOG_CONFIG);
 
       const sql = mockExecute.mock.calls[0][0];
-      expect(sql).toContain('WHERE name = ANY($2)');
-      expect(mockExecute.mock.calls[0][1][1]).toEqual(['posthog-read']);
+      expect(sql).toContain('WHERE workspace_id = $2 AND name = ANY($3)');
+      expect(mockExecute.mock.calls[0][1][2]).toEqual(['posthog-read']);
     });
   });
 });

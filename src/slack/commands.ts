@@ -2167,7 +2167,7 @@ export function registerToolAndKBModals(app: App): void {
       // Look up manifest and call its register function
       const manifest = getIntegration(integrationId);
       if (!manifest) throw new Error(`Unknown integration: ${integrationId}`);
-      await manifest.register(userId, config);
+      await manifest.register(workspaceId, userId, config);
 
       const toolList = integration.tools.map(t => `\`${t}\``).join(', ');
       await sendDMBlocks(userId, [

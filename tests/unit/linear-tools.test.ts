@@ -23,8 +23,10 @@ vi.mock('../../src/utils/logger', () => ({
 }));
 
 import { manifest as linearManifest } from '../../src/modules/tools/integrations/linear';
-const registerLinearTools = (userId: string, config: Record<string, string>) => linearManifest.register(userId, config);
-const updateLinearConfig = (config: Record<string, string>) => linearManifest.updateConfig(config);
+
+const TEST_WORKSPACE_ID = 'W_TEST_123';
+const registerLinearTools = (userId: string, config: Record<string, string>) => linearManifest.register(TEST_WORKSPACE_ID, userId, config);
+const updateLinearConfig = (config: Record<string, string>) => linearManifest.updateConfig(TEST_WORKSPACE_ID, config);
 
 // ── Helpers ──
 
@@ -50,9 +52,9 @@ describe('Linear Tools Module', () => {
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
       const readCall = mockRegisterCustomTool.mock.calls[0];
-      expect(readCall[0]).toBe('linear-read');
+      expect(readCall[1]).toBe('linear-read');
 
-      const readSchema = JSON.parse(readCall[1]);
+      const readSchema = JSON.parse(readCall[2]);
       expect(readSchema.type).toBe('object');
       expect(readSchema.description).toContain('Read-only access to Linear');
       expect(readSchema.properties.action.enum).toEqual([
@@ -69,9 +71,9 @@ describe('Linear Tools Module', () => {
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
       const writeCall = mockRegisterCustomTool.mock.calls[1];
-      expect(writeCall[0]).toBe('linear-write');
+      expect(writeCall[1]).toBe('linear-write');
 
-      const writeSchema = JSON.parse(writeCall[1]);
+      const writeSchema = JSON.parse(writeCall[2]);
       expect(writeSchema.type).toBe('object');
       expect(writeSchema.description).toContain('Create and update Linear issues');
       expect(writeSchema.description).toContain('No destructive actions');
@@ -87,7 +89,7 @@ describe('Linear Tools Module', () => {
 
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
-      const readSchema = JSON.parse(mockRegisterCustomTool.mock.calls[0][1]);
+      const readSchema = JSON.parse(mockRegisterCustomTool.mock.calls[0][2]);
       const propKeys = Object.keys(readSchema.properties);
       expect(propKeys).toContain('action');
       expect(propKeys).toContain('query');
@@ -104,7 +106,7 @@ describe('Linear Tools Module', () => {
 
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
-      const writeSchema = JSON.parse(mockRegisterCustomTool.mock.calls[1][1]);
+      const writeSchema = JSON.parse(mockRegisterCustomTool.mock.calls[1][2]);
       const propKeys = Object.keys(writeSchema.properties);
       expect(propKeys).toContain('action');
       expect(propKeys).toContain('title');
@@ -126,7 +128,7 @@ describe('Linear Tools Module', () => {
 
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
-      const readSchema = JSON.parse(mockRegisterCustomTool.mock.calls[0][1]);
+      const readSchema = JSON.parse(mockRegisterCustomTool.mock.calls[0][2]);
       expect(readSchema.properties.issue_id.type).toBe('string');
       expect(readSchema.properties.team_id.type).toBe('string');
       expect(readSchema.properties.user_id.type).toBe('string');
@@ -138,7 +140,7 @@ describe('Linear Tools Module', () => {
 
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
-      const readSchema = JSON.parse(mockRegisterCustomTool.mock.calls[0][1]);
+      const readSchema = JSON.parse(mockRegisterCustomTool.mock.calls[0][2]);
       expect(readSchema.properties.limit.type).toBe('number');
     });
 
@@ -148,7 +150,7 @@ describe('Linear Tools Module', () => {
 
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
-      const writeSchema = JSON.parse(mockRegisterCustomTool.mock.calls[1][1]);
+      const writeSchema = JSON.parse(mockRegisterCustomTool.mock.calls[1][2]);
       expect(writeSchema.properties.priority.type).toBe('number');
       expect(writeSchema.properties.priority.description).toContain('0=none');
       expect(writeSchema.properties.priority.description).toContain('1=urgent');
@@ -161,7 +163,7 @@ describe('Linear Tools Module', () => {
 
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
-      const writeSchema = JSON.parse(mockRegisterCustomTool.mock.calls[1][1]);
+      const writeSchema = JSON.parse(mockRegisterCustomTool.mock.calls[1][2]);
       expect(writeSchema.properties.label_ids.type).toBe('array');
       expect(writeSchema.properties.label_ids.items.type).toBe('string');
     });
@@ -177,7 +179,7 @@ describe('Linear Tools Module', () => {
 
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("'Authorization': apiKey");
       // Linear API uses the raw key, not "Bearer" prefix
       expect(code).not.toContain("'Bearer ' + apiKey");
@@ -189,7 +191,7 @@ describe('Linear Tools Module', () => {
 
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[1][4].code;
+      const code = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(code).toContain("'Authorization': apiKey");
     });
 
@@ -199,8 +201,8 @@ describe('Linear Tools Module', () => {
 
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
-      const readCode = mockRegisterCustomTool.mock.calls[0][4].code;
-      const writeCode = mockRegisterCustomTool.mock.calls[1][4].code;
+      const readCode = mockRegisterCustomTool.mock.calls[0][5].code;
+      const writeCode = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(readCode).toContain("hostname: 'api.linear.app'");
       expect(readCode).toContain("path: '/graphql'");
       expect(writeCode).toContain("hostname: 'api.linear.app'");
@@ -213,8 +215,8 @@ describe('Linear Tools Module', () => {
 
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
-      const readCode = mockRegisterCustomTool.mock.calls[0][4].code;
-      const writeCode = mockRegisterCustomTool.mock.calls[1][4].code;
+      const readCode = mockRegisterCustomTool.mock.calls[0][5].code;
+      const writeCode = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(readCode).toContain("method: 'POST'");
       expect(writeCode).toContain("method: 'POST'");
     });
@@ -225,7 +227,7 @@ describe('Linear Tools Module', () => {
 
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("'linear-read.config.json'");
     });
 
@@ -235,7 +237,7 @@ describe('Linear Tools Module', () => {
 
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[1][4].code;
+      const code = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(code).toContain("'linear-write.config.json'");
     });
 
@@ -245,8 +247,8 @@ describe('Linear Tools Module', () => {
 
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
-      const readCode = mockRegisterCustomTool.mock.calls[0][4].code;
-      const writeCode = mockRegisterCustomTool.mock.calls[1][4].code;
+      const readCode = mockRegisterCustomTool.mock.calls[0][5].code;
+      const writeCode = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(readCode).toContain('if (!apiKey)');
       expect(readCode).toContain('Linear API key not configured');
       expect(readCode).toContain('process.exit(0)');
@@ -260,8 +262,8 @@ describe('Linear Tools Module', () => {
 
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
-      const readCode = mockRegisterCustomTool.mock.calls[0][4].code;
-      const writeCode = mockRegisterCustomTool.mock.calls[1][4].code;
+      const readCode = mockRegisterCustomTool.mock.calls[0][5].code;
+      const writeCode = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(readCode).toContain('req.setTimeout(30000');
       expect(writeCode).toContain('req.setTimeout(30000');
     });
@@ -277,7 +279,7 @@ describe('Linear Tools Module', () => {
 
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("case 'search_issues':");
       expect(code).toContain('issueSearch');
       expect(code).toContain("if (!query) { result = { error: 'query is required for search_issues' }");
@@ -289,7 +291,7 @@ describe('Linear Tools Module', () => {
 
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("case 'get_issue':");
       expect(code).toContain('issue(id:');
       expect(code).toContain("if (!issue_id) { result = { error: 'issue_id is required' }");
@@ -301,7 +303,7 @@ describe('Linear Tools Module', () => {
 
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("case 'list_projects':");
       expect(code).toContain('projects(first:');
     });
@@ -312,7 +314,7 @@ describe('Linear Tools Module', () => {
 
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("case 'list_teams':");
       expect(code).toContain('teams(first: 50)');
     });
@@ -323,7 +325,7 @@ describe('Linear Tools Module', () => {
 
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("case 'get_cycles':");
       expect(code).toContain("if (!team_id) { result = { error: 'team_id is required for get_cycles' }");
       expect(code).toContain('cycles(first:');
@@ -335,7 +337,7 @@ describe('Linear Tools Module', () => {
 
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("case 'get_labels':");
       expect(code).toContain('issueLabels');
     });
@@ -346,7 +348,7 @@ describe('Linear Tools Module', () => {
 
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("case 'get_user':");
       expect(code).toContain('user(id:');
       expect(code).toContain("if (!user_id) { result = { error: 'user_id is required' }");
@@ -358,7 +360,7 @@ describe('Linear Tools Module', () => {
 
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("'Unknown action: ' + action");
     });
 
@@ -368,7 +370,7 @@ describe('Linear Tools Module', () => {
 
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain('Math.min(limit || 25, 50)');
     });
 
@@ -378,7 +380,7 @@ describe('Linear Tools Module', () => {
 
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain('filter: { state: { name: { eq:');
     });
 
@@ -388,7 +390,7 @@ describe('Linear Tools Module', () => {
 
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain('accessibleTeams: { id: { eq:');
     });
 
@@ -398,7 +400,7 @@ describe('Linear Tools Module', () => {
 
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain('query.replace(/"/g,');
       expect(code).toContain('issue_id.replace(/"/g,');
     });
@@ -414,7 +416,7 @@ describe('Linear Tools Module', () => {
 
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[1][4].code;
+      const code = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(code).toContain("case 'create_issue':");
       expect(code).toContain("if (!title || !team_id) { result = { error: 'title and team_id are required for create_issue' }");
       expect(code).toContain('issueCreate(input:');
@@ -426,7 +428,7 @@ describe('Linear Tools Module', () => {
 
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[1][4].code;
+      const code = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(code).toContain("case 'update_issue':");
       expect(code).toContain("if (!issue_id) { result = { error: 'issue_id is required for update_issue' }");
       expect(code).toContain('issueUpdate(id:');
@@ -438,7 +440,7 @@ describe('Linear Tools Module', () => {
 
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[1][4].code;
+      const code = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(code).toContain("case 'add_comment':");
       expect(code).toContain("if (!issue_id || !body) { result = { error: 'issue_id and body are required for add_comment' }");
       expect(code).toContain('commentCreate(input:');
@@ -450,7 +452,7 @@ describe('Linear Tools Module', () => {
 
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[1][4].code;
+      const code = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(code).toContain("case 'create_project':");
       expect(code).toContain("if (!title) { result = { error: 'title is required for create_project' }");
       expect(code).toContain('projectCreate(input:');
@@ -462,7 +464,7 @@ describe('Linear Tools Module', () => {
 
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[1][4].code;
+      const code = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(code).toContain("if (fields.length === 0) { result = { error: 'No fields to update' }");
     });
 
@@ -472,7 +474,7 @@ describe('Linear Tools Module', () => {
 
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[1][4].code;
+      const code = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(code).toContain("'Unknown action: ' + action");
     });
 
@@ -482,7 +484,7 @@ describe('Linear Tools Module', () => {
 
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[1][4].code;
+      const code = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(code).toContain("if (priority !== undefined) fields.push('priority: ' + priority)");
       expect(code).toContain("if (assignee_id) fields.push('assigneeId:");
       expect(code).toContain("if (project_id) fields.push('projectId:");
@@ -496,7 +498,7 @@ describe('Linear Tools Module', () => {
 
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[1][4].code;
+      const code = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(code).toContain("description.replace(/\"/g, '\\\\\"')");
       expect(code).toContain("body.replace(/\"/g, '\\\\\"')");
     });
@@ -513,8 +515,8 @@ describe('Linear Tools Module', () => {
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
       expect(mockRegisterCustomTool).toHaveBeenCalledTimes(2);
-      expect(mockGetCustomTool).toHaveBeenCalledWith('linear-read');
-      expect(mockGetCustomTool).toHaveBeenCalledWith('linear-write');
+      expect(mockGetCustomTool).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 'linear-read');
+      expect(mockGetCustomTool).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 'linear-write');
     });
 
     it('passes configJson to both tools', async () => {
@@ -524,8 +526,8 @@ describe('Linear Tools Module', () => {
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
       const expectedConfigJson = JSON.stringify(LINEAR_CONFIG);
-      expect(mockRegisterCustomTool.mock.calls[0][4].configJson).toBe(expectedConfigJson);
-      expect(mockRegisterCustomTool.mock.calls[1][4].configJson).toBe(expectedConfigJson);
+      expect(mockRegisterCustomTool.mock.calls[0][5].configJson).toBe(expectedConfigJson);
+      expect(mockRegisterCustomTool.mock.calls[1][5].configJson).toBe(expectedConfigJson);
     });
 
     it('registers read tool with read-only access level', async () => {
@@ -534,7 +536,7 @@ describe('Linear Tools Module', () => {
 
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
-      const readOptions = mockRegisterCustomTool.mock.calls[0][4];
+      const readOptions = mockRegisterCustomTool.mock.calls[0][5];
       expect(readOptions.language).toBe('javascript');
       expect(readOptions.autoApprove).toBe(true);
       expect(readOptions.accessLevel).toBe('read-only');
@@ -546,7 +548,7 @@ describe('Linear Tools Module', () => {
 
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
-      const writeOptions = mockRegisterCustomTool.mock.calls[1][4];
+      const writeOptions = mockRegisterCustomTool.mock.calls[1][5];
       expect(writeOptions.language).toBe('javascript');
       expect(writeOptions.autoApprove).toBe(true);
       expect(writeOptions.accessLevel).toBe('read-write');
@@ -558,10 +560,10 @@ describe('Linear Tools Module', () => {
 
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
-      expect(mockRegisterCustomTool.mock.calls[0][2]).toBeNull();
-      expect(mockRegisterCustomTool.mock.calls[0][3]).toBe('admin-1');
-      expect(mockRegisterCustomTool.mock.calls[1][2]).toBeNull();
-      expect(mockRegisterCustomTool.mock.calls[1][3]).toBe('admin-1');
+      expect(mockRegisterCustomTool.mock.calls[0][3]).toBeNull();
+      expect(mockRegisterCustomTool.mock.calls[0][4]).toBe('admin-1');
+      expect(mockRegisterCustomTool.mock.calls[1][3]).toBeNull();
+      expect(mockRegisterCustomTool.mock.calls[1][4]).toBe('admin-1');
     });
 
     it('skips read tool registration when it already exists', async () => {
@@ -573,7 +575,7 @@ describe('Linear Tools Module', () => {
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
       expect(mockRegisterCustomTool).toHaveBeenCalledTimes(1);
-      expect(mockRegisterCustomTool.mock.calls[0][0]).toBe('linear-write');
+      expect(mockRegisterCustomTool.mock.calls[0][1]).toBe('linear-write');
     });
 
     it('skips write tool registration when it already exists', async () => {
@@ -585,7 +587,7 @@ describe('Linear Tools Module', () => {
       await registerLinearTools('admin-1', LINEAR_CONFIG);
 
       expect(mockRegisterCustomTool).toHaveBeenCalledTimes(1);
-      expect(mockRegisterCustomTool.mock.calls[0][0]).toBe('linear-read');
+      expect(mockRegisterCustomTool.mock.calls[0][1]).toBe('linear-read');
     });
 
     it('skips both when both already exist', async () => {
@@ -608,8 +610,8 @@ describe('Linear Tools Module', () => {
       await updateLinearConfig(newConfig);
 
       expect(mockExecute).toHaveBeenCalledWith(
-        `UPDATE custom_tools SET config_json = $1 WHERE name = ANY($2)`,
-        [JSON.stringify(newConfig), ['linear-read', 'linear-write']],
+        `UPDATE custom_tools SET config_json = $1 WHERE workspace_id = $2 AND name = ANY($3)`,
+        [JSON.stringify(newConfig), TEST_WORKSPACE_ID, ['linear-read', 'linear-write']],
       );
     });
 

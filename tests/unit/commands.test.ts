@@ -4553,7 +4553,7 @@ describe('Commands Module', () => {
       await app.handlers.view['register_tool_modal']({ ack, body, view });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockRegister).toHaveBeenCalledWith('U1', { api_key: 'sk-123', site: 'mysite' });
+      expect(mockRegister).toHaveBeenCalledWith('W_TEST_123', 'U1', { api_key: 'sk-123', site: 'mysite' });
       expect(mockSendDMBlocks).toHaveBeenCalledWith(
         'U1',
         expect.arrayContaining([

@@ -23,8 +23,10 @@ vi.mock('../../src/utils/logger', () => ({
 }));
 
 import { manifest as hubspotManifest } from '../../src/modules/tools/integrations/hubspot';
-const registerHubSpotTools = (userId: string, config: Record<string, string>) => hubspotManifest.register(userId, config);
-const updateHubSpotConfig = (config: Record<string, string>) => hubspotManifest.updateConfig(config);
+
+const TEST_WORKSPACE_ID = 'W_TEST_123';
+const registerHubSpotTools = (userId: string, config: Record<string, string>) => hubspotManifest.register(TEST_WORKSPACE_ID, userId, config);
+const updateHubSpotConfig = (config: Record<string, string>) => hubspotManifest.updateConfig(TEST_WORKSPACE_ID, config);
 
 // ── Helpers ──
 
@@ -50,9 +52,9 @@ describe('HubSpot Tools Module', () => {
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
       const readCall = mockRegisterCustomTool.mock.calls[0];
-      expect(readCall[0]).toBe('hubspot-read');
+      expect(readCall[1]).toBe('hubspot-read');
 
-      const readSchema = JSON.parse(readCall[1]);
+      const readSchema = JSON.parse(readCall[2]);
       expect(readSchema.type).toBe('object');
       expect(readSchema.description).toContain('Read-only access to HubSpot CRM');
       expect(readSchema.properties.action.enum).toEqual([
@@ -69,9 +71,9 @@ describe('HubSpot Tools Module', () => {
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
       const writeCall = mockRegisterCustomTool.mock.calls[1];
-      expect(writeCall[0]).toBe('hubspot-write');
+      expect(writeCall[1]).toBe('hubspot-write');
 
-      const writeSchema = JSON.parse(writeCall[1]);
+      const writeSchema = JSON.parse(writeCall[2]);
       expect(writeSchema.type).toBe('object');
       expect(writeSchema.description).toContain('Create and update HubSpot CRM records');
       expect(writeSchema.description).toContain('No destructive actions');
@@ -88,7 +90,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const readSchema = JSON.parse(mockRegisterCustomTool.mock.calls[0][1]);
+      const readSchema = JSON.parse(mockRegisterCustomTool.mock.calls[0][2]);
       const propKeys = Object.keys(readSchema.properties);
       expect(propKeys).toContain('action');
       expect(propKeys).toContain('query');
@@ -106,7 +108,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const writeSchema = JSON.parse(mockRegisterCustomTool.mock.calls[1][1]);
+      const writeSchema = JSON.parse(mockRegisterCustomTool.mock.calls[1][2]);
       const propKeys = Object.keys(writeSchema.properties);
       expect(propKeys).toContain('action');
       expect(propKeys).toContain('contact_id');
@@ -127,7 +129,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const readSchema = JSON.parse(mockRegisterCustomTool.mock.calls[0][1]);
+      const readSchema = JSON.parse(mockRegisterCustomTool.mock.calls[0][2]);
       expect(readSchema.properties.properties.type).toBe('array');
       expect(readSchema.properties.properties.items.type).toBe('string');
     });
@@ -138,7 +140,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const writeSchema = JSON.parse(mockRegisterCustomTool.mock.calls[1][1]);
+      const writeSchema = JSON.parse(mockRegisterCustomTool.mock.calls[1][2]);
       expect(writeSchema.properties.properties.type).toBe('object');
     });
 
@@ -148,7 +150,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const readSchema = JSON.parse(mockRegisterCustomTool.mock.calls[0][1]);
+      const readSchema = JSON.parse(mockRegisterCustomTool.mock.calls[0][2]);
       expect(readSchema.properties.contact_id.type).toBe('string');
       expect(readSchema.properties.deal_id.type).toBe('string');
       expect(readSchema.properties.company_id.type).toBe('string');
@@ -160,7 +162,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const readSchema = JSON.parse(mockRegisterCustomTool.mock.calls[0][1]);
+      const readSchema = JSON.parse(mockRegisterCustomTool.mock.calls[0][2]);
       expect(readSchema.properties.limit.type).toBe('number');
     });
 
@@ -170,7 +172,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const readSchema = JSON.parse(mockRegisterCustomTool.mock.calls[0][1]);
+      const readSchema = JSON.parse(mockRegisterCustomTool.mock.calls[0][2]);
       expect(readSchema.properties.after.type).toBe('string');
     });
   });
@@ -185,8 +187,8 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const readCode = mockRegisterCustomTool.mock.calls[0][4].code;
-      const writeCode = mockRegisterCustomTool.mock.calls[1][4].code;
+      const readCode = mockRegisterCustomTool.mock.calls[0][5].code;
+      const writeCode = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(readCode).toContain("'Authorization': 'Bearer ' + token");
       expect(writeCode).toContain("'Authorization': 'Bearer ' + token");
     });
@@ -197,8 +199,8 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const readCode = mockRegisterCustomTool.mock.calls[0][4].code;
-      const writeCode = mockRegisterCustomTool.mock.calls[1][4].code;
+      const readCode = mockRegisterCustomTool.mock.calls[0][5].code;
+      const writeCode = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(readCode).toContain("hostname: 'api.hubapi.com'");
       expect(writeCode).toContain("hostname: 'api.hubapi.com'");
     });
@@ -209,7 +211,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("'hubspot-read.config.json'");
     });
 
@@ -219,7 +221,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[1][4].code;
+      const code = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(code).toContain("'hubspot-write.config.json'");
     });
 
@@ -229,8 +231,8 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const readCode = mockRegisterCustomTool.mock.calls[0][4].code;
-      const writeCode = mockRegisterCustomTool.mock.calls[1][4].code;
+      const readCode = mockRegisterCustomTool.mock.calls[0][5].code;
+      const writeCode = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(readCode).toContain('if (!token)');
       expect(readCode).toContain('HubSpot access token not configured');
       expect(readCode).toContain('process.exit(0)');
@@ -244,8 +246,8 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const readCode = mockRegisterCustomTool.mock.calls[0][4].code;
-      const writeCode = mockRegisterCustomTool.mock.calls[1][4].code;
+      const readCode = mockRegisterCustomTool.mock.calls[0][5].code;
+      const writeCode = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(readCode).toContain('req.setTimeout(30000');
       expect(writeCode).toContain('req.setTimeout(30000');
     });
@@ -256,8 +258,8 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const readCode = mockRegisterCustomTool.mock.calls[0][4].code;
-      const writeCode = mockRegisterCustomTool.mock.calls[1][4].code;
+      const readCode = mockRegisterCustomTool.mock.calls[0][5].code;
+      const writeCode = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(readCode).toContain("if (payload) options.headers['Content-Length']");
       expect(writeCode).toContain("if (payload) options.headers['Content-Length']");
     });
@@ -273,7 +275,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("case 'search_contacts':");
       expect(code).toContain("if (!input.query) { result = { error: 'query is required for search_contacts' }");
       expect(code).toContain('/crm/v3/objects/contacts/search');
@@ -285,7 +287,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("case 'search_deals':");
       expect(code).toContain("if (!input.query) { result = { error: 'query is required for search_deals' }");
       expect(code).toContain('/crm/v3/objects/deals/search');
@@ -297,7 +299,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("case 'get_contact':");
       expect(code).toContain("if (!input.contact_id) { result = { error: 'contact_id is required' }");
       expect(code).toContain('/crm/v3/objects/contacts/');
@@ -309,7 +311,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("case 'get_deal':");
       expect(code).toContain("if (!input.deal_id) { result = { error: 'deal_id is required' }");
       expect(code).toContain('/crm/v3/objects/deals/');
@@ -321,7 +323,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("case 'list_pipelines':");
       expect(code).toContain('/crm/v3/pipelines/deals');
     });
@@ -332,7 +334,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("case 'get_company':");
       expect(code).toContain("if (!input.company_id) { result = { error: 'company_id is required' }");
       expect(code).toContain('/crm/v3/objects/companies/');
@@ -344,7 +346,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("case 'search_companies':");
       expect(code).toContain("if (!input.query) { result = { error: 'query is required for search_companies' }");
       expect(code).toContain('/crm/v3/objects/companies/search');
@@ -356,7 +358,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("'Unknown action: ' + a");
     });
 
@@ -366,7 +368,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain('Math.min(input.limit || 10, 100)');
     });
 
@@ -376,7 +378,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("['email', 'firstname', 'lastname', 'phone', 'company']");
     });
 
@@ -386,7 +388,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain("['dealname', 'amount', 'dealstage', 'pipeline', 'closedate']");
     });
 
@@ -396,7 +398,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain('properties=email,firstname,lastname,phone,company,lifecyclestage');
     });
 
@@ -406,7 +408,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain('if (input.after) body.after = input.after');
     });
   });
@@ -421,7 +423,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[1][4].code;
+      const code = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(code).toContain("case 'create_contact':");
       expect(code).toContain("if (!input.properties) { result = { error: 'properties are required for create_contact' }");
       expect(code).toContain("'/crm/v3/objects/contacts', 'POST'");
@@ -433,7 +435,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[1][4].code;
+      const code = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(code).toContain("case 'update_contact':");
       expect(code).toContain("if (!input.contact_id || !input.properties) { result = { error: 'contact_id and properties are required' }");
       expect(code).toContain("'PATCH'");
@@ -445,7 +447,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[1][4].code;
+      const code = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(code).toContain("case 'create_deal':");
       expect(code).toContain("if (!input.properties) { result = { error: 'properties are required for create_deal' }");
       expect(code).toContain("'/crm/v3/objects/deals', 'POST'");
@@ -457,7 +459,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[1][4].code;
+      const code = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(code).toContain("case 'update_deal':");
       expect(code).toContain("if (!input.deal_id || !input.properties) { result = { error: 'deal_id and properties are required' }");
       expect(code).toContain("'PATCH'");
@@ -469,7 +471,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[1][4].code;
+      const code = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(code).toContain("case 'create_task':");
       expect(code).toContain("if (!input.task_subject) { result = { error: 'task_subject is required for create_task' }");
       expect(code).toContain('/crm/v3/objects/tasks');
@@ -483,7 +485,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[1][4].code;
+      const code = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(code).toContain("case 'add_note':");
       expect(code).toContain("if (!input.note_body) { result = { error: 'note_body is required for add_note' }");
       expect(code).toContain('/crm/v3/objects/notes');
@@ -497,7 +499,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[1][4].code;
+      const code = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(code).toContain("case 'create_company':");
       expect(code).toContain("if (!input.properties) { result = { error: 'properties are required for create_company' }");
       expect(code).toContain("'/crm/v3/objects/companies', 'POST'");
@@ -509,7 +511,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[1][4].code;
+      const code = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(code).toContain("'Unknown action: ' + a");
     });
 
@@ -519,7 +521,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[1][4].code;
+      const code = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(code).toContain("if (input.contact_id) await associate('deals', dealId, 'contacts', input.contact_id)");
       expect(code).toContain("if (input.company_id) await associate('deals', dealId, 'companies', input.company_id)");
     });
@@ -530,7 +532,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[1][4].code;
+      const code = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(code).toContain("if (input.contact_id) await associate('tasks', taskId, 'contacts', input.contact_id)");
       expect(code).toContain("if (input.deal_id) await associate('tasks', taskId, 'deals', input.deal_id)");
       expect(code).toContain("if (input.company_id) await associate('tasks', taskId, 'companies', input.company_id)");
@@ -542,7 +544,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[1][4].code;
+      const code = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(code).toContain("if (input.contact_id) await associate('notes', noteId, 'contacts', input.contact_id)");
       expect(code).toContain("if (input.deal_id) await associate('notes', noteId, 'deals', input.deal_id)");
       expect(code).toContain("if (input.company_id) await associate('notes', noteId, 'companies', input.company_id)");
@@ -554,7 +556,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[1][4].code;
+      const code = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(code).toContain('/crm/v4/objects/');
       expect(code).toContain('/associations/');
       expect(code).toContain("associationCategory: 'HUBSPOT_DEFINED'");
@@ -567,7 +569,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[1][4].code;
+      const code = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(code).toContain('if (input.pipeline_id) dealProps.pipeline = input.pipeline_id');
       expect(code).toContain('if (input.stage_id) dealProps.dealstage = input.stage_id');
     });
@@ -578,7 +580,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[1][4].code;
+      const code = mockRegisterCustomTool.mock.calls[1][5].code;
       expect(code).toContain('if (result.status < 300 && result.data && result.data.id)');
     });
   });
@@ -594,8 +596,8 @@ describe('HubSpot Tools Module', () => {
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
       expect(mockRegisterCustomTool).toHaveBeenCalledTimes(2);
-      expect(mockGetCustomTool).toHaveBeenCalledWith('hubspot-read');
-      expect(mockGetCustomTool).toHaveBeenCalledWith('hubspot-write');
+      expect(mockGetCustomTool).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 'hubspot-read');
+      expect(mockGetCustomTool).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 'hubspot-write');
     });
 
     it('passes configJson to both tools', async () => {
@@ -605,8 +607,8 @@ describe('HubSpot Tools Module', () => {
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
       const expectedConfigJson = JSON.stringify(HUBSPOT_CONFIG);
-      expect(mockRegisterCustomTool.mock.calls[0][4].configJson).toBe(expectedConfigJson);
-      expect(mockRegisterCustomTool.mock.calls[1][4].configJson).toBe(expectedConfigJson);
+      expect(mockRegisterCustomTool.mock.calls[0][5].configJson).toBe(expectedConfigJson);
+      expect(mockRegisterCustomTool.mock.calls[1][5].configJson).toBe(expectedConfigJson);
     });
 
     it('registers read tool with read-only access level', async () => {
@@ -615,7 +617,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const readOptions = mockRegisterCustomTool.mock.calls[0][4];
+      const readOptions = mockRegisterCustomTool.mock.calls[0][5];
       expect(readOptions.language).toBe('javascript');
       expect(readOptions.autoApprove).toBe(true);
       expect(readOptions.accessLevel).toBe('read-only');
@@ -627,7 +629,7 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      const writeOptions = mockRegisterCustomTool.mock.calls[1][4];
+      const writeOptions = mockRegisterCustomTool.mock.calls[1][5];
       expect(writeOptions.language).toBe('javascript');
       expect(writeOptions.autoApprove).toBe(true);
       expect(writeOptions.accessLevel).toBe('read-write');
@@ -639,10 +641,10 @@ describe('HubSpot Tools Module', () => {
 
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
-      expect(mockRegisterCustomTool.mock.calls[0][2]).toBeNull();
-      expect(mockRegisterCustomTool.mock.calls[0][3]).toBe('admin-1');
-      expect(mockRegisterCustomTool.mock.calls[1][2]).toBeNull();
-      expect(mockRegisterCustomTool.mock.calls[1][3]).toBe('admin-1');
+      expect(mockRegisterCustomTool.mock.calls[0][3]).toBeNull();
+      expect(mockRegisterCustomTool.mock.calls[0][4]).toBe('admin-1');
+      expect(mockRegisterCustomTool.mock.calls[1][3]).toBeNull();
+      expect(mockRegisterCustomTool.mock.calls[1][4]).toBe('admin-1');
     });
 
     it('skips read tool registration when it already exists', async () => {
@@ -654,7 +656,7 @@ describe('HubSpot Tools Module', () => {
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
       expect(mockRegisterCustomTool).toHaveBeenCalledTimes(1);
-      expect(mockRegisterCustomTool.mock.calls[0][0]).toBe('hubspot-write');
+      expect(mockRegisterCustomTool.mock.calls[0][1]).toBe('hubspot-write');
     });
 
     it('skips write tool registration when it already exists', async () => {
@@ -666,7 +668,7 @@ describe('HubSpot Tools Module', () => {
       await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
 
       expect(mockRegisterCustomTool).toHaveBeenCalledTimes(1);
-      expect(mockRegisterCustomTool.mock.calls[0][0]).toBe('hubspot-read');
+      expect(mockRegisterCustomTool.mock.calls[0][1]).toBe('hubspot-read');
     });
 
     it('skips both when both already exist', async () => {
@@ -689,8 +691,8 @@ describe('HubSpot Tools Module', () => {
       await updateHubSpotConfig(newConfig);
 
       expect(mockExecute).toHaveBeenCalledWith(
-        `UPDATE custom_tools SET config_json = $1 WHERE name = ANY($2)`,
-        [JSON.stringify(newConfig), ['hubspot-read', 'hubspot-write']],
+        `UPDATE custom_tools SET config_json = $1 WHERE workspace_id = $2 AND name = ANY($3)`,
+        [JSON.stringify(newConfig), TEST_WORKSPACE_ID, ['hubspot-read', 'hubspot-write']],
       );
     });
 

@@ -33,6 +33,8 @@ vi.mock('../../src/utils/logger', () => ({
 
 import { manifest as kbManifest } from '../../src/modules/tools/integrations/kb';
 
+const TEST_WORKSPACE_ID = 'W_TEST_123';
+
 // ── Tests ──
 
 describe('KB Tools Module', () => {
@@ -146,21 +148,22 @@ describe('KB Tools Module', () => {
       mockGetCustomTool.mockResolvedValue(null);
       mockRegisterCustomTool.mockResolvedValue(undefined);
 
-      await kbManifest.register('system', {});
+      await kbManifest.register(TEST_WORKSPACE_ID, 'system', {});
 
-      expect(mockGetCustomTool).toHaveBeenCalledWith('kb-search');
+      expect(mockGetCustomTool).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 'kb-search');
       expect(mockRegisterCustomTool).toHaveBeenCalledTimes(1);
-      expect(mockRegisterCustomTool.mock.calls[0][0]).toBe('kb-search');
-      expect(mockRegisterCustomTool.mock.calls[0][3]).toBe('system');
+      expect(mockRegisterCustomTool.mock.calls[0][0]).toBe(TEST_WORKSPACE_ID);
+      expect(mockRegisterCustomTool.mock.calls[0][1]).toBe('kb-search');
+      expect(mockRegisterCustomTool.mock.calls[0][4]).toBe('system');
     });
 
     it('passes correct options to registerCustomTool', async () => {
       mockGetCustomTool.mockResolvedValue(null);
       mockRegisterCustomTool.mockResolvedValue(undefined);
 
-      await kbManifest.register('system', {});
+      await kbManifest.register(TEST_WORKSPACE_ID, 'system', {});
 
-      const options = mockRegisterCustomTool.mock.calls[0][4];
+      const options = mockRegisterCustomTool.mock.calls[0][5];
       expect(options.language).toBe('javascript');
       expect(options.autoApprove).toBe(true);
       expect(options.accessLevel).toBe('read-only');
@@ -170,9 +173,9 @@ describe('KB Tools Module', () => {
       mockGetCustomTool.mockResolvedValue(null);
       mockRegisterCustomTool.mockResolvedValue(undefined);
 
-      await kbManifest.register('system', {});
+      await kbManifest.register(TEST_WORKSPACE_ID, 'system', {});
 
-      const options = mockRegisterCustomTool.mock.calls[0][4];
+      const options = mockRegisterCustomTool.mock.calls[0][5];
       const configJson = JSON.parse(options.configJson);
       expect(configJson.api_url).toBe('http://host.docker.internal:3000');
       expect(configJson.internal_secret).toBe('test-secret');
@@ -181,7 +184,7 @@ describe('KB Tools Module', () => {
     it('skips registration when kb-search already exists', async () => {
       mockGetCustomTool.mockResolvedValue({ id: 'existing-kb' });
 
-      await kbManifest.register('system', {});
+      await kbManifest.register(TEST_WORKSPACE_ID, 'system', {});
 
       expect(mockRegisterCustomTool).not.toHaveBeenCalled();
     });
@@ -190,18 +193,18 @@ describe('KB Tools Module', () => {
       mockGetCustomTool.mockResolvedValue(null);
       mockRegisterCustomTool.mockResolvedValue(undefined);
 
-      await kbManifest.register('system', {});
+      await kbManifest.register(TEST_WORKSPACE_ID, 'system', {});
 
-      expect(mockRegisterCustomTool.mock.calls[0][2]).toBeNull();
+      expect(mockRegisterCustomTool.mock.calls[0][3]).toBeNull();
     });
 
     it('passes schema as second argument', async () => {
       mockGetCustomTool.mockResolvedValue(null);
       mockRegisterCustomTool.mockResolvedValue(undefined);
 
-      await kbManifest.register('system', {});
+      await kbManifest.register(TEST_WORKSPACE_ID, 'system', {});
 
-      const schemaArg = mockRegisterCustomTool.mock.calls[0][1];
+      const schemaArg = mockRegisterCustomTool.mock.calls[0][2];
       const parsed = JSON.parse(schemaArg);
       expect(parsed.type).toBe('object');
       expect(parsed.properties.action).toBeDefined();
@@ -213,7 +216,7 @@ describe('KB Tools Module', () => {
   // ────────────────────────────────────────────────
   describe('updateConfig', () => {
     it('is a no-op (KB config derived from app config)', async () => {
-      await kbManifest.updateConfig({});
+      await kbManifest.updateConfig(TEST_WORKSPACE_ID, {});
 
       expect(mockExecute).not.toHaveBeenCalled();
     });

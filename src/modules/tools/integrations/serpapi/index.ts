@@ -147,22 +147,22 @@ export const manifest: ToolManifest = {
   tools: [
     { name: 'serpapi-read', schema: READ_SCHEMA, code: READ_CODE, accessLevel: 'read-only', displayName: 'Searching SerpAPI' },
   ],
-  async register(userId, config) {
+  async register(workspaceId, userId, config) {
     const configJson = JSON.stringify(config);
     for (const tool of this.tools) {
-      const existing = await getCustomTool(tool.name);
+      const existing = await getCustomTool(workspaceId, tool.name);
       if (!existing) {
-        await registerCustomTool(tool.name, tool.schema, null, userId, {
+        await registerCustomTool(workspaceId, tool.name, tool.schema, null, userId, {
           code: tool.code, language: 'javascript', autoApprove: true, accessLevel: tool.accessLevel, configJson,
         });
         logger.info(`${this.label} tool registered: ${tool.name}`);
       }
     }
   },
-  async updateConfig(config) {
+  async updateConfig(workspaceId, config) {
     const configJson = JSON.stringify(config);
     const names = this.tools.map(t => t.name);
-    await execute(`UPDATE custom_tools SET config_json = $1 WHERE name = ANY($2)`, [configJson, names]);
+    await execute(`UPDATE custom_tools SET config_json = $1 WHERE workspace_id = $2 AND name = ANY($3)`, [configJson, workspaceId, names]);
     logger.info(`${this.label} config updated`);
   },
 };

@@ -23,8 +23,10 @@ vi.mock('../../src/utils/logger', () => ({
 }));
 
 import { manifest as serpapiManifest } from '../../src/modules/tools/integrations/serpapi';
-const registerSerpAPITools = (userId: string, config: Record<string, string>) => serpapiManifest.register(userId, config);
-const updateSerpAPIConfig = (config: Record<string, string>) => serpapiManifest.updateConfig(config);
+
+const TEST_WORKSPACE_ID = 'W_TEST_123';
+const registerSerpAPITools = (userId: string, config: Record<string, string>) => serpapiManifest.register(TEST_WORKSPACE_ID, userId, config);
+const updateSerpAPIConfig = (config: Record<string, string>) => serpapiManifest.updateConfig(TEST_WORKSPACE_ID, config);
 
 // ── Helpers ──
 
@@ -143,7 +145,7 @@ describe('SerpAPI Tools Module', () => {
       await registerSerpAPITools('admin-1', SERPAPI_CONFIG);
 
       expect(mockRegisterCustomTool).toHaveBeenCalledTimes(1);
-      expect(mockGetCustomTool).toHaveBeenCalledWith('serpapi-read');
+      expect(mockGetCustomTool).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 'serpapi-read');
     });
 
     it('passes configJson to the tool', async () => {
@@ -153,7 +155,7 @@ describe('SerpAPI Tools Module', () => {
       await registerSerpAPITools('admin-1', SERPAPI_CONFIG);
 
       const expectedConfigJson = JSON.stringify(SERPAPI_CONFIG);
-      expect(mockRegisterCustomTool.mock.calls[0][4].configJson).toBe(expectedConfigJson);
+      expect(mockRegisterCustomTool.mock.calls[0][5].configJson).toBe(expectedConfigJson);
     });
 
     it('registers with read-only access level', async () => {
@@ -162,7 +164,7 @@ describe('SerpAPI Tools Module', () => {
 
       await registerSerpAPITools('admin-1', SERPAPI_CONFIG);
 
-      const options = mockRegisterCustomTool.mock.calls[0][4];
+      const options = mockRegisterCustomTool.mock.calls[0][5];
       expect(options.language).toBe('javascript');
       expect(options.autoApprove).toBe(true);
       expect(options.accessLevel).toBe('read-only');
@@ -174,9 +176,9 @@ describe('SerpAPI Tools Module', () => {
 
       await registerSerpAPITools('admin-1', SERPAPI_CONFIG);
 
-      expect(mockRegisterCustomTool.mock.calls[0][0]).toBe('serpapi-read');
-      expect(mockRegisterCustomTool.mock.calls[0][2]).toBeNull();
-      expect(mockRegisterCustomTool.mock.calls[0][3]).toBe('admin-1');
+      expect(mockRegisterCustomTool.mock.calls[0][1]).toBe('serpapi-read');
+      expect(mockRegisterCustomTool.mock.calls[0][3]).toBeNull();
+      expect(mockRegisterCustomTool.mock.calls[0][4]).toBe('admin-1');
     });
 
     it('skips registration when serpapi-read already exists', async () => {
@@ -193,7 +195,7 @@ describe('SerpAPI Tools Module', () => {
 
       await registerSerpAPITools('admin-1', SERPAPI_CONFIG);
 
-      const code = mockRegisterCustomTool.mock.calls[0][4].code;
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
       expect(code).toContain('serpRequest');
     });
   });
@@ -209,8 +211,8 @@ describe('SerpAPI Tools Module', () => {
       await updateSerpAPIConfig(newConfig);
 
       expect(mockExecute).toHaveBeenCalledWith(
-        `UPDATE custom_tools SET config_json = $1 WHERE name = ANY($2)`,
-        [JSON.stringify(newConfig), ['serpapi-read']],
+        `UPDATE custom_tools SET config_json = $1 WHERE workspace_id = $2 AND name = ANY($3)`,
+        [JSON.stringify(newConfig), TEST_WORKSPACE_ID, ['serpapi-read']],
       );
     });
 

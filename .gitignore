@@ -8,3 +8,4 @@ dist/
 logs/
 coverage/
 .DS_Store
+.claude/

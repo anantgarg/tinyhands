@@ -140,8 +140,8 @@ export const manifest: ToolManifest = {
   tools: [
     { name: 'kb-search', schema: READ_SCHEMA, code: READ_CODE, accessLevel: 'read-only', displayName: 'Searching knowledge base' },
   ],
-  async register(_userId, _config) {
-    const existing = await getCustomTool('kb-search');
+  async register(workspaceId, _userId, _config) {
+    const existing = await getCustomTool(workspaceId, 'kb-search');
     if (existing) return;
 
     const toolConfig: Record<string, string> = {
@@ -151,7 +151,7 @@ export const manifest: ToolManifest = {
       toolConfig.internal_secret = appConfig.server.internalSecret;
     }
 
-    await registerCustomTool('kb-search', READ_SCHEMA, null, 'system', {
+    await registerCustomTool(workspaceId, 'kb-search', READ_SCHEMA, null, 'system', {
       code: READ_CODE,
       language: 'javascript',
       autoApprove: true,
@@ -160,7 +160,7 @@ export const manifest: ToolManifest = {
     });
     logger.info('KB search tool registered');
   },
-  async updateConfig() {
+  async updateConfig(_workspaceId) {
     // KB config is derived from app config, not user-provided
   },
 };
