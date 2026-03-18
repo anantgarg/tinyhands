@@ -86,10 +86,11 @@ export async function handleDeploy(payload: any): Promise<DeployResult> {
     }
     execSync('npm run migrate', { cwd: process.cwd(), timeout: 60000 });
 
-    // 5. Restart PM2 using startOrRestart to pick up any .env changes
-    // (pm2 restart reuses cached env; startOrRestart re-evaluates ecosystem.config.js)
-    logger.info('Deploy: restarting PM2');
-    execSync('pm2 startOrRestart ecosystem.config.js', { cwd: process.cwd(), timeout: 30000 });
+    // 5. Graceful reload — sends SIGTERM to each process one at a time,
+    // waits for it to exit (allowing active agent runs to finish), then starts the new version.
+    // This prevents orphaned Docker containers from interrupted runs.
+    logger.info('Deploy: graceful reload via PM2');
+    execSync('pm2 reload ecosystem.config.js', { cwd: process.cwd(), timeout: 120000 });
 
     const restartTime = Date.now() - startTime;
 
