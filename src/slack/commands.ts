@@ -2287,7 +2287,7 @@ async function handleNewAgentWhen(workspaceId: string, goal: string, whenInput: 
   await postMessage(channelId, ':gear: Flexing tiny fingers... analyzing your goal and configuring the best setup.', threadTs);
 
   try {
-    const analysis = await analyzeGoal(combinedGoal, undefined, userId);
+    const analysis = await analyzeGoal(workspaceId, combinedGoal, undefined, userId);
     logger.info('Goal analysis complete', { agentName: analysis.agent_name, feasible: analysis.feasible, userId });
 
     // If not feasible, queue it and notify owner
@@ -2706,7 +2706,7 @@ async function handleUpdateAgentGoalWithChannels(workspaceId: string, agentId: s
   await postMessage(channelId, `:gear: Analyzing updated goal for *${agent.name}*...`, threadTs);
 
   try {
-    const analysis = await analyzeGoal(newGoal, agent.system_prompt, userId, agent.name);
+    const analysis = await analyzeGoal(workspaceId, newGoal, agent.system_prompt, userId, agent.name);
     await showUpdateAgentConfirmation(workspaceId, analysis, agentId, newGoal, userId, channelId, threadTs, newChannelIds);
   } catch (err: any) {
     logger.error('Update goal analysis failed', { error: err.message, agentId, userId });
@@ -2724,7 +2724,7 @@ async function handleUpdateAgentGoal(workspaceId: string, agentId: string, newGo
   await postMessage(channelId, `:gear: Analyzing updated goal for *${agent.name}*...`, threadTs);
 
   try {
-    const analysis = await analyzeGoal(newGoal, agent.system_prompt, userId, agent.name);
+    const analysis = await analyzeGoal(workspaceId, newGoal, agent.system_prompt, userId, agent.name);
     const currentChannels = agent.channel_ids?.length > 0 ? agent.channel_ids : [agent.channel_id];
     await showUpdateAgentConfirmation(workspaceId, analysis, agentId, newGoal, userId, channelId, threadTs, currentChannels);
   } catch (err: any) {
@@ -3194,7 +3194,7 @@ export function registerConfirmationActions(app: App): void {
 
     try {
       // Re-analyze the goal (capabilities may have changed since the request was made)
-      const freshAnalysis = await analyzeGoal(goal, undefined, requestedBy);
+      const freshAnalysis = await analyzeGoal(workspaceId, goal, undefined, requestedBy);
 
       if (!freshAnalysis.feasible) {
         const blockerList = freshAnalysis.blockers.map((b: string) => `• ${b}`).join('\n');

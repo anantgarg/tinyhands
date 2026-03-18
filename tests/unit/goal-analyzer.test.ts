@@ -37,6 +37,8 @@ vi.mock('../../src/utils/logger', () => ({
 
 import { analyzeGoal, checkMessageRelevance, GoalAnalysis } from '../../src/modules/agents/goal-analyzer';
 
+const TEST_WORKSPACE_ID = 'W_TEST_123';
+
 // ── Helpers ──
 
 function makeGoalAnalysisJson(overrides: Partial<GoalAnalysis> = {}): GoalAnalysis {
@@ -87,7 +89,7 @@ describe('Goal Analyzer', () => {
     it('should return a valid GoalAnalysis with expected fields', async () => {
       mockAnthropicJsonResponse();
 
-      const result = await analyzeGoal('Build a code review bot');
+      const result = await analyzeGoal(TEST_WORKSPACE_ID, 'Build a code review bot');
 
       expect(result.agent_name).toBe('test-agent');
       expect(result.system_prompt).toBe('You are a test agent.');
@@ -103,7 +105,7 @@ describe('Goal Analyzer', () => {
     it('should call Claude with claude-opus-4-6 model', async () => {
       mockAnthropicJsonResponse();
 
-      await analyzeGoal('Build a bot');
+      await analyzeGoal(TEST_WORKSPACE_ID, 'Build a bot');
 
       expect(mockCreate).toHaveBeenCalledOnce();
       const callArgs = mockCreate.mock.calls[0][0];
@@ -116,7 +118,7 @@ describe('Goal Analyzer', () => {
         tools: ['Read', 'Glob', 'FakeToolThatDoesNotExist', 'AnotherFake'],
       });
 
-      const result = await analyzeGoal('Build a bot');
+      const result = await analyzeGoal(TEST_WORKSPACE_ID, 'Build a bot');
 
       expect(result.tools).toEqual(['Read', 'Glob']);
       expect(result.tools).not.toContain('FakeToolThatDoesNotExist');
@@ -128,7 +130,7 @@ describe('Goal Analyzer', () => {
         tools: ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash'],
       });
 
-      const result = await analyzeGoal('Build a bot');
+      const result = await analyzeGoal(TEST_WORKSPACE_ID, 'Build a bot');
 
       expect(result.tools).toEqual(['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash']);
     });
@@ -142,7 +144,7 @@ describe('Goal Analyzer', () => {
         new_skills_needed: [{ name: 'my-skill', description: 'Does more stuff' }],
       });
 
-      const result = await analyzeGoal('Build a bot', undefined, 'U_NON_ADMIN');
+      const result = await analyzeGoal(TEST_WORKSPACE_ID, 'Build a bot', undefined, 'U_NON_ADMIN');
 
       expect(result.new_tools_needed).toEqual([]);
       expect(result.new_skills_needed).toEqual([]);
@@ -155,7 +157,7 @@ describe('Goal Analyzer', () => {
         new_tools_needed: newTools,
       });
 
-      const result = await analyzeGoal('Build a bot', undefined, 'U_ADMIN');
+      const result = await analyzeGoal(TEST_WORKSPACE_ID, 'Build a bot', undefined, 'U_ADMIN');
 
       expect(result.new_tools_needed).toEqual(newTools);
     });
@@ -173,7 +175,7 @@ describe('Goal Analyzer', () => {
         custom_tools: ['safe-reader', 'dangerous-writer'],
       });
 
-      const result = await analyzeGoal('Build a bot', undefined, 'U_NON_ADMIN');
+      const result = await analyzeGoal(TEST_WORKSPACE_ID, 'Build a bot', undefined, 'U_NON_ADMIN');
 
       expect(result.custom_tools).toEqual(['safe-reader']);
       expect(result.custom_tools).not.toContain('dangerous-writer');
@@ -192,7 +194,7 @@ describe('Goal Analyzer', () => {
         custom_tools: ['safe-reader', 'dangerous-writer'],
       });
 
-      const result = await analyzeGoal('Build a bot', undefined, 'U_ADMIN');
+      const result = await analyzeGoal(TEST_WORKSPACE_ID, 'Build a bot', undefined, 'U_ADMIN');
 
       expect(result.custom_tools).toEqual(['safe-reader', 'dangerous-writer']);
     });
@@ -208,7 +210,7 @@ describe('Goal Analyzer', () => {
         custom_tools: ['real-tool', 'nonexistent-tool'],
       });
 
-      const result = await analyzeGoal('Build a bot', undefined, 'U_ADMIN');
+      const result = await analyzeGoal(TEST_WORKSPACE_ID, 'Build a bot', undefined, 'U_ADMIN');
 
       expect(result.custom_tools).toEqual(['real-tool']);
     });
@@ -222,7 +224,7 @@ describe('Goal Analyzer', () => {
         write_tools_requested: ['db-writer', 'nonexistent-writer'],
       });
 
-      const result = await analyzeGoal('Build a bot');
+      const result = await analyzeGoal(TEST_WORKSPACE_ID, 'Build a bot');
 
       expect(result.write_tools_requested).toEqual(['db-writer']);
     });
@@ -232,7 +234,7 @@ describe('Goal Analyzer', () => {
     it('should include existing prompt in user message for update mode', async () => {
       mockAnthropicJsonResponse();
 
-      await analyzeGoal('Add error handling', 'You are a code reviewer.');
+      await analyzeGoal(TEST_WORKSPACE_ID, 'Add error handling', 'You are a code reviewer.');
 
       const callArgs = mockCreate.mock.calls[0][0];
       const userContent = callArgs.messages[0].content;
@@ -245,7 +247,7 @@ describe('Goal Analyzer', () => {
     it('should include current agent name in user message for update mode', async () => {
       mockAnthropicJsonResponse();
 
-      await analyzeGoal('Change the name to something nicer', 'You are a domain lookup agent.', 'U123', 'domain-employee-lookup');
+      await analyzeGoal(TEST_WORKSPACE_ID, 'Change the name to something nicer', 'You are a domain lookup agent.', 'U123', 'domain-employee-lookup');
 
       const callArgs = mockCreate.mock.calls[0][0];
       const userContent = callArgs.messages[0].content;
@@ -256,7 +258,7 @@ describe('Goal Analyzer', () => {
     it('should use goal-only format when no existing prompt', async () => {
       mockAnthropicJsonResponse();
 
-      await analyzeGoal('Build a new bot');
+      await analyzeGoal(TEST_WORKSPACE_ID, 'Build a new bot');
 
       const callArgs = mockCreate.mock.calls[0][0];
       const userContent = callArgs.messages[0].content;
@@ -268,7 +270,7 @@ describe('Goal Analyzer', () => {
     it('should include requesting user Slack ID in message', async () => {
       mockAnthropicJsonResponse();
 
-      await analyzeGoal('Build a bot', undefined, 'U12345');
+      await analyzeGoal(TEST_WORKSPACE_ID, 'Build a bot', undefined, 'U12345');
 
       const callArgs = mockCreate.mock.calls[0][0];
       const userContent = callArgs.messages[0].content;
@@ -281,7 +283,7 @@ describe('Goal Analyzer', () => {
       const analysis = makeGoalAnalysisJson({ agent_name: 'wrapped-agent' });
       mockAnthropicResponse('```json\n' + JSON.stringify(analysis) + '\n```');
 
-      const result = await analyzeGoal('Build a bot');
+      const result = await analyzeGoal(TEST_WORKSPACE_ID, 'Build a bot');
 
       expect(result.agent_name).toBe('wrapped-agent');
     });
@@ -290,7 +292,7 @@ describe('Goal Analyzer', () => {
       const analysis = makeGoalAnalysisJson({ agent_name: 'embedded-agent' });
       mockAnthropicResponse('Here is the analysis:\n' + JSON.stringify(analysis) + '\n\nLet me know if you need changes.');
 
-      const result = await analyzeGoal('Build a bot');
+      const result = await analyzeGoal(TEST_WORKSPACE_ID, 'Build a bot');
 
       expect(result.agent_name).toBe('embedded-agent');
     });
@@ -298,13 +300,13 @@ describe('Goal Analyzer', () => {
     it('should throw if no JSON found in response', async () => {
       mockAnthropicResponse('I cannot produce a valid configuration for this goal.');
 
-      await expect(analyzeGoal('Build a bot')).rejects.toThrow('Failed to parse goal analysis response');
+      await expect(analyzeGoal(TEST_WORKSPACE_ID, 'Build a bot')).rejects.toThrow('Failed to parse goal analysis response');
     });
 
     it('should throw on invalid JSON', async () => {
       mockAnthropicResponse('{invalid json here}');
 
-      await expect(analyzeGoal('Build a bot')).rejects.toThrow();
+      await expect(analyzeGoal(TEST_WORKSPACE_ID, 'Build a bot')).rejects.toThrow();
     });
 
     // ── Timeout ──
@@ -320,7 +322,7 @@ describe('Goal Analyzer', () => {
         ),
       );
 
-      await expect(analyzeGoal('Build a bot')).rejects.toThrow(
+      await expect(analyzeGoal(TEST_WORKSPACE_ID, 'Build a bot')).rejects.toThrow(
         'Goal analysis timed out after 90 seconds',
       );
     });
@@ -337,7 +339,7 @@ describe('Goal Analyzer', () => {
         summary: 'Minimal.',
       }));
 
-      const result = await analyzeGoal('Build a bot');
+      const result = await analyzeGoal(TEST_WORKSPACE_ID, 'Build a bot');
 
       expect(result.custom_tools).toEqual([]);
       expect(result.relevance_keywords).toEqual([]);
@@ -353,7 +355,7 @@ describe('Goal Analyzer', () => {
     it('should not check isSuperadmin when requestingUserId is not provided', async () => {
       mockAnthropicJsonResponse();
 
-      await analyzeGoal('Build a bot');
+      await analyzeGoal(TEST_WORKSPACE_ID, 'Build a bot');
 
       expect(mockIsSuperadmin).not.toHaveBeenCalled();
     });
@@ -361,9 +363,9 @@ describe('Goal Analyzer', () => {
     it('should check isSuperadmin when requestingUserId is provided', async () => {
       mockAnthropicJsonResponse();
 
-      await analyzeGoal('Build a bot', undefined, 'U123');
+      await analyzeGoal(TEST_WORKSPACE_ID, 'Build a bot', undefined, 'U123');
 
-      expect(mockIsSuperadmin).toHaveBeenCalledWith('U123');
+      expect(mockIsSuperadmin).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 'U123');
     });
   });
 

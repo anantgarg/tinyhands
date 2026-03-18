@@ -60,6 +60,7 @@ export async function startWorkflow(workspaceId: string, workflowId: string): Pr
 
   const run: WorkflowRun = {
     id,
+    workspace_id: workspaceId,
     workflow_id: workflowId,
     run_id: runId,
     current_step: 0,

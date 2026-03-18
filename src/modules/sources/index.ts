@@ -21,6 +21,7 @@ export async function connectSource(workspaceId: string, params: ConnectSourcePa
 
   const source: Source = {
     id,
+    workspace_id: workspaceId,
     agent_id: params.agentId,
     source_type: params.sourceType,
     uri: params.uri,

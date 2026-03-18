@@ -108,7 +108,7 @@ describe('createTrigger', () => {
       createdBy: 'user-42',
     });
 
-    expect(mockCanModifyAgent).toHaveBeenCalledWith('agent-99', 'user-42');
+    expect(mockCanModifyAgent).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 'agent-99', 'user-42');
   });
 
   it('should serialize complex config to JSON', async () => {

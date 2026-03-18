@@ -28,17 +28,17 @@ export interface GoalAnalysis {
   summary: string;
 }
 
-export async function analyzeGoal(goal: string, existingPrompt?: string, requestingUserId?: string, currentAgentName?: string): Promise<GoalAnalysis> {
+export async function analyzeGoal(workspaceId: string, goal: string, existingPrompt?: string, requestingUserId?: string, currentAgentName?: string): Promise<GoalAnalysis> {
   const client = new Anthropic();
   const builtinTools = getBuiltinTools();
   const availableSkills = getAvailableSkills();
 
   // Determine if requesting user is admin
-  const isAdmin = requestingUserId ? await isSuperadmin(requestingUserId) : false;
+  const isAdmin = requestingUserId ? await isSuperadmin(workspaceId, requestingUserId) : false;
 
   // Get available custom tools
-  const readOnlyTools = await listUserAvailableTools();
-  const writeTools = await listWriteTools();
+  const readOnlyTools = await listUserAvailableTools(workspaceId);
+  const writeTools = await listWriteTools(workspaceId);
 
   const isToolConfigured = (t: { config_json: string }): boolean => {
     const cfg = JSON.parse(t.config_json || '{}');

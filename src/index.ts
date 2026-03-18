@@ -39,7 +39,7 @@ async function main(): Promise<void> {
   try {
     const { getIntegration } = await import('./modules/tools/integrations');
     const kb = getIntegration('kb');
-    if (kb) await kb.register('system', {});
+    if (kb) await kb.register(authResult.team_id as string, 'system', {});
   } catch (err: any) {
     logger.warn('KB tool registration failed', { error: err.message });
   }

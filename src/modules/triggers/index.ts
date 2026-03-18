@@ -15,7 +15,7 @@ export interface CreateTriggerParams {
 }
 
 export async function createTrigger(workspaceId: string, params: CreateTriggerParams): Promise<Trigger> {
-  if (!(await canModifyAgent(params.agentId, params.createdBy))) {
+  if (!(await canModifyAgent(workspaceId, params.agentId, params.createdBy))) {
     throw new Error('Insufficient permissions to create trigger');
   }
 
@@ -23,6 +23,7 @@ export async function createTrigger(workspaceId: string, params: CreateTriggerPa
 
   const trigger: Trigger = {
     id,
+    workspace_id: workspaceId,
     agent_id: params.agentId,
     trigger_type: params.triggerType,
     config_json: JSON.stringify(params.config),
@@ -60,7 +61,7 @@ export async function getActiveTriggersByType(workspaceId: string, triggerType: 
 export async function pauseTrigger(workspaceId: string, triggerId: string, userId: string): Promise<void> {
   const trigger = await getTrigger(workspaceId, triggerId);
   if (!trigger) throw new Error(`Trigger ${triggerId} not found`);
-  if (!(await canModifyAgent(trigger.agent_id, userId))) {
+  if (!(await canModifyAgent(workspaceId, trigger.agent_id, userId))) {
     throw new Error('Insufficient permissions');
   }
 
@@ -71,7 +72,7 @@ export async function pauseTrigger(workspaceId: string, triggerId: string, userI
 export async function resumeTrigger(workspaceId: string, triggerId: string, userId: string): Promise<void> {
   const trigger = await getTrigger(workspaceId, triggerId);
   if (!trigger) throw new Error(`Trigger ${triggerId} not found`);
-  if (!(await canModifyAgent(trigger.agent_id, userId))) {
+  if (!(await canModifyAgent(workspaceId, trigger.agent_id, userId))) {
     throw new Error('Insufficient permissions');
   }
 
@@ -82,7 +83,7 @@ export async function resumeTrigger(workspaceId: string, triggerId: string, user
 export async function deleteTrigger(workspaceId: string, triggerId: string, userId: string): Promise<void> {
   const trigger = await getTrigger(workspaceId, triggerId);
   if (!trigger) throw new Error(`Trigger ${triggerId} not found`);
-  if (!(await canModifyAgent(trigger.agent_id, userId))) {
+  if (!(await canModifyAgent(workspaceId, trigger.agent_id, userId))) {
     throw new Error('Insufficient permissions');
   }
 

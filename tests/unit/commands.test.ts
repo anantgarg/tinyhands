@@ -2351,6 +2351,7 @@ describe('Commands Module', () => {
 
       expect(result).toBe(true);
       expect(mockAnalyzeGoal).toHaveBeenCalledWith(
+        'W_TEST_123',
         expect.stringContaining('TRIGGER/SCHEDULE: every message'),
         undefined,
         'U1',
