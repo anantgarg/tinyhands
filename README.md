@@ -16,6 +16,8 @@ cp .env.example .env   # fill in SLACK_* and ANTHROPIC_API_KEY
 docker compose up -d
 ```
 
+For OAuth (Google, GitHub, Notion), set `OAUTH_DOMAIN` in `.env` and run `./deploy/init-letsencrypt.sh` to enable HTTPS with auto-renewing SSL certificates.
+
 **Install script** (Ubuntu/Debian — installs Docker, configures everything interactively):
 
 ```bash
@@ -128,6 +130,7 @@ The GitHub connector automatically detects Mintlify documentation projects:
 - **Observability** — Structured logging, cost tracking, alerting
 - **Self-Evolution** — Agents can write their own tools, create MCP configs, and update their prompts
 - **Role-Based Access Control** — Platform roles (superadmin/admin/member), per-agent access levels (owner/member/viewer/none), write policies, auto-upgrade requests
+- **Nginx Reverse Proxy with Auto-SSL** — Built-in Nginx + Let's Encrypt for HTTPS, required for OAuth callbacks (Google, GitHub, Notion). One command to bootstrap certificates.
 - **Personal Tool Connections** — Encrypted credential storage (AES-256-GCM), OAuth flows for Google/Notion/GitHub, team/delegated/runtime connection modes
 - **Audit Logging** — Comprehensive action audit trail for role changes, tool invocations, agent operations, and connection management
 - **Pull-Based Deploy** — Multiple deployments poll for updates automatically. No webhook needed.
@@ -420,6 +423,8 @@ Run `/agents` to see all agents. Use the overflow menu on any agent to:
 | `GITHUB_OAUTH_CLIENT_ID` | No | OAuth client ID for GitHub integration |
 | `GITHUB_OAUTH_CLIENT_SECRET` | No | OAuth client secret for GitHub integration |
 | `OAUTH_REDIRECT_BASE_URL` | No | Public URL for OAuth callbacks (default: `http://localhost:3000`) |
+| `OAUTH_DOMAIN` | No | Domain for Nginx SSL (e.g., `tinyhands.example.com`) |
+| `LETSENCRYPT_EMAIL` | No | Email for Let's Encrypt certificate notifications |
 
 ---
 

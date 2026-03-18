@@ -281,6 +281,62 @@ OAUTH_REDIRECT_BASE_URL=https://your-domain.com
 
 OAuth callbacks are handled at `GET /auth/callback/:integration` on the Express server.
 
+### SSL / Nginx Setup for OAuth
+
+OAuth providers (Google, GitHub, Notion) require HTTPS callback URLs. TinyHands ships with an Nginx reverse proxy and automatic Let's Encrypt SSL certificates for Docker Compose deployments.
+
+#### Required Environment Variables
+
+Add these to your `.env` file:
+
+```env
+# Your server's public domain (e.g., tinyhands.example.com)
+OAUTH_DOMAIN=your-domain.com
+
+# Email for Let's Encrypt certificate notifications
+LETSENCRYPT_EMAIL=you@example.com
+
+# Set your OAuth callback URL to use HTTPS
+OAUTH_REDIRECT_BASE_URL=https://your-domain.com
+```
+
+#### Initial SSL Setup
+
+Before starting for the first time (or after setting `OAUTH_DOMAIN`), run the bootstrap script to obtain SSL certificates:
+
+```bash
+./deploy/init-letsencrypt.sh
+```
+
+This script:
+1. Creates a temporary self-signed certificate so Nginx can start
+2. Starts the Nginx container
+3. Requests a real certificate from Let's Encrypt using certbot
+4. Reloads Nginx with the valid certificate
+
+You can also pass the domain and email as arguments:
+
+```bash
+./deploy/init-letsencrypt.sh tinyhands.example.com you@example.com
+```
+
+#### How It Works
+
+The Docker Compose setup includes:
+
+- **Nginx** (`nginx:alpine`) — listens on ports 80 and 443, redirects HTTP to HTTPS, proxies HTTPS traffic to the TinyHands app on port 3000
+- **Certbot** (`certbot/certbot`) — automatically renews certificates every 12 hours
+
+The Nginx configuration template at `nginx/default.conf.template` uses the `OAUTH_DOMAIN` environment variable for `server_name` and SSL certificate paths. The `nginx:alpine` image automatically substitutes environment variables in template files.
+
+#### DNS Requirements
+
+Before running the SSL setup, ensure your domain's DNS A record points to your server's public IP address. Let's Encrypt validates domain ownership via HTTP, so the domain must resolve to your server.
+
+#### Certificate Renewal
+
+Certificates are renewed automatically by the certbot service. No manual intervention is required. Certbot checks for renewal every 12 hours and renews certificates that are within 30 days of expiration.
+
 ---
 
 ## Triggers

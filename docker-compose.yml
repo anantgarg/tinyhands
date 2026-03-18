@@ -51,9 +51,33 @@ services:
       - .env
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+
+  # Nginx reverse proxy — SSL termination for OAuth callbacks
+  nginx:
+    image: nginx:alpine
+    restart: unless-stopped
+    depends_on:
+      - tinyhands
     ports:
-      - "${PORT:-3000}:3000"
+      - "80:80"
+      - "443:443"
+    environment:
+      - OAUTH_DOMAIN=${OAUTH_DOMAIN:-localhost}
+    volumes:
+      - ./nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - certbot-etc:/etc/letsencrypt
+      - certbot-var:/var/lib/letsencrypt
+
+  # Certbot — automatic certificate renewal every 12 hours
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - certbot-etc:/etc/letsencrypt
+      - certbot-var:/var/lib/letsencrypt
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
 
 volumes:
   pgdata:
   redisdata:
+  certbot-etc:
+  certbot-var:
