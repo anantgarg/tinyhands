@@ -173,7 +173,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
   let contextBlock = '';
   let contextTokens = 0;
   try {
-    const chunks = await retrieveContext(agent.id, data.input);
+    const chunks = await retrieveContext(workspaceId, agent.id, data.input);
     if (chunks.length > 0) {
       contextBlock = '\n\n## Relevant Context\n\n' +
         chunks.map(c => `### ${c.file_path}\n${c.content}`).join('\n\n');
@@ -181,7 +181,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
     }
 
     if (agent.memory_enabled) {
-      const memories = await retrieveMemories(agent.id, data.input);
+      const memories = await retrieveMemories(workspaceId, agent.id, data.input);
       if (memories.length > 0) {
         contextBlock += '\n\n## Agent Memory\n\n' +
           memories.map(m => `- [${m.category}] ${m.fact}`).join('\n');
@@ -208,7 +208,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
   let customToolsConfig = '[]';
   let codeArtifactsConfig = '[]';
   try {
-    const skills = await getAgentSkills(agent.id);
+    const skills = await getAgentSkills(workspaceId, agent.id);
     skillsConfig = JSON.stringify(skills.map(s => ({
       name: s.name,
       type: s.skill_type,
@@ -219,7 +219,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
     const agentCustomTools = customTools.filter(t => agent.tools.includes(t.name));
     const customToolEntries = [];
     for (const t of agentCustomTools) {
-      const execScript = await getToolExecutionScript(t.name);
+      const execScript = await getToolExecutionScript(workspaceId, t.name);
       customToolEntries.push({
         name: t.name,
         schema: JSON.parse(t.schema_json),
@@ -232,7 +232,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
     customToolsConfig = JSON.stringify(customToolEntries);
 
     // Collect DB-stored MCP configs
-    const mcpConfigs = (await getMcpConfigs(agent.id)).filter(m => m.approved);
+    const mcpConfigs = (await getMcpConfigs(workspaceId, agent.id)).filter(m => m.approved);
     if (mcpConfigs.length > 0) {
       const mcpSkillEntries = mcpConfigs.map(m => ({
         name: m.name,
@@ -245,7 +245,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
     }
 
     // Collect DB-stored code artifacts for workspace injection
-    const codeArtifacts = await getCodeArtifacts(agent.id);
+    const codeArtifacts = await getCodeArtifacts(workspaceId, agent.id);
     if (codeArtifacts.length > 0) {
       codeArtifactsConfig = JSON.stringify(codeArtifacts.map(a => ({
         file_path: a.file_path,
@@ -420,7 +420,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
     // Extract and store 0-5 key facts as agent memory
     if (agent.memory_enabled && status === 'completed' && output) {
       try {
-        await extractAndStoreMemories(agent.id, runRecord.id, data.input, output);
+        await extractAndStoreMemories(workspaceId, agent.id, runRecord.id, data.input, output);
       } catch (memErr) {
         logger.warn('Memory extraction failed', { traceId: data.traceId, error: String(memErr) });
       }
@@ -519,6 +519,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
 // ── Memory Extraction ──
 
 async function extractAndStoreMemories(
+  workspaceId: string,
   agentId: string,
   runId: string,
   input: string,
@@ -562,7 +563,7 @@ Focus on: user preferences, corrections, entities mentioned, procedures learned.
         }));
 
       if (validFacts.length > 0) {
-        await storeMemories(agentId, runId, validFacts);
+        await storeMemories(workspaceId, agentId, runId, validFacts);
         logger.info('Memories extracted from run', { agentId, runId, count: validFacts.length });
       }
     }

@@ -783,7 +783,7 @@ describe('Execution Module – executeAgentRun', () => {
     const job = makeFakeJob(makeJobData());
     await executeAgentRun(job);
 
-    expect(mockRetrieveMemories).toHaveBeenCalledWith('agent-1', 'Hello, run a task');
+    expect(mockRetrieveMemories).toHaveBeenCalledWith('W_TEST_123', 'agent-1', 'Hello, run a task');
     const containerCall = mockCreateAgentContainer.mock.calls[0][0];
     expect(containerCall.envVars.TASK_PROMPT).toContain('Agent Memory');
     expect(containerCall.envVars.TASK_PROMPT).toContain('User likes JSON format');
@@ -1368,6 +1368,7 @@ describe('Execution Module – executeAgentRun', () => {
 
     expect(mockAnthropicCreate).toHaveBeenCalled();
     expect(mockStoreMemories).toHaveBeenCalledWith(
+      'W_TEST_123',
       'agent-1',
       expect.any(String),
       [{ fact: 'User prefers JSON', category: 'preference' }],
@@ -1439,6 +1440,7 @@ describe('Execution Module – executeAgentRun', () => {
     await executeAgentRun(job);
 
     expect(mockStoreMemories).toHaveBeenCalledWith(
+      'W_TEST_123',
       'agent-1',
       expect.any(String),
       expect.arrayContaining([
@@ -1495,11 +1497,12 @@ describe('Execution Module – executeAgentRun', () => {
     await executeAgentRun(job);
 
     expect(mockStoreMemories).toHaveBeenCalledWith(
+      'W_TEST_123',
       'agent-1',
       expect.any(String),
       expect.any(Array),
     );
-    const storedFacts = mockStoreMemories.mock.calls[0][2];
+    const storedFacts = mockStoreMemories.mock.calls[0][3];
     expect(storedFacts.length).toBeLessThanOrEqual(5);
   });
 
