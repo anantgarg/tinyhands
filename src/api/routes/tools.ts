@@ -7,6 +7,8 @@ import {
   getToolConfig, updateToolConfig, setToolConfigKey, removeToolConfigKey,
   updateToolAccessLevel,
 } from '../../modules/tools';
+import { getIntegrations } from '../../modules/tools/integrations';
+import { createTeamConnection } from '../../modules/connections';
 import { logger } from '../../utils/logger';
 
 const router = Router();
@@ -162,6 +164,62 @@ router.put('/custom/:name/access-level', requireAdmin, async (req: Request, res:
     res.json({ ok: true });
   } catch (err: any) {
     logger.error('Update tool access level error', { error: err.message });
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// ── Integrations ──
+
+// GET /tools/integrations — List all integrations with status
+router.get('/integrations', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { workspaceId } = getSessionUser(req);
+    const integrations = getIntegrations();
+
+    // Check which integrations have active connections
+    let activeIds: Set<string> = new Set();
+    try {
+      const { listTeamConnections } = await import('../../modules/connections');
+      const connections = await listTeamConnections(workspaceId);
+      for (const c of connections as any[]) {
+        if (c.integration_id) activeIds.add(c.integration_id);
+      }
+    } catch { /* ignore */ }
+
+    res.json(integrations.map((int: any) => ({
+      id: int.id,
+      name: int.id,
+      displayName: int.label || int.id,
+      description: int.description || '',
+      status: activeIds.has(int.id) ? 'active' : 'inactive',
+      toolsCount: int.tools?.length ?? 0,
+      connectionModel: int.connectionModel || 'team',
+      configKeys: (int.configKeys ?? []).map((k: string) => ({
+        key: k,
+        label: k.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()),
+        required: true,
+        secret: k.includes('key') || k.includes('token') || k.includes('secret'),
+      })),
+    })));
+  } catch (err: any) {
+    logger.error('List integrations error', { error: err.message });
+    res.status(500).json({ error: 'Failed to list integrations' });
+  }
+});
+
+// POST /tools/integrations/register — Register/activate an integration
+router.post('/integrations/register', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { workspaceId, userId } = getSessionUser(req);
+    const { integrationId, config } = req.body;
+    if (!integrationId || !config) {
+      res.status(400).json({ error: 'integrationId and config are required' });
+      return;
+    }
+    const connection = await createTeamConnection(workspaceId, integrationId, config, userId);
+    res.status(201).json(connection);
+  } catch (err: any) {
+    logger.error('Register integration error', { error: err.message });
     res.status(400).json({ error: err.message });
   }
 });

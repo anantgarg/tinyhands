@@ -197,11 +197,11 @@ function SettingsContent() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="viewer">Viewer (view only)</SelectItem>
-                  <SelectItem value="member">Member (everyone)</SelectItem>
+                  <SelectItem value="viewer">Restricted (admins only)</SelectItem>
+                  <SelectItem value="member">Everyone (all workspace members)</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-xs text-warm-text-secondary mt-1">Controls default access level for new agents</p>
+              <p className="text-xs text-warm-text-secondary mt-1">Who can interact with newly created agents by default</p>
             </div>
             <div>
               <Label>When agents want to take actions</Label>
@@ -213,12 +213,12 @@ function SettingsContent() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="allow">Just do it</SelectItem>
-                  <SelectItem value="confirm">Ask the user first</SelectItem>
-                  <SelectItem value="admin_confirm">Ask an admin first</SelectItem>
+                  <SelectItem value="allow">Automatic (no approval needed)</SelectItem>
+                  <SelectItem value="confirm">Ask the user for approval</SelectItem>
+                  <SelectItem value="admin_confirm">Require admin approval</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-xs text-warm-text-secondary mt-1">Default write policy for new agents</p>
+              <p className="text-xs text-warm-text-secondary mt-1">Controls whether agents need permission before taking actions like creating tickets or updating records</p>
             </div>
           </div>
           <div className="max-w-xs">

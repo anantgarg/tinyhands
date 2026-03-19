@@ -22,6 +22,12 @@ vi.mock('../../src/modules/knowledge-base', () => ({
   getCategories: (...args: any[]) => mockGetCategories(...args),
 }));
 
+const mockQuery = vi.fn();
+
+vi.mock('../../src/db', () => ({
+  query: (...args: any[]) => mockQuery(...args),
+}));
+
 const mockListSources = vi.fn();
 const mockCreateSource = vi.fn();
 const mockUpdateSource = vi.fn();
@@ -124,33 +130,67 @@ describe('KB Routes', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockQuery.mockResolvedValue([]);
     app = createApp();
   });
 
   // ── Entries ──
 
+  describe('GET /kb/stats', () => {
+    it('returns KB stats', async () => {
+      mockQuery
+        .mockResolvedValueOnce([{ count: 10 }])
+        .mockResolvedValueOnce([{ count: 2 }])
+        .mockResolvedValueOnce([{ count: 3 }])
+        .mockResolvedValueOnce([{ count: 1 }]);
+
+      const res = await makeRequest(app, 'GET', '/kb/stats');
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        totalEntries: 10,
+        pendingEntries: 2,
+        categories: 3,
+        sourcesCount: 1,
+      });
+    });
+
+    it('returns 500 on error', async () => {
+      mockQuery.mockRejectedValueOnce(new Error('DB error'));
+
+      const res = await makeRequest(app, 'GET', '/kb/stats');
+
+      expect(res.status).toBe(500);
+      expect(res.body).toEqual({ error: 'Failed to get stats' });
+    });
+  });
+
   describe('GET /kb/entries', () => {
-    it('lists entries with default limit', async () => {
+    it('lists entries with pagination', async () => {
       const entries = [{ id: 'e1', title: 'Doc' }];
-      mockListKBEntries.mockResolvedValueOnce(entries);
+      mockQuery
+        .mockResolvedValueOnce([{ count: 1 }])
+        .mockResolvedValueOnce(entries);
 
       const res = await makeRequest(app, 'GET', '/kb/entries');
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual(entries);
-      expect(mockListKBEntries).toHaveBeenCalledWith('W123', 20);
+      expect(res.body).toEqual({ entries, total: 1 });
     });
 
-    it('uses custom limit', async () => {
-      mockListKBEntries.mockResolvedValueOnce([]);
+    it('uses custom limit and page', async () => {
+      mockQuery
+        .mockResolvedValueOnce([{ count: 10 }])
+        .mockResolvedValueOnce([]);
 
-      await makeRequest(app, 'GET', '/kb/entries?limit=5');
+      await makeRequest(app, 'GET', '/kb/entries?limit=5&page=2');
 
-      expect(mockListKBEntries).toHaveBeenCalledWith('W123', 5);
+      // Count query + entries query
+      expect(mockQuery).toHaveBeenCalledTimes(2);
     });
 
     it('returns 500 on error', async () => {
-      mockListKBEntries.mockRejectedValueOnce(new Error('DB error'));
+      mockQuery.mockRejectedValueOnce(new Error('DB error'));
 
       const res = await makeRequest(app, 'GET', '/kb/entries');
 

@@ -16,11 +16,7 @@ vi.mock('../../src/modules/agents', () => ({
   listAgents: (...args: any[]) => mockListAgents(...args),
 }));
 
-const mockGetRecentRuns = vi.fn();
-
-vi.mock('../../src/modules/execution', () => ({
-  getRecentRuns: (...args: any[]) => mockGetRecentRuns(...args),
-}));
+// getRecentRuns no longer used — recent-runs uses direct JOIN query via mockQuery
 
 const mockGetAuditLog = vi.fn();
 
@@ -115,7 +111,6 @@ describe('Dashboard Routes', () => {
     // Set safe defaults so unhandled calls don't crash
     mockGetMetrics.mockResolvedValue({});
     mockListAgents.mockResolvedValue([]);
-    mockGetRecentRuns.mockResolvedValue([]);
     mockGetAuditLog.mockResolvedValue([]);
     mockQuery.mockResolvedValue([]);
     // Default: resolveUserNames returns userId as displayName
@@ -278,28 +273,25 @@ describe('Dashboard Routes', () => {
   });
 
   describe('GET /dashboard/recent-runs', () => {
-    it('returns recent runs with resolved display names', async () => {
-      const runs = [{ id: 'r1', slack_user_id: 'U1' }];
-      mockGetRecentRuns.mockResolvedValueOnce(runs);
+    it('returns recent runs with agent names and resolved display names', async () => {
+      const runs = [{
+        id: 'r1', trace_id: 'tr1', agent_name: 'Bot1', agent_avatar: '',
+        slack_user_id: 'U1', status: 'completed', model: 'claude-sonnet-4-20250514',
+        estimated_cost_usd: '0.05', duration_ms: 1000, output: null, created_at: '2025-01-01',
+      }];
+      mockQuery.mockResolvedValueOnce(runs);
       mockResolveUserNames.mockResolvedValueOnce({ U1: 'Alice' });
 
       const res = await makeRequest(app, 'GET', '/dashboard/recent-runs');
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual([{ id: 'r1', slack_user_id: 'U1', displayName: 'Alice' }]);
-      expect(mockGetRecentRuns).toHaveBeenCalledWith('W123', 10);
-    });
-
-    it('uses custom limit', async () => {
-      mockGetRecentRuns.mockResolvedValueOnce([]);
-
-      await makeRequest(app, 'GET', '/dashboard/recent-runs?limit=5');
-
-      expect(mockGetRecentRuns).toHaveBeenCalledWith('W123', 5);
+      expect(res.body[0].agentName).toBe('Bot1');
+      expect(res.body[0].displayName).toBe('Alice');
+      expect(res.body[0].cost).toBe(0.05);
     });
 
     it('returns 500 on error', async () => {
-      mockGetRecentRuns.mockRejectedValueOnce(new Error('DB error'));
+      mockQuery.mockRejectedValueOnce(new Error('DB error'));
 
       const res = await makeRequest(app, 'GET', '/dashboard/recent-runs');
 
@@ -309,15 +301,19 @@ describe('Dashboard Routes', () => {
   });
 
   describe('GET /dashboard/recent-activity', () => {
-    it('returns audit entries with resolved display names', async () => {
-      const entries = [{ id: 'e1', action: 'create', actor_user_id: 'U1' }];
+    it('returns audit entries with proper field mapping and resolved names', async () => {
+      const entries = [{ id: 'e1', action: 'create', action_type: 'create_agent', actor_user_id: 'U1', metadata: { foo: 'bar' }, created_at: '2025-01-01' }];
       mockGetAuditLog.mockResolvedValueOnce(entries);
       mockResolveUserNames.mockResolvedValueOnce({ U1: 'Alice' });
 
       const res = await makeRequest(app, 'GET', '/dashboard/recent-activity');
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual([{ id: 'e1', action: 'create', actor_user_id: 'U1', displayName: 'Alice' }]);
+      expect(res.body[0].id).toBe('e1');
+      expect(res.body[0].action).toBe('create');
+      expect(res.body[0].displayName).toBe('Alice');
+      expect(res.body[0].userId).toBe('U1');
+      expect(res.body[0].createdAt).toBe('2025-01-01');
       expect(mockGetAuditLog).toHaveBeenCalledWith('W123', { limit: 10 });
     });
 

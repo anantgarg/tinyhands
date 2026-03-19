@@ -24,7 +24,7 @@ export function Requests() {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="upgrades">Upgrade Requests</TabsTrigger>
-          <TabsTrigger value="approvals">Write Approvals</TabsTrigger>
+          <TabsTrigger value="approvals">Action Approvals</TabsTrigger>
           <TabsTrigger value="evolution">Evolution Proposals</TabsTrigger>
         </TabsList>
 

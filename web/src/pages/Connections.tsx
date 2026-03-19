@@ -44,7 +44,7 @@ function ConnectionsContent() {
   const { data: agentToolModes, isLoading: modesLoading } = useAgentToolModes();
   const deleteConnection = useDeleteConnection();
   const setToolMode = useSetAgentToolMode();
-  const [tab, setTab] = useState('team');
+  const [tab, setTab] = useState('personal');
 
   const handleDelete = (id: string) => {
     if (confirm('Delete this connection?')) {
@@ -180,19 +180,19 @@ function ConnectionsContent() {
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>
-          <TabsTrigger value="team">Team Connections</TabsTrigger>
           <TabsTrigger value="personal">Personal Connections</TabsTrigger>
+          <TabsTrigger value="team">Team Connections</TabsTrigger>
           {hasToolModes && <TabsTrigger value="modes">Agent Tool Modes</TabsTrigger>}
         </TabsList>
-
-        <TabsContent value="team">
-          {renderOAuthCards()}
-          {renderConnectionsTable(teamConns, teamLoading, teamError, false)}
-        </TabsContent>
 
         <TabsContent value="personal">
           {renderOAuthCards()}
           {renderConnectionsTable(personalConns, personalLoading, personalError, true)}
+        </TabsContent>
+
+        <TabsContent value="team">
+          {renderOAuthCards()}
+          {renderConnectionsTable(teamConns, teamLoading, teamError, false)}
         </TabsContent>
 
         {hasToolModes && (

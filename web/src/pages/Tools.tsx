@@ -34,10 +34,18 @@ import {
 import { useAuthStore } from '@/store/auth';
 import { toast } from '@/components/ui/use-toast';
 
-function fmtUserId(createdBy: unknown): string {
-  if (!createdBy || typeof createdBy !== 'string') return '\u2014';
-  if (createdBy.startsWith('U')) return `@${createdBy}`;
-  return createdBy;
+function friendlyToolName(name: string): string {
+  if (!name) return 'Unnamed tool';
+  const parts = name.split('-');
+  if (parts.length >= 2) {
+    const service = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
+    const action = parts.slice(1).join(' ');
+    if (action === 'read') return `${service} (View)`;
+    if (action === 'write') return `${service} (Edit)`;
+    if (action === 'search') return `${service} (Search)`;
+    return `${service} ${action.charAt(0).toUpperCase() + action.slice(1)}`;
+  }
+  return name.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
 export function Tools() {
@@ -232,10 +240,8 @@ function ToolsContent() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
-                    <TableHead>Type</TableHead>
                     <TableHead>Access</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Creator</TableHead>
                     <TableHead>Created</TableHead>
                     <TableHead className="w-10"></TableHead>
                   </TableRow>
@@ -245,25 +251,19 @@ function ToolsContent() {
                     <TableRow key={tool.id}>
                       <TableCell>
                         <div>
-                          <p className="font-medium">{tool.displayName || tool.name || 'Unnamed tool'}</p>
+                          <p className="font-medium">{tool.displayName || friendlyToolName(tool.name) || 'Unnamed tool'}</p>
                           <p className="text-xs text-warm-text-secondary line-clamp-1">{tool.description || 'No description'}</p>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="secondary">{tool.type || 'custom'}</Badge>
-                      </TableCell>
-                      <TableCell>
                         <Badge variant={tool.accessLevel === 'read-write' ? 'warning' : 'default'}>
-                          {tool.accessLevel || 'read-only'}
+                          {tool.accessLevel === 'read-write' ? 'Read & Write' : 'Read Only'}
                         </Badge>
                       </TableCell>
                       <TableCell>
                         <Badge variant={tool.approved ? 'success' : 'warning'}>
                           {tool.approved ? 'Approved' : 'Pending'}
                         </Badge>
-                      </TableCell>
-                      <TableCell className="text-warm-text-secondary text-xs">
-                        {fmtUserId(tool.createdBy)}
                       </TableCell>
                       <TableCell className="text-warm-text-secondary text-xs">
                         {tool.createdAt
