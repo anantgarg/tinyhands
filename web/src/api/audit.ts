@@ -4,12 +4,16 @@ import { api } from './client';
 interface AuditEntry {
   id: string;
   action: string;
+  actionType?: string;
   userId: string;
+  actorUserId?: string;
   displayName: string;
   targetType: string;
   targetId: string;
   targetName: string;
+  agentName?: string;
   details: Record<string, unknown>;
+  status?: string;
   createdAt: string;
 }
 

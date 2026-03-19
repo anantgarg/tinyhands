@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { Activity, DollarSign, Hash, AlertTriangle, Clock, Timer } from 'lucide-react';
+import { Activity, DollarSign, Hash, AlertTriangle, Clock, Timer, AlertCircle } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { StatCard } from '@/components/StatCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -7,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   useDashboardMetrics,
   usePowerUsers,
@@ -22,7 +24,38 @@ function fmt$(v: unknown): string { return `$${(Number(v) || 0).toFixed(2)}`; }
 function fmtMs(v: unknown): string { const n = Number(v) || 0; return n < 1000 ? `${Math.round(n)}ms` : `${(n / 1000).toFixed(1)}s`; }
 function fmtTok(v: unknown): string { const n = Number(v) || 0; return n >= 1e6 ? `${(n/1e6).toFixed(1)}M` : n >= 1e3 ? `${(n/1e3).toFixed(1)}K` : String(Math.round(n)); }
 function fmtPct(v: unknown): string { return `${((Number(v) || 0) * 100).toFixed(1)}%`; }
-function fmtDate(v: unknown): string { if (!v) return '\u2014'; try { return new Date(v as string).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }); } catch { return '\u2014'; } }
+function fmtRelative(v: unknown): string {
+  if (!v) return '\u2014';
+  try {
+    return formatDistanceToNow(new Date(v as string), { addSuffix: true });
+  } catch {
+    return '\u2014';
+  }
+}
+function fmtUserId(displayName: unknown, userId: unknown): string {
+  if (displayName && typeof displayName === 'string' && displayName.trim()) return displayName;
+  if (userId && typeof userId === 'string') return `@${userId}`;
+  return 'Unknown';
+}
+function humanizeAction(action: unknown): string {
+  if (!action || typeof action !== 'string') return '\u2014';
+  const map: Record<string, string> = {
+    agent_created: 'Agent Created',
+    agent_updated: 'Agent Updated',
+    agent_deleted: 'Agent Deleted',
+    agent_config_change: 'Config Changed',
+    tool_registered: 'Tool Registered',
+    tool_approved: 'Tool Approved',
+    kb_entry_created: 'KB Entry Created',
+    kb_entry_approved: 'KB Entry Approved',
+    role_change: 'Role Changed',
+    role_changed: 'Role Changed',
+    connection_created: 'Connection Created',
+    trigger_created: 'Trigger Created',
+    settings_updated: 'Settings Updated',
+  };
+  return map[action] || action.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 export function Dashboard() {
   const [days, setDays] = useState(7);
@@ -57,6 +90,13 @@ export function Dashboard() {
         <div className="grid grid-cols-4 gap-4 mb-6">
           {[1,2,3,4].map(i => <Skeleton key={i} className="h-[100px]" />)}
         </div>
+      ) : metrics.isError ? (
+        <Card className="mb-6">
+          <CardContent className="py-8 text-center text-red-500">
+            <AlertCircle className="h-6 w-6 mx-auto mb-2" />
+            <p>Failed to load metrics. Please try refreshing.</p>
+          </CardContent>
+        </Card>
       ) : (
         <>
           <div className="grid grid-cols-4 gap-4 mb-6">
@@ -79,13 +119,15 @@ export function Dashboard() {
           <CardContent>
             {powerUsers.isLoading ? (
               <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-8" />)}</div>
+            ) : powerUsers.isError ? (
+              <p className="text-sm text-red-500 text-center py-4">Failed to load</p>
             ) : (
               <div className="space-y-3">
                 {(powerUsers.data ?? []).map((u, i) => (
                   <div key={u.userId ?? i} className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-medium text-warm-text-secondary w-5">{i+1}.</span>
-                      <span className="text-sm font-medium">{u.displayName || u.userId || 'Unknown'}</span>
+                      <span className="text-sm font-medium">{fmtUserId(u.displayName, u.userId)}</span>
                     </div>
                     <span className="text-sm text-warm-text-secondary">{u.runCount || 0} runs</span>
                   </div>
@@ -100,13 +142,15 @@ export function Dashboard() {
           <CardContent>
             {creators.isLoading ? (
               <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-8" />)}</div>
+            ) : creators.isError ? (
+              <p className="text-sm text-red-500 text-center py-4">Failed to load</p>
             ) : (
               <div className="space-y-3">
                 {(creators.data ?? []).map((c, i) => (
                   <div key={c.userId ?? i} className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <span className="text-sm font-medium text-warm-text-secondary w-5">{i+1}.</span>
-                      <span className="text-sm font-medium">{c.displayName || c.userId || 'Unknown'}</span>
+                      <span className="text-sm font-medium">{fmtUserId(c.displayName, c.userId)}</span>
                     </div>
                     <span className="text-sm text-warm-text-secondary">{c.agentCount || 0} agents</span>
                   </div>
@@ -122,7 +166,9 @@ export function Dashboard() {
       <Card className="mb-6">
         <CardHeader><CardTitle className="text-base">Most Popular Agents</CardTitle></CardHeader>
         <CardContent>
-          {popularAgents.isLoading ? <Skeleton className="h-[200px]" /> : (
+          {popularAgents.isLoading ? <Skeleton className="h-[200px]" /> : popularAgents.isError ? (
+            <p className="text-sm text-red-500 text-center py-4">Failed to load</p>
+          ) : (
             <Table>
               <TableHeader><TableRow><TableHead>Agent</TableHead><TableHead>Runs</TableHead><TableHead>Cost</TableHead></TableRow></TableHeader>
               <TableBody>
@@ -144,7 +190,9 @@ export function Dashboard() {
       <Card className="mb-6">
         <CardHeader><CardTitle className="text-base">Agent Fleet</CardTitle></CardHeader>
         <CardContent>
-          {fleet.isLoading ? <Skeleton className="h-[200px]" /> : (
+          {fleet.isLoading ? <Skeleton className="h-[200px]" /> : fleet.isError ? (
+            <p className="text-sm text-red-500 text-center py-4">Failed to load</p>
+          ) : (
             <Table>
               <TableHeader><TableRow><TableHead>Agent</TableHead><TableHead>Status</TableHead><TableHead>Model</TableHead><TableHead>Tools</TableHead></TableRow></TableHeader>
               <TableBody>
@@ -167,23 +215,46 @@ export function Dashboard() {
       <Card className="mb-6">
         <CardHeader><CardTitle className="text-base">Recent Runs</CardTitle></CardHeader>
         <CardContent>
-          {recentRuns.isLoading ? <Skeleton className="h-[200px]" /> : (
-            <Table>
-              <TableHeader><TableRow><TableHead>Trace</TableHead><TableHead>Status</TableHead><TableHead>Model</TableHead><TableHead>Duration</TableHead><TableHead>Cost</TableHead><TableHead>Time</TableHead></TableRow></TableHeader>
-              <TableBody>
-                {(recentRuns.data ?? []).map((r) => (
-                  <TableRow key={r.id}>
-                    <TableCell className="font-mono text-xs">{(r.traceId || '\u2014').slice(0, 8)}</TableCell>
-                    <TableCell><Badge variant={r.status === 'completed' ? 'success' : r.status === 'failed' ? 'danger' : 'secondary'}>{r.status}</Badge></TableCell>
-                    <TableCell className="text-warm-text-secondary">{r.model || '\u2014'}</TableCell>
-                    <TableCell>{fmtMs(r.durationMs)}</TableCell>
-                    <TableCell>{fmt$(r.cost)}</TableCell>
-                    <TableCell className="text-warm-text-secondary">{fmtDate(r.createdAt)}</TableCell>
-                  </TableRow>
-                ))}
-                {(recentRuns.data ?? []).length === 0 && <TableRow><TableCell colSpan={6} className="text-center text-warm-text-secondary">No runs yet</TableCell></TableRow>}
-              </TableBody>
-            </Table>
+          {recentRuns.isLoading ? <Skeleton className="h-[200px]" /> : recentRuns.isError ? (
+            <p className="text-sm text-red-500 text-center py-4">Failed to load</p>
+          ) : (
+            <TooltipProvider>
+              <Table>
+                <TableHeader><TableRow><TableHead>Agent</TableHead><TableHead>Trace</TableHead><TableHead>Status</TableHead><TableHead>Model</TableHead><TableHead>Duration</TableHead><TableHead>Cost</TableHead><TableHead>Time</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {(recentRuns.data ?? []).map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <span>{r.agentAvatar || '\uD83E\uDD16'}</span>
+                          <span className="font-medium">{r.agentName || '\u2014'}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="font-mono text-xs">{(r.traceId || '\u2014').slice(0, 8)}</TableCell>
+                      <TableCell>
+                        {r.status === 'failed' ? (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Badge variant="danger" className="cursor-help">{r.status}</Badge>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-xs">
+                              <p className="text-xs">{r.error || r.errorMessage || 'No error details available'}</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          <Badge variant={r.status === 'completed' ? 'success' : 'secondary'}>{r.status ?? 'unknown'}</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-warm-text-secondary">{r.model || '\u2014'}</TableCell>
+                      <TableCell>{fmtMs(r.durationMs)}</TableCell>
+                      <TableCell>{fmt$(r.cost)}</TableCell>
+                      <TableCell className="text-warm-text-secondary text-xs">{fmtRelative(r.createdAt)}</TableCell>
+                    </TableRow>
+                  ))}
+                  {(recentRuns.data ?? []).length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-warm-text-secondary">No runs yet</TableCell></TableRow>}
+                </TableBody>
+              </Table>
+            </TooltipProvider>
           )}
         </CardContent>
       </Card>
@@ -192,16 +263,18 @@ export function Dashboard() {
       <Card>
         <CardHeader><CardTitle className="text-base">Recent Activity</CardTitle></CardHeader>
         <CardContent>
-          {recentActivity.isLoading ? <Skeleton className="h-[200px]" /> : (
+          {recentActivity.isLoading ? <Skeleton className="h-[200px]" /> : recentActivity.isError ? (
+            <p className="text-sm text-red-500 text-center py-4">Failed to load</p>
+          ) : (
             <Table>
               <TableHeader><TableRow><TableHead>Action</TableHead><TableHead>Actor</TableHead><TableHead>Details</TableHead><TableHead>Time</TableHead></TableRow></TableHeader>
               <TableBody>
                 {(recentActivity.data ?? []).map((e) => (
                   <TableRow key={e.id}>
-                    <TableCell><Badge variant="secondary">{e.action || '\u2014'}</Badge></TableCell>
-                    <TableCell>{e.displayName || e.userId || '\u2014'}</TableCell>
-                    <TableCell className="text-warm-text-secondary">{e.details || '\u2014'}</TableCell>
-                    <TableCell className="text-warm-text-secondary">{fmtDate(e.createdAt)}</TableCell>
+                    <TableCell><Badge variant="secondary">{humanizeAction(e.action)}</Badge></TableCell>
+                    <TableCell>{fmtUserId(e.displayName, e.userId)}</TableCell>
+                    <TableCell className="text-warm-text-secondary max-w-[250px] truncate">{e.details || '\u2014'}</TableCell>
+                    <TableCell className="text-warm-text-secondary text-xs">{fmtRelative(e.createdAt)}</TableCell>
                   </TableRow>
                 ))}
                 {(recentActivity.data ?? []).length === 0 && <TableRow><TableCell colSpan={4} className="text-center text-warm-text-secondary">No activity yet</TableCell></TableRow>}

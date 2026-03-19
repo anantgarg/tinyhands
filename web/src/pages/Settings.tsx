@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertCircle } from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -12,7 +12,7 @@ import { useSettings, useUpdateSettings } from '@/api/settings';
 import { toast } from '@/components/ui/use-toast';
 
 export function Settings() {
-  const { data: settings, isLoading } = useSettings();
+  const { data: settings, isLoading, isError } = useSettings();
   const updateSettings = useUpdateSettings();
 
   const [general, setGeneral] = useState({
@@ -39,10 +39,35 @@ export function Settings() {
 
   useEffect(() => {
     if (settings) {
-      setGeneral(settings.general);
-      setDefaults(settings.defaults);
-      setRateLimits(settings.rateLimits);
-      setAlerts(settings.alerts);
+      if (settings.general) {
+        setGeneral({
+          workspaceName: settings.general.workspaceName ?? '',
+          defaultModel: settings.general.defaultModel ?? 'claude-sonnet-4-20250514',
+          dailyBudgetUsd: settings.general.dailyBudgetUsd ?? 50,
+        });
+      }
+      if (settings.defaults) {
+        setDefaults({
+          defaultAccess: settings.defaults.defaultAccess ?? 'member',
+          writePolicy: settings.defaults.writePolicy ?? 'allow',
+          maxTurns: settings.defaults.maxTurns ?? 25,
+          memoryEnabled: settings.defaults.memoryEnabled ?? false,
+        });
+      }
+      if (settings.rateLimits) {
+        setRateLimits({
+          tpmLimit: settings.rateLimits.tpmLimit ?? 100000,
+          rpmLimit: settings.rateLimits.rpmLimit ?? 60,
+          concurrentRunsLimit: settings.rateLimits.concurrentRunsLimit ?? 10,
+        });
+      }
+      if (settings.alerts) {
+        setAlerts({
+          errorRateThreshold: settings.alerts.errorRateThreshold ?? 0.1,
+          costAlertThreshold: settings.alerts.costAlertThreshold ?? 10,
+          durationAlertThreshold: settings.alerts.durationAlertThreshold ?? 60000,
+        });
+      }
     }
   }, [settings]);
 
@@ -50,7 +75,10 @@ export function Settings() {
     const data = { general, defaults, rateLimits, alerts };
     updateSettings.mutate(
       { [section]: data[section as keyof typeof data] },
-      { onSuccess: () => toast({ title: 'Settings saved', variant: 'success' }) },
+      {
+        onSuccess: () => toast({ title: 'Settings saved', variant: 'success' }),
+        onError: (err) => toast({ title: 'Failed to save', description: err.message, variant: 'error' }),
+      },
     );
   };
 
@@ -63,6 +91,20 @@ export function Settings() {
             <Skeleton key={i} className="h-[200px]" />
           ))}
         </div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div>
+        <PageHeader title="Workspace Settings" />
+        <Card>
+          <CardContent className="py-8 text-center text-red-500">
+            <AlertCircle className="h-6 w-6 mx-auto mb-2" />
+            <p>Failed to load workspace settings. Please try refreshing.</p>
+          </CardContent>
+        </Card>
       </div>
     );
   }
@@ -82,7 +124,7 @@ export function Settings() {
             <div>
               <Label>Workspace Name</Label>
               <Input
-                value={general.workspaceName}
+                value={general.workspaceName ?? ''}
                 onChange={(e) => setGeneral({ ...general, workspaceName: e.target.value })}
                 className="mt-1"
               />
@@ -90,7 +132,7 @@ export function Settings() {
             <div>
               <Label>Default Model</Label>
               <Select
-                value={general.defaultModel}
+                value={general.defaultModel ?? 'claude-sonnet-4-20250514'}
                 onValueChange={(v) => setGeneral({ ...general, defaultModel: v })}
               >
                 <SelectTrigger className="mt-1">
@@ -109,10 +151,11 @@ export function Settings() {
             <Input
               type="number"
               step="0.01"
-              value={general.dailyBudgetUsd}
+              value={general.dailyBudgetUsd ?? 50}
               onChange={(e) => setGeneral({ ...general, dailyBudgetUsd: Number(e.target.value) })}
               className="mt-1"
             />
+            <p className="text-xs text-warm-text-secondary mt-1">Maximum daily spend across all agents</p>
           </div>
           <Button size="sm" onClick={() => handleSave('general')} disabled={updateSettings.isPending}>
             {updateSettings.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
@@ -125,57 +168,63 @@ export function Settings() {
       <Card className="mb-6">
         <CardHeader>
           <CardTitle className="text-base">Agent Defaults</CardTitle>
-          <CardDescription>Default settings for new agents</CardDescription>
+          <CardDescription>Default settings applied to new agents</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label>Default Access</Label>
+              <Label>Who can use new agents?</Label>
               <Select
-                value={defaults.defaultAccess}
+                value={defaults.defaultAccess ?? 'member'}
                 onValueChange={(v) => setDefaults({ ...defaults, defaultAccess: v })}
               >
                 <SelectTrigger className="mt-1">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="viewer">Viewer</SelectItem>
-                  <SelectItem value="member">Member</SelectItem>
+                  <SelectItem value="viewer">Viewer (view only)</SelectItem>
+                  <SelectItem value="member">Member (everyone)</SelectItem>
                 </SelectContent>
               </Select>
+              <p className="text-xs text-warm-text-secondary mt-1">Controls default access level for new agents</p>
             </div>
             <div>
-              <Label>Write Policy</Label>
+              <Label>When agents want to take actions</Label>
               <Select
-                value={defaults.writePolicy}
+                value={defaults.writePolicy ?? 'allow'}
                 onValueChange={(v) => setDefaults({ ...defaults, writePolicy: v })}
               >
                 <SelectTrigger className="mt-1">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="allow">Allow</SelectItem>
-                  <SelectItem value="confirm">Confirm</SelectItem>
-                  <SelectItem value="admin_confirm">Admin Confirm</SelectItem>
+                  <SelectItem value="allow">Just do it</SelectItem>
+                  <SelectItem value="confirm">Ask the user first</SelectItem>
+                  <SelectItem value="admin_confirm">Ask an admin first</SelectItem>
                 </SelectContent>
               </Select>
+              <p className="text-xs text-warm-text-secondary mt-1">Default write policy for new agents</p>
             </div>
           </div>
           <div className="max-w-xs">
-            <Label>Max Turns</Label>
+            <Label>Response Depth (Max Turns)</Label>
             <Input
               type="number"
-              value={defaults.maxTurns}
+              value={defaults.maxTurns ?? 25}
               onChange={(e) => setDefaults({ ...defaults, maxTurns: Number(e.target.value) })}
               className="mt-1"
             />
+            <p className="text-xs text-warm-text-secondary mt-1">10 = Quick, 25 = Standard, 50 = Thorough, 100 = Unlimited</p>
           </div>
           <div className="flex items-center gap-3">
             <Switch
-              checked={defaults.memoryEnabled}
+              checked={defaults.memoryEnabled ?? false}
               onCheckedChange={(checked) => setDefaults({ ...defaults, memoryEnabled: checked })}
             />
-            <Label>Enable Memory by Default</Label>
+            <div>
+              <Label>Enable Memory by Default</Label>
+              <p className="text-xs text-warm-text-secondary">Agents remember facts across conversations</p>
+            </div>
           </div>
           <Button size="sm" onClick={() => handleSave('defaults')} disabled={updateSettings.isPending}>
             Save Defaults
@@ -192,31 +241,34 @@ export function Settings() {
         <CardContent className="space-y-4">
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <Label>TPM Limit</Label>
+              <Label>Tokens per Minute (TPM)</Label>
               <Input
                 type="number"
-                value={rateLimits.tpmLimit}
+                value={rateLimits.tpmLimit ?? 100000}
                 onChange={(e) => setRateLimits({ ...rateLimits, tpmLimit: Number(e.target.value) })}
                 className="mt-1"
               />
+              <p className="text-xs text-warm-text-secondary mt-1">Max tokens processed per minute</p>
             </div>
             <div>
-              <Label>RPM Limit</Label>
+              <Label>Requests per Minute (RPM)</Label>
               <Input
                 type="number"
-                value={rateLimits.rpmLimit}
+                value={rateLimits.rpmLimit ?? 60}
                 onChange={(e) => setRateLimits({ ...rateLimits, rpmLimit: Number(e.target.value) })}
                 className="mt-1"
               />
+              <p className="text-xs text-warm-text-secondary mt-1">Max API requests per minute</p>
             </div>
             <div>
-              <Label>Concurrent Runs Limit</Label>
+              <Label>Concurrent Runs</Label>
               <Input
                 type="number"
-                value={rateLimits.concurrentRunsLimit}
+                value={rateLimits.concurrentRunsLimit ?? 10}
                 onChange={(e) => setRateLimits({ ...rateLimits, concurrentRunsLimit: Number(e.target.value) })}
                 className="mt-1"
               />
+              <p className="text-xs text-warm-text-secondary mt-1">Max simultaneous agent runs</p>
             </div>
           </div>
           <Button size="sm" onClick={() => handleSave('rateLimits')} disabled={updateSettings.isPending}>
@@ -237,30 +289,33 @@ export function Settings() {
               <Label>Error Rate Threshold (%)</Label>
               <Input
                 type="number"
-                step="0.01"
-                value={(alerts.errorRateThreshold * 100).toFixed(0)}
+                step="1"
+                value={Math.round((alerts.errorRateThreshold ?? 0.1) * 100)}
                 onChange={(e) => setAlerts({ ...alerts, errorRateThreshold: Number(e.target.value) / 100 })}
                 className="mt-1"
               />
+              <p className="text-xs text-warm-text-secondary mt-1">Alert when error rate exceeds this</p>
             </div>
             <div>
               <Label>Cost Alert ($)</Label>
               <Input
                 type="number"
                 step="0.01"
-                value={alerts.costAlertThreshold}
+                value={alerts.costAlertThreshold ?? 10}
                 onChange={(e) => setAlerts({ ...alerts, costAlertThreshold: Number(e.target.value) })}
                 className="mt-1"
               />
+              <p className="text-xs text-warm-text-secondary mt-1">Alert when single run cost exceeds this</p>
             </div>
             <div>
-              <Label>Duration Alert (ms)</Label>
+              <Label>Duration Alert (seconds)</Label>
               <Input
                 type="number"
-                value={alerts.durationAlertThreshold}
-                onChange={(e) => setAlerts({ ...alerts, durationAlertThreshold: Number(e.target.value) })}
+                value={Math.round((alerts.durationAlertThreshold ?? 60000) / 1000)}
+                onChange={(e) => setAlerts({ ...alerts, durationAlertThreshold: Number(e.target.value) * 1000 })}
                 className="mt-1"
               />
+              <p className="text-xs text-warm-text-secondary mt-1">Alert when run takes longer than this</p>
             </div>
           </div>
           <Button size="sm" onClick={() => handleSave('alerts')} disabled={updateSettings.isPending}>

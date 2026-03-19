@@ -26,6 +26,7 @@ interface NavItem {
   to: string;
   icon: React.ComponentType<{ className?: string }>;
   badge?: number;
+  adminOnly?: boolean;
 }
 
 const mainNav: NavItem[] = [
@@ -34,9 +35,9 @@ const mainNav: NavItem[] = [
 
 const manageNav: NavItem[] = [
   { label: 'Agents', to: '/agents', icon: Bot },
-  { label: 'Tools & Integrations', to: '/tools', icon: Wrench },
+  { label: 'Tools & Integrations', to: '/tools', icon: Wrench, adminOnly: true },
   { label: 'Knowledge Base', to: '/kb', icon: BookOpen },
-  { label: 'Connections', to: '/connections', icon: Link },
+  { label: 'Connections', to: '/connections', icon: Link, adminOnly: true },
   { label: 'Triggers', to: '/triggers', icon: Zap },
   { label: 'Workflows', to: '/workflows', icon: GitBranch },
 ];
@@ -47,11 +48,14 @@ const reviewNav: NavItem[] = [
 ];
 
 const settingsNav: NavItem[] = [
-  { label: 'Access & Roles', to: '/access', icon: Shield },
-  { label: 'Workspace Settings', to: '/settings', icon: Settings },
+  { label: 'Access & Roles', to: '/access', icon: Shield, adminOnly: true },
+  { label: 'Workspace Settings', to: '/settings', icon: Settings, adminOnly: true },
 ];
 
-function NavSection({ title, items }: { title?: string; items: NavItem[] }) {
+function NavSection({ title, items, isAdmin }: { title?: string; items: NavItem[]; isAdmin: boolean }) {
+  const visibleItems = items.filter((item) => !item.adminOnly || isAdmin);
+  if (visibleItems.length === 0) return null;
+
   return (
     <div className="mb-1">
       {title && (
@@ -60,7 +64,7 @@ function NavSection({ title, items }: { title?: string; items: NavItem[] }) {
         </p>
       )}
       <nav className="space-y-px px-3">
-        {items.map((item) => (
+        {visibleItems.map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
@@ -90,7 +94,8 @@ function NavSection({ title, items }: { title?: string; items: NavItem[] }) {
 
 export function Sidebar() {
   const navigate = useNavigate();
-  const { user, clearUser } = useAuthStore();
+  const { user, clearUser, isAdmin } = useAuthStore();
+  const admin = isAdmin();
   const { collapsed, toggle } = useSidebarStore();
   const { data: evolutionData } = useEvolutionProposals({ status: 'pending' });
   const pendingCount = evolutionData?.total ?? 0;
@@ -109,6 +114,9 @@ export function Sidebar() {
     navigate('/login');
   };
 
+  const allItems = [...mainNav, ...manageNav, ...reviewItems, ...settingsNav];
+  const visibleCollapsedItems = allItems.filter((item) => !item.adminOnly || admin);
+
   if (collapsed) {
     return (
       <div className="flex h-screen w-[52px] flex-col border-r border-warm-border bg-white">
@@ -119,7 +127,7 @@ export function Sidebar() {
           <ChevronsRight className="h-4 w-4" />
         </button>
         <nav className="flex flex-1 flex-col items-center gap-1 py-2">
-          {[...mainNav, ...manageNav, ...reviewItems, ...settingsNav].map((item) => (
+          {visibleCollapsedItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
@@ -163,10 +171,10 @@ export function Sidebar() {
 
       {/* Navigation */}
       <div className="flex-1 overflow-y-auto pt-1 pb-3">
-        <NavSection items={mainNav} />
-        <NavSection title="Manage" items={manageNav} />
-        <NavSection title="Review" items={reviewItems} />
-        <NavSection title="Settings" items={settingsNav} />
+        <NavSection items={mainNav} isAdmin={admin} />
+        <NavSection title="Manage" items={manageNav} isAdmin={admin} />
+        <NavSection title="Review" items={reviewItems} isAdmin={admin} />
+        <NavSection title="Settings" items={settingsNav} isAdmin={admin} />
       </div>
 
       {/* User footer */}

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Lightbulb, Check, X } from 'lucide-react';
+import { Lightbulb, Check, X, AlertCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
@@ -11,10 +11,29 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useEvolutionProposals, useApproveProposal, useRejectProposal } from '@/api/evolution';
 import { toast } from '@/components/ui/use-toast';
 
+function humanizeType(type: unknown): string {
+  if (!type || typeof type !== 'string') return 'Unknown';
+  const map: Record<string, string> = {
+    prompt_refinement: 'Prompt Refinement',
+    tool_suggestion: 'Tool Suggestion',
+    behavior_change: 'Behavior Change',
+  };
+  return map[type] || type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function fmtRelative(v: unknown): string {
+  if (!v) return '\u2014';
+  try {
+    return formatDistanceToNow(new Date(v as string), { addSuffix: true });
+  } catch {
+    return '\u2014';
+  }
+}
+
 export function Evolution() {
   const [status, setStatus] = useState<string>('pending');
   const [page, setPage] = useState(1);
-  const { data, isLoading } = useEvolutionProposals({ status: status === 'all' ? undefined : status, page, limit: 20 });
+  const { data, isLoading, isError } = useEvolutionProposals({ status: status === 'all' ? undefined : status, page, limit: 20 });
   const approveProposal = useApproveProposal();
   const rejectProposal = useRejectProposal();
 
@@ -56,11 +75,18 @@ export function Evolution() {
             <Skeleton key={i} className="h-[200px]" />
           ))}
         </div>
+      ) : isError ? (
+        <Card>
+          <CardContent className="py-8 text-center text-red-500">
+            <AlertCircle className="h-5 w-5 mx-auto mb-2" />
+            Failed to load evolution proposals
+          </CardContent>
+        </Card>
       ) : proposals.length === 0 ? (
         <EmptyState
           icon={Lightbulb}
           title="No proposals"
-          description={status === 'pending' ? 'No pending proposals to review' : 'No proposals found with this filter'}
+          description={status === 'pending' ? 'No pending proposals to review. Agents will create proposals as they identify improvements.' : 'No proposals found with this filter'}
         />
       ) : (
         <div className="space-y-4">
@@ -69,11 +95,11 @@ export function Evolution() {
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">
-                    <span className="text-xl">{proposal.agentAvatar}</span>
+                    <span className="text-xl">{proposal.agentAvatar ?? '\uD83E\uDD16'}</span>
                     <div>
-                      <CardTitle className="text-base">{proposal.title}</CardTitle>
+                      <CardTitle className="text-base">{proposal.title ?? 'Untitled Proposal'}</CardTitle>
                       <CardDescription>
-                        {proposal.agentName} - {proposal.type.replace(/_/g, ' ')} - confidence {(proposal.confidence * 100).toFixed(0)}%
+                        {proposal.agentName ?? 'Unknown Agent'} &middot; {humanizeType(proposal.type)} &middot; Confidence: {Math.round((proposal.confidence ?? 0) * 100)}%
                       </CardDescription>
                     </div>
                   </div>
@@ -86,12 +112,12 @@ export function Evolution() {
                         : 'danger'
                     }
                   >
-                    {proposal.status}
+                    {proposal.status ?? 'unknown'}
                   </Badge>
                 </div>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-warm-text-secondary mb-4">{proposal.description}</p>
+                <p className="text-sm text-warm-text-secondary mb-4">{proposal.description ?? ''}</p>
 
                 {proposal.diff && (
                   <div className="mb-4">
@@ -104,8 +130,8 @@ export function Evolution() {
 
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-warm-text-secondary">
-                    {formatDistanceToNow(new Date(proposal.createdAt), { addSuffix: true })}
-                    {proposal.reviewedBy && ` - reviewed by ${proposal.reviewedBy}`}
+                    {fmtRelative(proposal.createdAt)}
+                    {proposal.reviewedBy ? ` \u2014 reviewed by ${proposal.reviewedBy}` : ''}
                   </span>
                   {proposal.status === 'pending' && (
                     <div className="flex gap-2">

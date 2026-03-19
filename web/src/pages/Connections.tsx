@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link as LinkIcon, Trash2, ExternalLink } from 'lucide-react';
+import { Link as LinkIcon, Trash2, ExternalLink, AlertCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
@@ -21,8 +21,8 @@ import {
 import { toast } from '@/components/ui/use-toast';
 
 export function Connections() {
-  const { data: teamConns, isLoading: teamLoading } = useTeamConnections();
-  const { data: personalConns, isLoading: personalLoading } = usePersonalConnections();
+  const { data: teamConns, isLoading: teamLoading, isError: teamError } = useTeamConnections();
+  const { data: personalConns, isLoading: personalLoading, isError: personalError } = usePersonalConnections();
   const { data: oauthIntegrations } = useOAuthIntegrations();
   const { data: agentToolModes, isLoading: modesLoading } = useAgentToolModes();
   const deleteConnection = useDeleteConnection();
@@ -33,6 +33,7 @@ export function Connections() {
     if (confirm('Delete this connection?')) {
       deleteConnection.mutate(id, {
         onSuccess: () => toast({ title: 'Connection deleted', variant: 'success' }),
+        onError: (err) => toast({ title: 'Failed to delete', description: err.message, variant: 'error' }),
       });
     }
   };
@@ -41,8 +42,20 @@ export function Connections() {
     window.open(`/api/v1/connections/oauth/${integration}/start`, '_blank');
   };
 
-  const renderConnectionsTable = (connections: typeof teamConns, loading: boolean) => {
+  const hasToolModes = (agentToolModes ?? []).length > 0;
+
+  const renderConnectionsTable = (connections: typeof teamConns, loading: boolean, hasError: boolean) => {
     if (loading) return <Skeleton className="h-[200px]" />;
+    if (hasError) {
+      return (
+        <Card>
+          <CardContent className="py-8 text-center text-red-500">
+            <AlertCircle className="h-5 w-5 mx-auto mb-2" />
+            Failed to load connections
+          </CardContent>
+        </Card>
+      );
+    }
     if (!connections?.length) {
       return (
         <EmptyState
@@ -69,18 +82,20 @@ export function Connections() {
             <TableBody>
               {connections.map((conn) => (
                 <TableRow key={conn.id}>
-                  <TableCell className="font-medium">{conn.integrationName}</TableCell>
-                  <TableCell>{conn.displayName}</TableCell>
+                  <TableCell className="font-medium">{conn.integrationName ?? '\u2014'}</TableCell>
+                  <TableCell>{conn.displayName ?? '\u2014'}</TableCell>
                   <TableCell>
                     <Badge variant={conn.status === 'active' ? 'success' : conn.status === 'expired' ? 'warning' : 'danger'}>
-                      {conn.status}
+                      {conn.status ?? 'unknown'}
                     </Badge>
                   </TableCell>
                   {tab === 'personal' && (
-                    <TableCell className="text-warm-text-secondary">{conn.userDisplayName}</TableCell>
+                    <TableCell className="text-warm-text-secondary">{conn.userDisplayName ?? (conn.userId ? `@${conn.userId}` : '\u2014')}</TableCell>
                   )}
                   <TableCell className="text-warm-text-secondary text-xs">
-                    {formatDistanceToNow(new Date(conn.createdAt), { addSuffix: true })}
+                    {conn.createdAt
+                      ? formatDistanceToNow(new Date(conn.createdAt), { addSuffix: true })
+                      : '\u2014'}
                   </TableCell>
                   <TableCell>
                     <Button
@@ -109,7 +124,7 @@ export function Connections() {
         <TabsList>
           <TabsTrigger value="team">Team Connections</TabsTrigger>
           <TabsTrigger value="personal">Personal Connections</TabsTrigger>
-          <TabsTrigger value="modes">Agent Tool Modes</TabsTrigger>
+          {hasToolModes && <TabsTrigger value="modes">Agent Tool Modes</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="team">
@@ -128,72 +143,75 @@ export function Connections() {
                       onClick={() => handleOAuth(integration.name)}
                     >
                       <ExternalLink className="mr-2 h-3 w-3" />
-                      Connect {integration.displayName}
+                      Connect {integration.displayName ?? integration.name ?? 'Integration'}
                     </Button>
                   ))}
               </div>
             </div>
           )}
-          {renderConnectionsTable(teamConns, teamLoading)}
+          {renderConnectionsTable(teamConns, teamLoading, teamError)}
         </TabsContent>
 
         <TabsContent value="personal">
-          {renderConnectionsTable(personalConns, personalLoading)}
+          {renderConnectionsTable(personalConns, personalLoading, personalError)}
         </TabsContent>
 
-        <TabsContent value="modes">
-          {modesLoading ? (
-            <Skeleton className="h-[200px]" />
-          ) : (agentToolModes ?? []).length === 0 ? (
-            <EmptyState
-              icon={LinkIcon}
-              title="No agent tool modes configured"
-              description="Tool connection modes are configured per-agent to control credential resolution"
-            />
-          ) : (
-            <Card>
-              <CardContent className="pt-6">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Agent</TableHead>
-                      <TableHead>Tool</TableHead>
-                      <TableHead>Mode</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(agentToolModes ?? []).map((mode) => (
-                      <TableRow key={`${mode.agentId}-${mode.toolName}`}>
-                        <TableCell className="font-medium">{mode.agentName}</TableCell>
-                        <TableCell>{mode.toolName}</TableCell>
-                        <TableCell>
-                          <Select
-                            value={mode.mode}
-                            onValueChange={(newMode) =>
-                              setToolMode.mutate(
-                                { agentId: mode.agentId, toolName: mode.toolName, mode: newMode },
-                                { onSuccess: () => toast({ title: 'Mode updated', variant: 'success' }) },
-                              )
-                            }
-                          >
-                            <SelectTrigger className="w-[120px]">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="team">Team</SelectItem>
-                              <SelectItem value="personal">Personal</SelectItem>
-                              <SelectItem value="hybrid">Hybrid</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+        {hasToolModes && (
+          <TabsContent value="modes">
+            <Card className="mb-4">
+              <CardContent className="py-4">
+                <p className="text-sm text-warm-text-secondary">
+                  Agent tool modes control how credentials are resolved for each tool. <strong>Team</strong> uses shared workspace credentials, <strong>Personal</strong> uses the individual user's credentials, and <strong>Hybrid</strong> falls back to team credentials when personal ones are not available.
+                </p>
               </CardContent>
             </Card>
-          )}
-        </TabsContent>
+            {modesLoading ? (
+              <Skeleton className="h-[200px]" />
+            ) : (
+              <Card>
+                <CardContent className="pt-6">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Agent</TableHead>
+                        <TableHead>Tool</TableHead>
+                        <TableHead>Mode</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {(agentToolModes ?? []).map((mode) => (
+                        <TableRow key={`${mode.agentId}-${mode.toolName}`}>
+                          <TableCell className="font-medium">{mode.agentName ?? '\u2014'}</TableCell>
+                          <TableCell>{mode.toolName ?? '\u2014'}</TableCell>
+                          <TableCell>
+                            <Select
+                              value={mode.mode ?? 'team'}
+                              onValueChange={(newMode) =>
+                                setToolMode.mutate(
+                                  { agentId: mode.agentId, toolName: mode.toolName, mode: newMode },
+                                  { onSuccess: () => toast({ title: 'Mode updated', variant: 'success' }) },
+                                )
+                              }
+                            >
+                              <SelectTrigger className="w-[120px]">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="team">Team</SelectItem>
+                                <SelectItem value="personal">Personal</SelectItem>
+                                <SelectItem value="hybrid">Hybrid</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );

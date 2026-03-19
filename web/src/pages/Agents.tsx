@@ -145,8 +145,8 @@ export function Agents() {
                         <span>Tools: {agent.tools?.length ?? 0}</span>
                         <span>Channels: {agent.channels?.length ?? 0}</span>
                         {agent.memoryEnabled && <Badge variant="default" className="text-[10px] px-1.5 py-0">Memory</Badge>}
-                        <span>by {agent.createdBy}</span>
-                        <span>{formatDistanceToNow(new Date(agent.createdAt), { addSuffix: true })}</span>
+                        <span>by {agent.createdBy?.startsWith('U') ? `@${agent.createdBy}` : agent.createdBy ?? '\u2014'}</span>
+                        <span>{agent.createdAt ? formatDistanceToNow(new Date(agent.createdAt), { addSuffix: true }) : '\u2014'}</span>
                       </div>
                     </div>
                   </div>

@@ -39,13 +39,30 @@ import type { Agent as AgentData } from '@/api/agents';
 import { useTriggers } from '@/api/triggers';
 import { toast } from '@/components/ui/use-toast';
 
-function formatCost(cost: number): string {
-  return `$${cost.toFixed(4)}`;
+function formatCost(cost: unknown): string {
+  const n = Number(cost) || 0;
+  return `$${n.toFixed(4)}`;
 }
 
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`;
-  return `${(ms / 1000).toFixed(1)}s`;
+function formatDuration(ms: unknown): string {
+  const n = Number(ms) || 0;
+  if (n < 1000) return `${Math.round(n)}ms`;
+  return `${(n / 1000).toFixed(1)}s`;
+}
+
+function fmtRelative(v: unknown): string {
+  if (!v) return '\u2014';
+  try {
+    return formatDistanceToNow(new Date(v as string), { addSuffix: true });
+  } catch {
+    return '\u2014';
+  }
+}
+
+function fmtUserId(name: unknown, userId?: unknown): string {
+  if (name && typeof name === 'string' && name.trim()) return name;
+  if (userId && typeof userId === 'string') return `@${userId}`;
+  return '\u2014';
 }
 
 export function AgentDetail() {
@@ -190,7 +207,7 @@ function ConfigTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                     <div>
                       <p className="text-sm font-medium">Version {v.version}</p>
                       <p className="text-xs text-warm-text-secondary">
-                        by {v.changedBy} - {format(new Date(v.changedAt), 'MMM d, yyyy HH:mm')}
+                        by {fmtUserId(v.changedBy)} - {v.changedAt ? format(new Date(v.changedAt), 'MMM d, yyyy HH:mm') : '\u2014'}
                       </p>
                       <p className="text-xs text-warm-text-secondary mt-1">Model: {v.model}</p>
                     </div>
@@ -290,7 +307,7 @@ function RunsTab({ agentId }: { agentId: string }) {
             {runs.map((run) => (
               <TableRow key={run.id}>
                 <TableCell className="font-mono text-xs">{run.traceId?.slice(0, 12)}</TableCell>
-                <TableCell>{run.userId}</TableCell>
+                <TableCell>{fmtUserId(null, run.userId)}</TableCell>
                 <TableCell>
                   <Badge variant={run.status === 'success' ? 'success' : run.status === 'error' ? 'danger' : 'secondary'}>
                     {run.status}
@@ -299,8 +316,8 @@ function RunsTab({ agentId }: { agentId: string }) {
                 <TableCell className="text-warm-text-secondary">{run.model}</TableCell>
                 <TableCell>{formatDuration(run.durationMs)}</TableCell>
                 <TableCell>{formatCost(run.cost)}</TableCell>
-                <TableCell className="text-warm-text-secondary">
-                  {formatDistanceToNow(new Date(run.createdAt), { addSuffix: true })}
+                <TableCell className="text-warm-text-secondary text-xs">
+                  {fmtRelative(run.createdAt)}
                 </TableCell>
               </TableRow>
             ))}
@@ -398,9 +415,9 @@ function MemoryTab({ agentId }: { agentId: string }) {
                   <TableCell>
                     <Badge variant="secondary">{mem.category}</Badge>
                   </TableCell>
-                  <TableCell>{mem.relevance.toFixed(2)}</TableCell>
-                  <TableCell className="text-warm-text-secondary">
-                    {formatDistanceToNow(new Date(mem.createdAt), { addSuffix: true })}
+                  <TableCell>{(Number(mem.relevance) || 0).toFixed(2)}</TableCell>
+                  <TableCell className="text-warm-text-secondary text-xs">
+                    {fmtRelative(mem.createdAt)}
                   </TableCell>
                   <TableCell>
                     <Button
@@ -498,9 +515,9 @@ function TriggersTab({ agentId }: { agentId: string }) {
                     {trigger.enabled ? 'Enabled' : 'Disabled'}
                   </Badge>
                 </TableCell>
-                <TableCell className="text-warm-text-secondary">
+                <TableCell className="text-warm-text-secondary text-xs">
                   {trigger.lastTriggeredAt
-                    ? formatDistanceToNow(new Date(trigger.lastTriggeredAt), { addSuffix: true })
+                    ? fmtRelative(trigger.lastTriggeredAt)
                     : 'Never'}
                 </TableCell>
               </TableRow>
@@ -597,7 +614,7 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
               <TableBody>
                 {(roles ?? []).map((role) => (
                   <TableRow key={role.userId}>
-                    <TableCell>{role.displayName}</TableCell>
+                    <TableCell>{fmtUserId(role.displayName, role.userId)}</TableCell>
                     <TableCell>
                       <Select
                         value={role.role}
@@ -659,15 +676,15 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
               <TableBody>
                 {(upgradeRequests ?? []).map((req) => (
                   <TableRow key={req.id}>
-                    <TableCell>{req.displayName}</TableCell>
-                    <TableCell className="max-w-[200px] truncate">{req.reason}</TableCell>
+                    <TableCell>{fmtUserId(req.displayName, req.userId)}</TableCell>
+                    <TableCell className="max-w-[200px] truncate">{req.reason ?? '\u2014'}</TableCell>
                     <TableCell>
                       <Badge variant={req.status === 'pending' ? 'warning' : req.status === 'approved' ? 'success' : 'danger'}>
                         {req.status}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-warm-text-secondary">
-                      {formatDistanceToNow(new Date(req.createdAt), { addSuffix: true })}
+                    <TableCell className="text-warm-text-secondary text-xs">
+                      {fmtRelative(req.createdAt)}
                     </TableCell>
                     <TableCell>
                       {req.status === 'pending' && (

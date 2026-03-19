@@ -48,6 +48,8 @@ interface RecentRun {
   model: string;
   cost: number;
   durationMs: number;
+  error: string | null;
+  errorMessage: string | null;
   createdAt: string;
 }
 

@@ -1,5 +1,6 @@
 import { useState } from 'react';
-import { BookOpen, Plus, Search, Check, Trash2, MoreVertical } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { BookOpen, Plus, Search, Check, Trash2, MoreVertical, Eye, Database, AlertCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { StatCard } from '@/components/StatCard';
@@ -35,8 +36,15 @@ import {
   useCreateKBEntry,
   useApproveKBEntry,
   useDeleteKBEntry,
+  useKBSources,
 } from '@/api/kb';
 import { toast } from '@/components/ui/use-toast';
+
+function fmtUserId(createdBy: unknown): string {
+  if (!createdBy || typeof createdBy !== 'string') return '\u2014';
+  if (createdBy.startsWith('U')) return `@${createdBy}`;
+  return createdBy;
+}
 
 export function KnowledgeBase() {
   const [search, setSearch] = useState('');
@@ -47,11 +55,20 @@ export function KnowledgeBase() {
   const [newTitle, setNewTitle] = useState('');
   const [newContent, setNewContent] = useState('');
   const [newCategory, setNewCategory] = useState('');
+  const [newTags, setNewTags] = useState('');
+  const [detailEntry, setDetailEntry] = useState<{
+    title: string;
+    content: string;
+    category: string;
+    createdBy: string;
+    updatedAt: string;
+  } | null>(null);
 
   const approved = tab === 'approved';
-  const { data: stats, isLoading: statsLoading } = useKBStats();
+  const { data: stats, isLoading: statsLoading, isError: statsError } = useKBStats();
   const { data: categories } = useKBCategories();
-  const { data, isLoading } = useKBEntries({
+  const { data: sources } = useKBSources();
+  const { data, isLoading, isError } = useKBEntries({
     page,
     limit: 20,
     category: category !== 'all' ? category : undefined,
@@ -73,7 +90,11 @@ export function KnowledgeBase() {
       return;
     }
     createEntry.mutate(
-      { title: newTitle, content: newContent, category: newCategory || undefined },
+      {
+        title: newTitle,
+        content: newContent,
+        category: newCategory || undefined,
+      },
       {
         onSuccess: () => {
           toast({ title: 'Entry created', variant: 'success' });
@@ -81,6 +102,7 @@ export function KnowledgeBase() {
           setNewTitle('');
           setNewContent('');
           setNewCategory('');
+          setNewTags('');
         },
       },
     );
@@ -89,10 +111,18 @@ export function KnowledgeBase() {
   return (
     <div>
       <PageHeader title="Knowledge Base" description="Manage knowledge entries for agents">
-        <Button onClick={() => setShowAdd(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Entry
-        </Button>
+        <div className="flex items-center gap-2">
+          <Link to="/kb/sources">
+            <Button variant="outline">
+              <Database className="mr-2 h-4 w-4" />
+              Sources
+            </Button>
+          </Link>
+          <Button onClick={() => setShowAdd(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Entry
+          </Button>
+        </div>
       </PageHeader>
 
       {/* Stats */}
@@ -102,12 +132,19 @@ export function KnowledgeBase() {
             <Skeleton key={i} className="h-[80px]" />
           ))}
         </div>
+      ) : statsError ? (
+        <Card className="mb-6">
+          <CardContent className="py-6 text-center text-red-500">
+            <AlertCircle className="h-5 w-5 mx-auto mb-2" />
+            Failed to load stats
+          </CardContent>
+        </Card>
       ) : (
         <div className="grid grid-cols-4 gap-4 mb-6">
           <StatCard label="Total Entries" value={stats?.totalEntries ?? 0} color="blue" />
           <StatCard label="Pending Review" value={stats?.pendingEntries ?? 0} color="amber" />
           <StatCard label="Categories" value={stats?.categories ?? 0} color="green" />
-          <StatCard label="Sources" value={stats?.sourcesCount ?? 0} color="blue" />
+          <StatCard label="Sources" value={stats?.sourcesCount ?? (sources ?? []).length ?? 0} color="blue" />
         </div>
       )}
 
@@ -145,6 +182,13 @@ export function KnowledgeBase() {
         <TabsContent value={tab}>
           {isLoading ? (
             <Skeleton className="h-[300px]" />
+          ) : isError ? (
+            <Card>
+              <CardContent className="py-8 text-center text-red-500">
+                <AlertCircle className="h-5 w-5 mx-auto mb-2" />
+                Failed to load entries
+              </CardContent>
+            </Card>
           ) : entries.length === 0 ? (
             <EmptyState
               icon={BookOpen}
@@ -167,11 +211,23 @@ export function KnowledgeBase() {
                   </TableHeader>
                   <TableBody>
                     {entries.map((entry) => (
-                      <TableRow key={entry.id}>
+                      <TableRow
+                        key={entry.id}
+                        className="cursor-pointer"
+                        onClick={() =>
+                          setDetailEntry({
+                            title: entry.title || 'Untitled',
+                            content: entry.content || '',
+                            category: entry.category || 'Uncategorized',
+                            createdBy: entry.createdBy || '',
+                            updatedAt: entry.updatedAt || '',
+                          })
+                        }
+                      >
                         <TableCell>
-                          <p className="font-medium">{entry.title}</p>
+                          <p className="font-medium">{entry.title || 'Untitled'}</p>
                           <p className="text-xs text-warm-text-secondary line-clamp-1 max-w-[300px]">
-                            {entry.content}
+                            {entry.content || ''}
                           </p>
                         </TableCell>
                         <TableCell>
@@ -181,11 +237,13 @@ export function KnowledgeBase() {
                             <span className="text-warm-text-secondary text-xs">Uncategorized</span>
                           )}
                         </TableCell>
-                        <TableCell className="text-warm-text-secondary">{entry.createdBy}</TableCell>
+                        <TableCell className="text-warm-text-secondary text-xs">{fmtUserId(entry.createdBy)}</TableCell>
                         <TableCell className="text-warm-text-secondary text-xs">
-                          {formatDistanceToNow(new Date(entry.updatedAt), { addSuffix: true })}
+                          {entry.updatedAt
+                            ? formatDistanceToNow(new Date(entry.updatedAt), { addSuffix: true })
+                            : '\u2014'}
                         </TableCell>
-                        <TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -193,6 +251,20 @@ export function KnowledgeBase() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  setDetailEntry({
+                                    title: entry.title || 'Untitled',
+                                    content: entry.content || '',
+                                    category: entry.category || 'Uncategorized',
+                                    createdBy: entry.createdBy || '',
+                                    updatedAt: entry.updatedAt || '',
+                                  })
+                                }
+                              >
+                                <Eye className="mr-2 h-4 w-4" />
+                                View
+                              </DropdownMenuItem>
                               {!entry.approved && (
                                 <DropdownMenuItem
                                   onClick={() =>
@@ -256,6 +328,12 @@ export function KnowledgeBase() {
             <div>
               <Label>Category</Label>
               <Input value={newCategory} onChange={(e) => setNewCategory(e.target.value)} className="mt-1" placeholder="e.g. procedures, faq" />
+              <p className="text-xs text-warm-text-secondary mt-1">Group related entries together</p>
+            </div>
+            <div>
+              <Label>Tags</Label>
+              <Input value={newTags} onChange={(e) => setNewTags(e.target.value)} className="mt-1" placeholder="e.g. onboarding, setup (comma separated)" />
+              <p className="text-xs text-warm-text-secondary mt-1">Optional tags for better searchability</p>
             </div>
             <div>
               <Label>Content *</Label>
@@ -265,6 +343,29 @@ export function KnowledgeBase() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
             <Button onClick={handleCreate} disabled={createEntry.isPending}>Create Entry</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Entry Detail Dialog */}
+      <Dialog open={!!detailEntry} onOpenChange={() => setDetailEntry(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{detailEntry?.title}</DialogTitle>
+            <DialogDescription>
+              <span className="flex items-center gap-2 mt-1">
+                <Badge variant="secondary">{detailEntry?.category}</Badge>
+                <span className="text-xs">
+                  by {fmtUserId(detailEntry?.createdBy)} {detailEntry?.updatedAt ? formatDistanceToNow(new Date(detailEntry.updatedAt), { addSuffix: true }) : ''}
+                </span>
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[400px] overflow-y-auto whitespace-pre-wrap text-sm bg-warm-bg rounded-lg p-4">
+            {detailEntry?.content}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDetailEntry(null)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

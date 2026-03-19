@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { FileText, Search, Download } from 'lucide-react';
-import { format } from 'date-fns';
+import { FileText, Search, Download, AlertCircle } from 'lucide-react';
+import { formatDistanceToNow, format } from 'date-fns';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/ui/button';
@@ -13,26 +13,60 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useAuditLog } from '@/api/audit';
 import { toast } from '@/components/ui/use-toast';
 
-const ACTIONS = [
-  'agent_created',
-  'agent_updated',
-  'agent_deleted',
-  'tool_registered',
-  'tool_approved',
-  'kb_entry_created',
-  'kb_entry_approved',
-  'role_changed',
-  'connection_created',
-  'trigger_created',
-  'settings_updated',
+const ACTION_TYPES = [
+  { value: 'agent_created', label: 'Agent Created' },
+  { value: 'agent_updated', label: 'Agent Updated' },
+  { value: 'agent_deleted', label: 'Agent Deleted' },
+  { value: 'agent_config_change', label: 'Config Changed' },
+  { value: 'tool_registered', label: 'Tool Registered' },
+  { value: 'tool_approved', label: 'Tool Approved' },
+  { value: 'kb_entry_created', label: 'KB Entry Created' },
+  { value: 'kb_entry_approved', label: 'KB Entry Approved' },
+  { value: 'role_changed', label: 'Role Changed' },
+  { value: 'connection_created', label: 'Connection Created' },
+  { value: 'trigger_created', label: 'Trigger Created' },
+  { value: 'settings_updated', label: 'Settings Updated' },
 ];
+
+function humanizeAction(action: unknown): string {
+  if (!action || typeof action !== 'string') return '\u2014';
+  const found = ACTION_TYPES.find((a) => a.value === action);
+  if (found) return found.label;
+  return action.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function fmtUserId(displayName: unknown, userId: unknown): string {
+  if (displayName && typeof displayName === 'string' && displayName.trim()) return displayName;
+  if (userId && typeof userId === 'string') return `@${userId}`;
+  return '\u2014';
+}
+
+function fmtRelative(v: unknown): string {
+  if (!v) return '\u2014';
+  try {
+    return formatDistanceToNow(new Date(v as string), { addSuffix: true });
+  } catch {
+    return '\u2014';
+  }
+}
+
+function fmtDetails(details: unknown): string {
+  if (!details) return '\u2014';
+  if (typeof details === 'string') return details;
+  try {
+    const str = JSON.stringify(details);
+    return str === '{}' || str === 'null' ? '\u2014' : str;
+  } catch {
+    return '\u2014';
+  }
+}
 
 export function AuditLog() {
   const [search, setSearch] = useState('');
   const [action, setAction] = useState<string>('all');
   const [page, setPage] = useState(1);
 
-  const { data, isLoading } = useAuditLog({
+  const { data, isLoading, isError } = useAuditLog({
     page,
     limit: 50,
     action: action !== 'all' ? action : undefined,
@@ -44,17 +78,19 @@ export function AuditLog() {
   const totalPages = Math.ceil(total / 50);
 
   const handleExport = () => {
+    if (entries.length === 0) return;
     const csv = [
       ['Time', 'Action', 'User', 'Target', 'Details'].join(','),
-      ...entries.map((e) =>
-        [
-          format(new Date(e.createdAt), 'yyyy-MM-dd HH:mm:ss'),
-          e.action,
-          e.displayName,
-          `${e.targetType}:${e.targetName}`,
-          JSON.stringify(e.details),
-        ].join(','),
-      ),
+      ...entries.map((e) => {
+        const time = e.createdAt ? format(new Date(e.createdAt), 'yyyy-MM-dd HH:mm:ss') : '';
+        return [
+          time,
+          e.action ?? '',
+          fmtUserId(e.displayName, e.userId),
+          `${e.targetType ?? ''}:${e.targetName ?? ''}`,
+          JSON.stringify(e.details ?? ''),
+        ].join(',');
+      }),
     ].join('\n');
 
     const blob = new Blob([csv], { type: 'text/csv' });
@@ -92,8 +128,8 @@ export function AuditLog() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Actions</SelectItem>
-            {ACTIONS.map((a) => (
-              <SelectItem key={a} value={a}>{a.replace(/_/g, ' ')}</SelectItem>
+            {ACTION_TYPES.map((a) => (
+              <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -101,6 +137,13 @@ export function AuditLog() {
 
       {isLoading ? (
         <Skeleton className="h-[400px]" />
+      ) : isError ? (
+        <Card>
+          <CardContent className="py-8 text-center text-red-500">
+            <AlertCircle className="h-5 w-5 mx-auto mb-2" />
+            Failed to load audit log entries
+          </CardContent>
+        </Card>
       ) : entries.length === 0 ? (
         <EmptyState
           icon={FileText}
@@ -113,29 +156,30 @@ export function AuditLog() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Time</TableHead>
                   <TableHead>Action</TableHead>
-                  <TableHead>User</TableHead>
-                  <TableHead>Target</TableHead>
+                  <TableHead>Who</TableHead>
+                  <TableHead>Agent</TableHead>
                   <TableHead>Details</TableHead>
+                  <TableHead>Time</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {entries.map((entry) => (
                   <TableRow key={entry.id}>
-                    <TableCell className="text-warm-text-secondary text-xs whitespace-nowrap">
-                      {format(new Date(entry.createdAt), 'MMM d, HH:mm:ss')}
-                    </TableCell>
                     <TableCell>
-                      <Badge variant="secondary">{entry.action.replace(/_/g, ' ')}</Badge>
+                      <Badge variant="secondary">{humanizeAction(entry.action ?? entry.actionType)}</Badge>
                     </TableCell>
-                    <TableCell>{entry.displayName}</TableCell>
-                    <TableCell>
-                      <span className="text-warm-text-secondary text-xs">{entry.targetType}:</span>{' '}
-                      {entry.targetName}
+                    <TableCell className="text-sm">
+                      {fmtUserId(entry.displayName, entry.userId ?? entry.actorUserId)}
+                    </TableCell>
+                    <TableCell className="text-sm">
+                      {entry.targetName ?? entry.agentName ?? '\u2014'}
                     </TableCell>
                     <TableCell className="max-w-[250px] truncate text-warm-text-secondary text-xs font-mono">
-                      {JSON.stringify(entry.details)}
+                      {fmtDetails(entry.details)}
+                    </TableCell>
+                    <TableCell className="text-warm-text-secondary text-xs whitespace-nowrap">
+                      {fmtRelative(entry.createdAt)}
                     </TableCell>
                   </TableRow>
                 ))}
