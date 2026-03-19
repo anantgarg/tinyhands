@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/auth';
@@ -7,23 +7,24 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
-import { Login } from '@/pages/Login';
-import { Dashboard } from '@/pages/Dashboard';
-import { Agents } from '@/pages/Agents';
-import { AgentDetail } from '@/pages/AgentDetail';
-import { AgentCreate } from '@/pages/AgentCreate';
-import { AgentTemplates } from '@/pages/AgentTemplates';
-import { Tools } from '@/pages/Tools';
-import { KnowledgeBase } from '@/pages/KnowledgeBase';
-import { KBSources } from '@/pages/KBSources';
-import { Connections } from '@/pages/Connections';
-import { Triggers } from '@/pages/Triggers';
-import { Evolution } from '@/pages/Evolution';
-import { AuditLog } from '@/pages/AuditLog';
-import { AccessRoles } from '@/pages/AccessRoles';
-import { Settings } from '@/pages/Settings';
-import { Requests } from '@/pages/Requests';
-import { ErrorLogs } from '@/pages/ErrorLogs';
+// Lazy-load all pages for code splitting
+const Login = lazy(() => import('@/pages/Login').then(m => ({ default: m.Login })));
+const Dashboard = lazy(() => import('@/pages/Dashboard').then(m => ({ default: m.Dashboard })));
+const Agents = lazy(() => import('@/pages/Agents').then(m => ({ default: m.Agents })));
+const AgentDetail = lazy(() => import('@/pages/AgentDetail').then(m => ({ default: m.AgentDetail })));
+const AgentCreate = lazy(() => import('@/pages/AgentCreate').then(m => ({ default: m.AgentCreate })));
+const AgentTemplates = lazy(() => import('@/pages/AgentTemplates').then(m => ({ default: m.AgentTemplates })));
+const Tools = lazy(() => import('@/pages/Tools').then(m => ({ default: m.Tools })));
+const KnowledgeBase = lazy(() => import('@/pages/KnowledgeBase').then(m => ({ default: m.KnowledgeBase })));
+const KBSources = lazy(() => import('@/pages/KBSources').then(m => ({ default: m.KBSources })));
+const Connections = lazy(() => import('@/pages/Connections').then(m => ({ default: m.Connections })));
+const Triggers = lazy(() => import('@/pages/Triggers').then(m => ({ default: m.Triggers })));
+const Evolution = lazy(() => import('@/pages/Evolution').then(m => ({ default: m.Evolution })));
+const AuditLog = lazy(() => import('@/pages/AuditLog').then(m => ({ default: m.AuditLog })));
+const AccessRoles = lazy(() => import('@/pages/AccessRoles').then(m => ({ default: m.AccessRoles })));
+const Settings = lazy(() => import('@/pages/Settings').then(m => ({ default: m.Settings })));
+const Requests = lazy(() => import('@/pages/Requests').then(m => ({ default: m.Requests })));
+const ErrorLogs = lazy(() => import('@/pages/ErrorLogs').then(m => ({ default: m.ErrorLogs })));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -33,6 +34,14 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center py-20">
+      <div className="h-6 w-6 animate-spin rounded-full border-2 border-warm-text-secondary border-t-brand" />
+    </div>
+  );
+}
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, setUser, clearUser } = useAuthStore();
@@ -63,7 +72,7 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   if (checking) {
     return (
       <div className="flex h-screen items-center justify-center bg-warm-bg">
-        <p className="text-warm-text-secondary">Loading...</p>
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-warm-text-secondary border-t-brand" />
       </div>
     );
   }
@@ -80,36 +89,38 @@ export function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <BrowserRouter>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route
-              path="/*"
-              element={
-                <RequireAuth>
-                  <ErrorBoundary>
-                    <Shell />
-                  </ErrorBoundary>
-                </RequireAuth>
-              }
-            >
-              <Route index element={<Dashboard />} />
-              <Route path="agents" element={<Agents />} />
-              <Route path="agents/new" element={<AgentCreate />} />
-              <Route path="agents/templates" element={<AgentTemplates />} />
-              <Route path="agents/:id" element={<AgentDetail />} />
-              <Route path="tools" element={<Tools />} />
-              <Route path="kb" element={<KnowledgeBase />} />
-              <Route path="kb/sources" element={<KBSources />} />
-              <Route path="connections" element={<Connections />} />
-              <Route path="triggers" element={<Triggers />} />
-              <Route path="requests" element={<Requests />} />
-              <Route path="errors" element={<ErrorLogs />} />
-              <Route path="evolution" element={<Evolution />} />
-              <Route path="audit" element={<AuditLog />} />
-              <Route path="access" element={<AccessRoles />} />
-              <Route path="settings" element={<Settings />} />
-            </Route>
-          </Routes>
+          <Suspense fallback={<PageLoader />}>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route
+                path="/*"
+                element={
+                  <RequireAuth>
+                    <ErrorBoundary>
+                      <Shell />
+                    </ErrorBoundary>
+                  </RequireAuth>
+                }
+              >
+                <Route index element={<Suspense fallback={<PageLoader />}><Dashboard /></Suspense>} />
+                <Route path="agents" element={<Suspense fallback={<PageLoader />}><Agents /></Suspense>} />
+                <Route path="agents/new" element={<Suspense fallback={<PageLoader />}><AgentCreate /></Suspense>} />
+                <Route path="agents/templates" element={<Suspense fallback={<PageLoader />}><AgentTemplates /></Suspense>} />
+                <Route path="agents/:id" element={<Suspense fallback={<PageLoader />}><AgentDetail /></Suspense>} />
+                <Route path="tools" element={<Suspense fallback={<PageLoader />}><Tools /></Suspense>} />
+                <Route path="kb" element={<Suspense fallback={<PageLoader />}><KnowledgeBase /></Suspense>} />
+                <Route path="kb/sources" element={<Suspense fallback={<PageLoader />}><KBSources /></Suspense>} />
+                <Route path="connections" element={<Suspense fallback={<PageLoader />}><Connections /></Suspense>} />
+                <Route path="triggers" element={<Suspense fallback={<PageLoader />}><Triggers /></Suspense>} />
+                <Route path="requests" element={<Suspense fallback={<PageLoader />}><Requests /></Suspense>} />
+                <Route path="errors" element={<Suspense fallback={<PageLoader />}><ErrorLogs /></Suspense>} />
+                <Route path="evolution" element={<Suspense fallback={<PageLoader />}><Evolution /></Suspense>} />
+                <Route path="audit" element={<Suspense fallback={<PageLoader />}><AuditLog /></Suspense>} />
+                <Route path="access" element={<Suspense fallback={<PageLoader />}><AccessRoles /></Suspense>} />
+                <Route path="settings" element={<Suspense fallback={<PageLoader />}><Settings /></Suspense>} />
+              </Route>
+            </Routes>
+          </Suspense>
         </BrowserRouter>
         <Toaster />
       </TooltipProvider>
