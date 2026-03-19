@@ -3,15 +3,15 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/lib/utils';
 
 const badgeVariants = cva(
-  'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium transition-colors',
+  'inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium',
   {
     variants: {
       variant: {
-        default: 'bg-brand/10 text-brand',
-        success: 'bg-green-100 text-green-700',
-        warning: 'bg-amber-100 text-amber-700',
-        danger: 'bg-red-100 text-red-700',
-        secondary: 'bg-warm-sidebar text-warm-text-secondary',
+        default: 'bg-brand-light text-brand',
+        success: 'bg-emerald-50 text-emerald-700',
+        warning: 'bg-amber-50 text-amber-700',
+        danger: 'bg-red-50 text-red-700',
+        secondary: 'bg-warm-bg text-warm-text-secondary',
       },
     },
     defaultVariants: {

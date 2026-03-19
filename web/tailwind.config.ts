@@ -6,22 +6,31 @@ const config: Config = {
     extend: {
       colors: {
         warm: {
-          bg: '#FFFDF7',
+          bg: '#F6F6F3',
           card: '#FFFFFF',
-          sidebar: '#F5F0E8',
-          border: '#E8E2D9',
-          text: '#1D1D1D',
-          'text-secondary': '#6B6B6B',
+          sidebar: '#FFFFFF',
+          border: '#E0DED9',
+          text: '#1A1A1A',
+          'text-secondary': '#787774',
         },
         brand: {
-          DEFAULT: '#1D6CE0',
-          hover: '#1557B8',
+          DEFAULT: '#1E8B5E',
+          hover: '#176B49',
+          light: '#E7F5EE',
         },
       },
       borderRadius: {
-        card: '12px',
-        btn: '8px',
+        card: '16px',
+        btn: '10px',
         badge: '6px',
+      },
+      fontSize: {
+        'page-title': ['32px', { lineHeight: '1.2', fontWeight: '800' }],
+        'section-title': ['18px', { lineHeight: '1.3', fontWeight: '700' }],
+      },
+      boxShadow: {
+        'card': '0 1px 3px rgba(0, 0, 0, 0.04)',
+        'card-hover': '0 2px 8px rgba(0, 0, 0, 0.08)',
       },
     },
   },

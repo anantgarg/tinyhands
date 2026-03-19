@@ -3,27 +3,52 @@
 @tailwind utilities;
 
 :root {
-  --color-warm-bg: #FFFDF7;
+  --color-warm-bg: #F6F6F3;
   --color-warm-card: #FFFFFF;
-  --color-warm-sidebar: #F5F0E8;
-  --color-warm-border: #E8E2D9;
-  --color-warm-text: #1D1D1D;
-  --color-warm-text-secondary: #6B6B6B;
-  --color-brand: #1D6CE0;
-  --color-brand-hover: #1557B8;
-  --color-success: #1DB954;
-  --color-warning: #E8A317;
-  --color-danger: #D64045;
-  --radius-card: 12px;
-  --radius-btn: 8px;
+  --color-warm-sidebar: #FFFFFF;
+  --color-warm-border: #E0DED9;
+  --color-warm-text: #1A1A1A;
+  --color-warm-text-secondary: #787774;
+  --color-brand: #1E8B5E;
+  --color-brand-hover: #176B49;
+  --color-brand-light: #E7F5EE;
+  --color-success: #1E8B5E;
+  --color-warning: #D97706;
+  --color-danger: #DC2626;
+  --radius-card: 16px;
+  --radius-btn: 10px;
   --radius-badge: 6px;
 }
 
 @layer base {
   body {
     @apply bg-warm-bg text-warm-text antialiased;
-    font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     font-size: 15px;
-    line-height: 1.6;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Basecamp-style focus rings */
+  *:focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  /* Clean scrollbar */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #C4C4C0;
+    border-radius: 4px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #A0A09C;
   }
 }

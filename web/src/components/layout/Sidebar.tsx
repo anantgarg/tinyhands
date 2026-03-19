@@ -12,15 +12,13 @@ import {
   Shield,
   Settings,
   LogOut,
-  PanelLeftClose,
-  PanelLeft,
+  ChevronsLeft,
+  ChevronsRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
 import { useSidebarStore } from '@/store/sidebar';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
 import { useEvolutionProposals } from '@/api/evolution';
 
 interface NavItem {
@@ -55,13 +53,13 @@ const settingsNav: NavItem[] = [
 
 function NavSection({ title, items }: { title?: string; items: NavItem[] }) {
   return (
-    <div className="mb-2">
+    <div className="mb-1">
       {title && (
-        <p className="px-4 py-2 text-[11px] font-semibold uppercase tracking-wider text-warm-text-secondary/70">
+        <p className="px-4 pt-5 pb-1.5 text-[11px] font-bold uppercase tracking-wider text-warm-text-secondary/50">
           {title}
         </p>
       )}
-      <nav className="space-y-0.5 px-2">
+      <nav className="space-y-px px-3">
         {items.map((item) => (
           <NavLink
             key={item.to}
@@ -69,14 +67,14 @@ function NavSection({ title, items }: { title?: string; items: NavItem[] }) {
             end={item.to === '/'}
             className={({ isActive }) =>
               cn(
-                'flex items-center gap-3 rounded-btn px-3 py-2 text-sm font-medium transition-colors',
+                'flex items-center gap-2.5 rounded-lg px-3 py-[7px] text-[14px] transition-colors',
                 isActive
-                  ? 'bg-white/70 text-warm-text border-l-2 border-brand shadow-sm'
-                  : 'text-warm-text-secondary hover:bg-white/40 hover:text-warm-text border-l-2 border-transparent',
+                  ? 'bg-brand-light text-brand font-semibold'
+                  : 'text-warm-text-secondary hover:text-warm-text hover:bg-warm-bg',
               )
             }
           >
-            <item.icon className="h-4 w-4 shrink-0" />
+            <item.icon className="h-[18px] w-[18px] shrink-0" />
             <span className="truncate">{item.label}</span>
             {item.badge !== undefined && item.badge > 0 && (
               <span className="ml-auto inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand px-1.5 text-[10px] font-bold text-white">
@@ -113,12 +111,13 @@ export function Sidebar() {
 
   if (collapsed) {
     return (
-      <div className="flex h-screen w-16 flex-col border-r border-warm-border bg-warm-sidebar">
-        <div className="flex h-14 items-center justify-center">
-          <Button variant="ghost" size="icon" onClick={toggle} className="h-8 w-8">
-            <PanelLeft className="h-4 w-4" />
-          </Button>
-        </div>
+      <div className="flex h-screen w-[52px] flex-col border-r border-warm-border bg-white">
+        <button
+          onClick={toggle}
+          className="flex h-12 items-center justify-center text-warm-text-secondary hover:text-warm-text"
+        >
+          <ChevronsRight className="h-4 w-4" />
+        </button>
         <nav className="flex flex-1 flex-col items-center gap-1 py-2">
           {[...mainNav, ...manageNav, ...reviewItems, ...settingsNav].map((item) => (
             <NavLink
@@ -127,13 +126,13 @@ export function Sidebar() {
               end={item.to === '/'}
               className={({ isActive }) =>
                 cn(
-                  'relative flex h-10 w-10 items-center justify-center rounded-btn transition-colors',
-                  isActive ? 'bg-white/70 text-brand shadow-sm' : 'text-warm-text-secondary hover:bg-white/40',
+                  'relative flex h-9 w-9 items-center justify-center rounded-lg transition-colors',
+                  isActive ? 'bg-brand-light text-brand' : 'text-warm-text-secondary hover:bg-warm-bg hover:text-warm-text',
                 )
               }
               title={item.label}
             >
-              <item.icon className="h-4 w-4" />
+              <item.icon className="h-[18px] w-[18px]" />
               {item.badge !== undefined && item.badge > 0 && (
                 <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-brand px-1 text-[9px] font-bold text-white">
                   {item.badge}
@@ -147,40 +146,50 @@ export function Sidebar() {
   }
 
   return (
-    <div className="flex h-screen w-[260px] flex-col border-r border-warm-border bg-warm-sidebar">
-      <div className="flex h-14 items-center justify-between px-4">
+    <div className="flex h-screen w-[240px] flex-col border-r border-warm-border bg-white">
+      {/* Header */}
+      <div className="flex h-12 items-center justify-between px-4">
         <div className="flex items-center gap-2">
-          <span className="text-lg">🤲</span>
-          <span className="text-sm font-bold text-warm-text">TinyHands</span>
+          <span className="text-lg">✋</span>
+          <span className="text-[15px] font-extrabold text-warm-text tracking-tight">TinyHands</span>
         </div>
-        <Button variant="ghost" size="icon" onClick={toggle} className="h-8 w-8">
-          <PanelLeftClose className="h-4 w-4" />
-        </Button>
+        <button
+          onClick={toggle}
+          className="flex h-7 w-7 items-center justify-center rounded-md text-warm-text-secondary hover:text-warm-text hover:bg-warm-bg transition-colors"
+        >
+          <ChevronsLeft className="h-3.5 w-3.5" />
+        </button>
       </div>
 
-      <Separator />
-
-      <div className="flex-1 overflow-y-auto py-3">
+      {/* Navigation */}
+      <div className="flex-1 overflow-y-auto pt-1 pb-3">
         <NavSection items={mainNav} />
         <NavSection title="Manage" items={manageNav} />
         <NavSection title="Review" items={reviewItems} />
         <NavSection title="Settings" items={settingsNav} />
       </div>
 
-      <Separator />
-
-      <div className="flex items-center gap-3 p-4">
-        <Avatar className="h-8 w-8">
-          <AvatarImage src={user?.avatarUrl} alt={user?.displayName} />
-          <AvatarFallback>{user?.displayName?.charAt(0) ?? '?'}</AvatarFallback>
-        </Avatar>
-        <div className="flex-1 min-w-0">
-          <p className="truncate text-sm font-medium">{user?.displayName ?? 'Unknown'}</p>
-          <p className="truncate text-xs text-warm-text-secondary capitalize">{user?.platformRole ?? 'member'}</p>
+      {/* User footer */}
+      <div className="border-t border-warm-border px-3 py-3">
+        <div className="flex items-center gap-2.5">
+          <Avatar className="h-7 w-7">
+            <AvatarImage src={user?.avatarUrl} alt={user?.displayName} />
+            <AvatarFallback className="text-xs bg-brand-light text-brand font-semibold">
+              {user?.displayName?.charAt(0) ?? '?'}
+            </AvatarFallback>
+          </Avatar>
+          <div className="flex-1 min-w-0">
+            <p className="truncate text-sm font-medium leading-tight">{user?.displayName ?? 'Unknown'}</p>
+            <p className="truncate text-xs text-warm-text-secondary capitalize">{user?.platformRole ?? 'member'}</p>
+          </div>
+          <button
+            onClick={handleLogout}
+            className="flex h-7 w-7 items-center justify-center rounded-md text-warm-text-secondary hover:text-warm-text hover:bg-warm-bg transition-colors shrink-0"
+            title="Log out"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+          </button>
         </div>
-        <Button variant="ghost" size="icon" onClick={handleLogout} className="h-8 w-8 shrink-0">
-          <LogOut className="h-4 w-4" />
-        </Button>
       </div>
     </div>
   );

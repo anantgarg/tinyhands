@@ -111,28 +111,28 @@ export function Dashboard() {
               <AreaChart data={metrics.data?.runsByDay ?? []}>
                 <defs>
                   <linearGradient id="colorRuns" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#1D6CE0" stopOpacity={0.15} />
-                    <stop offset="95%" stopColor="#1D6CE0" stopOpacity={0} />
+                    <stop offset="5%" stopColor="#1E8B5E" stopOpacity={0.15} />
+                    <stop offset="95%" stopColor="#1E8B5E" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#E8E2D9" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#E0DED9" />
                 <XAxis
                   dataKey="date"
-                  tick={{ fontSize: 12, fill: '#6B6B6B' }}
+                  tick={{ fontSize: 12, fill: '#787774' }}
                   tickFormatter={(d) => format(new Date(d), 'MMM d')}
                 />
-                <YAxis tick={{ fontSize: 12, fill: '#6B6B6B' }} />
+                <YAxis tick={{ fontSize: 12, fill: '#787774' }} />
                 <Tooltip
                   contentStyle={{
                     borderRadius: '8px',
-                    border: '1px solid #E8E2D9',
+                    border: '1px solid #E0DED9',
                     boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
                   }}
                 />
                 <Area
                   type="monotone"
                   dataKey="count"
-                  stroke="#1D6CE0"
+                  stroke="#1E8B5E"
                   strokeWidth={2}
                   fill="url(#colorRuns)"
                   name="Runs"

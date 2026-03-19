@@ -1,18 +1,18 @@
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
 export function Login() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-warm-bg p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="mb-4 text-5xl">🤲</div>
-          <CardTitle className="text-2xl">TinyHands</CardTitle>
-          <CardDescription className="text-base">AI Agent Platform</CardDescription>
-        </CardHeader>
-        <CardContent className="pb-8">
+    <div className="flex min-h-screen flex-col items-center justify-center bg-warm-bg p-4">
+      <div className="w-full max-w-sm">
+        <div className="text-center mb-8">
+          <span className="text-5xl">✋</span>
+          <h1 className="mt-4 text-[28px] font-extrabold text-warm-text tracking-tight">TinyHands</h1>
+          <p className="mt-1 text-warm-text-secondary">AI Agent Platform for Slack</p>
+        </div>
+
+        <div className="rounded-card border border-warm-border bg-white p-8">
           <Button
-            className="w-full h-12 text-base"
+            className="w-full h-11"
             onClick={() => {
               window.location.href = '/api/v1/auth/slack';
             }}
@@ -22,8 +22,11 @@ export function Login() {
             </svg>
             Sign in with Slack
           </Button>
-        </CardContent>
-      </Card>
+          <p className="mt-4 text-center text-xs text-warm-text-secondary">
+            Sign in with your Slack workspace to access the dashboard.
+          </p>
+        </div>
+      </div>
     </div>
   );
 }

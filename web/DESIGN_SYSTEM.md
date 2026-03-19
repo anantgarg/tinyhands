@@ -1,140 +1,153 @@
 # TinyHands Design System
 
+Inspired by Basecamp's design language: clean, flat, utilitarian, and human-friendly.
+
 ## Core Principles
 
-1. **Warm & Approachable** -- Cream backgrounds, soft borders, and natural tones create a friendly interface that feels inviting rather than clinical.
-2. **Card-Based Layout** -- Content is organized into clearly delineated cards with consistent padding, borders, and shadows.
-3. **Human-Friendly** -- Typography prioritizes readability. Actions are clearly labeled. States (loading, empty, error) are always handled gracefully.
-4. **Consistent Spacing** -- A rhythmic spacing system keeps the interface visually balanced and scannable.
+1. **Clean & Flat** -- No gratuitous shadows or gradients. Borders define structure, not depth effects. UI gets out of the way so content speaks.
+2. **Bold & Readable** -- Large, extrabold page titles. System font stack for maximum legibility. Generous line height and spacing.
+3. **Card-Based Layout** -- Content organized into flat bordered cards. Consistent padding. Single-column stacked layouts preferred over complex grids.
+4. **Human-Friendly** -- Conversational labels, helpful empty states, clear action verbs. States (loading, empty, error) always handled gracefully.
+5. **Green for Action** -- Primary actions use a confident green. Most of the UI is grayscale; color is reserved for meaning.
 
 ## Color Tokens
 
 | Token | Value | Usage |
 |-------|-------|-------|
-| `warm-bg` | `#FFFDF7` | Page background |
-| `warm-card` | `#FFFFFF` | Card backgrounds |
-| `warm-sidebar` | `#F5F0E8` | Sidebar background, secondary surfaces |
-| `warm-border` | `#E8E2D9` | Borders, dividers |
-| `warm-text` | `#1D1D1D` | Primary text |
-| `warm-text-secondary` | `#6B6B6B` | Secondary text, labels |
-| `brand` | `#1D6CE0` | Primary buttons, links, active indicators |
-| `brand-hover` | `#1557B8` | Button hover state |
-| Success | `#1DB954` | Success badges, positive states |
-| Warning | `#E8A317` | Warning badges, pending states |
-| Danger | `#D64045` | Error badges, destructive actions |
+| `warm-bg` | `#F6F6F3` | Page background (light warm gray) |
+| `warm-card` | `#FFFFFF` | Card and surface backgrounds |
+| `warm-sidebar` | `#FFFFFF` | Sidebar background (clean white) |
+| `warm-border` | `#E0DED9` | Borders, dividers, separators |
+| `warm-text` | `#1A1A1A` | Primary text (near black) |
+| `warm-text-secondary` | `#787774` | Secondary text, labels, captions |
+| `brand` | `#1E8B5E` | Primary buttons, links, active indicators (Basecamp green) |
+| `brand-hover` | `#176B49` | Button hover state |
+| `brand-light` | `#E7F5EE` | Active nav item bg, default badge bg |
+| Success | `#1E8B5E` | Success badges (same as brand) |
+| Warning | `#D97706` | Warning badges, pending states |
+| Danger | `#DC2626` | Error badges, destructive actions |
 
 ### Color Usage Guidelines
 
-- Use `brand` for primary actions and interactive elements only
-- Use `warm-sidebar` for secondary button backgrounds and hover states
-- Use semantic colors (success/warning/danger) for badges and status indicators
-- Error and danger text uses `red-500` / `red-600`
-- Charts use the brand color with opacity gradients
+- **Minimal color**: Most UI is grayscale. Color indicates meaning (active state, status, action).
+- **Green = action**: Primary buttons, active nav, success states all share the brand green.
+- **No colored backgrounds on stat cards**: Use light tinted icon backgrounds only.
+- Charts use brand green with subtle opacity gradients.
+- Danger/destructive actions use red-600, not the brand color.
 
 ## Typography
 
 | Element | Size | Weight | Line Height |
 |---------|------|--------|-------------|
-| Body | 15px (base) | 400 | 1.6 |
-| H1 (Page title) | text-2xl (24px) | 700 (bold) | 1.2 |
-| H2 (Section title) | text-lg (18px) | 600 (semibold) | 1.3 |
-| H3 (Card title) | text-base (16px) | 600 (semibold) | 1.4 |
-| Small text | text-sm (14px) | 400 | 1.5 |
-| Caption | text-xs (12px) | 500 (medium) | 1.4 |
-| Code/Mono | text-sm (14px) | 400 | 1.5 |
+| Body | 15px (base) | 400 | 1.5 |
+| Page title | 32px (`text-page-title`) | 800 (extrabold) | 1.2 |
+| Section title | 18px (`text-section-title`) | 700 (bold) | 1.3 |
+| Card title | 18px | 700 (bold) | 1.3 |
+| Small text | 14px (`text-sm`) | 400 | 1.5 |
+| Caption | 12px (`text-xs`) | 500 (medium) | 1.4 |
+| Nav section label | 11px | 700 (bold) | uppercase tracking-wider |
 
-- **Font stack**: `'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif`
-- Section labels use `text-[11px] font-semibold uppercase tracking-wider text-warm-text-secondary/70`
+- **Font stack**: `-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif` (system fonts, like Basecamp)
+- Page titles are noticeably large and extrabold -- the most prominent element on the page.
+- Section labels in sidebar: `text-[11px] font-bold uppercase tracking-wider text-warm-text-secondary/50`
 
 ## Spacing
 
 | Context | Value |
 |---------|-------|
 | Page padding | 32px (`p-8`) |
-| Card padding | 24px (`p-6`) |
+| Card padding | 20-24px (`px-6 py-5`) |
 | Card gap | 16px (`gap-4`) |
-| Section gap | 32px (`mb-8`) |
+| Section gap | 24px (`mb-6`) |
 | Header bottom margin | 32px (`mb-8`) |
 | Input/button height | 40px (`h-10`) |
-| Small button height | 32px (`h-8`) |
+| Nav item padding | `px-3 py-[7px]` |
 
 ## Border Radius
 
 | Element | Radius | Tailwind Class |
 |---------|--------|----------------|
-| Cards | 12px | `rounded-card` |
-| Buttons, Inputs | 8px | `rounded-btn` |
+| Cards | 16px | `rounded-card` |
+| Buttons, Inputs | 10px | `rounded-btn` |
 | Badges | 6px | `rounded-badge` |
+| Nav items | 8px | `rounded-lg` |
 | Full round | 9999px | `rounded-full` (avatars, switches) |
 
 ## Shadows
 
-- Cards: `shadow-sm` (default), `shadow-md` (hover/elevated)
-- Dropdowns/Dialogs: `shadow-lg`
-- Buttons: `shadow-sm` (default), `shadow` (hover)
+Minimal. Basecamp-inspired flat design.
+
+- **Cards**: No shadow by default. Border only (`border border-warm-border`).
+- **Card hover** (optional): `shadow-card-hover` (subtle, 0 2px 8px rgba(0,0,0,0.08))
+- **Dropdowns/Dialogs**: `shadow-lg` (only for overlays)
+- **Buttons**: No shadow. Use `active:scale-[0.98]` for press feedback instead.
 
 ## Component Customizations
 
 ### Button
-- **Default**: `bg-brand text-white`, hover `bg-brand-hover`, shadow on hover
-- **Secondary**: `bg-warm-sidebar text-warm-text`, hover `bg-warm-border`
-- **Danger**: `bg-red-500 text-white`, hover `bg-red-600`
-- **Ghost**: transparent, hover `bg-warm-sidebar`
-- **Outline**: `border border-warm-border bg-white`, hover `bg-warm-sidebar`
-- Focus ring: `ring-brand ring-offset-2`
+- **Default**: `bg-brand text-white`, hover `bg-brand-hover`, press `active:scale-[0.98]`
+- **Secondary**: `bg-warm-bg border border-warm-border`, hover `bg-white`
+- **Danger**: `bg-red-600 text-white`, hover `bg-red-700`
+- **Ghost**: transparent, hover `bg-warm-bg`, text `warm-text-secondary` -> `warm-text`
+- **Outline**: `border border-warm-border bg-white`, hover `bg-warm-bg`
+- **Link**: `text-brand`, underline on hover, no padding
+- Focus: `ring-2 ring-brand ring-offset-2`
+- Font: `font-semibold` (not just medium)
 
 ### Card
-- Background: `bg-warm-card`
+- Background: `bg-warm-card` (white)
 - Border: `border border-warm-border`
-- Shadow: `shadow-sm`
-- Radius: `rounded-card` (12px)
-- Header padding: `p-6`, Content padding: `p-6 pt-0`
+- **No shadow** (flat, like Basecamp)
+- Radius: `rounded-card` (16px)
+- Header: `px-6 pt-5 pb-0`
+- Content: `px-6 py-5`
 
 ### Input / Textarea
 - Border: `border-warm-border`
-- Focus: `ring-brand ring-offset-2`
-- Height: `h-10` (input), variable (textarea, min `min-h-[80px]`)
-- Placeholder: `text-warm-text-secondary/50`
-- Radius: `rounded-btn`
+- Focus: `ring-2 ring-brand/20 border-brand` (subtle green tint, not heavy ring)
+- Height: `h-10`
+- Placeholder: `text-warm-text-secondary/60`
+- Radius: `rounded-btn` (10px)
 
 ### Badge
-- Variants map to semantic color backgrounds with matching text
+- Variants use soft pastel backgrounds:
+  - Default: `bg-brand-light text-brand`
+  - Success: `bg-emerald-50 text-emerald-700`
+  - Warning: `bg-amber-50 text-amber-700`
+  - Danger: `bg-red-50 text-red-700`
+  - Secondary: `bg-warm-bg text-warm-text-secondary`
 - Size: `px-2.5 py-0.5 text-xs font-medium`
 - Radius: `rounded-full`
 
 ### Table
-- Header: `text-xs uppercase tracking-wider text-warm-text-secondary`
+- Header: Normal case (not uppercase), `text-sm font-medium text-warm-text-secondary`
 - Row border: `border-warm-border`
-- Row hover: `bg-amber-50/30`
+- Row hover: `bg-warm-bg/60` (subtle)
 - Cell padding: `px-4 py-3`
 
 ### Tabs
 - Style: Underline (no background)
-- Active: `border-b-2 border-brand text-warm-text`
+- Active: `border-b-2 border-brand text-warm-text font-semibold`
 - Inactive: `text-warm-text-secondary`
-- Content margin: `mt-4`
 
 ### Dialog
 - Overlay: `bg-black/40`
 - Radius: `rounded-xl`
 - Border: `border-warm-border`
-- Max width: `max-w-lg` (default), `max-w-2xl` for larger content
+- Max width: `max-w-lg` default
 
 ### Select
-- Trigger styled like Input
+- Trigger styled like Input (same focus style)
 - Dropdown: `rounded-lg shadow-lg border-warm-border`
-- Items: `rounded-badge`, focus `bg-warm-sidebar`
+- Items: `rounded-badge`, focus `bg-warm-bg`
 
 ### Switch
-- Checked: `bg-brand`
+- Checked: `bg-brand` (green)
 - Unchecked: `bg-warm-border`
-- Thumb: white, rounded-full
 
 ### Toast
-- Default: `bg-warm-card`
-- Success: `bg-green-50 border-green-200`
-- Error: `bg-red-50 border-red-200`
-- Appears bottom-right on desktop
+- Appears bottom-right
+- Clean border styling, not heavy shadows
 
 ## Layout Patterns
 
@@ -143,58 +156,50 @@
 - Centered: `mx-auto`
 - Page padding: `p-8`
 
-### Sidebar
-- Width: 260px (expanded), 64px (collapsed)
-- Background: `#F5F0E8`
+### Sidebar (Basecamp-style)
+- Width: 240px (expanded), 52px (collapsed)
+- Background: white (`#FFFFFF`)
 - Border right: `border-warm-border`
-- Active nav item: `bg-white/70 border-l-2 border-brand shadow-sm`
-- Nav item padding: `px-3 py-2`
+- Header: Logo + "TinyHands" in extrabold
+- Active nav item: `bg-brand-light text-brand font-semibold` (green tint)
+- Inactive nav: `text-warm-text-secondary`, hover `bg-warm-bg`
+- User footer: Avatar + name + role + logout icon
+- Section labels: tiny, bold, uppercase, very muted
 
 ### Page Header
-- Flex container, items start, justify between
-- Title: `text-2xl font-bold`
+- Title: `text-page-title` (32px extrabold)
 - Description: `text-warm-text-secondary mt-1`
-- Actions aligned right
+- Actions aligned right, slightly below title top
 
 ### Grid Layouts
 - Stats: `grid grid-cols-4 gap-4`
-- Cards (3-col): `grid grid-cols-3 gap-4`
-- Cards (2-col): `grid grid-cols-2 gap-4`
-- Forms (2-col): `grid grid-cols-2 gap-4`
+- Side-by-side: `grid grid-cols-2 gap-4`
+- Stacked cards: `space-y-3`
 
 ## State Patterns
 
 ### Loading State
-Use `<Skeleton />` components that match the approximate dimensions of the content they replace.
-- Single values: `<Skeleton className="h-8 w-48" />`
-- Cards: `<Skeleton className="h-[120px]" />`
-- Tables: `<Skeleton className="h-[300px]" />`
-- Use `Array.from({ length: n })` to render multiple skeletons
+`<Skeleton />` components with `animate-pulse rounded-btn bg-warm-border/50`.
 
 ### Empty State
-Use the `<EmptyState />` component:
-- Large icon in a rounded circle with `bg-warm-sidebar`
-- Title: `text-lg font-semibold`
-- Description: `text-sm text-warm-text-secondary`, max width 400px
-- Optional CTA button
+`<EmptyState />`:
+- Large icon in `rounded-2xl bg-warm-bg p-5`
+- Title: `text-lg font-bold`
+- Description: `text-sm text-warm-text-secondary leading-relaxed`
+- Optional green CTA button
 
 ### Error State
-- Display error message in a card or toast
-- Use `variant="error"` toast for API errors
-- Mutations show error toast on failure
-- Queries use react-query's built-in error handling
-
-### Confirmation
-- Destructive actions use `confirm()` dialogs
-- Non-destructive mutations use optimistic updates with toast feedback
+- Toast with error variant
+- Inline error message in `text-red-600`
 
 ## Icons
 
-All icons from `lucide-react`. Standard size is `h-4 w-4` (16px). Use `h-5 w-5` for stat card icons and `h-8 w-8` for empty state illustrations.
+All from `lucide-react`. Default: `h-[18px] w-[18px]` (nav), `h-4 w-4` (inline), `h-5 w-5` (stat cards), `h-8 w-8` (empty states).
 
 ## Animation
 
+- Minimal. Basecamp avoids flashy animations.
 - Skeleton: `animate-pulse`
 - Dialog/Dropdown: `animate-in fade-in-0 zoom-in-95`
-- Toast: `slide-in-from-bottom-full`
-- Transitions: `transition-colors`, `transition-shadow` for hover states
+- Buttons: `active:scale-[0.98]` for tactile feedback
+- Transitions: `transition-colors` for hover states
