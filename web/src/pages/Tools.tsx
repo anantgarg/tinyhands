@@ -34,18 +34,38 @@ import {
 import { useAuthStore } from '@/store/auth';
 import { toast } from '@/components/ui/use-toast';
 
-function friendlyToolName(name: string): string {
-  if (!name) return 'Unnamed tool';
-  const parts = name.split('-');
-  if (parts.length >= 2) {
-    const service = parts[0].charAt(0).toUpperCase() + parts[0].slice(1);
-    const action = parts.slice(1).join(' ');
-    if (action === 'read') return `${service} (View)`;
-    if (action === 'write') return `${service} (Edit)`;
-    if (action === 'search') return `${service} (Search)`;
-    return `${service} ${action.charAt(0).toUpperCase() + action.slice(1)}`;
+function fmtUserId(createdBy: unknown): string {
+  if (!createdBy || typeof createdBy !== 'string') return '\u2014';
+  if (createdBy.startsWith('U')) return `@${createdBy}`;
+  return createdBy;
+}
+
+interface ToolGroup {
+  name: string;
+  displayName: string;
+  tools: any[];
+  accessLevels: string[];
+}
+
+function groupToolsByIntegration(tools: any[]): ToolGroup[] {
+  const groups: Record<string, { name: string; tools: any[]; accessLevels: string[] }> = {};
+  for (const tool of tools) {
+    const baseName = tool.name.replace(/-(read|write|search)$/, '');
+    if (!groups[baseName]) {
+      groups[baseName] = { name: baseName, tools: [], accessLevels: [] };
+    }
+    groups[baseName].tools.push(tool);
+    if (tool.accessLevel) {
+      const level = tool.accessLevel.replace('read-only', 'read').replace('read-write', 'write');
+      if (!groups[baseName].accessLevels.includes(level)) {
+        groups[baseName].accessLevels.push(level);
+      }
+    }
   }
-  return name.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  return Object.values(groups).map(g => ({
+    ...g,
+    displayName: g.name.charAt(0).toUpperCase() + g.name.slice(1).replace(/[-_]/g, ' '),
+  }));
 }
 
 export function Tools() {
@@ -116,6 +136,8 @@ function ToolsContent() {
       });
     }
   };
+
+  const toolGroups = groupToolsByIntegration(customTools ?? []);
 
   return (
     <div>
@@ -242,74 +264,99 @@ function ToolsContent() {
                     <TableHead>Name</TableHead>
                     <TableHead>Access</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Creator</TableHead>
                     <TableHead>Created</TableHead>
                     <TableHead className="w-10"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {(customTools ?? []).map((tool) => (
-                    <TableRow key={tool.id}>
-                      <TableCell>
-                        <div>
-                          <p className="font-medium">{tool.displayName || friendlyToolName(tool.name) || 'Unnamed tool'}</p>
-                          <p className="text-xs text-warm-text-secondary line-clamp-1">{tool.description || 'No description'}</p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={tool.accessLevel === 'read-write' ? 'warning' : 'default'}>
-                          {tool.accessLevel === 'read-write' ? 'Read & Write' : 'Read Only'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={tool.approved ? 'success' : 'warning'}>
-                          {tool.approved ? 'Approved' : 'Pending'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-warm-text-secondary text-xs">
-                        {tool.createdAt
-                          ? formatDistanceToNow(new Date(tool.createdAt), { addSuffix: true })
-                          : '\u2014'}
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
-                              <MoreVertical className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem
-                              onClick={() =>
-                                setDetailDialog({
-                                  name: tool.name || '',
-                                  displayName: tool.displayName || tool.name || 'Unnamed',
-                                  description: tool.description || 'No description',
-                                  type: tool.type || 'custom',
-                                  accessLevel: tool.accessLevel || 'read-only',
-                                })
-                              }
-                            >
-                              <Eye className="mr-2 h-4 w-4" />
-                              View Details
-                            </DropdownMenuItem>
-                            {!tool.approved && (
-                              <DropdownMenuItem onClick={() => handleApprove(tool.id)}>
-                                <Check className="mr-2 h-4 w-4" />
-                                Approve
-                              </DropdownMenuItem>
+                  {toolGroups.map((group) => {
+                    const firstTool = group.tools[0];
+                    const allApproved = group.tools.every(t => t.approved);
+                    const earliestDate = group.tools
+                      .filter(t => t.createdAt)
+                      .map(t => new Date(t.createdAt).getTime())
+                      .sort((a, b) => a - b)[0];
+                    return (
+                      <TableRow key={group.name}>
+                        <TableCell>
+                          <div>
+                            <p className="font-medium">{group.displayName}</p>
+                            <p className="text-xs text-warm-text-secondary line-clamp-1">
+                              {firstTool?.description || 'No description'}
+                            </p>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            {group.accessLevels.includes('read') && (
+                              <Badge variant="default">Read</Badge>
                             )}
-                            <DropdownMenuItem
-                              className="text-red-600"
-                              onClick={() => handleDelete(tool.id, tool.displayName || tool.name || 'tool')}
-                            >
-                              <Trash2 className="mr-2 h-4 w-4" />
-                              Delete
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                            {group.accessLevels.includes('write') && (
+                              <Badge variant="warning">Write</Badge>
+                            )}
+                            {group.accessLevels.length === 0 && (
+                              <Badge variant="secondary">{firstTool?.accessLevel || 'read-only'}</Badge>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={allApproved ? 'success' : 'warning'}>
+                            {allApproved ? 'Approved' : 'Pending'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-warm-text-secondary text-xs">
+                          {fmtUserId(firstTool?.createdBy)}
+                        </TableCell>
+                        <TableCell className="text-warm-text-secondary text-xs">
+                          {earliestDate
+                            ? formatDistanceToNow(new Date(earliestDate), { addSuffix: true })
+                            : '\u2014'}
+                        </TableCell>
+                        <TableCell>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={() =>
+                                  setDetailDialog({
+                                    name: group.name,
+                                    displayName: group.displayName,
+                                    description: firstTool?.description || 'No description',
+                                    type: firstTool?.type || 'custom',
+                                    accessLevel: group.accessLevels.join(', ') || firstTool?.accessLevel || 'read-only',
+                                  })
+                                }
+                              >
+                                <Eye className="mr-2 h-4 w-4" />
+                                View Details
+                              </DropdownMenuItem>
+                              {!allApproved && group.tools.filter(t => !t.approved).map(t => (
+                                <DropdownMenuItem key={t.id} onClick={() => handleApprove(t.id)}>
+                                  <Check className="mr-2 h-4 w-4" />
+                                  Approve {group.tools.length > 1 ? t.name : ''}
+                                </DropdownMenuItem>
+                              ))}
+                              {group.tools.map(t => (
+                                <DropdownMenuItem
+                                  key={`del-${t.id}`}
+                                  className="text-red-600"
+                                  onClick={() => handleDelete(t.id, t.displayName || t.name || 'tool')}
+                                >
+                                  <Trash2 className="mr-2 h-4 w-4" />
+                                  Delete {group.tools.length > 1 ? t.name : ''}
+                                </DropdownMenuItem>
+                              ))}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </CardContent>
@@ -367,7 +414,7 @@ function ToolsContent() {
             </div>
             <div className="flex items-center gap-2">
               <span className="text-sm text-warm-text-secondary">Access Level:</span>
-              <Badge variant={detailDialog?.accessLevel === 'read-write' ? 'warning' : 'default'}>
+              <Badge variant={detailDialog?.accessLevel?.includes('write') ? 'warning' : 'default'}>
                 {detailDialog?.accessLevel}
               </Badge>
             </div>

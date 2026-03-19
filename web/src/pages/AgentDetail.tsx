@@ -50,7 +50,6 @@ import {
 } from '@/api/agents';
 import type { Agent as AgentData, AgentVersion } from '@/api/agents';
 import { useAvailableTools } from '@/api/tools';
-import { useSlackUsers } from '@/api/slack';
 import { useUpdateTrigger, useDeleteTrigger } from '@/api/triggers';
 import { renderEmoji } from '@/lib/emoji';
 import { toast } from '@/components/ui/use-toast';
@@ -75,22 +74,6 @@ function InfoTooltip({ text }: { text: string }) {
   );
 }
 
-function normalizeModelValue(model: string): string {
-  if (!model) return '';
-  // Map various model ID formats to our canonical select values
-  if (model.includes('opus')) return 'claude-opus-4-20250514';
-  if (model.includes('haiku')) return 'claude-haiku-4-20250514';
-  if (model.includes('sonnet')) return 'claude-sonnet-4-20250514';
-  return model;
-}
-
-function formatModelLabel(model: string): string {
-  if (model.includes('opus')) return 'Opus';
-  if (model.includes('haiku')) return 'Haiku';
-  if (model.includes('sonnet')) return 'Sonnet';
-  return model || 'Not set';
-}
-
 function activationLabel(agent: AgentData): string {
   if (agent.mentionsOnly) return 'Mentions Only';
   if (agent.respondToAllMessages) return 'All Messages';
@@ -104,8 +87,6 @@ export function AgentDetail() {
   const updateAgent = useUpdateAgent();
   const deleteAgentMut = useDeleteAgent();
   const [activeTab, setActiveTab] = useState('overview');
-  const [editingName, setEditingName] = useState(false);
-  const [nameDraft, setNameDraft] = useState('');
 
   if (isLoading) {
     return (
@@ -160,39 +141,11 @@ export function AgentDetail() {
           <span className="text-3xl">{renderEmoji(agent.avatarEmoji)}</span>
           <div>
             <div className="flex items-center gap-2">
-              {editingName ? (
-                <input
-                  className="text-2xl font-extrabold bg-transparent border-b-2 border-brand outline-none"
-                  value={nameDraft}
-                  onChange={(e) => setNameDraft(e.target.value)}
-                  onBlur={() => {
-                    if (nameDraft.trim() && nameDraft !== agent.name) {
-                      updateAgent.mutate(
-                        { id: agent.id, name: nameDraft.trim() },
-                        { onSuccess: () => toast({ title: 'Agent renamed', variant: 'success' }) },
-                      );
-                    }
-                    setEditingName(false);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
-                    if (e.key === 'Escape') setEditingName(false);
-                  }}
-                  autoFocus
-                />
-              ) : (
-                <h1
-                  className="text-2xl font-extrabold cursor-pointer hover:text-brand transition-colors"
-                  onClick={() => { setNameDraft(agent.name); setEditingName(true); }}
-                  title="Click to rename"
-                >
-                  {agent.name}
-                </h1>
-              )}
+              <h1 className="text-2xl font-extrabold">{agent.name}</h1>
               <Badge variant={agent.status === 'active' ? 'success' : 'secondary'}>
                 {agent.status}
               </Badge>
-              <Badge variant="secondary">{formatModelLabel(agent.model)}</Badge>
+              <Badge variant="secondary">{agent.model}</Badge>
             </div>
           </div>
         </div>
@@ -240,7 +193,7 @@ export function AgentDetail() {
           <MemoryTab agentId={id!} />
         </TabsContent>
         <TabsContent value="triggers">
-          <TriggersTab agentId={id!} agent={agent} />
+          <TriggersTab agentId={id!} />
         </TabsContent>
         <TabsContent value="access">
           <AccessTab agentId={id!} agent={agent} />
@@ -267,7 +220,7 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
   // Configuration editing
   const [configDirty, setConfigDirty] = useState(false);
   const [configDraft, setConfigDraft] = useState({
-    model: normalizeModelValue(agent.model),
+    model: agent.model,
     maxTurns: agent.maxTurns,
     mentionsOnly: agent.mentionsOnly,
     respondToAllMessages: agent.respondToAllMessages,
@@ -337,7 +290,6 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
   const handleAddSelectedTools = () => {
     const tools = Array.from(selectedToolsToAdd);
     if (tools.length === 0) return;
-    // Add them one by one
     let completed = 0;
     for (const tool of tools) {
       addAgentTool.mutate(
@@ -367,27 +319,9 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
     return acc;
   }, {});
 
-  const BUILTIN_FRIENDLY_NAMES: Record<string, string> = {
-    Bash: 'Run Commands',
-    Read: 'Read Files',
-    Write: 'Write Files',
-    Edit: 'Edit Files',
-    Glob: 'Find Files',
-    Grep: 'Search Code',
-    WebSearch: 'Web Search',
-    WebFetch: 'Fetch Web Pages',
-    NotebookEdit: 'Edit Notebooks',
-    TodoWrite: 'Task Planner',
-    Agent: 'Sub-Agent',
-    Mcp: 'External Service',
-  };
-
   const getToolDisplayName = (toolName: string): string => {
     const meta = (availableTools ?? []).find((t) => t.name === toolName);
-    if (meta?.displayName) return meta.displayName;
-    if (BUILTIN_FRIENDLY_NAMES[toolName]) return BUILTIN_FRIENDLY_NAMES[toolName];
-    // Convert camelCase/kebab-case to friendly name
-    return toolName.replace(/[-_]/g, ' ').replace(/([a-z])([A-Z])/g, '$1 $2').replace(/\b\w/g, c => c.toUpperCase());
+    return meta?.displayName ?? toolName;
   };
 
   return (
@@ -442,28 +376,28 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
             <div>
               <Label className="text-warm-text-secondary text-xs">Model</Label>
               <Select value={configDraft.model} onValueChange={(v) => updateConfig({ model: v })}>
-                <SelectTrigger className="mt-1"><SelectValue placeholder="Select model" /></SelectTrigger>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="claude-sonnet-4-20250514">Sonnet</SelectItem>
-                  <SelectItem value="claude-opus-4-20250514">Opus</SelectItem>
-                  <SelectItem value="claude-haiku-4-20250514">Haiku</SelectItem>
+                  <SelectItem value="claude-sonnet-4-20250514">Claude Sonnet 4</SelectItem>
+                  <SelectItem value="claude-opus-4-20250514">Claude Opus 4</SelectItem>
+                  <SelectItem value="claude-haiku-4-20250514">Claude Haiku 4</SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
-            {/* Effort */}
+            {/* Response Depth */}
             <div>
-              <Label className="text-warm-text-secondary text-xs">Effort</Label>
+              <Label className="text-warm-text-secondary text-xs">Response Depth</Label>
               <Select
                 value={String(configDraft.maxTurns)}
                 onValueChange={(v) => updateConfig({ maxTurns: Number(v) })}
               >
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="10">Quick</SelectItem>
-                  <SelectItem value="25">Standard</SelectItem>
-                  <SelectItem value="50">Thorough</SelectItem>
-                  <SelectItem value="100">Maximum</SelectItem>
+                  <SelectItem value="10">Quick (10)</SelectItem>
+                  <SelectItem value="25">Standard (25)</SelectItem>
+                  <SelectItem value="50">Thorough (50)</SelectItem>
+                  <SelectItem value="100">Unlimited (100)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -496,30 +430,11 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
               </Select>
             </div>
 
-            {/* Write Safety */}
-            <div>
-              <Label className="text-warm-text-secondary text-xs">
-                Write Safety
-                <InfoTooltip text="Controls whether the agent needs approval before making changes. Automatic = no approval needed. Ask User = asks the person who triggered the agent. Ask Owner/Admins = asks an agent owner or admin to approve." />
-              </Label>
-              <Select
-                value={configDraft.writePolicy}
-                onValueChange={(v) => updateConfig({ writePolicy: v })}
-              >
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="auto">Automatic</SelectItem>
-                  <SelectItem value="confirm">Ask User First</SelectItem>
-                  <SelectItem value="admin_confirm">Ask Owner/Admins</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
             {/* Access */}
             <div>
               <Label className="text-warm-text-secondary text-xs">
                 Access
-                <InfoTooltip text="Controls who can use this agent. Everyone = all workspace members. Restricted = only people with assigned roles. Private = agent is hidden from others." />
+                <InfoTooltip text="Everyone = all workspace members can use. Members Only = only users with explicit roles. Hidden = agent is invisible." />
               </Label>
               <Select
                 value={configDraft.defaultAccess}
@@ -528,8 +443,8 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="member">Everyone</SelectItem>
-                  <SelectItem value="viewer">Restricted</SelectItem>
-                  <SelectItem value="none">Private</SelectItem>
+                  <SelectItem value="viewer">Members Only</SelectItem>
+                  <SelectItem value="none">Hidden</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -537,15 +452,32 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
         </CardContent>
       </Card>
 
-      {/* Section 3: Tools */}
+      {/* Section 3: Tools & Actions */}
       <Card>
         <CardHeader className="flex-row items-center justify-between">
-          <CardTitle className="text-base">Tools ({currentTools.length})</CardTitle>
+          <CardTitle className="text-base">Tools & Actions</CardTitle>
           <Button variant="ghost" size="sm" onClick={() => { setShowAddTool(true); setSelectedToolsToAdd(new Set()); }}>
             <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Tool
           </Button>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-6">
+          {/* Action Approval setting */}
+          <div>
+            <Label className="text-warm-text-secondary text-xs">
+              Action Approval
+              <InfoTooltip text="Controls whether the agent needs approval before making changes. Automatic = no approval needed. Ask User = asks the person who triggered the agent. Ask Owner/Admins = asks an agent owner or admin to approve." />
+            </Label>
+            <Select value={configDraft.writePolicy} onValueChange={(v) => updateConfig({ writePolicy: v })}>
+              <SelectTrigger className="mt-1 max-w-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">Automatic</SelectItem>
+                <SelectItem value="confirm">Ask User First</SelectItem>
+                <SelectItem value="admin_confirm">Ask Owner/Admins</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Tools table */}
           {currentTools.length === 0 ? (
             <p className="text-sm text-warm-text-secondary">No tools configured</p>
           ) : (
@@ -577,6 +509,10 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
               </Table>
             </div>
           )}
+
+          <p className="text-xs text-warm-text-secondary">
+            Tools use team credentials by default. Configure per-tool credentials in <Link to="/connections" className="text-brand hover:underline">Connections</Link>.
+          </p>
         </CardContent>
       </Card>
 
@@ -780,10 +716,12 @@ function RunsTab({ agentId }: { agentId: string }) {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead>Trace ID</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Triggered By</TableHead>
+              <TableHead>Model</TableHead>
               <TableHead>Duration</TableHead>
               <TableHead>Cost</TableHead>
+              <TableHead>Error</TableHead>
               <TableHead>Time</TableHead>
             </TableRow>
           </TableHeader>
@@ -799,21 +737,29 @@ function RunsTab({ agentId }: { agentId: string }) {
                     }
                   }}
                 >
+                  <TableCell className="font-mono text-xs">{run.traceId?.slice(0, 8)}</TableCell>
                   <TableCell>
                     <Badge variant={run.status === 'success' ? 'success' : run.status === 'error' ? 'danger' : 'secondary'}>
-                      {run.status === 'success' ? 'Completed' : run.status === 'error' ? 'Failed' : 'Running'}
+                      {run.status}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-sm">{run.displayName || '\u2014'}</TableCell>
+                  <TableCell className="text-warm-text-secondary text-sm">{run.model}</TableCell>
                   <TableCell className="text-sm">{formatDuration(run.durationMs)}</TableCell>
                   <TableCell className="text-sm">{formatCost(run.estimatedCostUsd)}</TableCell>
+                  <TableCell className="text-sm max-w-[200px] truncate">
+                    {run.status === 'error' ? (
+                      <span className="text-red-600">{run.output || 'Error'}</span>
+                    ) : (
+                      '\u2014'
+                    )}
+                  </TableCell>
                   <TableCell className="text-warm-text-secondary text-sm">
                     {formatDistanceToNow(new Date(run.createdAt), { addSuffix: true })}
                   </TableCell>
                 </TableRow>
                 {expandedRun === run.id && run.output && (
                   <TableRow key={`${run.id}-expanded`}>
-                    <TableCell colSpan={5} className="bg-red-50 border-t-0">
+                    <TableCell colSpan={7} className="bg-red-50 border-t-0">
                       <pre className="text-xs text-red-700 whitespace-pre-wrap p-2 max-h-[200px] overflow-y-auto">
                         {run.output}
                       </pre>
@@ -824,7 +770,7 @@ function RunsTab({ agentId }: { agentId: string }) {
             ))}
             {runs.length === 0 && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-warm-text-secondary">
+                <TableCell colSpan={7} className="text-center text-warm-text-secondary">
                   No runs yet
                 </TableCell>
               </TableRow>
@@ -993,7 +939,7 @@ function MemoryTab({ agentId }: { agentId: string }) {
 
 // ---- Triggers Tab ----
 
-function TriggersTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
+function TriggersTab({ agentId }: { agentId: string }) {
   const { data: triggers, isLoading } = useAgentTriggers(agentId);
   const updateTrigger = useUpdateTrigger();
   const deleteTrigger = useDeleteTrigger();
@@ -1073,30 +1019,6 @@ function TriggersTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
 
   return (
     <div className="space-y-4">
-      {/* Slack Activation */}
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="text-base">Slack Activation</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-warm-text-secondary mb-3">
-            Controls how the agent responds to messages in its Slack channels.
-          </p>
-          <div className="flex items-center gap-4">
-            <Badge variant={agent.mentionsOnly ? 'default' : agent.respondToAllMessages ? 'warning' : 'success'} className="text-sm px-3 py-1">
-              {agent.mentionsOnly ? 'Mentions Only' : agent.respondToAllMessages ? 'All Messages' : 'Relevant Messages'}
-            </Badge>
-            <span className="text-xs text-warm-text-secondary">
-              {agent.mentionsOnly
-                ? 'Only responds when @mentioned directly'
-                : agent.respondToAllMessages
-                  ? 'Responds to every message in its channels'
-                  : 'Automatically responds to messages that seem relevant'}
-            </span>
-          </div>
-        </CardContent>
-      </Card>
-
       <div className="flex justify-end">
         <Button variant="outline" size="sm" onClick={() => setShowAddTrigger(true)}>
           <Plus className="mr-2 h-4 w-4" />
@@ -1237,20 +1159,8 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
 
   // Add user dialog
   const [showAddUser, setShowAddUser] = useState(false);
-  const [userSearch, setUserSearch] = useState('');
-  const [selectedUser, setSelectedUser] = useState<{ id: string; name: string; avatarUrl: string } | null>(null);
+  const [newUserId, setNewUserId] = useState('');
   const [newUserRole, setNewUserRole] = useState('member');
-
-  const { data: slackUsersData } = useSlackUsers();
-  const slackUsers = slackUsersData?.users ?? [];
-
-  const filteredUsers = userSearch.length > 0
-    ? slackUsers.filter(u => {
-        const search = userSearch.toLowerCase();
-        return (u.realName?.toLowerCase().includes(search) || u.displayName?.toLowerCase().includes(search) || u.name?.toLowerCase().includes(search))
-          && !(roles ?? []).some(r => r.userId === u.id);
-      }).slice(0, 8)
-    : [];
 
   const handleSaveAccess = () => {
     updateAccess.mutate(
@@ -1267,15 +1177,14 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
   };
 
   const handleAddUser = () => {
-    if (!selectedUser) return;
+    if (!newUserId.trim()) return;
     setRole.mutate(
-      { agentId, userId: selectedUser.id, role: newUserRole },
+      { agentId, userId: newUserId, role: newUserRole },
       {
         onSuccess: () => {
-          toast({ title: 'User added', variant: 'success' });
+          toast({ title: 'User role added', variant: 'success' });
           setShowAddUser(false);
-          setSelectedUser(null);
-          setUserSearch('');
+          setNewUserId('');
         },
       },
     );
@@ -1300,7 +1209,7 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
         <CardHeader>
           <CardTitle className="text-base">
             Default Access
-            <InfoTooltip text="Sets the baseline access for all workspace members. Individual roles below can override this." />
+            <InfoTooltip text="viewer = can see the agent but not send tasks. member = can use the agent. none = agent is hidden." />
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -1309,9 +1218,9 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
               <Select value={defaultAccess} onValueChange={setDefaultAccess}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="viewer">Can View Only</SelectItem>
-                  <SelectItem value="member">Can Use</SelectItem>
-                  <SelectItem value="none">Hidden</SelectItem>
+                  <SelectItem value="viewer">Viewer</SelectItem>
+                  <SelectItem value="member">Member</SelectItem>
+                  <SelectItem value="none">None</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1322,12 +1231,12 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
         </CardContent>
       </Card>
 
-      {/* Write Safety */}
+      {/* Write Policy */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">
-            Write Safety
-            <InfoTooltip text="Controls whether the agent needs approval before making changes to external tools." />
+            Write Policy
+            <InfoTooltip text="auto = agent can write freely. confirm = asks the user to approve writes. admin_confirm = asks an agent owner to approve writes." />
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -1336,9 +1245,9 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
               <Select value={writePolicy} onValueChange={setWritePolicy}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="auto">Automatic</SelectItem>
-                  <SelectItem value="confirm">Ask User First</SelectItem>
-                  <SelectItem value="admin_confirm">Ask Owner/Admins</SelectItem>
+                  <SelectItem value="auto">Auto</SelectItem>
+                  <SelectItem value="confirm">Confirm</SelectItem>
+                  <SelectItem value="admin_confirm">Admin Confirm</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1355,11 +1264,11 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
           <div>
             <CardTitle className="text-base">Roles</CardTitle>
             <p className="text-xs text-warm-text-secondary mt-1">
-              Individual roles override the default access level.
+              Roles override the default access. Owner = full control. Member = can use the agent. Viewer = can see but not interact.
             </p>
           </div>
           <Button variant="ghost" size="sm" onClick={() => setShowAddUser(true)}>
-            <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Person
+            <Plus className="mr-1.5 h-3.5 w-3.5" /> Add User
           </Button>
         </CardHeader>
         <CardContent>
@@ -1397,7 +1306,7 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                         </SelectContent>
                       </Select>
                     </TableCell>
-                    <TableCell className="text-warm-text-secondary text-sm">{role.grantedByName ?? '\u2014'}</TableCell>
+                    <TableCell className="text-warm-text-secondary text-sm">{role.grantedBy ?? '-'}</TableCell>
                     <TableCell className="text-warm-text-secondary text-sm">
                       {role.grantedAt ? formatDistanceToNow(new Date(role.grantedAt), { addSuffix: true }) : '-'}
                     </TableCell>
@@ -1427,56 +1336,21 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
       </Card>
 
       {/* Add User Dialog */}
-      <Dialog open={showAddUser} onOpenChange={(open) => { setShowAddUser(open); if (!open) { setSelectedUser(null); setUserSearch(''); } }}>
+      <Dialog open={showAddUser} onOpenChange={setShowAddUser}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add Person</DialogTitle>
-            <DialogDescription>Search for a team member to add to this agent.</DialogDescription>
+            <DialogTitle>Add User Role</DialogTitle>
+            <DialogDescription>Assign a role to a user for this agent.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label>Person</Label>
-              {selectedUser ? (
-                <div className="flex items-center gap-2 mt-1 p-2 border border-warm-border rounded-lg">
-                  <img src={selectedUser.avatarUrl} alt="" className="h-8 w-8 rounded-full" />
-                  <span className="font-medium flex-1">{selectedUser.name}</span>
-                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setSelectedUser(null); setUserSearch(''); }}>
-                    <X className="h-3 w-3" />
-                  </Button>
-                </div>
-              ) : (
-                <div className="relative">
-                  <Input
-                    value={userSearch}
-                    onChange={(e) => setUserSearch(e.target.value)}
-                    placeholder="Type a name..."
-                    className="mt-1"
-                    autoFocus
-                  />
-                  {filteredUsers.length > 0 && (
-                    <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-warm-border rounded-lg shadow-lg max-h-[240px] overflow-y-auto">
-                      {filteredUsers.map((user) => (
-                        <button
-                          key={user.id}
-                          className="flex items-center gap-3 w-full px-3 py-2 hover:bg-warm-bg text-left transition-colors"
-                          onClick={() => {
-                            setSelectedUser({ id: user.id, name: user.realName || user.displayName || user.name, avatarUrl: user.avatarUrl });
-                            setUserSearch('');
-                          }}
-                        >
-                          <img src={user.avatarUrl} alt="" className="h-8 w-8 rounded-full" />
-                          <div>
-                            <p className="text-sm font-medium">{user.realName || user.displayName || user.name}</p>
-                            {user.displayName && user.realName && user.displayName !== user.realName && (
-                              <p className="text-xs text-warm-text-secondary">{user.displayName}</p>
-                            )}
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
+              <Label>User ID</Label>
+              <Input
+                value={newUserId}
+                onChange={(e) => setNewUserId(e.target.value)}
+                placeholder="Enter Slack user ID..."
+                className="mt-1"
+              />
             </div>
             <div>
               <Label>Role</Label>
@@ -1493,8 +1367,8 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setShowAddUser(false); setSelectedUser(null); setUserSearch(''); }}>Cancel</Button>
-            <Button onClick={handleAddUser} disabled={!selectedUser || setRole.isPending}>Add</Button>
+            <Button variant="outline" onClick={() => setShowAddUser(false)}>Cancel</Button>
+            <Button onClick={handleAddUser} disabled={setRole.isPending}>Add</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

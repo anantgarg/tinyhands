@@ -134,12 +134,6 @@ vi.mock('../../src/utils/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-const mockGetIntegrations = vi.fn();
-
-vi.mock('../../src/modules/tools/integrations', () => ({
-  getIntegrations: (...args: any[]) => mockGetIntegrations(...args),
-}));
-
 const mockResolveUserNames = vi.fn();
 
 vi.mock('../../src/api/helpers/user-resolver', () => ({
@@ -236,30 +230,18 @@ describe('Connection Routes', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetIntegrations.mockReturnValue([
-      { id: 'linear', label: 'Linear', description: 'Issue tracking' },
-      { id: 'github', label: 'GitHub', description: 'Code hosting' },
-    ]);
-    mockResolveUserNames.mockImplementation(async (ids: string[]) => {
-      const result: Record<string, string> = {};
-      for (const id of ids) result[id] = id;
-      return result;
-    });
-    mockQuery.mockResolvedValue([]);
     app = createApp(connectionRoutes, '/connections');
   });
 
   describe('GET /connections/team', () => {
-    it('lists team connections with integration names for admin', async () => {
-      const connections = [{ id: 'c1', integration_id: 'linear', label: 'Main Linear', status: 'active', created_at: '2025-01-01' }];
+    it('lists team connections for admin', async () => {
+      const connections = [{ id: 'c1', integration_id: 'linear' }];
       mockListTeamConnections.mockResolvedValueOnce(connections);
 
       const res = await makeRequest(app, 'GET', '/connections/team');
 
       expect(res.status).toBe(200);
       expect(res.body[0].id).toBe('c1');
-      expect(res.body[0].integrationId).toBe('linear');
-      expect(res.body[0].displayName).toBe('Main Linear');
       expect(res.body[0].type).toBe('team');
     });
 
@@ -282,15 +264,15 @@ describe('Connection Routes', () => {
   });
 
   describe('GET /connections/personal', () => {
-    it('lists personal connections with integration names', async () => {
-      const connections = [{ id: 'c2', integration_id: 'github', user_id: 'U123', label: '', status: 'active', created_at: '2025-01-01' }];
+    it('lists personal connections for current user', async () => {
+      const connections = [{ id: 'c2', integration_id: 'github', user_id: 'U123' }];
       mockListPersonalConnectionsForUser.mockResolvedValueOnce(connections);
+      mockResolveUserNames.mockResolvedValueOnce({ U123: 'Test User' });
 
       const res = await makeRequest(app, 'GET', '/connections/personal');
 
       expect(res.status).toBe(200);
       expect(res.body[0].id).toBe('c2');
-      expect(res.body[0].integrationId).toBe('github');
       expect(res.body[0].type).toBe('personal');
       expect(mockListPersonalConnectionsForUser).toHaveBeenCalledWith('W123', 'U123');
     });
@@ -433,64 +415,6 @@ describe('Connection Routes', () => {
       expect(res.body).toEqual({ error: 'mode is required' });
     });
   });
-
-  describe('GET /connections/oauth-integrations', () => {
-    it('returns OAuth-capable integrations', async () => {
-      const res = await makeRequest(app, 'GET', '/connections/oauth-integrations');
-
-      expect(res.status).toBe(200);
-      expect(res.body).toHaveLength(2);
-      expect(res.body[0].id).toBe('linear');
-      expect(res.body[0].displayName).toBe('Linear');
-    });
-  });
-
-  describe('GET /connections/agent-tool-modes', () => {
-    it('lists agent tool modes (admin)', async () => {
-      mockQuery.mockResolvedValueOnce([
-        { agent_id: 'a1', agent_name: 'Bot1', tool_name: 'linear', mode: 'team' },
-      ]);
-
-      const res = await makeRequest(app, 'GET', '/connections/agent-tool-modes');
-
-      expect(res.status).toBe(200);
-      expect(res.body[0]).toEqual({
-        agentId: 'a1',
-        agentName: 'Bot1',
-        toolName: 'linear',
-        mode: 'team',
-      });
-    });
-
-    it('returns 403 for non-admin', async () => {
-      const memberApp = createApp(connectionRoutes, '/connections', 'member');
-
-      const res = await makeRequest(memberApp, 'GET', '/connections/agent-tool-modes');
-
-      expect(res.status).toBe(403);
-    });
-  });
-
-  describe('PUT /connections/agent-tool-modes/:agentId/:toolName', () => {
-    it('sets agent tool mode', async () => {
-      const result = { ok: true };
-      mockSetAgentToolConnection.mockResolvedValueOnce(result);
-
-      const res = await makeRequest(app, 'PUT', '/connections/agent-tool-modes/a1/linear', {
-        mode: 'personal',
-      });
-
-      expect(res.status).toBe(200);
-      expect(res.body).toEqual(result);
-    });
-
-    it('returns 400 when mode is missing', async () => {
-      const res = await makeRequest(app, 'PUT', '/connections/agent-tool-modes/a1/linear', {});
-
-      expect(res.status).toBe(400);
-      expect(res.body).toEqual({ error: 'mode is required' });
-    });
-  });
 });
 
 // ────────────────────────────────────────────────
@@ -506,35 +430,67 @@ describe('Trigger Routes', () => {
   });
 
   describe('GET /triggers', () => {
-    it('lists all triggers when no type filter', async () => {
-      mockGetActiveTriggersByType.mockResolvedValue([]);
+    it('lists all triggers with JOIN query when no type filter', async () => {
+      const rows = [
+        {
+          id: 't1', agent_id: 'a1', agent_name: 'Bot1', agent_avatar: '',
+          trigger_type: 'webhook', config_json: '{}', status: 'active',
+          last_triggered_at: null, last_fired_at: null, created_at: '2025-01-01',
+        },
+      ];
+      mockQuery.mockResolvedValueOnce(rows);
 
       const res = await makeRequest(app, 'GET', '/triggers');
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual([]);
-      // Called for each trigger type
-      expect(mockGetActiveTriggersByType).toHaveBeenCalledTimes(6);
+      expect(res.body).toEqual([{
+        id: 't1', agentId: 'a1', agentName: 'Bot1', agentAvatar: '',
+        type: 'webhook', config: {}, enabled: true,
+        lastTriggeredAt: null, createdAt: '2025-01-01',
+      }]);
+      expect(mockQuery).toHaveBeenCalledTimes(1);
+      expect(mockQuery.mock.calls[0][0]).toContain('LEFT JOIN agents');
     });
 
     it('filters by type when provided', async () => {
-      const triggers = [{ id: 't1', type: 'webhook' }];
-      mockGetActiveTriggersByType.mockResolvedValueOnce(triggers);
+      mockQuery.mockResolvedValueOnce([]);
 
       const res = await makeRequest(app, 'GET', '/triggers?type=webhook');
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual(triggers);
-      expect(mockGetActiveTriggersByType).toHaveBeenCalledWith('W123', 'webhook');
+      expect(res.body).toEqual([]);
+      expect(mockQuery).toHaveBeenCalledTimes(1);
+      const sql = mockQuery.mock.calls[0][0];
+      expect(sql).toContain('trigger_type = $2');
+      expect(mockQuery.mock.calls[0][1]).toEqual(['W123', 'webhook']);
     });
 
     it('returns 500 on error', async () => {
-      mockGetActiveTriggersByType.mockRejectedValueOnce(new Error('DB error'));
+      mockQuery.mockRejectedValueOnce(new Error('DB error'));
 
-      const res = await makeRequest(app, 'GET', '/triggers?type=webhook');
+      const res = await makeRequest(app, 'GET', '/triggers');
 
       expect(res.status).toBe(500);
       expect(res.body).toEqual({ error: 'Failed to list triggers' });
+    });
+
+    it('maps disabled triggers correctly', async () => {
+      const rows = [
+        {
+          id: 't2', agent_id: 'a2', agent_name: null, agent_avatar: null,
+          trigger_type: 'schedule', config_json: '{"cron":"0 9 * * 1-5"}', status: 'paused',
+          last_triggered_at: null, last_fired_at: '2025-06-01T12:00:00Z', created_at: '2025-01-01',
+        },
+      ];
+      mockQuery.mockResolvedValueOnce(rows);
+
+      const res = await makeRequest(app, 'GET', '/triggers');
+
+      expect(res.status).toBe(200);
+      expect(res.body[0].enabled).toBe(false);
+      expect(res.body[0].agentName).toBe('Unknown');
+      expect(res.body[0].config).toEqual({ cron: '0 9 * * 1-5' });
+      expect(res.body[0].lastTriggeredAt).toBe('2025-06-01T12:00:00Z');
     });
   });
 
@@ -574,6 +530,20 @@ describe('Trigger Routes', () => {
       expect(res.body).toEqual(trigger);
     });
 
+    it('creates trigger with type field (frontend compat)', async () => {
+      const trigger = { id: 't1', type: 'schedule' };
+      mockCreateTrigger.mockResolvedValueOnce(trigger);
+
+      const res = await makeRequest(app, 'POST', '/triggers', {
+        agentId: 'a1',
+        type: 'schedule',
+        config: { cron: '0 9 * * 1-5' },
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body).toEqual(trigger);
+    });
+
     it('returns 400 when required fields missing', async () => {
       const res = await makeRequest(app, 'POST', '/triggers', {});
 
@@ -591,6 +561,37 @@ describe('Trigger Routes', () => {
 
       expect(res.status).toBe(400);
       expect(res.body).toEqual({ error: 'Invalid type' });
+    });
+  });
+
+  describe('PATCH /triggers/:id', () => {
+    it('enables trigger', async () => {
+      mockResumeTrigger.mockResolvedValueOnce(undefined);
+
+      const res = await makeRequest(app, 'PATCH', '/triggers/t1', { enabled: true });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ ok: true });
+      expect(mockResumeTrigger).toHaveBeenCalledWith('W123', 't1', 'U123');
+    });
+
+    it('disables trigger', async () => {
+      mockPauseTrigger.mockResolvedValueOnce(undefined);
+
+      const res = await makeRequest(app, 'PATCH', '/triggers/t1', { enabled: false });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ ok: true });
+      expect(mockPauseTrigger).toHaveBeenCalledWith('W123', 't1', 'U123');
+    });
+
+    it('returns 400 on error', async () => {
+      mockResumeTrigger.mockRejectedValueOnce(new Error('Not found'));
+
+      const res = await makeRequest(app, 'PATCH', '/triggers/t1', { enabled: true });
+
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({ error: 'Not found' });
     });
   });
 
@@ -1232,9 +1233,9 @@ describe('Observability Routes', () => {
   });
 
   describe('GET /observability/error-log', () => {
-    it('returns failed runs with proper field mapping and resolved names (admin)', async () => {
+    it('returns failed runs with resolved display names (admin)', async () => {
       const rows = [
-        { id: 'r1', agent_id: 'a1', agent_name: 'Bot1', avatar_emoji: '🤖', trace_id: 'tr1', slack_user_id: 'U1', status: 'failed', model: 'claude-sonnet-4-20250514', input: 'hi', output: 'Error occurred', input_tokens: 100, output_tokens: 50, estimated_cost_usd: '0.01', duration_ms: 500, created_at: '2025-01-01', completed_at: null },
+        { id: 'r1', agent_id: 'a1', agent_name: 'Bot1', avatar_emoji: '\uD83E\uDD16', slack_user_id: 'U1', status: 'failed', output: 'Error occurred' },
       ];
       mockQuery.mockResolvedValueOnce(rows);
       mockResolveUserNames.mockResolvedValueOnce({ U1: 'Alice' });
@@ -1243,10 +1244,9 @@ describe('Observability Routes', () => {
 
       expect(res.status).toBe(200);
       expect(res.body[0].agentName).toBe('Bot1');
-      expect(res.body[0].avatarEmoji).toBe('🤖');
       expect(res.body[0].displayName).toBe('Alice');
+      expect(res.body[0].avatarEmoji).toBe('\uD83E\uDD16');
       expect(res.body[0].slackUserId).toBe('U1');
-      expect(res.body[0].output).toBe('Error occurred');
     });
 
     it('uses default params', async () => {

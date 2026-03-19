@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from './client';
 
-export interface SlackUser {
+interface SlackUser {
   id: string;
   name: string;
   realName: string;
@@ -11,10 +11,15 @@ export interface SlackUser {
   isOwner: boolean;
 }
 
+interface SlackUsersResponse {
+  users: SlackUser[];
+  nextCursor: string | null;
+}
+
 export function useSlackUsers() {
-  return useQuery<{ users: SlackUser[]; nextCursor: string | null }>({
-    queryKey: ['slack', 'users'],
-    queryFn: () => api.get('/slack/users?limit=500'),
+  return useQuery<SlackUsersResponse>({
+    queryKey: ['slack-users'],
+    queryFn: () => api.get('/slack/users'),
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   });
 }
