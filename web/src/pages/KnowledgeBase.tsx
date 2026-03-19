@@ -43,7 +43,7 @@ import { toast } from '@/components/ui/use-toast';
 
 function fmtUserId(createdBy: unknown): string {
   if (!createdBy || typeof createdBy !== 'string') return '\u2014';
-  if (createdBy.startsWith('U')) return `@${createdBy}`;
+  if (createdBy.startsWith('U')) return '\u2014';
   return createdBy;
 }
 

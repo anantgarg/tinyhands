@@ -72,7 +72,6 @@ export function Agents() {
   function formatCreator(agent: Agent): string {
     if (agent.createdBy === currentUserId) return 'You';
     if (agent.createdByDisplayName) return agent.createdByDisplayName;
-    if (agent.createdBy) return `@${agent.createdBy}`;
     return '\u2014';
   }
 

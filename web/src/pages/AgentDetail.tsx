@@ -716,12 +716,10 @@ function RunsTab({ agentId }: { agentId: string }) {
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>Trace ID</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Model</TableHead>
+              <TableHead>Triggered By</TableHead>
               <TableHead>Duration</TableHead>
               <TableHead>Cost</TableHead>
-              <TableHead>Error</TableHead>
               <TableHead>Time</TableHead>
             </TableRow>
           </TableHeader>
@@ -737,29 +735,21 @@ function RunsTab({ agentId }: { agentId: string }) {
                     }
                   }}
                 >
-                  <TableCell className="font-mono text-xs">{run.traceId?.slice(0, 8)}</TableCell>
                   <TableCell>
                     <Badge variant={run.status === 'success' ? 'success' : run.status === 'error' ? 'danger' : 'secondary'}>
                       {run.status}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-warm-text-secondary text-sm">{run.model}</TableCell>
+                  <TableCell className="text-warm-text-secondary text-sm">{run.slackUserName || '\u2014'}</TableCell>
                   <TableCell className="text-sm">{formatDuration(run.durationMs)}</TableCell>
                   <TableCell className="text-sm">{formatCost(run.estimatedCostUsd)}</TableCell>
-                  <TableCell className="text-sm max-w-[200px] truncate">
-                    {run.status === 'error' ? (
-                      <span className="text-red-600">{run.output || 'Error'}</span>
-                    ) : (
-                      '\u2014'
-                    )}
-                  </TableCell>
                   <TableCell className="text-warm-text-secondary text-sm">
                     {formatDistanceToNow(new Date(run.createdAt), { addSuffix: true })}
                   </TableCell>
                 </TableRow>
                 {expandedRun === run.id && run.output && (
                   <TableRow key={`${run.id}-expanded`}>
-                    <TableCell colSpan={7} className="bg-red-50 border-t-0">
+                    <TableCell colSpan={5} className="bg-red-50 border-t-0">
                       <pre className="text-xs text-red-700 whitespace-pre-wrap p-2 max-h-[200px] overflow-y-auto">
                         {run.output}
                       </pre>
@@ -770,7 +760,7 @@ function RunsTab({ agentId }: { agentId: string }) {
             ))}
             {runs.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-warm-text-secondary">
+                <TableCell colSpan={5} className="text-center text-warm-text-secondary">
                   No runs yet
                 </TableCell>
               </TableRow>

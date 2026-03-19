@@ -213,7 +213,7 @@ function AccessRolesContent() {
                           <AvatarFallback>{safeInitial(role.displayName)}</AvatarFallback>
                         </Avatar>
                         <span className="font-medium">
-                          {role.displayName || (role.userId ? `@${role.userId}` : 'Unknown')}
+                          {role.displayName || 'Unknown'}
                         </span>
                       </div>
                     </TableCell>

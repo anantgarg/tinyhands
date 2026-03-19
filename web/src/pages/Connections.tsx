@@ -131,7 +131,7 @@ function ConnectionsContent() {
                   </Badge>
                 </TableCell>
                 {showUser && (
-                  <TableCell className="text-warm-text-secondary">{conn.userDisplayName ?? (conn.userId ? `@${conn.userId}` : '\u2014')}</TableCell>
+                  <TableCell className="text-warm-text-secondary">{conn.userDisplayName ?? '\u2014'}</TableCell>
                 )}
                 <TableCell className="text-warm-text-secondary text-xs">
                   {conn.createdAt

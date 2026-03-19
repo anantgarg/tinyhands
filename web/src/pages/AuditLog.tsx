@@ -38,7 +38,6 @@ function humanizeAction(action: unknown): string {
 
 function fmtUserId(displayName: unknown, userId: unknown): string {
   if (displayName && typeof displayName === 'string' && displayName.trim()) return displayName;
-  if (userId && typeof userId === 'string') return `@${userId}`;
   return '\u2014';
 }
 

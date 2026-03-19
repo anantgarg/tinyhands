@@ -36,8 +36,7 @@ function fmtRelative(v: unknown): string {
 }
 function fmtUserId(displayName: unknown, userId: unknown): string {
   if (displayName && typeof displayName === 'string' && displayName.trim()) return displayName;
-  if (userId && typeof userId === 'string') return `@${userId}`;
-  return 'Unknown';
+  return '\u2014';
 }
 function humanizeAction(action: unknown): string {
   if (!action || typeof action !== 'string') return '\u2014';
@@ -227,7 +226,7 @@ export function Dashboard() {
           ) : (
             <TooltipProvider>
               <Table>
-                <TableHeader><TableRow><TableHead>Agent</TableHead><TableHead>Trace</TableHead><TableHead>Status</TableHead><TableHead>Model</TableHead><TableHead>Duration</TableHead><TableHead>Cost</TableHead><TableHead>Time</TableHead></TableRow></TableHeader>
+                <TableHeader><TableRow><TableHead>Agent</TableHead><TableHead>Status</TableHead><TableHead>Duration</TableHead><TableHead>Cost</TableHead><TableHead>Time</TableHead></TableRow></TableHeader>
                 <TableBody>
                   {(recentRuns.data ?? []).map((r) => (
                     <TableRow key={r.id}>
@@ -237,7 +236,6 @@ export function Dashboard() {
                           <span className="font-medium">{r.agentName || '\u2014'}</span>
                         </div>
                       </TableCell>
-                      <TableCell className="font-mono text-xs">{(r.traceId || '\u2014').slice(0, 8)}</TableCell>
                       <TableCell>
                         {r.status === 'failed' ? (
                           <Tooltip>
@@ -252,13 +250,12 @@ export function Dashboard() {
                           <Badge variant={r.status === 'completed' ? 'success' : 'secondary'}>{r.status ?? 'unknown'}</Badge>
                         )}
                       </TableCell>
-                      <TableCell className="text-warm-text-secondary">{r.model || '\u2014'}</TableCell>
                       <TableCell>{fmtMs(r.durationMs)}</TableCell>
                       <TableCell>{fmt$(r.cost)}</TableCell>
                       <TableCell className="text-warm-text-secondary text-xs">{fmtRelative(r.createdAt)}</TableCell>
                     </TableRow>
                   ))}
-                  {(recentRuns.data ?? []).length === 0 && <TableRow><TableCell colSpan={7} className="text-center text-warm-text-secondary">No runs yet</TableCell></TableRow>}
+                  {(recentRuns.data ?? []).length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-warm-text-secondary">No runs yet</TableCell></TableRow>}
                 </TableBody>
               </Table>
             </TooltipProvider>

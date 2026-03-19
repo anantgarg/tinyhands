@@ -18,7 +18,6 @@ import { KnowledgeBase } from '@/pages/KnowledgeBase';
 import { KBSources } from '@/pages/KBSources';
 import { Connections } from '@/pages/Connections';
 import { Triggers } from '@/pages/Triggers';
-import { Workflows } from '@/pages/Workflows';
 import { Evolution } from '@/pages/Evolution';
 import { AuditLog } from '@/pages/AuditLog';
 import { AccessRoles } from '@/pages/AccessRoles';
@@ -103,7 +102,6 @@ export function App() {
               <Route path="kb/sources" element={<KBSources />} />
               <Route path="connections" element={<Connections />} />
               <Route path="triggers" element={<Triggers />} />
-              <Route path="workflows" element={<Workflows />} />
               <Route path="requests" element={<Requests />} />
               <Route path="errors" element={<ErrorLogs />} />
               <Route path="evolution" element={<Evolution />} />

@@ -6,7 +6,6 @@ import {
   BookOpen,
   Link,
   Zap,
-  GitBranch,
   Lightbulb,
   Bell,
   FileText,
@@ -41,7 +40,6 @@ const manageNav: NavItem[] = [
   { label: 'Knowledge Base', to: '/kb', icon: BookOpen },
   { label: 'Connections', to: '/connections', icon: Link, adminOnly: true },
   { label: 'Triggers', to: '/triggers', icon: Zap },
-  { label: 'Workflows', to: '/workflows', icon: GitBranch },
 ];
 
 const reviewNav: NavItem[] = [

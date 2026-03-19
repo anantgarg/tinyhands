@@ -29,7 +29,6 @@ function fmtRelative(v: unknown): string {
 
 function fmtUser(displayName: unknown, userId: unknown): string {
   if (displayName && typeof displayName === 'string' && displayName.trim()) return displayName;
-  if (userId && typeof userId === 'string') return `@${userId}`;
   return '\u2014';
 }
 
@@ -106,7 +105,6 @@ export function ErrorLogs() {
                   <TableHead>User</TableHead>
                   <TableHead>Error</TableHead>
                   <TableHead>Duration</TableHead>
-                  <TableHead>Trace ID</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -142,13 +140,10 @@ export function ErrorLogs() {
                       <TableCell className="text-sm text-warm-text-secondary">
                         {formatDuration(entry.durationMs)}
                       </TableCell>
-                      <TableCell className="font-mono text-xs text-warm-text-secondary">
-                        {entry.traceId?.slice(0, 12)}
-                      </TableCell>
                     </TableRow>
                     {expandedId === entry.id && (
                       <TableRow key={`${entry.id}-detail`}>
-                        <TableCell colSpan={7} className="bg-red-50/50 border-l-2 border-red-300">
+                        <TableCell colSpan={6} className="bg-red-50/50 border-l-2 border-red-300">
                           <div className="py-3 px-2 space-y-3">
                             <div>
                               <p className="text-xs font-semibold text-warm-text-secondary mb-1">Error Details</p>
@@ -160,7 +155,6 @@ export function ErrorLogs() {
                               <span>Model: <Badge variant="secondary">{entry.model}</Badge></span>
                               <span>Tokens: {entry.inputTokens?.toLocaleString() ?? 0} in / {entry.outputTokens?.toLocaleString() ?? 0} out</span>
                               <span>Cost: ${(Number(entry.estimatedCostUsd) || 0).toFixed(4)}</span>
-                              <span>Trace: <code className="font-mono">{entry.traceId}</code></span>
                             </div>
                           </div>
                         </TableCell>
