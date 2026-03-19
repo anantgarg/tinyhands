@@ -22,28 +22,28 @@ export function AgentCreate() {
 
   const [goal, setGoal] = useState('');
   const [name, setName] = useState('');
-  const [avatar, setAvatar] = useState('');
+  const [avatarEmoji, setAvatarEmoji] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
-  const [channels, setChannels] = useState('');
+  const [channelIds, setChannelIds] = useState('');
   const [model, setModel] = useState('claude-sonnet-4-20250514');
   const [maxTurns, setMaxTurns] = useState('25');
   const [memoryEnabled, setMemoryEnabled] = useState(false);
-  const [respondTo, setRespondTo] = useState('all');
+  const [mentionsOnly, setMentionsOnly] = useState(false);
   const [defaultAccess, setDefaultAccess] = useState('member');
-  const [writePolicy, setWritePolicy] = useState('allow');
+  const [writePolicy, setWritePolicy] = useState('auto');
   const [selectedTools, setSelectedTools] = useState<string[]>([]);
 
   const handleAnalyze = () => {
     if (!goal.trim()) return;
     analyzeGoal.mutate(goal, {
       onSuccess: (result) => {
-        if (result?.name) setName(result.name);
-        if (result?.avatar) setAvatar(result.avatar);
-        if (result?.systemPrompt) setSystemPrompt(result.systemPrompt);
-        if (result?.model) setModel(result.model);
-        if (result?.tools) setSelectedTools(result.tools);
-        if (result?.respondTo) setRespondTo(result.respondTo);
-        if (result?.memoryEnabled !== undefined) setMemoryEnabled(result.memoryEnabled);
+        setName(result.name);
+        setAvatarEmoji(result.avatarEmoji);
+        setSystemPrompt(result.systemPrompt);
+        setModel(result.model);
+        setSelectedTools(result.tools);
+        setMentionsOnly(result.mentionsOnly);
+        setMemoryEnabled(result.memoryEnabled);
         toast({ title: 'Agent configuration generated', variant: 'success' });
       },
       onError: (err) => {
@@ -54,27 +54,27 @@ export function AgentCreate() {
 
   const handleCreate = () => {
     if (!name.trim() || !systemPrompt.trim()) {
-      toast({ title: 'Name and system prompt are required', variant: 'error' });
+      toast({ title: 'Name and instructions are required', variant: 'error' });
       return;
     }
     createAgent.mutate(
       {
         name,
-        avatar: avatar || undefined,
+        avatarEmoji: avatarEmoji || undefined,
         systemPrompt,
         model,
         tools: selectedTools,
-        channels: channels.split(',').map((c) => c.trim()).filter(Boolean),
+        channelIds: channelIds.split(',').map((c) => c.trim()).filter(Boolean),
         memoryEnabled,
-        maxTurns: Number(maxTurns) || 25,
-        respondTo: respondTo,
+        maxTurns: Number(maxTurns),
+        mentionsOnly,
         defaultAccess,
         writePolicy,
       },
       {
         onSuccess: (agent) => {
           toast({ title: 'Agent created', variant: 'success' });
-          navigate(`/agents/${agent?.id ?? ''}`);
+          navigate(`/agents/${agent.id}`);
         },
         onError: (err) => {
           toast({ title: 'Failed to create agent', description: err.message, variant: 'error' });
@@ -103,10 +103,10 @@ export function AgentCreate() {
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2">
             <Sparkles className="h-5 w-5 text-brand" />
-            Tell us about your agent
+            Goal-based Setup
           </CardTitle>
           <CardDescription>
-            Describe what you want your agent to do in plain language and we will generate the optimal configuration
+            Describe what you want your agent to do and we will generate the configuration
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -126,7 +126,7 @@ export function AgentCreate() {
               {analyzeGoal.isPending ? (
                 <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Analyzing...</>
               ) : (
-                'Generate Config'
+                'Analyze & Generate'
               )}
             </Button>
           </div>
@@ -159,16 +159,16 @@ export function AgentCreate() {
             <div>
               <Label>Avatar (emoji)</Label>
               <Input
-                value={avatar}
-                onChange={(e) => setAvatar(e.target.value)}
-                placeholder="\uD83E\uDD16"
+                value={avatarEmoji}
+                onChange={(e) => setAvatarEmoji(e.target.value)}
+                placeholder="🤖"
                 className="mt-1"
               />
             </div>
           </div>
 
           <div>
-            <Label>System Prompt *</Label>
+            <Label>Instructions *</Label>
             <Textarea
               value={systemPrompt}
               onChange={(e) => setSystemPrompt(e.target.value)}
@@ -176,18 +176,16 @@ export function AgentCreate() {
               className="mt-1"
               rows={8}
             />
-            <p className="text-xs text-warm-text-secondary mt-1">Instructions that define your agent's behavior and personality</p>
           </div>
 
           <div>
             <Label>Channels (comma separated)</Label>
             <Input
-              value={channels}
-              onChange={(e) => setChannels(e.target.value)}
+              value={channelIds}
+              onChange={(e) => setChannelIds(e.target.value)}
               placeholder="#general, #support"
               className="mt-1"
             />
-            <p className="text-xs text-warm-text-secondary mt-1">Slack channels where this agent will be active</p>
           </div>
 
           <div className="grid grid-cols-3 gap-4">
@@ -205,73 +203,61 @@ export function AgentCreate() {
               </Select>
             </div>
             <div>
-              <Label>Response Depth</Label>
-              <Select value={maxTurns} onValueChange={setMaxTurns}>
-                <SelectTrigger className="mt-1">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="10">Quick (10 turns)</SelectItem>
-                  <SelectItem value="25">Standard (25 turns)</SelectItem>
-                  <SelectItem value="50">Thorough (50 turns)</SelectItem>
-                  <SelectItem value="100">Unlimited (100 turns)</SelectItem>
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-warm-text-secondary mt-1">How deep the agent thinks before responding</p>
+              <Label>Max Turns</Label>
+              <Input
+                type="number"
+                value={maxTurns}
+                onChange={(e) => setMaxTurns(e.target.value)}
+                className="mt-1"
+              />
             </div>
             <div>
-              <Label>Activation Mode</Label>
-              <Select value={respondTo} onValueChange={setRespondTo}>
+              <Label>Respond To</Label>
+              <Select value={mentionsOnly ? 'mentions' : 'all'} onValueChange={(v) => setMentionsOnly(v === 'mentions')}>
                 <SelectTrigger className="mt-1">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Messages</SelectItem>
                   <SelectItem value="mentions">Mentions Only</SelectItem>
-                  <SelectItem value="direct">Direct Messages Only</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-xs text-warm-text-secondary mt-1">When the agent responds in channels</p>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
             <Switch checked={memoryEnabled} onCheckedChange={setMemoryEnabled} />
-            <div>
-              <Label>Enable Memory</Label>
-              <p className="text-xs text-warm-text-secondary">Agent remembers facts across conversations</p>
-            </div>
+            <Label>Enable Memory</Label>
           </div>
 
           <Separator />
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <Label>Who can use this agent?</Label>
+              <Label>Default Access</Label>
               <Select value={defaultAccess} onValueChange={setDefaultAccess}>
                 <SelectTrigger className="mt-1">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="member">Everyone (all workspace members)</SelectItem>
-                  <SelectItem value="viewer">Only invited members</SelectItem>
+                  <SelectItem value="viewer">Viewer</SelectItem>
+                  <SelectItem value="member">Member</SelectItem>
+                  <SelectItem value="none">None</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-xs text-warm-text-secondary mt-1">Controls who can interact with this agent</p>
             </div>
             <div>
-              <Label>When this agent wants to take actions</Label>
+              <Label>Write Policy</Label>
               <Select value={writePolicy} onValueChange={setWritePolicy}>
                 <SelectTrigger className="mt-1">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="allow">Just do it (no approval needed)</SelectItem>
-                  <SelectItem value="confirm">Ask me first (user approval)</SelectItem>
-                  <SelectItem value="admin_confirm">Ask an admin first</SelectItem>
+                  <SelectItem value="auto">Auto</SelectItem>
+                  <SelectItem value="confirm">Confirm</SelectItem>
+                  <SelectItem value="admin_confirm">Admin Confirm</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-xs text-warm-text-secondary mt-1">Approval gate for write operations</p>
             </div>
           </div>
 
@@ -279,30 +265,24 @@ export function AgentCreate() {
 
           <div>
             <Label className="mb-3 block">Tools</Label>
-            <p className="text-xs text-warm-text-secondary mb-3">Select the tools this agent can use</p>
             <div className="grid grid-cols-2 gap-2">
               {(availableTools ?? []).map((tool) => (
                 <label
                   key={tool.name}
-                  className="flex items-center gap-2 rounded-btn border border-warm-border p-3 cursor-pointer hover:bg-warm-sidebar transition-colors"
+                  className="flex items-center gap-2 rounded-lg border border-warm-border p-3 cursor-pointer hover:bg-warm-bg transition-colors"
                 >
                   <input
                     type="checkbox"
-                    checked={selectedTools.includes(tool.name ?? '')}
-                    onChange={() => toggleTool(tool.name ?? '')}
+                    checked={selectedTools.includes(tool.name)}
+                    onChange={() => toggleTool(tool.name)}
                     className="rounded accent-brand"
                   />
                   <div>
-                    <p className="text-sm font-medium">{tool.displayName ?? tool.name ?? 'Unknown'}</p>
-                    <p className="text-xs text-warm-text-secondary line-clamp-1">{tool.description ?? ''}</p>
+                    <p className="text-sm font-medium">{tool.displayName}</p>
+                    <p className="text-xs text-warm-text-secondary line-clamp-1">{tool.description}</p>
                   </div>
                 </label>
               ))}
-              {(availableTools ?? []).length === 0 && (
-                <p className="text-sm text-warm-text-secondary col-span-2 text-center py-4">
-                  No tools available. Register integrations first.
-                </p>
-              )}
             </div>
           </div>
 
