@@ -247,7 +247,7 @@ export function AgentCreate() {
               </Select>
             </div>
             <div>
-              <Label>Write Policy</Label>
+              <Label>Action Approval</Label>
               <Select value={writePolicy} onValueChange={setWritePolicy}>
                 <SelectTrigger className="mt-1">
                   <SelectValue />

@@ -222,14 +222,14 @@ function SettingsContent() {
             </div>
           </div>
           <div className="max-w-xs">
-            <Label>Response Depth (Max Turns)</Label>
+            <Label>Default Effort Level</Label>
             <Input
               type="number"
               value={defaults.maxTurns ?? 25}
               onChange={(e) => setDefaults({ ...defaults, maxTurns: Number(e.target.value) })}
               className="mt-1"
             />
-            <p className="text-xs text-warm-text-secondary mt-1">10 = Quick, 25 = Standard, 50 = Thorough, 100 = Unlimited</p>
+            <p className="text-xs text-warm-text-secondary mt-1">How thorough agents are: 10 = Quick, 25 = Standard, 50 = Thorough, 100 = Maximum</p>
           </div>
           <div className="flex items-center gap-3">
             <Switch

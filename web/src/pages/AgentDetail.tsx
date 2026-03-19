@@ -313,7 +313,7 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
 
   // Group tools not added by source
   const groupedToolsNotAdded = toolsNotAdded.reduce<Record<string, typeof toolsNotAdded>>((acc, tool) => {
-    const group = tool.source === 'integration' ? 'Integration' : tool.source === 'custom' ? 'Custom' : 'Built-in';
+    const group = tool.source === 'integration' ? 'Connected Services' : tool.source === 'custom' ? 'Custom Tools' : 'Core Tools';
     if (!acc[group]) acc[group] = [];
     acc[group].push(tool);
     return acc;
@@ -385,9 +385,9 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
               </Select>
             </div>
 
-            {/* Response Depth */}
+            {/* Effort */}
             <div>
-              <Label className="text-warm-text-secondary text-xs">Response Depth</Label>
+              <Label className="text-warm-text-secondary text-xs">Effort</Label>
               <Select
                 value={String(configDraft.maxTurns)}
                 onValueChange={(v) => updateConfig({ maxTurns: Number(v) })}
@@ -1221,12 +1221,12 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
         </CardContent>
       </Card>
 
-      {/* Write Policy */}
+      {/* Action Approval */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">
-            Write Policy
-            <InfoTooltip text="auto = agent can write freely. confirm = asks the user to approve writes. admin_confirm = asks an agent owner to approve writes." />
+            Action Approval
+            <InfoTooltip text="Controls whether the agent needs approval before making changes. Automatic = no approval needed. Ask User = asks the person who triggered the agent. Ask Owner/Admins = asks an agent owner or admin." />
           </CardTitle>
         </CardHeader>
         <CardContent>
