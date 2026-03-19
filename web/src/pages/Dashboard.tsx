@@ -71,7 +71,7 @@ export function Dashboard() {
         <>
           <div className="grid grid-cols-4 gap-4 mb-6">
             <StatCard label="Total Runs" value={metrics.data?.totalRuns ?? 0} icon={Activity} color="blue" />
-            <StatCard label="Total Cost" value={formatCost(metrics.data?.totalCost ?? 0)} icon={DollarSign} color="green" />
+            <StatCard label="Total Cost" value={formatCost(metrics.data?.totalCostUsd ?? 0)} icon={DollarSign} color="green" />
             <StatCard label="Total Tokens" value={formatTokens(metrics.data?.totalTokens ?? 0)} icon={Hash} color="amber" />
             <StatCard
               label="Error Rate"
@@ -84,13 +84,13 @@ export function Dashboard() {
           <div className="grid grid-cols-2 gap-4 mb-6">
             <StatCard
               label="Performance (avg / p50 / p95)"
-              value={`${formatDuration(metrics.data?.avgDuration ?? 0)} / ${formatDuration(metrics.data?.p50Duration ?? 0)} / ${formatDuration(metrics.data?.p95Duration ?? 0)}`}
+              value={`${formatDuration(metrics.data?.avgDurationMs ?? 0)} / ${formatDuration(metrics.data?.p50DurationMs ?? 0)} / ${formatDuration(metrics.data?.p95DurationMs ?? 0)}`}
               icon={Clock}
               color="blue"
             />
             <StatCard
               label="Queue Wait (p50 / p95)"
-              value={`${formatDuration(metrics.data?.p50QueueWait ?? 0)} / ${formatDuration(metrics.data?.p95QueueWait ?? 0)}`}
+              value={`${formatDuration(metrics.data?.queueWaitP50Ms ?? 0)} / ${formatDuration(metrics.data?.queueWaitP95Ms ?? 0)}`}
               icon={Timer}
               color="amber"
             />

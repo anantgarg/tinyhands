@@ -3,15 +3,16 @@ import { api } from './client';
 
 interface DashboardMetrics {
   totalRuns: number;
-  totalCost: number;
+  totalCostUsd: number;
   totalTokens: number;
   errorRate: number;
-  avgDuration: number;
-  p50Duration: number;
-  p95Duration: number;
-  p50QueueWait: number;
-  p95QueueWait: number;
-  runsByDay: { date: string; count: number }[];
+  avgDurationMs: number;
+  p50DurationMs: number;
+  p95DurationMs: number;
+  p99DurationMs: number;
+  queueWaitP50Ms: number;
+  queueWaitP95Ms: number;
+  runsByDay?: { date: string; count: number }[];
 }
 
 interface PowerUser {
