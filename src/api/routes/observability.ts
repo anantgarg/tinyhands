@@ -75,8 +75,23 @@ router.get('/error-log', requireAdmin, async (req: Request, res: Response) => {
     const names = await resolveUserNames(userIds);
 
     res.json((rows as any[]).map((r: any) => ({
-      ...r,
-      displayName: names[r.slack_user_id] || r.slack_user_id,
+      id: r.id,
+      agentId: r.agent_id,
+      agentName: r.agent_name || 'Unknown',
+      avatarEmoji: r.avatar_emoji || '',
+      traceId: r.trace_id,
+      slackUserId: r.slack_user_id,
+      displayName: names[r.slack_user_id] || r.slack_user_id || '',
+      status: r.status,
+      model: r.model,
+      input: r.input,
+      output: r.output,
+      inputTokens: r.input_tokens,
+      outputTokens: r.output_tokens,
+      estimatedCostUsd: r.estimated_cost_usd,
+      durationMs: r.duration_ms,
+      createdAt: r.created_at,
+      completedAt: r.completed_at,
     })));
   } catch (err: any) {
     logger.error('Get error log error', { error: err.message });

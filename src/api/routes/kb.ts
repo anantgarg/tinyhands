@@ -3,26 +3,78 @@ import { getSessionUser } from '../middleware/auth';
 import { requireAdmin } from '../middleware/admin';
 import {
   createKBEntry, approveKBEntry, getKBEntry, deleteKBEntry,
-  listKBEntries, searchKB, getCategories,
+  searchKB, getCategories,
 } from '../../modules/knowledge-base';
 import {
   listSources, createSource, updateSource, deleteSource,
   startSync, flushAndResync,
   listApiKeys, setApiKey, deleteApiKey,
 } from '../../modules/kb-sources';
+import { query } from '../../db';
 import { logger } from '../../utils/logger';
 
 const router = Router();
 
+// GET /kb/stats — KB statistics
+router.get('/stats', async (req: Request, res: Response) => {
+  try {
+    const { workspaceId } = getSessionUser(req);
+    const [totalRow] = await query('SELECT count(*)::int as count FROM kb_entries WHERE workspace_id = $1 AND approved = true', [workspaceId]);
+    const [pendingRow] = await query('SELECT count(*)::int as count FROM kb_entries WHERE workspace_id = $1 AND approved = false', [workspaceId]);
+    const [catRow] = await query('SELECT count(DISTINCT category)::int as count FROM kb_entries WHERE workspace_id = $1 AND category IS NOT NULL', [workspaceId]);
+    const [srcRow] = await query('SELECT count(*)::int as count FROM kb_sources WHERE workspace_id = $1', [workspaceId]);
+    res.json({
+      totalEntries: totalRow?.count ?? 0,
+      pendingEntries: pendingRow?.count ?? 0,
+      categories: catRow?.count ?? 0,
+      sourcesCount: srcRow?.count ?? 0,
+    });
+  } catch (err: any) {
+    logger.error('KB stats error', { error: err.message });
+    res.status(500).json({ error: 'Failed to get stats' });
+  }
+});
+
 // ── KB Entries ──
 
-// GET /kb/entries — List KB entries
+// GET /kb/entries — List KB entries with pagination/filtering
 router.get('/entries', async (req: Request, res: Response) => {
   try {
     const { workspaceId } = getSessionUser(req);
+    const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
-    const entries = await listKBEntries(workspaceId, limit);
-    res.json(entries);
+    const offset = (page - 1) * limit;
+    const category = req.query.category as string | undefined;
+    const approved = req.query.approved as string | undefined;
+    const search = req.query.search as string | undefined;
+
+    let where = 'WHERE workspace_id = $1';
+    const params: any[] = [workspaceId];
+    let paramIdx = 2;
+
+    if (approved !== undefined) {
+      where += ` AND approved = $${paramIdx++}`;
+      params.push(approved === 'true');
+    }
+    if (category) {
+      where += ` AND category = $${paramIdx++}`;
+      params.push(category);
+    }
+    if (search) {
+      where += ` AND (title ILIKE $${paramIdx} OR content ILIKE $${paramIdx})`;
+      params.push(`%${search}%`);
+      paramIdx++;
+    }
+
+    const [countRow] = await query(`SELECT count(*)::int as count FROM kb_entries ${where}`, params);
+    const total = countRow?.count ?? 0;
+
+    const entries = await query(
+      `SELECT * FROM kb_entries ${where} ORDER BY updated_at DESC LIMIT $${paramIdx++} OFFSET $${paramIdx}`,
+      [...params, limit, offset]
+    );
+
+    res.json({ entries, total });
   } catch (err: any) {
     logger.error('List KB entries error', { error: err.message });
     res.status(500).json({ error: 'Failed to list entries' });

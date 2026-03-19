@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useErrorLog } from '@/api/observability';
 import { useAgents } from '@/api/agents';
+import { renderEmoji } from '@/lib/emoji';
 
 function formatDuration(ms: unknown): string {
   const n = Number(ms) || 0;
@@ -71,7 +72,7 @@ export function ErrorLogs() {
             <SelectItem value="all">All Agents</SelectItem>
             {(agents ?? []).map((a) => (
               <SelectItem key={a.id} value={a.id}>
-                {a.avatarEmoji ? `${a.avatarEmoji} ` : ''}{a.name}
+                {a.avatarEmoji ? `${renderEmoji(a.avatarEmoji)} ` : ''}{a.name}
               </SelectItem>
             ))}
           </SelectContent>
@@ -128,7 +129,7 @@ export function ErrorLogs() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1.5">
-                          {entry.avatarEmoji && <span>{entry.avatarEmoji}</span>}
+                          {entry.avatarEmoji && <span>{renderEmoji(entry.avatarEmoji)}</span>}
                           <span className="text-sm font-medium">{entry.agentName}</span>
                         </div>
                       </TableCell>

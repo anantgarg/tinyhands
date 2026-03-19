@@ -18,6 +18,7 @@ import {
   useAgentFleet,
   useRecentActivity,
 } from '@/api/dashboard';
+import { renderEmoji } from '@/lib/emoji';
 import { useAuthStore } from '@/store/auth';
 
 // Safe number/date formatting helpers
@@ -178,7 +179,7 @@ export function Dashboard() {
               <TableBody>
                 {(popularAgents.data ?? []).map((a) => (
                   <TableRow key={a.id}>
-                    <TableCell><div className="flex items-center gap-2"><span>{a.avatar || '\uD83E\uDD16'}</span><span className="font-medium">{a.name || 'Unknown'}</span></div></TableCell>
+                    <TableCell><div className="flex items-center gap-2"><span>{renderEmoji(a.avatar || ':robot_face:')}</span><span className="font-medium">{a.name || 'Unknown'}</span></div></TableCell>
                     <TableCell>{a.runCount || 0}</TableCell>
                     <TableCell>{fmt$(a.totalCost)}</TableCell>
                   </TableRow>
@@ -203,7 +204,7 @@ export function Dashboard() {
                 <TableBody>
                   {(fleet.data ?? []).map((a) => (
                     <TableRow key={a.id}>
-                      <TableCell><div className="flex items-center gap-2"><span>{a.avatar || '\uD83E\uDD16'}</span><span className="font-medium">{a.name || 'Unknown'}</span></div></TableCell>
+                      <TableCell><div className="flex items-center gap-2"><span>{renderEmoji(a.avatar || ':robot_face:')}</span><span className="font-medium">{a.name || 'Unknown'}</span></div></TableCell>
                       <TableCell><Badge variant={a.status === 'active' ? 'success' : 'secondary'}>{a.status || 'unknown'}</Badge></TableCell>
                       <TableCell className="text-warm-text-secondary">{a.model || '\u2014'}</TableCell>
                       <TableCell>{a.toolsCount ?? 0}</TableCell>
@@ -232,7 +233,7 @@ export function Dashboard() {
                     <TableRow key={r.id}>
                       <TableCell>
                         <div className="flex items-center gap-2">
-                          <span>{r.agentAvatar || '\uD83E\uDD16'}</span>
+                          <span>{renderEmoji(r.agentAvatar || ':robot_face:')}</span>
                           <span className="font-medium">{r.agentName || '\u2014'}</span>
                         </div>
                       </TableCell>

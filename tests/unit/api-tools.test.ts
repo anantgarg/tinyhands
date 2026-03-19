@@ -34,6 +34,20 @@ vi.mock('../../src/utils/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+const mockGetIntegrations = vi.fn();
+
+vi.mock('../../src/modules/tools/integrations', () => ({
+  getIntegrations: (...args: any[]) => mockGetIntegrations(...args),
+}));
+
+const mockCreateTeamConnection = vi.fn();
+const mockListTeamConnectionsForTools = vi.fn();
+
+vi.mock('../../src/modules/connections', () => ({
+  createTeamConnection: (...args: any[]) => mockCreateTeamConnection(...args),
+  listTeamConnections: (...args: any[]) => mockListTeamConnectionsForTools(...args),
+}));
+
 import toolRoutes from '../../src/api/routes/tools';
 
 // ── HTTP Test Helper ──
@@ -391,6 +405,75 @@ describe('Tool Routes', () => {
 
       const res = await makeRequest(memberApp, 'PUT', '/tools/custom/my-tool/access-level', {
         accessLevel: 'read_only',
+      });
+
+      expect(res.status).toBe(403);
+    });
+  });
+
+  describe('GET /tools/integrations', () => {
+    it('returns integrations with status', async () => {
+      mockGetIntegrations.mockReturnValueOnce([
+        { id: 'linear', label: 'Linear', description: 'Issue tracker', tools: [{ name: 'linear-read' }], configKeys: ['api_key'], connectionModel: 'team' },
+      ]);
+      mockListTeamConnectionsForTools.mockResolvedValueOnce([
+        { integration_id: 'linear' },
+      ]);
+
+      const res = await makeRequest(app, 'GET', '/tools/integrations');
+
+      expect(res.status).toBe(200);
+      expect(res.body[0].id).toBe('linear');
+      expect(res.body[0].displayName).toBe('Linear');
+      expect(res.body[0].status).toBe('active');
+      expect(res.body[0].toolsCount).toBe(1);
+    });
+
+    it('returns 403 for non-admin', async () => {
+      const memberApp = createApp('member');
+
+      const res = await makeRequest(memberApp, 'GET', '/tools/integrations');
+
+      expect(res.status).toBe(403);
+    });
+
+    it('returns 500 on error', async () => {
+      mockGetIntegrations.mockImplementationOnce(() => { throw new Error('err'); });
+
+      const res = await makeRequest(app, 'GET', '/tools/integrations');
+
+      expect(res.status).toBe(500);
+      expect(res.body).toEqual({ error: 'Failed to list integrations' });
+    });
+  });
+
+  describe('POST /tools/integrations/register', () => {
+    it('registers an integration', async () => {
+      const conn = { id: 'c1' };
+      mockCreateTeamConnection.mockResolvedValueOnce(conn);
+
+      const res = await makeRequest(app, 'POST', '/tools/integrations/register', {
+        integrationId: 'linear',
+        config: { api_key: 'xxx' },
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body).toEqual(conn);
+    });
+
+    it('returns 400 when fields missing', async () => {
+      const res = await makeRequest(app, 'POST', '/tools/integrations/register', {});
+
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({ error: 'integrationId and config are required' });
+    });
+
+    it('returns 403 for non-admin', async () => {
+      const memberApp = createApp('member');
+
+      const res = await makeRequest(memberApp, 'POST', '/tools/integrations/register', {
+        integrationId: 'linear',
+        config: { api_key: 'xxx' },
       });
 
       expect(res.status).toBe(403);

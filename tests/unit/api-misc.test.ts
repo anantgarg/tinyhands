@@ -134,6 +134,12 @@ vi.mock('../../src/utils/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+const mockGetIntegrations = vi.fn();
+
+vi.mock('../../src/modules/tools/integrations', () => ({
+  getIntegrations: (...args: any[]) => mockGetIntegrations(...args),
+}));
+
 const mockResolveUserNames = vi.fn();
 
 vi.mock('../../src/api/helpers/user-resolver', () => ({
@@ -230,18 +236,31 @@ describe('Connection Routes', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetIntegrations.mockReturnValue([
+      { id: 'linear', label: 'Linear', description: 'Issue tracking' },
+      { id: 'github', label: 'GitHub', description: 'Code hosting' },
+    ]);
+    mockResolveUserNames.mockImplementation(async (ids: string[]) => {
+      const result: Record<string, string> = {};
+      for (const id of ids) result[id] = id;
+      return result;
+    });
+    mockQuery.mockResolvedValue([]);
     app = createApp(connectionRoutes, '/connections');
   });
 
   describe('GET /connections/team', () => {
-    it('lists team connections for admin', async () => {
-      const connections = [{ id: 'c1', integration: 'linear' }];
+    it('lists team connections with integration names for admin', async () => {
+      const connections = [{ id: 'c1', integration_id: 'linear', label: 'Main Linear', status: 'active', created_at: '2025-01-01' }];
       mockListTeamConnections.mockResolvedValueOnce(connections);
 
       const res = await makeRequest(app, 'GET', '/connections/team');
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual(connections);
+      expect(res.body[0].id).toBe('c1');
+      expect(res.body[0].integrationId).toBe('linear');
+      expect(res.body[0].displayName).toBe('Main Linear');
+      expect(res.body[0].type).toBe('team');
     });
 
     it('returns 403 for non-admin', async () => {
@@ -263,14 +282,16 @@ describe('Connection Routes', () => {
   });
 
   describe('GET /connections/personal', () => {
-    it('lists personal connections for current user', async () => {
-      const connections = [{ id: 'c2', integration: 'github' }];
+    it('lists personal connections with integration names', async () => {
+      const connections = [{ id: 'c2', integration_id: 'github', user_id: 'U123', label: '', status: 'active', created_at: '2025-01-01' }];
       mockListPersonalConnectionsForUser.mockResolvedValueOnce(connections);
 
       const res = await makeRequest(app, 'GET', '/connections/personal');
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual(connections);
+      expect(res.body[0].id).toBe('c2');
+      expect(res.body[0].integrationId).toBe('github');
+      expect(res.body[0].type).toBe('personal');
       expect(mockListPersonalConnectionsForUser).toHaveBeenCalledWith('W123', 'U123');
     });
 
@@ -407,6 +428,64 @@ describe('Connection Routes', () => {
 
     it('returns 400 when mode is missing', async () => {
       const res = await makeRequest(app, 'PUT', '/connections/agent/a1/linear', {});
+
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({ error: 'mode is required' });
+    });
+  });
+
+  describe('GET /connections/oauth-integrations', () => {
+    it('returns OAuth-capable integrations', async () => {
+      const res = await makeRequest(app, 'GET', '/connections/oauth-integrations');
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveLength(2);
+      expect(res.body[0].id).toBe('linear');
+      expect(res.body[0].displayName).toBe('Linear');
+    });
+  });
+
+  describe('GET /connections/agent-tool-modes', () => {
+    it('lists agent tool modes (admin)', async () => {
+      mockQuery.mockResolvedValueOnce([
+        { agent_id: 'a1', agent_name: 'Bot1', tool_name: 'linear', mode: 'team' },
+      ]);
+
+      const res = await makeRequest(app, 'GET', '/connections/agent-tool-modes');
+
+      expect(res.status).toBe(200);
+      expect(res.body[0]).toEqual({
+        agentId: 'a1',
+        agentName: 'Bot1',
+        toolName: 'linear',
+        mode: 'team',
+      });
+    });
+
+    it('returns 403 for non-admin', async () => {
+      const memberApp = createApp(connectionRoutes, '/connections', 'member');
+
+      const res = await makeRequest(memberApp, 'GET', '/connections/agent-tool-modes');
+
+      expect(res.status).toBe(403);
+    });
+  });
+
+  describe('PUT /connections/agent-tool-modes/:agentId/:toolName', () => {
+    it('sets agent tool mode', async () => {
+      const result = { ok: true };
+      mockSetAgentToolConnection.mockResolvedValueOnce(result);
+
+      const res = await makeRequest(app, 'PUT', '/connections/agent-tool-modes/a1/linear', {
+        mode: 'personal',
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual(result);
+    });
+
+    it('returns 400 when mode is missing', async () => {
+      const res = await makeRequest(app, 'PUT', '/connections/agent-tool-modes/a1/linear', {});
 
       expect(res.status).toBe(400);
       expect(res.body).toEqual({ error: 'mode is required' });
@@ -1153,9 +1232,9 @@ describe('Observability Routes', () => {
   });
 
   describe('GET /observability/error-log', () => {
-    it('returns failed runs with resolved display names (admin)', async () => {
+    it('returns failed runs with proper field mapping and resolved names (admin)', async () => {
       const rows = [
-        { id: 'r1', agent_id: 'a1', agent_name: 'Bot1', avatar_emoji: '🤖', slack_user_id: 'U1', status: 'failed', output: 'Error occurred' },
+        { id: 'r1', agent_id: 'a1', agent_name: 'Bot1', avatar_emoji: '🤖', trace_id: 'tr1', slack_user_id: 'U1', status: 'failed', model: 'claude-sonnet-4-20250514', input: 'hi', output: 'Error occurred', input_tokens: 100, output_tokens: 50, estimated_cost_usd: '0.01', duration_ms: 500, created_at: '2025-01-01', completed_at: null },
       ];
       mockQuery.mockResolvedValueOnce(rows);
       mockResolveUserNames.mockResolvedValueOnce({ U1: 'Alice' });
@@ -1163,9 +1242,11 @@ describe('Observability Routes', () => {
       const res = await makeRequest(app, 'GET', '/observability/error-log');
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual([
-        { ...rows[0], displayName: 'Alice' },
-      ]);
+      expect(res.body[0].agentName).toBe('Bot1');
+      expect(res.body[0].avatarEmoji).toBe('🤖');
+      expect(res.body[0].displayName).toBe('Alice');
+      expect(res.body[0].slackUserId).toBe('U1');
+      expect(res.body[0].output).toBe('Error occurred');
     });
 
     it('uses default params', async () => {

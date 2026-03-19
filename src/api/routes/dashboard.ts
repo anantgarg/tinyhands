@@ -2,7 +2,8 @@ import { Router, Request, Response } from 'express';
 import { getSessionUser } from '../middleware/auth';
 import { getMetrics } from '../../modules/dashboard';
 import { listAgents } from '../../modules/agents';
-import { getRecentRuns } from '../../modules/execution';
+// getRecentRuns replaced by direct JOIN query for agent names
+// import { getRecentRuns } from '../../modules/execution';
 import { getAuditLog } from '../../modules/audit';
 import { query } from '../../db';
 import { resolveUserNames } from '../helpers/user-resolver';
@@ -137,14 +138,33 @@ router.get('/recent-runs', async (req: Request, res: Response) => {
   try {
     const { workspaceId } = getSessionUser(req);
     const limit = parseInt(req.query.limit as string) || 10;
-    const runs = await getRecentRuns(workspaceId, limit);
 
-    const userIds = runs.map((r: any) => r.slack_user_id).filter(Boolean);
+    const runs = await query(`
+      SELECT r.*, a.name as agent_name, a.avatar_emoji as agent_avatar
+      FROM run_history r
+      LEFT JOIN agents a ON r.agent_id = a.id
+      WHERE r.workspace_id = $1
+      ORDER BY r.created_at DESC
+      LIMIT $2
+    `, [workspaceId, limit]);
+
+    const userIds = (runs as any[]).map((r: any) => r.slack_user_id).filter(Boolean);
     const names = await resolveUserNames(userIds);
 
-    res.json(runs.map((r: any) => ({
-      ...r,
-      displayName: names[r.slack_user_id] || r.slack_user_id,
+    res.json((runs as any[]).map((r: any) => ({
+      id: r.id,
+      traceId: r.trace_id,
+      agentName: r.agent_name || 'Unknown',
+      agentAvatar: r.agent_avatar || '',
+      userId: r.slack_user_id,
+      displayName: names[r.slack_user_id] || r.slack_user_id || '',
+      status: r.status,
+      model: r.model,
+      cost: parseFloat(r.estimated_cost_usd) || 0,
+      durationMs: r.duration_ms || 0,
+      error: r.status === 'error' ? (r.output || 'Error') : null,
+      errorMessage: r.status === 'error' ? r.output : null,
+      createdAt: r.created_at,
     })));
   } catch (err: any) {
     logger.error('Dashboard recent-runs error', { error: err.message });
@@ -159,12 +179,16 @@ router.get('/recent-activity', async (req: Request, res: Response) => {
     const limit = parseInt(req.query.limit as string) || 10;
     const entries = await getAuditLog(workspaceId, { limit });
 
-    const userIds = entries.map((e: any) => e.actor_user_id).filter(Boolean);
+    const userIds = (entries as any[]).map((e: any) => e.actor_user_id).filter(Boolean);
     const names = await resolveUserNames(userIds);
 
-    res.json(entries.map((e: any) => ({
-      ...e,
-      displayName: names[e.actor_user_id] || e.actor_user_id,
+    res.json((entries as any[]).map((e: any) => ({
+      id: e.id,
+      action: e.action || e.action_type || '',
+      userId: e.actor_user_id,
+      displayName: names[e.actor_user_id] || e.actor_user_id || 'system',
+      details: e.details || (e.metadata ? JSON.stringify(e.metadata).slice(0, 200) : ''),
+      createdAt: e.created_at,
     })));
   } catch (err: any) {
     logger.error('Dashboard recent-activity error', { error: err.message });
