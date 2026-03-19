@@ -1,6 +1,7 @@
 import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
+import { FloatingChat } from '@/components/FloatingChat';
 
 export function Shell() {
   return (
@@ -14,6 +15,7 @@ export function Shell() {
           </div>
         </main>
       </div>
+      <FloatingChat />
     </div>
   );
 }
