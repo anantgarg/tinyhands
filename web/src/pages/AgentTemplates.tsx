@@ -154,12 +154,12 @@ export function AgentTemplates() {
 
       {Object.entries(grouped).map(([category, categoryTemplates]) => (
         <div key={category} className="mb-8">
-          <h2 className="text-sm font-semibold text-warm-text-secondary uppercase tracking-wider mb-3">
+          <h2 className="text-sm font-medium text-warm-text-secondary mb-3">
             {category}
           </h2>
           <div className="grid grid-cols-3 gap-4">
             {categoryTemplates.map((template) => (
-              <Card key={template.id} className="hover:shadow-md transition-shadow">
+              <Card key={template.id} className="transition-colors hover:bg-warm-bg/30">
                 <CardContent className="p-5">
                   <div className="flex items-start justify-between mb-3">
                     <span className="text-2xl">{template.avatar}</span>

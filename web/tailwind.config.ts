@@ -29,8 +29,7 @@ const config: Config = {
         'section-title': ['18px', { lineHeight: '1.3', fontWeight: '700' }],
       },
       boxShadow: {
-        'card': '0 1px 3px rgba(0, 0, 0, 0.04)',
-        'card-hover': '0 2px 8px rgba(0, 0, 0, 0.08)',
+        'overlay': '0 4px 16px rgba(0, 0, 0, 0.12)',
       },
     },
   },

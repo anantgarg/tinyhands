@@ -8,7 +8,7 @@ export function Shell() {
       <Sidebar />
       <div className="flex flex-1 flex-col overflow-hidden">
         <TopBar />
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto bg-warm-bg">
           <div className="mx-auto max-w-[1200px] p-8">
             <Outlet />
           </div>

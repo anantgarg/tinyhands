@@ -123,7 +123,7 @@ export function Agents() {
           {filtered.map((agent) => (
             <Card
               key={agent.id}
-              className="cursor-pointer transition-shadow hover:shadow-md"
+              className="cursor-pointer transition-colors hover:bg-warm-bg/30"
               onClick={() => navigate(`/agents/${agent.id}`)}
             >
               <CardContent className="p-5">

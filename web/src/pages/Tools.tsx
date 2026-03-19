@@ -144,7 +144,7 @@ export function Tools() {
         ) : (
           <div className="grid grid-cols-3 gap-4">
             {available.map((integration) => (
-              <Card key={integration.id} className="hover:shadow-md transition-shadow">
+              <Card key={integration.id} className="transition-colors hover:bg-warm-bg/30">
                 <CardContent className="p-5">
                   <div className="mb-3">
                     <h3 className="font-semibold">{integration.displayName}</h3>
