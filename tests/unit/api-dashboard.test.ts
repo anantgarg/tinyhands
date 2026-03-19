@@ -38,6 +38,13 @@ vi.mock('../../src/utils/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+const mockResolveUserNames = vi.fn();
+
+vi.mock('../../src/api/helpers/user-resolver', () => ({
+  resolveUserNames: (...args: any[]) => mockResolveUserNames(...args),
+  resolveUserName: vi.fn().mockImplementation((id: string) => Promise.resolve(id)),
+}));
+
 import dashboardRoutes from '../../src/api/routes/dashboard';
 
 // ── HTTP Test Helper ──
@@ -111,6 +118,12 @@ describe('Dashboard Routes', () => {
     mockGetRecentRuns.mockResolvedValue([]);
     mockGetAuditLog.mockResolvedValue([]);
     mockQuery.mockResolvedValue([]);
+    // Default: resolveUserNames returns userId as displayName
+    mockResolveUserNames.mockImplementation(async (ids: string[]) => {
+      const result: Record<string, string> = {};
+      for (const id of ids) result[id] = id;
+      return result;
+    });
     app = createApp();
   });
 
@@ -145,17 +158,19 @@ describe('Dashboard Routes', () => {
   });
 
   describe('GET /dashboard/power-users', () => {
-    it('returns top users', async () => {
+    it('returns top users with resolved display names', async () => {
       mockQuery.mockResolvedValueOnce([
         { slack_user_id: 'U1', run_count: '10', agent_names: ['Bot1', 'Bot2'] },
       ]);
+      mockResolveUserNames.mockResolvedValueOnce({ U1: 'Alice' });
 
       const res = await makeRequest(app, 'GET', '/dashboard/power-users');
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual([
-        { userId: 'U1', runCount: 10, agentNames: ['Bot1', 'Bot2'] },
+        { userId: 'U1', displayName: 'Alice', runCount: 10, agentNames: ['Bot1', 'Bot2'] },
       ]);
+      expect(mockResolveUserNames).toHaveBeenCalledWith(['U1']);
     });
 
     it('handles null agent_names', async () => {
@@ -180,17 +195,19 @@ describe('Dashboard Routes', () => {
   });
 
   describe('GET /dashboard/agent-creators', () => {
-    it('returns top creators', async () => {
+    it('returns top creators with resolved display names', async () => {
       mockQuery.mockResolvedValueOnce([
         { created_by: 'U1', agent_count: '3', agent_names: ['Bot1'] },
       ]);
+      mockResolveUserNames.mockResolvedValueOnce({ U1: 'Bob' });
 
       const res = await makeRequest(app, 'GET', '/dashboard/agent-creators');
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual([
-        { userId: 'U1', agentCount: 3, agentNames: ['Bot1'] },
+        { userId: 'U1', displayName: 'Bob', agentCount: 3, agentNames: ['Bot1'] },
       ]);
+      expect(mockResolveUserNames).toHaveBeenCalledWith(['U1']);
     });
 
     it('handles null agent_names', async () => {
@@ -261,14 +278,15 @@ describe('Dashboard Routes', () => {
   });
 
   describe('GET /dashboard/recent-runs', () => {
-    it('returns recent runs with default limit', async () => {
-      const runs = [{ id: 'r1' }];
+    it('returns recent runs with resolved display names', async () => {
+      const runs = [{ id: 'r1', slack_user_id: 'U1' }];
       mockGetRecentRuns.mockResolvedValueOnce(runs);
+      mockResolveUserNames.mockResolvedValueOnce({ U1: 'Alice' });
 
       const res = await makeRequest(app, 'GET', '/dashboard/recent-runs');
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual(runs);
+      expect(res.body).toEqual([{ id: 'r1', slack_user_id: 'U1', displayName: 'Alice' }]);
       expect(mockGetRecentRuns).toHaveBeenCalledWith('W123', 10);
     });
 
@@ -291,14 +309,15 @@ describe('Dashboard Routes', () => {
   });
 
   describe('GET /dashboard/recent-activity', () => {
-    it('returns audit entries with default limit', async () => {
-      const entries = [{ id: 'e1', action: 'create' }];
+    it('returns audit entries with resolved display names', async () => {
+      const entries = [{ id: 'e1', action: 'create', actor_user_id: 'U1' }];
       mockGetAuditLog.mockResolvedValueOnce(entries);
+      mockResolveUserNames.mockResolvedValueOnce({ U1: 'Alice' });
 
       const res = await makeRequest(app, 'GET', '/dashboard/recent-activity');
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual(entries);
+      expect(res.body).toEqual([{ id: 'e1', action: 'create', actor_user_id: 'U1', displayName: 'Alice' }]);
       expect(mockGetAuditLog).toHaveBeenCalledWith('W123', { limit: 10 });
     });
 

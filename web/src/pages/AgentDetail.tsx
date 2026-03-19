@@ -280,6 +280,7 @@ function ConfigTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
 
 function RunsTab({ agentId }: { agentId: string }) {
   const [page, setPage] = useState(1);
+  const [expandedRunId, setExpandedRunId] = useState<string | null>(null);
   const { data, isLoading } = useAgentRuns(agentId, { page, limit: 20 });
 
   if (isLoading) return <Skeleton className="h-[300px]" />;
@@ -304,23 +305,44 @@ function RunsTab({ agentId }: { agentId: string }) {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {runs.map((run) => (
-              <TableRow key={run.id}>
-                <TableCell className="font-mono text-xs">{run.traceId?.slice(0, 12)}</TableCell>
-                <TableCell>{fmtUserId(null, run.userId)}</TableCell>
-                <TableCell>
-                  <Badge variant={run.status === 'success' ? 'success' : run.status === 'error' ? 'danger' : 'secondary'}>
-                    {run.status}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-warm-text-secondary">{run.model}</TableCell>
-                <TableCell>{formatDuration(run.durationMs)}</TableCell>
-                <TableCell>{formatCost(run.cost)}</TableCell>
-                <TableCell className="text-warm-text-secondary text-xs">
-                  {fmtRelative(run.createdAt)}
-                </TableCell>
-              </TableRow>
-            ))}
+            {runs.map((run) => {
+              const isFailed = run.status === 'failed' || run.status === 'error' || run.status === 'timeout';
+              return (
+                <>
+                  <TableRow
+                    key={run.id}
+                    className={isFailed ? 'cursor-pointer hover:bg-red-50/50' : ''}
+                    onClick={() => isFailed && setExpandedRunId(expandedRunId === run.id ? null : run.id)}
+                  >
+                    <TableCell className="font-mono text-xs">{run.traceId?.slice(0, 12)}</TableCell>
+                    <TableCell>{fmtUserId(run.displayName, run.slackUserId)}</TableCell>
+                    <TableCell>
+                      <Badge variant={run.status === 'completed' ? 'success' : isFailed ? 'danger' : 'secondary'}>
+                        {run.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-warm-text-secondary">{run.model}</TableCell>
+                    <TableCell>{formatDuration(run.durationMs)}</TableCell>
+                    <TableCell>{formatCost(run.estimatedCostUsd)}</TableCell>
+                    <TableCell className="text-warm-text-secondary text-xs">
+                      {fmtRelative(run.createdAt)}
+                    </TableCell>
+                  </TableRow>
+                  {isFailed && expandedRunId === run.id && (
+                    <TableRow key={`${run.id}-error`}>
+                      <TableCell colSpan={7} className="bg-red-50/50 border-l-2 border-red-300">
+                        <div className="py-2 px-2">
+                          <p className="text-xs font-semibold text-warm-text-secondary mb-1">Error Details</p>
+                          <pre className="text-sm whitespace-pre-wrap font-mono bg-white rounded-md p-3 border border-red-200 max-h-[200px] overflow-y-auto text-red-700">
+                            {run.output || 'No error details available'}
+                          </pre>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </>
+              );
+            })}
             {runs.length === 0 && (
               <TableRow>
                 <TableCell colSpan={7} className="text-center text-warm-text-secondary">

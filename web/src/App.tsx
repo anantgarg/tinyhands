@@ -24,6 +24,7 @@ import { AuditLog } from '@/pages/AuditLog';
 import { AccessRoles } from '@/pages/AccessRoles';
 import { Settings } from '@/pages/Settings';
 import { Requests } from '@/pages/Requests';
+import { ErrorLogs } from '@/pages/ErrorLogs';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -104,6 +105,7 @@ export function App() {
               <Route path="triggers" element={<Triggers />} />
               <Route path="workflows" element={<Workflows />} />
               <Route path="requests" element={<Requests />} />
+              <Route path="errors" element={<ErrorLogs />} />
               <Route path="evolution" element={<Evolution />} />
               <Route path="audit" element={<AuditLog />} />
               <Route path="access" element={<AccessRoles />} />

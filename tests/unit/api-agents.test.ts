@@ -88,6 +88,13 @@ vi.mock('../../src/utils/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+const mockResolveUserNames = vi.fn();
+
+vi.mock('../../src/api/helpers/user-resolver', () => ({
+  resolveUserNames: (...args: any[]) => mockResolveUserNames(...args),
+  resolveUserName: vi.fn().mockImplementation((id: string) => Promise.resolve(id)),
+}));
+
 import agentRoutes from '../../src/api/routes/agents';
 
 // ── HTTP Test Helper ──
@@ -164,6 +171,12 @@ describe('Agent Routes', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default: resolveUserNames returns userId as displayName
+    mockResolveUserNames.mockImplementation(async (ids: string[]) => {
+      const result: Record<string, string> = {};
+      for (const id of ids) result[id] = id;
+      return result;
+    });
     app = createApp();
   });
 
@@ -435,15 +448,19 @@ describe('Agent Routes', () => {
   // ── GET /agents/:id/runs ──
 
   describe('GET /agents/:id/runs', () => {
-    it('returns paginated runs', async () => {
+    it('returns paginated runs with resolved display names', async () => {
       mockCanView.mockResolvedValueOnce(true);
-      const runs = [{ id: 'r1' }, { id: 'r2' }];
+      const runs = [{ id: 'r1', slack_user_id: 'U1' }, { id: 'r2', slack_user_id: 'U2' }];
       mockGetRunsByAgent.mockResolvedValueOnce(runs);
+      mockResolveUserNames.mockResolvedValueOnce({ U1: 'Alice', U2: 'Bob' });
 
       const res = await makeRequest(app, 'GET', '/agents/a1/runs?limit=10');
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual(runs);
+      expect(res.body).toEqual([
+        { id: 'r1', slack_user_id: 'U1', displayName: 'Alice' },
+        { id: 'r2', slack_user_id: 'U2', displayName: 'Bob' },
+      ]);
       expect(mockGetRunsByAgent).toHaveBeenCalledWith('W123', 'a1', 10);
     });
 
@@ -511,15 +528,19 @@ describe('Agent Routes', () => {
   // ── GET /agents/:id/roles ──
 
   describe('GET /agents/:id/roles', () => {
-    it('returns roles', async () => {
+    it('returns roles with resolved display names', async () => {
       mockCanView.mockResolvedValueOnce(true);
-      const roles = [{ userId: 'U1', role: 'owner' }];
+      const roles = [{ user_id: 'U1', role: 'owner', granted_by: 'U2' }];
       mockGetAgentRoles.mockResolvedValueOnce(roles);
+      mockResolveUserNames.mockResolvedValueOnce({ U1: 'Alice', U2: 'Bob' });
 
       const res = await makeRequest(app, 'GET', '/agents/a1/roles');
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual(roles);
+      expect(res.body).toEqual([{
+        user_id: 'U1', role: 'owner', granted_by: 'U2',
+        displayName: 'Alice', grantedByName: 'Bob',
+      }]);
     });
 
     it('returns 403 when user cannot view', async () => {

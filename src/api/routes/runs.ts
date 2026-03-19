@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { getSessionUser } from '../middleware/auth';
 import { getRecentRuns, getRunRecord } from '../../modules/execution';
 import { queryOne } from '../../db';
+import { resolveUserNames } from '../helpers/user-resolver';
 import type { RunRecord } from '../../types';
 import { logger } from '../../utils/logger';
 
@@ -13,7 +14,12 @@ router.get('/', async (req: Request, res: Response) => {
     const { workspaceId } = getSessionUser(req);
     const limit = parseInt(req.query.limit as string) || 20;
     const runs = await getRecentRuns(workspaceId, limit);
-    res.json(runs);
+    const userIds = (runs as any[]).map((r: any) => r.slack_user_id).filter(Boolean);
+    const names = await resolveUserNames(userIds);
+    res.json((runs as any[]).map((r: any) => ({
+      ...r,
+      displayName: names[r.slack_user_id] || r.slack_user_id,
+    })));
   } catch (err: any) {
     logger.error('List runs error', { error: err.message });
     res.status(500).json({ error: 'Failed to list runs' });

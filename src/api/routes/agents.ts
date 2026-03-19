@@ -14,6 +14,7 @@ import { addToolToAgent, removeToolFromAgent, getAgentToolSummary } from '../../
 import { attachSkillToAgent, detachSkillFromAgent, getAgentSkills } from '../../modules/skills';
 import { getAgentTriggers } from '../../modules/triggers';
 import { query } from '../../db';
+import { resolveUserNames } from '../helpers/user-resolver';
 import { logger } from '../../utils/logger';
 
 const router = Router();
@@ -250,7 +251,12 @@ router.get('/:id/runs', async (req: Request, res: Response) => {
     }
     const limit = parseInt(req.query.limit as string) || 20;
     const runs = await getRunsByAgent(workspaceId, id, limit);
-    res.json(runs);
+    const userIds = (runs as any[]).map((r: any) => r.slack_user_id).filter(Boolean);
+    const names = await resolveUserNames(userIds);
+    res.json((runs as any[]).map((r: any) => ({
+      ...r,
+      displayName: names[r.slack_user_id] || r.slack_user_id,
+    })));
   } catch (err: any) {
     logger.error('Get agent runs error', { error: err.message });
     res.status(500).json({ error: 'Failed to get runs' });
@@ -288,7 +294,13 @@ router.get('/:id/roles', async (req: Request, res: Response) => {
       return;
     }
     const roles = await getAgentRoles(workspaceId, id);
-    res.json(roles);
+    const userIds = (roles as any[]).map((r: any) => r.user_id).concat((roles as any[]).map((r: any) => r.granted_by)).filter(Boolean);
+    const names = await resolveUserNames(userIds);
+    res.json((roles as any[]).map((r: any) => ({
+      ...r,
+      displayName: names[r.user_id] || r.user_id,
+      grantedByName: names[r.granted_by] || r.granted_by,
+    })));
   } catch (err: any) {
     logger.error('Get agent roles error', { error: err.message });
     res.status(500).json({ error: 'Failed to get roles' });

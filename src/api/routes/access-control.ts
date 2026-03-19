@@ -5,6 +5,7 @@ import {
   listPlatformAdmins, setPlatformRole, removePlatformRole,
   getPlatformRole,
 } from '../../modules/access-control';
+import { resolveUserNames } from '../helpers/user-resolver';
 import { logger } from '../../utils/logger';
 
 const router = Router();
@@ -14,7 +15,13 @@ router.get('/platform-roles', requireAdmin, async (req: Request, res: Response) 
   try {
     const { workspaceId } = getSessionUser(req);
     const admins = await listPlatformAdmins(workspaceId);
-    res.json(admins);
+    const userIds = (admins as any[]).map((a: any) => a.user_id).concat((admins as any[]).map((a: any) => a.granted_by)).filter(Boolean);
+    const names = await resolveUserNames(userIds);
+    res.json((admins as any[]).map((a: any) => ({
+      ...a,
+      displayName: names[a.user_id] || a.user_id,
+      grantedByName: names[a.granted_by] || a.granted_by,
+    })));
   } catch (err: any) {
     logger.error('List platform admins error', { error: err.message });
     res.status(500).json({ error: 'Failed to list platform admins' });

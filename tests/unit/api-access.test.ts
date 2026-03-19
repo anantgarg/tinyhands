@@ -20,6 +20,13 @@ vi.mock('../../src/utils/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+const mockResolveUserNames = vi.fn();
+
+vi.mock('../../src/api/helpers/user-resolver', () => ({
+  resolveUserNames: (...args: any[]) => mockResolveUserNames(...args),
+  resolveUserName: vi.fn().mockImplementation((id: string) => Promise.resolve(id)),
+}));
+
 import accessRoutes from '../../src/api/routes/access-control';
 
 // ── HTTP Test Helper ──
@@ -96,18 +103,28 @@ describe('Access Control Routes', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default: resolveUserNames returns userId as displayName
+    mockResolveUserNames.mockImplementation(async (ids: string[]) => {
+      const result: Record<string, string> = {};
+      for (const id of ids) result[id] = id;
+      return result;
+    });
     app = createApp();
   });
 
   describe('GET /access/platform-roles', () => {
-    it('lists platform admins for admin user', async () => {
-      const admins = [{ userId: 'U1', role: 'admin' }];
+    it('lists platform admins with resolved display names', async () => {
+      const admins = [{ user_id: 'U1', role: 'admin', granted_by: 'U2' }];
       mockListPlatformAdmins.mockResolvedValueOnce(admins);
+      mockResolveUserNames.mockResolvedValueOnce({ U1: 'Alice', U2: 'Bob' });
 
       const res = await makeRequest(app, 'GET', '/access/platform-roles');
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual(admins);
+      expect(res.body).toEqual([{
+        user_id: 'U1', role: 'admin', granted_by: 'U2',
+        displayName: 'Alice', grantedByName: 'Bob',
+      }]);
       expect(mockListPlatformAdmins).toHaveBeenCalledWith('W123');
     });
 

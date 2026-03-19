@@ -5,6 +5,7 @@ import { listAgents } from '../../modules/agents';
 import { getRecentRuns } from '../../modules/execution';
 import { getAuditLog } from '../../modules/audit';
 import { query } from '../../db';
+import { resolveUserNames } from '../helpers/user-resolver';
 import { logger } from '../../utils/logger';
 
 const router = Router();
@@ -41,8 +42,12 @@ router.get('/power-users', async (req: Request, res: Response) => {
       LIMIT $3
     `, [since, workspaceId, limit]);
 
+    const userIds = rows.map((r: any) => r.slack_user_id);
+    const names = await resolveUserNames(userIds);
+
     res.json(rows.map((r: any) => ({
       userId: r.slack_user_id,
+      displayName: names[r.slack_user_id] || r.slack_user_id,
       runCount: parseInt(r.run_count, 10),
       agentNames: r.agent_names || [],
     })));
@@ -68,8 +73,12 @@ router.get('/agent-creators', async (req: Request, res: Response) => {
       LIMIT $2
     `, [workspaceId, limit]);
 
+    const userIds = rows.map((r: any) => r.created_by);
+    const names = await resolveUserNames(userIds);
+
     res.json(rows.map((r: any) => ({
       userId: r.created_by,
+      displayName: names[r.created_by] || r.created_by,
       agentCount: parseInt(r.agent_count, 10),
       agentNames: r.agent_names || [],
     })));
@@ -129,7 +138,14 @@ router.get('/recent-runs', async (req: Request, res: Response) => {
     const { workspaceId } = getSessionUser(req);
     const limit = parseInt(req.query.limit as string) || 10;
     const runs = await getRecentRuns(workspaceId, limit);
-    res.json(runs);
+
+    const userIds = runs.map((r: any) => r.slack_user_id).filter(Boolean);
+    const names = await resolveUserNames(userIds);
+
+    res.json(runs.map((r: any) => ({
+      ...r,
+      displayName: names[r.slack_user_id] || r.slack_user_id,
+    })));
   } catch (err: any) {
     logger.error('Dashboard recent-runs error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch recent runs' });
@@ -142,7 +158,14 @@ router.get('/recent-activity', async (req: Request, res: Response) => {
     const { workspaceId } = getSessionUser(req);
     const limit = parseInt(req.query.limit as string) || 10;
     const entries = await getAuditLog(workspaceId, { limit });
-    res.json(entries);
+
+    const userIds = entries.map((e: any) => e.actor_user_id).filter(Boolean);
+    const names = await resolveUserNames(userIds);
+
+    res.json(entries.map((e: any) => ({
+      ...e,
+      displayName: names[e.actor_user_id] || e.actor_user_id,
+    })));
   } catch (err: any) {
     logger.error('Dashboard recent-activity error', { error: err.message });
     res.status(500).json({ error: 'Failed to fetch recent activity' });
