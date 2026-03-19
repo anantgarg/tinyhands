@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Send, X, ChevronDown, Sparkles, Command } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { renderEmoji } from '@/lib/emoji';
 import { useChatStore, generateMessageId } from '@/store/chat';
 import { useAgents, useUpdateAgent } from '@/api/agents';
 import { api } from '@/api/client';
@@ -31,7 +32,7 @@ function getPageContext(pathname: string): { agentId: string | null; context: st
 
 function getPlaceholder(context: string, agentName?: string): string {
   if (context === 'agent' && agentName) {
-    return `Update "${agentName}" or ask a question...`;
+    return `Chat about ${agentName}...`;
   }
   return 'Ask anything or update an agent...';
 }
@@ -289,7 +290,7 @@ export function FloatingChat() {
                         : 'text-warm-text-secondary',
                     )}
                   >
-                    <span className="mr-1.5">{agent.avatarEmoji || ''}</span>
+                    <span className="mr-1.5">{renderEmoji(agent.avatarEmoji)}</span>
                     {agent.name}
                   </button>
                 ))}

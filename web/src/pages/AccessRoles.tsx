@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { usePlatformRoles, useSetPlatformRole, useRemovePlatformRole } from '@/api/access';
+import { useAuthStore } from '@/store/auth';
 import { toast } from '@/components/ui/use-toast';
 
 function safeInitial(name: unknown): string {
@@ -27,6 +28,20 @@ function fmtRelative(v: unknown): string {
 }
 
 export function AccessRoles() {
+  const isAdmin = useAuthStore((s) => s.user?.platformRole === 'superadmin' || s.user?.platformRole === 'admin');
+  if (!isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <Shield className="h-12 w-12 text-warm-text-secondary mb-4" />
+        <h2 className="text-lg font-bold">Admin Access Required</h2>
+        <p className="text-warm-text-secondary mt-2">You need admin permissions to access this page.</p>
+      </div>
+    );
+  }
+  return <AccessRolesContent />;
+}
+
+function AccessRolesContent() {
   const { data: roles, isLoading, isError } = usePlatformRoles();
   const setRole = useSetPlatformRole();
   const removeRole = useRemovePlatformRole();

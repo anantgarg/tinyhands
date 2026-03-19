@@ -2,8 +2,8 @@ import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Pause, Play, MoreVertical, Trash2, Plus, X,
-  Info, Pencil, Check, Loader2, Sparkles, RotateCcw,
-  Webhook, Clock, MessageSquare, Zap, Send,
+  Info, Pencil, Check, Loader2, RotateCcw, Eye,
+  Webhook, Clock, MessageSquare, Zap,
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -45,12 +45,13 @@ import {
   useDenyUpgrade,
   useRemoveAgentTool,
   useAddAgentTool,
-  useAnalyzeGoal,
   useAgentTriggers,
+  useAddAgentTrigger,
 } from '@/api/agents';
-import type { Agent as AgentData } from '@/api/agents';
+import type { Agent as AgentData, AgentVersion } from '@/api/agents';
 import { useAvailableTools } from '@/api/tools';
 import { useUpdateTrigger, useDeleteTrigger } from '@/api/triggers';
+import { renderEmoji } from '@/lib/emoji';
 import { toast } from '@/components/ui/use-toast';
 
 function formatCost(cost: number): string {
@@ -73,6 +74,12 @@ function InfoTooltip({ text }: { text: string }) {
   );
 }
 
+function activationLabel(agent: AgentData): string {
+  if (agent.mentionsOnly) return 'Mentions Only';
+  if (agent.respondToAllMessages) return 'All Messages';
+  return 'Relevant Messages';
+}
+
 export function AgentDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -80,12 +87,6 @@ export function AgentDetail() {
   const updateAgent = useUpdateAgent();
   const deleteAgentMut = useDeleteAgent();
   const [activeTab, setActiveTab] = useState('overview');
-
-  // AI Update bar state
-  const [aiGoal, setAiGoal] = useState('');
-  const [showAiPreview, setShowAiPreview] = useState(false);
-  const analyzeGoal = useAnalyzeGoal();
-  const [aiChanges, setAiChanges] = useState<Record<string, { from: unknown; to: unknown }> | null>(null);
 
   if (isLoading) {
     return (
@@ -126,52 +127,6 @@ export function AgentDetail() {
     }
   };
 
-  const handleAiAnalyze = () => {
-    if (!aiGoal.trim()) return;
-    analyzeGoal.mutate(aiGoal, {
-      onSuccess: (result) => {
-        const changes: Record<string, { from: unknown; to: unknown }> = {};
-        if (result.changes) {
-          Object.assign(changes, result.changes);
-        } else {
-          if (result.systemPrompt && result.systemPrompt !== agent.systemPrompt) {
-            changes.systemPrompt = { from: agent.systemPrompt?.slice(0, 80) + '...', to: result.systemPrompt.slice(0, 80) + '...' };
-          }
-          if (result.model && result.model !== agent.model) {
-            changes.model = { from: agent.model, to: result.model };
-          }
-          if (result.tools && JSON.stringify(result.tools) !== JSON.stringify(agent.tools)) {
-            changes.tools = { from: agent.tools, to: result.tools };
-          }
-          if (result.memoryEnabled !== agent.memoryEnabled) {
-            changes.memoryEnabled = { from: agent.memoryEnabled, to: result.memoryEnabled };
-          }
-        }
-        setAiChanges(changes);
-        setShowAiPreview(true);
-      },
-      onError: (err) => {
-        toast({ title: 'Analysis failed', description: err.message, variant: 'error' });
-      },
-    });
-  };
-
-  const handleApplyAiChanges = () => {
-    if (!aiChanges) return;
-    const payload: Record<string, unknown> = { id: agent.id };
-    for (const [key, val] of Object.entries(aiChanges)) {
-      payload[key] = val.to;
-    }
-    updateAgent.mutate(payload as unknown as Parameters<typeof updateAgent.mutate>[0], {
-      onSuccess: () => {
-        toast({ title: 'Agent updated with AI changes', variant: 'success' });
-        setShowAiPreview(false);
-        setAiGoal('');
-        setAiChanges(null);
-      },
-    });
-  };
-
   return (
     <div>
       {/* Back link */}
@@ -183,7 +138,7 @@ export function AgentDetail() {
       {/* Header */}
       <div className="flex items-start justify-between mb-6">
         <div className="flex items-center gap-3">
-          <span className="text-3xl">{agent.avatarEmoji || '🤖'}</span>
+          <span className="text-3xl">{renderEmoji(agent.avatarEmoji)}</span>
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-extrabold">{agent.name}</h1>
@@ -217,69 +172,6 @@ export function AgentDetail() {
           </DropdownMenu>
         </div>
       </div>
-
-      {/* AI Update Bar */}
-      <Card className="mb-6">
-        <CardContent className="py-3 px-4">
-          <div className="flex gap-3 items-center">
-            <Sparkles className="h-4 w-4 text-brand shrink-0" />
-            <Input
-              value={aiGoal}
-              onChange={(e) => setAiGoal(e.target.value)}
-              placeholder="Describe changes you want to make to this agent..."
-              className="flex-1"
-              onKeyDown={(e) => { if (e.key === 'Enter') handleAiAnalyze(); }}
-            />
-            <Button
-              size="sm"
-              onClick={handleAiAnalyze}
-              disabled={!aiGoal.trim() || analyzeGoal.isPending}
-            >
-              {analyzeGoal.isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* AI Preview Dialog */}
-      <Dialog open={showAiPreview} onOpenChange={setShowAiPreview}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Proposed Changes</DialogTitle>
-            <DialogDescription>Review the AI-suggested changes before applying.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3 max-h-[400px] overflow-y-auto">
-            {aiChanges && Object.entries(aiChanges).map(([key, val]) => (
-              <div key={key} className="rounded-lg border border-warm-border p-3">
-                <p className="text-sm font-medium mb-1 capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}</p>
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <span className="text-warm-text-secondary">From:</span>
-                    <p className="text-red-600 mt-0.5 break-words">{typeof val.from === 'object' ? JSON.stringify(val.from) : String(val.from)}</p>
-                  </div>
-                  <div>
-                    <span className="text-warm-text-secondary">To:</span>
-                    <p className="text-emerald-700 mt-0.5 break-words">{typeof val.to === 'object' ? JSON.stringify(val.to) : String(val.to)}</p>
-                  </div>
-                </div>
-              </div>
-            ))}
-            {aiChanges && Object.keys(aiChanges).length === 0 && (
-              <p className="text-sm text-warm-text-secondary text-center py-4">No changes detected</p>
-            )}
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAiPreview(false)}>Cancel</Button>
-            <Button onClick={handleApplyAiChanges} disabled={!aiChanges || Object.keys(aiChanges).length === 0}>
-              Apply Changes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -326,25 +218,24 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
   const [promptDraft, setPromptDraft] = useState('');
 
   // Configuration editing
-  const [editingConfig, setEditingConfig] = useState(false);
+  const [configDirty, setConfigDirty] = useState(false);
   const [configDraft, setConfigDraft] = useState({
     model: agent.model,
     maxTurns: agent.maxTurns,
     mentionsOnly: agent.mentionsOnly,
     respondToAllMessages: agent.respondToAllMessages,
-    relevanceKeywords: agent.relevanceKeywords ?? [],
     memoryEnabled: agent.memoryEnabled,
     selfEvolutionMode: agent.selfEvolutionMode ?? 'off',
     writePolicy: agent.writePolicy ?? 'auto',
     defaultAccess: agent.defaultAccess ?? 'member',
-    streamingDetail: agent.streamingDetail ?? false,
   });
-  const [keywordInput, setKeywordInput] = useState('');
 
   // Tool dialog
   const [showAddTool, setShowAddTool] = useState(false);
+  const [selectedToolsToAdd, setSelectedToolsToAdd] = useState<Set<string>>(new Set());
 
-  const respondToValue = configDraft.mentionsOnly ? 'mentions' : configDraft.relevanceKeywords.length > 0 ? 'keywords' : 'all';
+  // Version preview dialog
+  const [previewVersion, setPreviewVersion] = useState<AgentVersion | null>(null);
 
   const startEditPrompt = () => {
     setPromptDraft(agent.systemPrompt ?? '');
@@ -363,20 +254,9 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
     );
   };
 
-  const startEditConfig = () => {
-    setConfigDraft({
-      model: agent.model,
-      maxTurns: agent.maxTurns,
-      mentionsOnly: agent.mentionsOnly,
-      respondToAllMessages: agent.respondToAllMessages,
-      relevanceKeywords: agent.relevanceKeywords ?? [],
-      memoryEnabled: agent.memoryEnabled,
-      selfEvolutionMode: agent.selfEvolutionMode ?? 'off',
-      writePolicy: agent.writePolicy ?? 'auto',
-      defaultAccess: agent.defaultAccess ?? 'member',
-      streamingDetail: agent.streamingDetail ?? false,
-    });
-    setEditingConfig(true);
+  const updateConfig = (partial: Partial<typeof configDraft>) => {
+    setConfigDraft((d) => ({ ...d, ...partial }));
+    setConfigDirty(true);
   };
 
   const saveConfig = () => {
@@ -384,33 +264,11 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
       { id: agentId, ...configDraft },
       {
         onSuccess: () => {
-          setEditingConfig(false);
+          setConfigDirty(false);
           toast({ title: 'Configuration updated', variant: 'success' });
         },
       },
     );
-  };
-
-  const handleRespondToChange = (value: string) => {
-    if (value === 'mentions') {
-      setConfigDraft((d) => ({ ...d, mentionsOnly: true, respondToAllMessages: false, relevanceKeywords: [] }));
-    } else if (value === 'all') {
-      setConfigDraft((d) => ({ ...d, mentionsOnly: false, respondToAllMessages: true, relevanceKeywords: [] }));
-    } else {
-      setConfigDraft((d) => ({ ...d, mentionsOnly: false, respondToAllMessages: false }));
-    }
-  };
-
-  const addKeyword = () => {
-    const kw = keywordInput.trim();
-    if (kw && !configDraft.relevanceKeywords.includes(kw)) {
-      setConfigDraft((d) => ({ ...d, relevanceKeywords: [...d.relevanceKeywords, kw] }));
-      setKeywordInput('');
-    }
-  };
-
-  const removeKeyword = (kw: string) => {
-    setConfigDraft((d) => ({ ...d, relevanceKeywords: d.relevanceKeywords.filter((k) => k !== kw) }));
   };
 
   const handleRevert = (version: number) => {
@@ -429,24 +287,49 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
     );
   };
 
-  const handleAddTool = (tool: string) => {
-    addAgentTool.mutate(
-      { agentId, tool },
-      { onSuccess: () => toast({ title: `Added ${tool}`, variant: 'success' }) },
-    );
+  const handleAddSelectedTools = () => {
+    const tools = Array.from(selectedToolsToAdd);
+    if (tools.length === 0) return;
+    // Add them one by one
+    let completed = 0;
+    for (const tool of tools) {
+      addAgentTool.mutate(
+        { agentId, tool },
+        {
+          onSuccess: () => {
+            completed++;
+            if (completed === tools.length) {
+              toast({ title: `Added ${tools.length} tool(s)`, variant: 'success' });
+              setShowAddTool(false);
+              setSelectedToolsToAdd(new Set());
+            }
+          },
+        },
+      );
+    }
   };
 
   const currentTools = agent.tools ?? [];
   const toolsNotAdded = (availableTools ?? []).filter((t) => !currentTools.includes(t.name));
 
-  // Group tools by source
-  const groupedTools = currentTools.reduce<Record<string, string[]>>((acc, toolName) => {
-    const toolMeta = (availableTools ?? []).find((t) => t.name === toolName);
-    const group = toolMeta?.source === 'integration' ? 'Integration' : toolMeta?.source === 'custom' ? 'Custom' : 'Built-in';
+  // Group tools not added by source
+  const groupedToolsNotAdded = toolsNotAdded.reduce<Record<string, typeof toolsNotAdded>>((acc, tool) => {
+    const group = tool.source === 'integration' ? 'Integration' : tool.source === 'custom' ? 'Custom' : 'Built-in';
     if (!acc[group]) acc[group] = [];
-    acc[group].push(toolName);
+    acc[group].push(tool);
     return acc;
   }, {});
+
+  const getToolType = (toolName: string): string => {
+    const meta = (availableTools ?? []).find((t) => t.name === toolName);
+    if (!meta) return 'Built-in';
+    return meta.source === 'integration' ? 'Integration' : meta.source === 'custom' ? 'Custom' : 'Built-in';
+  };
+
+  const getToolDisplayName = (toolName: string): string => {
+    const meta = (availableTools ?? []).find((t) => t.name === toolName);
+    return meta?.displayName ?? toolName;
+  };
 
   return (
     <div className="space-y-6">
@@ -467,7 +350,7 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
                 value={promptDraft}
                 onChange={(e) => setPromptDraft(e.target.value)}
                 rows={16}
-                className="font-mono text-sm"
+                className="font-mono text-sm w-full min-h-[200px]"
               />
               <div className="flex justify-end gap-2">
                 <Button variant="outline" size="sm" onClick={() => setEditingPrompt(false)}>Cancel</Button>
@@ -488,17 +371,10 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
       <Card>
         <CardHeader className="flex-row items-center justify-between">
           <CardTitle className="text-base">Configuration</CardTitle>
-          {!editingConfig ? (
-            <Button variant="ghost" size="sm" onClick={startEditConfig}>
-              <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
+          {configDirty && (
+            <Button size="sm" onClick={saveConfig} disabled={updateAgent.isPending}>
+              {updateAgent.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Check className="mr-1.5 h-3.5 w-3.5" /> Save Changes</>}
             </Button>
-          ) : (
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => setEditingConfig(false)}>Cancel</Button>
-              <Button size="sm" onClick={saveConfig} disabled={updateAgent.isPending}>
-                {updateAgent.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Check className="mr-1.5 h-3.5 w-3.5" /> Save</>}
-              </Button>
-            </div>
           )}
         </CardHeader>
         <CardContent>
@@ -506,180 +382,103 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
             {/* Model */}
             <div>
               <Label className="text-warm-text-secondary text-xs">Model</Label>
-              {editingConfig ? (
-                <Select value={configDraft.model} onValueChange={(v) => setConfigDraft((d) => ({ ...d, model: v }))}>
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="claude-sonnet-4-20250514">Claude Sonnet 4</SelectItem>
-                    <SelectItem value="claude-opus-4-20250514">Claude Opus 4</SelectItem>
-                    <SelectItem value="claude-haiku-4-20250514">Claude Haiku 4</SelectItem>
-                  </SelectContent>
-                </Select>
-              ) : (
-                <p className="text-sm mt-1">{agent.model}</p>
-              )}
+              <Select value={configDraft.model} onValueChange={(v) => updateConfig({ model: v })}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="claude-sonnet-4-20250514">Claude Sonnet 4</SelectItem>
+                  <SelectItem value="claude-opus-4-20250514">Claude Opus 4</SelectItem>
+                  <SelectItem value="claude-haiku-4-20250514">Claude Haiku 4</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
-            {/* Max Turns */}
+            {/* Response Depth */}
             <div>
-              <Label className="text-warm-text-secondary text-xs">Max Turns</Label>
-              {editingConfig ? (
-                <Input
-                  type="number"
-                  value={configDraft.maxTurns}
-                  onChange={(e) => setConfigDraft((d) => ({ ...d, maxTurns: Number(e.target.value) }))}
-                  className="mt-1"
-                />
-              ) : (
-                <p className="text-sm mt-1">{agent.maxTurns}</p>
-              )}
+              <Label className="text-warm-text-secondary text-xs">Response Depth</Label>
+              <Select
+                value={String(configDraft.maxTurns)}
+                onValueChange={(v) => updateConfig({ maxTurns: Number(v) })}
+              >
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="10">Quick (10)</SelectItem>
+                  <SelectItem value="25">Standard (25)</SelectItem>
+                  <SelectItem value="50">Thorough (50)</SelectItem>
+                  <SelectItem value="100">Unlimited (100)</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
-            {/* Channels */}
-            <div className="col-span-2">
-              <Label className="text-warm-text-secondary text-xs">Channels</Label>
-              <div className="flex flex-wrap gap-1.5 mt-1">
-                {(agent.channelIds ?? []).map((ch) => (
-                  <Badge key={ch} variant="secondary">{ch}</Badge>
-                ))}
-                {(agent.channelIds ?? []).length === 0 && (
-                  <p className="text-sm text-warm-text-secondary">No channels configured</p>
-                )}
-              </div>
-            </div>
-
-            {/* Respond To */}
+            {/* Activation */}
             <div>
-              <Label className="text-warm-text-secondary text-xs">Respond To</Label>
-              {editingConfig ? (
-                <Select value={respondToValue} onValueChange={handleRespondToChange}>
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="mentions">Mentions Only</SelectItem>
-                    <SelectItem value="all">All Messages</SelectItem>
-                    <SelectItem value="keywords">Keywords</SelectItem>
-                  </SelectContent>
-                </Select>
-              ) : (
-                <p className="text-sm mt-1">
-                  {agent.mentionsOnly ? 'Mentions Only' : agent.relevanceKeywords?.length ? 'Keywords' : 'All Messages'}
-                </p>
-              )}
+              <Label className="text-warm-text-secondary text-xs">Activation</Label>
+              <p className="text-sm mt-1">{activationLabel(agent)}</p>
             </div>
-
-            {/* Keywords (conditional) */}
-            {editingConfig && respondToValue === 'keywords' && (
-              <div>
-                <Label className="text-warm-text-secondary text-xs">Keywords</Label>
-                <div className="flex gap-2 mt-1">
-                  <Input
-                    value={keywordInput}
-                    onChange={(e) => setKeywordInput(e.target.value)}
-                    placeholder="Add keyword..."
-                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addKeyword(); } }}
-                  />
-                  <Button variant="outline" size="sm" onClick={addKeyword}>Add</Button>
-                </div>
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {configDraft.relevanceKeywords.map((kw) => (
-                    <Badge key={kw} variant="secondary" className="gap-1">
-                      {kw}
-                      <button onClick={() => removeKeyword(kw)} className="hover:text-red-600">
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
 
             {/* Memory */}
             <div>
               <Label className="text-warm-text-secondary text-xs">Memory</Label>
-              {editingConfig ? (
-                <div className="flex items-center gap-2 mt-1.5">
-                  <Switch
-                    checked={configDraft.memoryEnabled}
-                    onCheckedChange={(v) => setConfigDraft((d) => ({ ...d, memoryEnabled: v }))}
-                  />
-                  <span className="text-sm">{configDraft.memoryEnabled ? 'Enabled' : 'Disabled'}</span>
-                </div>
-              ) : (
-                <p className="text-sm mt-1">{agent.memoryEnabled ? 'Enabled' : 'Disabled'}</p>
-              )}
+              <div className="flex items-center gap-2 mt-1.5">
+                <Switch
+                  checked={configDraft.memoryEnabled}
+                  onCheckedChange={(v) => updateConfig({ memoryEnabled: v })}
+                />
+                <span className="text-sm">{configDraft.memoryEnabled ? 'Enabled' : 'Disabled'}</span>
+              </div>
             </div>
 
-            {/* Evolution Mode */}
+            {/* Evolution */}
             <div>
-              <Label className="text-warm-text-secondary text-xs">Evolution Mode</Label>
-              {editingConfig ? (
-                <Select value={configDraft.selfEvolutionMode} onValueChange={(v) => setConfigDraft((d) => ({ ...d, selfEvolutionMode: v }))}>
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="autonomous">Autonomous</SelectItem>
-                    <SelectItem value="approve-first">Approve First</SelectItem>
-                    <SelectItem value="off">Off</SelectItem>
-                  </SelectContent>
-                </Select>
-              ) : (
-                <p className="text-sm mt-1 capitalize">{agent.selfEvolutionMode ?? 'Off'}</p>
-              )}
+              <Label className="text-warm-text-secondary text-xs">Evolution</Label>
+              <Select
+                value={configDraft.selfEvolutionMode}
+                onValueChange={(v) => updateConfig({ selfEvolutionMode: v })}
+              >
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="autonomous">Autonomous</SelectItem>
+                  <SelectItem value="approve-first">Approval Required</SelectItem>
+                  <SelectItem value="off">Disabled</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
-            {/* Write Policy */}
+            {/* Write Safety */}
             <div>
               <Label className="text-warm-text-secondary text-xs">
-                Write Policy
-                <InfoTooltip text="auto = agent can write freely. confirm = asks the user to approve writes. admin_confirm = asks an agent owner to approve writes." />
+                Write Safety
+                <InfoTooltip text="Automatic = agent writes freely. Ask User = agent asks the invoking user. Ask Admin = agent asks an agent owner to approve writes." />
               </Label>
-              {editingConfig ? (
-                <Select value={configDraft.writePolicy} onValueChange={(v) => setConfigDraft((d) => ({ ...d, writePolicy: v }))}>
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="auto">Auto</SelectItem>
-                    <SelectItem value="confirm">Confirm</SelectItem>
-                    <SelectItem value="admin_confirm">Admin Confirm</SelectItem>
-                  </SelectContent>
-                </Select>
-              ) : (
-                <p className="text-sm mt-1 capitalize">{agent.writePolicy ?? 'auto'}</p>
-              )}
+              <Select
+                value={configDraft.writePolicy}
+                onValueChange={(v) => updateConfig({ writePolicy: v })}
+              >
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">Automatic</SelectItem>
+                  <SelectItem value="confirm">Ask User</SelectItem>
+                  <SelectItem value="admin_confirm">Ask Admin</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
-            {/* Default Access */}
+            {/* Access */}
             <div>
               <Label className="text-warm-text-secondary text-xs">
-                Default Access
-                <InfoTooltip text="viewer = can see the agent but not send tasks. member = can use the agent. none = agent is hidden." />
+                Access
+                <InfoTooltip text="Everyone = all workspace members can use. Members Only = only users with explicit roles. Hidden = agent is invisible." />
               </Label>
-              {editingConfig ? (
-                <Select value={configDraft.defaultAccess} onValueChange={(v) => setConfigDraft((d) => ({ ...d, defaultAccess: v }))}>
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="viewer">Viewer</SelectItem>
-                    <SelectItem value="member">Member</SelectItem>
-                    <SelectItem value="none">None</SelectItem>
-                  </SelectContent>
-                </Select>
-              ) : (
-                <p className="text-sm mt-1 capitalize">{agent.defaultAccess ?? 'member'}</p>
-              )}
-            </div>
-
-            {/* Streaming Detail */}
-            <div>
-              <Label className="text-warm-text-secondary text-xs">Streaming Detail</Label>
-              {editingConfig ? (
-                <div className="flex items-center gap-2 mt-1.5">
-                  <Switch
-                    checked={configDraft.streamingDetail}
-                    onCheckedChange={(v) => setConfigDraft((d) => ({ ...d, streamingDetail: v }))}
-                  />
-                  <span className="text-sm">{configDraft.streamingDetail ? 'Enabled' : 'Disabled'}</span>
-                </div>
-              ) : (
-                <p className="text-sm mt-1">{agent.streamingDetail ? 'Enabled' : 'Disabled'}</p>
-              )}
+              <Select
+                value={configDraft.defaultAccess}
+                onValueChange={(v) => updateConfig({ defaultAccess: v })}
+              >
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="member">Everyone</SelectItem>
+                  <SelectItem value="viewer">Members Only</SelectItem>
+                  <SelectItem value="none">Hidden</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </CardContent>
@@ -688,8 +487,8 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
       {/* Section 3: Tools */}
       <Card>
         <CardHeader className="flex-row items-center justify-between">
-          <CardTitle className="text-base">Tools</CardTitle>
-          <Button variant="ghost" size="sm" onClick={() => setShowAddTool(true)}>
+          <CardTitle className="text-base">Tools ({currentTools.length})</CardTitle>
+          <Button variant="ghost" size="sm" onClick={() => { setShowAddTool(true); setSelectedToolsToAdd(new Set()); }}>
             <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Tool
           </Button>
         </CardHeader>
@@ -697,28 +496,36 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
           {currentTools.length === 0 ? (
             <p className="text-sm text-warm-text-secondary">No tools configured</p>
           ) : (
-            <div className="space-y-4">
-              {Object.entries(groupedTools).map(([group, tools]) => (
-                <div key={group}>
-                  <p className="text-xs font-semibold text-warm-text-secondary uppercase tracking-wider mb-2">{group}</p>
-                  <div className="flex flex-wrap gap-2">
-                    {tools.map((tool) => {
-                      const meta = (availableTools ?? []).find((t) => t.name === tool);
-                      return (
-                        <Badge key={tool} variant="secondary" className="gap-1.5 pr-1.5">
-                          {meta?.displayName ?? tool}
-                          <button
-                            onClick={() => handleRemoveTool(tool)}
-                            className="hover:text-red-600 transition-colors"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </Badge>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))}
+            <div className="rounded-card border border-warm-border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead className="w-10"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {currentTools.map((tool) => (
+                    <TableRow key={tool}>
+                      <TableCell className="font-medium">{getToolDisplayName(tool)}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">{getToolType(tool)}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-red-500"
+                          onClick={() => handleRemoveTool(tool)}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
           )}
         </CardContent>
@@ -726,33 +533,67 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
 
       {/* Add Tool Dialog */}
       <Dialog open={showAddTool} onOpenChange={setShowAddTool}>
-        <DialogContent>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Add Tool</DialogTitle>
+            <DialogTitle>Add Tools</DialogTitle>
             <DialogDescription>Select tools to add to this agent.</DialogDescription>
           </DialogHeader>
-          <div className="max-h-[400px] overflow-y-auto space-y-1">
+          <div className="max-h-[400px] overflow-y-auto space-y-4">
             {toolsNotAdded.length === 0 ? (
               <p className="text-sm text-warm-text-secondary text-center py-4">All available tools are already added</p>
             ) : (
-              toolsNotAdded.map((tool) => (
-                <label
-                  key={tool.name}
-                  className="flex items-center gap-3 rounded-lg border border-warm-border p-3 cursor-pointer hover:bg-warm-bg transition-colors"
-                  onClick={() => {
-                    handleAddTool(tool.name);
-                    setShowAddTool(false);
-                  }}
-                >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium">{tool.displayName}</p>
-                    <p className="text-xs text-warm-text-secondary line-clamp-1">{tool.description}</p>
+              Object.entries(groupedToolsNotAdded).map(([group, tools]) => (
+                <div key={group}>
+                  <p className="text-xs font-semibold text-warm-text-secondary uppercase tracking-wider mb-2">{group}</p>
+                  <div className="space-y-1">
+                    {tools.map((tool) => {
+                      const isSelected = selectedToolsToAdd.has(tool.name);
+                      return (
+                        <label
+                          key={tool.name}
+                          className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
+                            isSelected ? 'border-brand bg-brand-light/20' : 'border-warm-border hover:bg-warm-bg'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {
+                              setSelectedToolsToAdd((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(tool.name)) {
+                                  next.delete(tool.name);
+                                } else {
+                                  next.add(tool.name);
+                                }
+                                return next;
+                              });
+                            }}
+                            className="h-4 w-4 rounded border-warm-border text-brand focus:ring-brand"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium">{tool.displayName}</p>
+                            <p className="text-xs text-warm-text-secondary line-clamp-1">{tool.description}</p>
+                          </div>
+                        </label>
+                      );
+                    })}
                   </div>
-                  <Badge variant="secondary" className="text-[10px] shrink-0">{tool.source}</Badge>
-                </label>
+                </div>
               ))
             )}
           </div>
+          {toolsNotAdded.length > 0 && (
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowAddTool(false)}>Cancel</Button>
+              <Button
+                onClick={handleAddSelectedTools}
+                disabled={selectedToolsToAdd.size === 0 || addAgentTool.isPending}
+              >
+                Add Selected ({selectedToolsToAdd.size})
+              </Button>
+            </DialogFooter>
+          )}
         </DialogContent>
       </Dialog>
 
@@ -767,37 +608,86 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
           ) : (versions ?? []).length === 0 ? (
             <p className="text-sm text-warm-text-secondary">No version history</p>
           ) : (
-            <div className="space-y-3">
-              {(versions ?? []).map((v, idx) => (
-                <div key={v.id ?? v.version} className="flex items-start justify-between border-b border-warm-border pb-3 last:border-0">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium">Version {v.version}</p>
-                      {idx === 0 && <Badge variant="success" className="text-[10px]">Current</Badge>}
-                    </div>
-                    {v.changeNote && (
-                      <p className="text-xs text-warm-text-secondary mt-0.5">{v.changeNote}</p>
-                    )}
-                    <p className="text-xs text-warm-text-secondary mt-0.5">
-                      by {v.changedBy} - {format(new Date(v.createdAt), 'MMM d, yyyy HH:mm')}
-                    </p>
-                  </div>
-                  {idx > 0 && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleRevert(v.version)}
-                      disabled={revertAgent.isPending}
-                    >
-                      <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Revert
-                    </Button>
-                  )}
-                </div>
-              ))}
+            <div className="rounded-card border border-warm-border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Version</TableHead>
+                    <TableHead>Change</TableHead>
+                    <TableHead>By</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead className="w-28"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(versions ?? []).map((v, idx) => (
+                    <TableRow key={v.id ?? v.version}>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium">v{v.version}</span>
+                          {idx === 0 && <Badge variant="success" className="text-[10px]">Current</Badge>}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm text-warm-text-secondary max-w-[200px] truncate">
+                        {v.changeNote || '\u2014'}
+                      </TableCell>
+                      <TableCell className="text-sm text-warm-text-secondary">{v.changedBy}</TableCell>
+                      <TableCell className="text-sm text-warm-text-secondary">
+                        {formatDistanceToNow(new Date(v.createdAt), { addSuffix: true })}
+                      </TableCell>
+                      <TableCell>
+                        {idx > 0 && (
+                          <div className="flex gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setPreviewVersion(v)}
+                            >
+                              <Eye className="mr-1 h-3.5 w-3.5" /> Preview
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleRevert(v.version)}
+                              disabled={revertAgent.isPending}
+                            >
+                              <RotateCcw className="mr-1 h-3.5 w-3.5" /> Restore
+                            </Button>
+                          </div>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
           )}
         </CardContent>
       </Card>
+
+      {/* Version Preview Dialog */}
+      <Dialog open={!!previewVersion} onOpenChange={() => setPreviewVersion(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Version {previewVersion?.version} Preview</DialogTitle>
+            <DialogDescription>
+              {previewVersion?.changeNote || 'No change note'} - by {previewVersion?.changedBy}{' '}
+              {previewVersion?.createdAt && format(new Date(previewVersion.createdAt), 'MMM d, yyyy HH:mm')}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[400px] overflow-y-auto whitespace-pre-wrap text-sm bg-warm-bg rounded-lg p-4 font-mono">
+            {previewVersion?.systemPrompt || 'No instructions in this version.'}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPreviewVersion(null)}>Close</Button>
+            {previewVersion && (
+              <Button onClick={() => { handleRevert(previewVersion.version); setPreviewVersion(null); }}>
+                <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Restore This Version
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -807,6 +697,7 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
 function RunsTab({ agentId }: { agentId: string }) {
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [expandedRun, setExpandedRun] = useState<string | null>(null);
   const params = {
     page,
     limit: 20,
@@ -841,31 +732,56 @@ function RunsTab({ agentId }: { agentId: string }) {
           <TableHeader>
             <TableRow>
               <TableHead>Trace ID</TableHead>
-              <TableHead>User</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Model</TableHead>
               <TableHead>Duration</TableHead>
               <TableHead>Cost</TableHead>
+              <TableHead>Error</TableHead>
               <TableHead>Time</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {runs.map((run) => (
-              <TableRow key={run.id}>
-                <TableCell className="font-mono text-xs">{run.traceId?.slice(0, 8)}</TableCell>
-                <TableCell className="text-sm">{run.slackUserId}</TableCell>
-                <TableCell>
-                  <Badge variant={run.status === 'success' ? 'success' : run.status === 'error' ? 'danger' : 'secondary'}>
-                    {run.status}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-warm-text-secondary text-sm">{run.model}</TableCell>
-                <TableCell className="text-sm">{formatDuration(run.durationMs)}</TableCell>
-                <TableCell className="text-sm">{formatCost(run.estimatedCostUsd)}</TableCell>
-                <TableCell className="text-warm-text-secondary text-sm">
-                  {formatDistanceToNow(new Date(run.createdAt), { addSuffix: true })}
-                </TableCell>
-              </TableRow>
+              <>
+                <TableRow
+                  key={run.id}
+                  className={run.status === 'error' ? 'cursor-pointer' : ''}
+                  onClick={() => {
+                    if (run.status === 'error') {
+                      setExpandedRun(expandedRun === run.id ? null : run.id);
+                    }
+                  }}
+                >
+                  <TableCell className="font-mono text-xs">{run.traceId?.slice(0, 8)}</TableCell>
+                  <TableCell>
+                    <Badge variant={run.status === 'success' ? 'success' : run.status === 'error' ? 'danger' : 'secondary'}>
+                      {run.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-warm-text-secondary text-sm">{run.model}</TableCell>
+                  <TableCell className="text-sm">{formatDuration(run.durationMs)}</TableCell>
+                  <TableCell className="text-sm">{formatCost(run.estimatedCostUsd)}</TableCell>
+                  <TableCell className="text-sm max-w-[200px] truncate">
+                    {run.status === 'error' ? (
+                      <span className="text-red-600">{run.output || 'Error'}</span>
+                    ) : (
+                      '\u2014'
+                    )}
+                  </TableCell>
+                  <TableCell className="text-warm-text-secondary text-sm">
+                    {formatDistanceToNow(new Date(run.createdAt), { addSuffix: true })}
+                  </TableCell>
+                </TableRow>
+                {expandedRun === run.id && run.output && (
+                  <TableRow key={`${run.id}-expanded`}>
+                    <TableCell colSpan={7} className="bg-red-50 border-t-0">
+                      <pre className="text-xs text-red-700 whitespace-pre-wrap p-2 max-h-[200px] overflow-y-auto">
+                        {run.output}
+                      </pre>
+                    </TableCell>
+                  </TableRow>
+                )}
+              </>
             ))}
             {runs.length === 0 && (
               <TableRow>
@@ -952,7 +868,7 @@ function MemoryTab({ agentId }: { agentId: string }) {
               <TableHead>Fact</TableHead>
               <TableHead>Category</TableHead>
               <TableHead>Source</TableHead>
-              <TableHead>Relevance</TableHead>
+              <TableHead>Score</TableHead>
               <TableHead>Created</TableHead>
               <TableHead className="w-10"></TableHead>
             </TableRow>
@@ -1042,6 +958,10 @@ function TriggersTab({ agentId }: { agentId: string }) {
   const { data: triggers, isLoading } = useAgentTriggers(agentId);
   const updateTrigger = useUpdateTrigger();
   const deleteTrigger = useDeleteTrigger();
+  const addTrigger = useAddAgentTrigger();
+  const [showAddTrigger, setShowAddTrigger] = useState(false);
+  const [newTriggerType, setNewTriggerType] = useState('schedule');
+  const [newTriggerConfig, setNewTriggerConfig] = useState('{}');
 
   if (isLoading) return <Skeleton className="h-[200px]" />;
 
@@ -1092,16 +1012,43 @@ function TriggersTab({ agentId }: { agentId: string }) {
     }
   };
 
+  const handleCreateTrigger = () => {
+    let config: Record<string, unknown>;
+    try {
+      config = JSON.parse(newTriggerConfig);
+    } catch {
+      toast({ title: 'Invalid JSON config', variant: 'error' });
+      return;
+    }
+    addTrigger.mutate(
+      { agentId, type: newTriggerType, config },
+      {
+        onSuccess: () => {
+          toast({ title: 'Trigger created', variant: 'success' });
+          setShowAddTrigger(false);
+          setNewTriggerConfig('{}');
+        },
+      },
+    );
+  };
+
   return (
     <div className="space-y-4">
+      <div className="flex justify-end">
+        <Button variant="outline" size="sm" onClick={() => setShowAddTrigger(true)}>
+          <Plus className="mr-2 h-4 w-4" />
+          Add Trigger
+        </Button>
+      </div>
+
       <div className="rounded-card border border-warm-border bg-white">
         <Table>
           <TableHeader>
             <TableRow>
               <TableHead>Type</TableHead>
-              <TableHead>Details</TableHead>
+              <TableHead>Description</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead>Last Triggered</TableHead>
+              <TableHead>Last Fired</TableHead>
               <TableHead className="w-24"></TableHead>
             </TableRow>
           </TableHeader>
@@ -1160,6 +1107,53 @@ function TriggersTab({ agentId }: { agentId: string }) {
           </TableBody>
         </Table>
       </div>
+
+      {/* Add Trigger Dialog */}
+      <Dialog open={showAddTrigger} onOpenChange={setShowAddTrigger}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Trigger</DialogTitle>
+            <DialogDescription>Create a new trigger for this agent.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Trigger Type</Label>
+              <Select value={newTriggerType} onValueChange={setNewTriggerType}>
+                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="schedule">Schedule (Cron)</SelectItem>
+                  <SelectItem value="webhook">Webhook</SelectItem>
+                  <SelectItem value="slack_channel">Slack Channel</SelectItem>
+                  <SelectItem value="linear">Linear</SelectItem>
+                  <SelectItem value="zendesk">Zendesk</SelectItem>
+                  <SelectItem value="intercom">Intercom</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Configuration (JSON)</Label>
+              <Textarea
+                value={newTriggerConfig}
+                onChange={(e) => setNewTriggerConfig(e.target.value)}
+                className="mt-1 font-mono text-sm"
+                rows={5}
+                placeholder='{"cron": "0 9 * * 1-5", "timezone": "America/New_York"}'
+              />
+              <p className="text-xs text-warm-text-secondary mt-1">
+                {newTriggerType === 'schedule' && 'Example: {"cron": "0 9 * * 1-5", "timezone": "America/New_York"}'}
+                {newTriggerType === 'webhook' && 'Example: {"secret": "my-secret"}'}
+                {newTriggerType === 'slack_channel' && 'Example: {"channelId": "C...", "mentionsOnly": true}'}
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAddTrigger(false)}>Cancel</Button>
+            <Button onClick={handleCreateTrigger} disabled={addTrigger.isPending}>
+              Create Trigger
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1285,7 +1279,7 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
           <div>
             <CardTitle className="text-base">Roles</CardTitle>
             <p className="text-xs text-warm-text-secondary mt-1">
-              Roles override the default access. Owner = full control (edit config, manage roles). Member = can use the agent. Viewer = can see but not interact.
+              Roles override the default access. Owner = full control. Member = can use the agent. Viewer = can see but not interact.
             </p>
           </div>
           <Button variant="ghost" size="sm" onClick={() => setShowAddUser(true)}>

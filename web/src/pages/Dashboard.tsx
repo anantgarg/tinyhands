@@ -18,6 +18,7 @@ import {
   useAgentFleet,
   useRecentActivity,
 } from '@/api/dashboard';
+import { useAuthStore } from '@/store/auth';
 
 // Safe number/date formatting helpers
 function fmt$(v: unknown): string { return `$${(Number(v) || 0).toFixed(2)}`; }
@@ -58,6 +59,7 @@ function humanizeAction(action: unknown): string {
 }
 
 export function Dashboard() {
+  const isAdmin = useAuthStore((s) => s.user?.platformRole === 'superadmin' || s.user?.platformRole === 'admin');
   const [days, setDays] = useState(7);
   const metrics = useDashboardMetrics(days);
   const powerUsers = usePowerUsers(days);
@@ -113,7 +115,7 @@ export function Dashboard() {
       )}
 
       {/* Top Users + Top Creators */}
-      <div className="grid grid-cols-2 gap-4 mb-6">
+      <div className={`grid ${isAdmin ? 'grid-cols-2' : 'grid-cols-1'} gap-4 mb-6`}>
         <Card>
           <CardHeader><CardTitle className="text-base">Top Users</CardTitle></CardHeader>
           <CardContent>
@@ -137,29 +139,31 @@ export function Dashboard() {
             )}
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader><CardTitle className="text-base">Top Creators</CardTitle></CardHeader>
-          <CardContent>
-            {creators.isLoading ? (
-              <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-8" />)}</div>
-            ) : creators.isError ? (
-              <p className="text-sm text-red-500 text-center py-4">Failed to load</p>
-            ) : (
-              <div className="space-y-3">
-                {(creators.data ?? []).map((c, i) => (
-                  <div key={c.userId ?? i} className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-medium text-warm-text-secondary w-5">{i+1}.</span>
-                      <span className="text-sm font-medium">{fmtUserId(c.displayName, c.userId)}</span>
+        {isAdmin && (
+          <Card>
+            <CardHeader><CardTitle className="text-base">Top Creators</CardTitle></CardHeader>
+            <CardContent>
+              {creators.isLoading ? (
+                <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-8" />)}</div>
+              ) : creators.isError ? (
+                <p className="text-sm text-red-500 text-center py-4">Failed to load</p>
+              ) : (
+                <div className="space-y-3">
+                  {(creators.data ?? []).map((c, i) => (
+                    <div key={c.userId ?? i} className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <span className="text-sm font-medium text-warm-text-secondary w-5">{i+1}.</span>
+                        <span className="text-sm font-medium">{fmtUserId(c.displayName, c.userId)}</span>
+                      </div>
+                      <span className="text-sm text-warm-text-secondary">{c.agentCount || 0} agents</span>
                     </div>
-                    <span className="text-sm text-warm-text-secondary">{c.agentCount || 0} agents</span>
-                  </div>
-                ))}
-                {(creators.data ?? []).length === 0 && <p className="text-sm text-warm-text-secondary text-center py-4">No data yet</p>}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                  ))}
+                  {(creators.data ?? []).length === 0 && <p className="text-sm text-warm-text-secondary text-center py-4">No data yet</p>}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Most Popular Agents */}
@@ -186,30 +190,32 @@ export function Dashboard() {
         </CardContent>
       </Card>
 
-      {/* Agent Fleet */}
-      <Card className="mb-6">
-        <CardHeader><CardTitle className="text-base">Agent Fleet</CardTitle></CardHeader>
-        <CardContent>
-          {fleet.isLoading ? <Skeleton className="h-[200px]" /> : fleet.isError ? (
-            <p className="text-sm text-red-500 text-center py-4">Failed to load</p>
-          ) : (
-            <Table>
-              <TableHeader><TableRow><TableHead>Agent</TableHead><TableHead>Status</TableHead><TableHead>Model</TableHead><TableHead>Tools</TableHead></TableRow></TableHeader>
-              <TableBody>
-                {(fleet.data ?? []).map((a) => (
-                  <TableRow key={a.id}>
-                    <TableCell><div className="flex items-center gap-2"><span>{a.avatar || '\uD83E\uDD16'}</span><span className="font-medium">{a.name || 'Unknown'}</span></div></TableCell>
-                    <TableCell><Badge variant={a.status === 'active' ? 'success' : 'secondary'}>{a.status || 'unknown'}</Badge></TableCell>
-                    <TableCell className="text-warm-text-secondary">{a.model || '\u2014'}</TableCell>
-                    <TableCell>{a.toolsCount ?? 0}</TableCell>
-                  </TableRow>
-                ))}
-                {(fleet.data ?? []).length === 0 && <TableRow><TableCell colSpan={4} className="text-center text-warm-text-secondary">No agents yet</TableCell></TableRow>}
-              </TableBody>
-            </Table>
-          )}
-        </CardContent>
-      </Card>
+      {/* Agent Fleet (admin only) */}
+      {isAdmin && (
+        <Card className="mb-6">
+          <CardHeader><CardTitle className="text-base">Agent Fleet</CardTitle></CardHeader>
+          <CardContent>
+            {fleet.isLoading ? <Skeleton className="h-[200px]" /> : fleet.isError ? (
+              <p className="text-sm text-red-500 text-center py-4">Failed to load</p>
+            ) : (
+              <Table>
+                <TableHeader><TableRow><TableHead>Agent</TableHead><TableHead>Status</TableHead><TableHead>Model</TableHead><TableHead>Tools</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {(fleet.data ?? []).map((a) => (
+                    <TableRow key={a.id}>
+                      <TableCell><div className="flex items-center gap-2"><span>{a.avatar || '\uD83E\uDD16'}</span><span className="font-medium">{a.name || 'Unknown'}</span></div></TableCell>
+                      <TableCell><Badge variant={a.status === 'active' ? 'success' : 'secondary'}>{a.status || 'unknown'}</Badge></TableCell>
+                      <TableCell className="text-warm-text-secondary">{a.model || '\u2014'}</TableCell>
+                      <TableCell>{a.toolsCount ?? 0}</TableCell>
+                    </TableRow>
+                  ))}
+                  {(fleet.data ?? []).length === 0 && <TableRow><TableCell colSpan={4} className="text-center text-warm-text-secondary">No agents yet</TableCell></TableRow>}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Recent Runs */}
       <Card className="mb-6">

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Loader2, AlertCircle } from 'lucide-react';
+import { Loader2, AlertCircle, Shield } from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,9 +9,24 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useSettings, useUpdateSettings } from '@/api/settings';
+import { useAuthStore } from '@/store/auth';
 import { toast } from '@/components/ui/use-toast';
 
 export function Settings() {
+  const isAdmin = useAuthStore((s) => s.user?.platformRole === 'superadmin' || s.user?.platformRole === 'admin');
+  if (!isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <Shield className="h-12 w-12 text-warm-text-secondary mb-4" />
+        <h2 className="text-lg font-bold">Admin Access Required</h2>
+        <p className="text-warm-text-secondary mt-2">You need admin permissions to access this page.</p>
+      </div>
+    );
+  }
+  return <SettingsContent />;
+}
+
+function SettingsContent() {
   const { data: settings, isLoading, isError } = useSettings();
   const updateSettings = useUpdateSettings();
 

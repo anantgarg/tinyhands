@@ -38,6 +38,7 @@ import {
   useDeleteKBEntry,
   useKBSources,
 } from '@/api/kb';
+import { useAuthStore } from '@/store/auth';
 import { toast } from '@/components/ui/use-toast';
 
 function fmtUserId(createdBy: unknown): string {
@@ -47,6 +48,7 @@ function fmtUserId(createdBy: unknown): string {
 }
 
 export function KnowledgeBase() {
+  const isAdmin = useAuthStore((s) => s.user?.platformRole === 'superadmin' || s.user?.platformRole === 'admin');
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<string>('all');
   const [tab, setTab] = useState('approved');
@@ -111,18 +113,20 @@ export function KnowledgeBase() {
   return (
     <div>
       <PageHeader title="Knowledge Base" description="Manage knowledge entries for agents">
-        <div className="flex items-center gap-2">
-          <Link to="/kb/sources">
-            <Button variant="outline">
-              <Database className="mr-2 h-4 w-4" />
-              Sources
+        {isAdmin && (
+          <div className="flex items-center gap-2">
+            <Link to="/kb/sources">
+              <Button variant="outline">
+                <Database className="mr-2 h-4 w-4" />
+                Sources
+              </Button>
+            </Link>
+            <Button onClick={() => setShowAdd(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Entry
             </Button>
-          </Link>
-          <Button onClick={() => setShowAdd(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Add Entry
-          </Button>
-        </div>
+          </div>
+        )}
       </PageHeader>
 
       {/* Stats */}
@@ -176,7 +180,7 @@ export function KnowledgeBase() {
       <Tabs value={tab} onValueChange={(v) => { setTab(v); setPage(1); }}>
         <TabsList>
           <TabsTrigger value="approved">Approved</TabsTrigger>
-          <TabsTrigger value="pending">Pending</TabsTrigger>
+          {isAdmin && <TabsTrigger value="pending">Pending</TabsTrigger>}
         </TabsList>
 
         <TabsContent value={tab}>

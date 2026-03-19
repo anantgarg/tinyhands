@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Wrench, Check, Trash2, MoreVertical, Eye, AlertCircle } from 'lucide-react';
+import { Wrench, Check, Trash2, MoreVertical, Eye, AlertCircle, Shield } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
@@ -31,6 +31,7 @@ import {
   useApproveCustomTool,
   useDeleteCustomTool,
 } from '@/api/tools';
+import { useAuthStore } from '@/store/auth';
 import { toast } from '@/components/ui/use-toast';
 
 function fmtUserId(createdBy: unknown): string {
@@ -40,6 +41,20 @@ function fmtUserId(createdBy: unknown): string {
 }
 
 export function Tools() {
+  const isAdmin = useAuthStore((s) => s.user?.platformRole === 'superadmin' || s.user?.platformRole === 'admin');
+  if (!isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <Shield className="h-12 w-12 text-warm-text-secondary mb-4" />
+        <h2 className="text-lg font-bold">Admin Access Required</h2>
+        <p className="text-warm-text-secondary mt-2">You need admin permissions to access this page.</p>
+      </div>
+    );
+  }
+  return <ToolsContent />;
+}
+
+function ToolsContent() {
   const { data: integrations, isLoading: intLoading, isError: intError } = useIntegrations();
   const { data: customTools, isLoading: ctLoading, isError: ctError } = useCustomTools();
   const registerIntegration = useRegisterIntegration();

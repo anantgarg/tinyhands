@@ -22,6 +22,7 @@ export interface Agent {
   streamingDetail: boolean;
   visibility: string;
   createdBy: string;
+  createdByDisplayName?: string;
   createdAt: string;
   updatedAt: string;
 }

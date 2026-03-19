@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FileText, Search, Download, AlertCircle } from 'lucide-react';
+import { FileText, Search, Download, AlertCircle, Shield } from 'lucide-react';
 import { formatDistanceToNow, format } from 'date-fns';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { useAuditLog } from '@/api/audit';
+import { useAuthStore } from '@/store/auth';
 import { toast } from '@/components/ui/use-toast';
 
 const ACTION_TYPES = [
@@ -62,6 +63,20 @@ function fmtDetails(details: unknown): string {
 }
 
 export function AuditLog() {
+  const isAdmin = useAuthStore((s) => s.user?.platformRole === 'superadmin' || s.user?.platformRole === 'admin');
+  if (!isAdmin) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <Shield className="h-12 w-12 text-warm-text-secondary mb-4" />
+        <h2 className="text-lg font-bold">Admin Access Required</h2>
+        <p className="text-warm-text-secondary mt-2">You need admin permissions to access this page.</p>
+      </div>
+    );
+  }
+  return <AuditLogContent />;
+}
+
+function AuditLogContent() {
   const [search, setSearch] = useState('');
   const [action, setAction] = useState<string>('all');
   const [page, setPage] = useState(1);

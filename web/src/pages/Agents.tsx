@@ -7,8 +7,8 @@ import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   DropdownMenu,
@@ -18,10 +18,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useAgents, useDeleteAgent, useUpdateAgent } from '@/api/agents';
+import type { Agent } from '@/api/agents';
+import { useAuthStore } from '@/store/auth';
+import { renderEmoji } from '@/lib/emoji';
 import { toast } from '@/components/ui/use-toast';
 
 export function Agents() {
   const navigate = useNavigate();
+  const currentUserId = useAuthStore((s) => s.user?.userId);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [modelFilter, setModelFilter] = useState<string>('all');
@@ -38,7 +42,15 @@ export function Agents() {
 
   const models = [...new Set((agents ?? []).map((a) => a.model))];
 
-  const handleToggleStatus = (agent: { id: string; status: string }) => {
+  const yourAgents = filtered.filter(
+    (a) => a.createdBy === currentUserId,
+  );
+  const allAgents = filtered.filter(
+    (a) => a.createdBy !== currentUserId,
+  );
+
+  const handleToggleStatus = (agent: { id: string; status: string }, e: React.MouseEvent) => {
+    e.stopPropagation();
     const newStatus = agent.status === 'active' ? 'paused' : 'active';
     updateAgent.mutate(
       { id: agent.id, status: newStatus } as Parameters<typeof updateAgent.mutate>[0],
@@ -48,13 +60,126 @@ export function Agents() {
     );
   };
 
-  const handleDelete = (id: string, name: string) => {
+  const handleDelete = (id: string, name: string, e: React.MouseEvent) => {
+    e.stopPropagation();
     if (confirm(`Delete agent "${name}"? This cannot be undone.`)) {
       deleteAgent.mutate(id, {
         onSuccess: () => toast({ title: 'Agent deleted', variant: 'success' }),
       });
     }
   };
+
+  function formatCreator(agent: Agent): string {
+    if (agent.createdBy === currentUserId) return 'You';
+    if (agent.createdByDisplayName) return agent.createdByDisplayName;
+    if (agent.createdBy) return `@${agent.createdBy}`;
+    return '\u2014';
+  }
+
+  function formatModelShort(model: string): string {
+    if (model.includes('sonnet')) return 'Sonnet';
+    if (model.includes('opus')) return 'Opus';
+    if (model.includes('haiku')) return 'Haiku';
+    return model;
+  }
+
+  function renderAgentTable(agentList: Agent[]) {
+    return (
+      <div className="rounded-card border border-warm-border bg-white">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Agent</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Model</TableHead>
+              <TableHead>Tools</TableHead>
+              <TableHead>Memory</TableHead>
+              <TableHead>Creator</TableHead>
+              <TableHead>Created</TableHead>
+              <TableHead className="w-10"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {agentList.map((agent) => (
+              <TableRow
+                key={agent.id}
+                className="cursor-pointer"
+                onClick={() => navigate(`/agents/${agent.id}`)}
+              >
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">{renderEmoji(agent.avatarEmoji)}</span>
+                    <span className="font-medium">{agent.name}</span>
+                  </div>
+                </TableCell>
+                <TableCell>
+                  <Badge variant={agent.status === 'active' ? 'success' : 'secondary'}>
+                    {agent.status}
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-warm-text-secondary text-sm">
+                  {formatModelShort(agent.model)}
+                </TableCell>
+                <TableCell className="text-sm">{agent.tools?.length ?? 0}</TableCell>
+                <TableCell className="text-sm">
+                  {agent.memoryEnabled ? 'On' : 'Off'}
+                </TableCell>
+                <TableCell className="text-sm text-warm-text-secondary">
+                  {formatCreator(agent)}
+                </TableCell>
+                <TableCell className="text-warm-text-secondary text-sm">
+                  {agent.createdAt
+                    ? formatDistanceToNow(new Date(agent.createdAt), { addSuffix: true })
+                    : '\u2014'}
+                </TableCell>
+                <TableCell onClick={(e) => e.stopPropagation()}>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8">
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => navigate(`/agents/${agent.id}`)}>
+                        <Eye className="mr-2 h-4 w-4" />
+                        View Details
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => navigate(`/agents/${agent.id}`)}>
+                        <Settings className="mr-2 h-4 w-4" />
+                        Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={(e) => handleToggleStatus(agent, e)}>
+                        {agent.status === 'active' ? (
+                          <><Pause className="mr-2 h-4 w-4" /> Pause</>
+                        ) : (
+                          <><Play className="mr-2 h-4 w-4" /> Resume</>
+                        )}
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        className="text-red-600"
+                        onClick={(e) => handleDelete(agent.id, agent.name, e)}
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </TableCell>
+              </TableRow>
+            ))}
+            {agentList.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={8} className="text-center text-warm-text-secondary py-8">
+                  No agents in this section
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -108,7 +233,7 @@ export function Agents() {
       {isLoading ? (
         <div className="space-y-3">
           {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-[120px]" />
+            <Skeleton key={i} className="h-12" />
           ))}
         </div>
       ) : filtered.length === 0 ? (
@@ -119,73 +244,24 @@ export function Agents() {
           action={!search && statusFilter === 'all' && modelFilter === 'all' ? { label: 'Create Agent', onClick: () => navigate('/agents/new') } : undefined}
         />
       ) : (
-        <div className="space-y-3">
-          {filtered.map((agent) => (
-            <Card
-              key={agent.id}
-              className="cursor-pointer transition-colors hover:bg-warm-bg/30"
-              onClick={() => navigate(`/agents/${agent.id}`)}
-            >
-              <CardContent className="p-5">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-3 flex-1 min-w-0">
-                    <span className="text-2xl shrink-0">{agent.avatar || '🤖'}</span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-semibold truncate">{agent.name}</h3>
-                        <Badge variant={agent.status === 'active' ? 'success' : 'secondary'}>
-                          {agent.status}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-warm-text-secondary line-clamp-1 mb-2">
-                        {agent.systemPrompt?.split('\n')[0] ?? 'No description'}
-                      </p>
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-warm-text-secondary">
-                        <span>Model: {agent.model}</span>
-                        <span>Tools: {agent.tools?.length ?? 0}</span>
-                        <span>Channels: {agent.channels?.length ?? 0}</span>
-                        {agent.memoryEnabled && <Badge variant="default" className="text-[10px] px-1.5 py-0">Memory</Badge>}
-                        <span>by {agent.createdBy?.startsWith('U') ? `@${agent.createdBy}` : agent.createdBy ?? '\u2014'}</span>
-                        <span>{agent.createdAt ? formatDistanceToNow(new Date(agent.createdAt), { addSuffix: true }) : '\u2014'}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                      <Button variant="ghost" size="icon" className="shrink-0">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                      <DropdownMenuItem onClick={() => navigate(`/agents/${agent.id}`)}>
-                        <Eye className="mr-2 h-4 w-4" />
-                        View Details
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => navigate(`/agents/${agent.id}`)}>
-                        <Settings className="mr-2 h-4 w-4" />
-                        Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleToggleStatus(agent)}>
-                        {agent.status === 'active' ? (
-                          <><Pause className="mr-2 h-4 w-4" /> Pause</>
-                        ) : (
-                          <><Play className="mr-2 h-4 w-4" /> Resume</>
-                        )}
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        className="text-red-600"
-                        onClick={() => handleDelete(agent.id, agent.name)}
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+        <div className="space-y-8">
+          {/* Your Agents */}
+          {yourAgents.length > 0 && (
+            <section>
+              <h2 className="text-sm font-semibold text-warm-text-secondary uppercase tracking-wider mb-3">
+                Your Agents ({yourAgents.length})
+              </h2>
+              {renderAgentTable(yourAgents)}
+            </section>
+          )}
+
+          {/* All Agents */}
+          <section>
+            <h2 className="text-sm font-semibold text-warm-text-secondary uppercase tracking-wider mb-3">
+              {yourAgents.length > 0 ? `All Agents (${allAgents.length})` : `All Agents (${filtered.length})`}
+            </h2>
+            {renderAgentTable(yourAgents.length > 0 ? allAgents : filtered)}
+          </section>
         </div>
       )}
     </div>
