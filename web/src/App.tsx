@@ -1,12 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { useAuth } from '@/hooks/useAuth';
 import { useAuthStore } from '@/store/auth';
 import { Shell } from '@/components/layout/Shell';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { Skeleton } from '@/components/ui/skeleton';
 
 import { Login } from '@/pages/Login';
 import { Dashboard } from '@/pages/Dashboard';
@@ -35,21 +33,35 @@ const queryClient = new QueryClient({
 });
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
-  const { checkAuth } = useAuth();
-  const { user, isLoading } = useAuthStore();
+  const { user, setUser, clearUser } = useAuthStore();
+  const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    checkAuth();
-  }, [checkAuth]);
+    let cancelled = false;
+    fetch('/api/v1/auth/me', { credentials: 'include' })
+      .then((res) => {
+        if (!res.ok) throw new Error('Not authenticated');
+        return res.json();
+      })
+      .then((data) => {
+        if (!cancelled) {
+          setUser(data);
+          setChecking(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          clearUser();
+          setChecking(false);
+        }
+      });
+    return () => { cancelled = true; };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (isLoading) {
+  if (checking) {
     return (
       <div className="flex h-screen items-center justify-center bg-warm-bg">
-        <div className="space-y-4 w-64">
-          <Skeleton className="h-8 w-32 mx-auto" />
-          <Skeleton className="h-4 w-48 mx-auto" />
-          <Skeleton className="h-4 w-40 mx-auto" />
-        </div>
+        <p className="text-warm-text-secondary">Loading...</p>
       </div>
     );
   }
