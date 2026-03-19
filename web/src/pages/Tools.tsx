@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Wrench, Check, Settings, Trash2, MoreVertical } from 'lucide-react';
+import { Wrench, Check, Trash2, MoreVertical, Eye, AlertCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
@@ -33,9 +33,15 @@ import {
 } from '@/api/tools';
 import { toast } from '@/components/ui/use-toast';
 
+function fmtUserId(createdBy: unknown): string {
+  if (!createdBy || typeof createdBy !== 'string') return '\u2014';
+  if (createdBy.startsWith('U')) return `@${createdBy}`;
+  return createdBy;
+}
+
 export function Tools() {
-  const { data: integrations, isLoading: intLoading } = useIntegrations();
-  const { data: customTools, isLoading: ctLoading } = useCustomTools();
+  const { data: integrations, isLoading: intLoading, isError: intError } = useIntegrations();
+  const { data: customTools, isLoading: ctLoading, isError: ctError } = useCustomTools();
   const registerIntegration = useRegisterIntegration();
   const approveCustomTool = useApproveCustomTool();
   const deleteCustomTool = useDeleteCustomTool();
@@ -46,6 +52,13 @@ export function Tools() {
     configKeys: { key: string; label: string; required: boolean; secret: boolean }[];
   } | null>(null);
   const [configValues, setConfigValues] = useState<Record<string, string>>({});
+  const [detailDialog, setDetailDialog] = useState<{
+    name: string;
+    displayName: string;
+    description: string;
+    type: string;
+    accessLevel: string;
+  } | null>(null);
 
   const connected = (integrations ?? []).filter((i) => i.status === 'active');
   const available = (integrations ?? []).filter((i) => i.status !== 'active');
@@ -94,6 +107,13 @@ export function Tools() {
               <Skeleton key={i} className="h-[120px]" />
             ))}
           </div>
+        ) : intError ? (
+          <Card>
+            <CardContent className="py-8 text-center text-red-500">
+              <AlertCircle className="h-5 w-5 mx-auto mb-2" />
+              Failed to load integrations
+            </CardContent>
+          </Card>
         ) : connected.length === 0 ? (
           <Card>
             <CardContent className="py-8 text-center text-warm-text-secondary">
@@ -107,17 +127,14 @@ export function Tools() {
                 <CardContent className="p-5">
                   <div className="flex items-start justify-between mb-3">
                     <div>
-                      <h3 className="font-semibold">{integration.displayName}</h3>
-                      <p className="text-xs text-warm-text-secondary">{integration.description}</p>
+                      <h3 className="font-semibold">{integration.displayName ?? integration.name ?? 'Unknown'}</h3>
+                      <p className="text-xs text-warm-text-secondary mt-1">{integration.description || 'Connected integration'}</p>
                     </div>
                     <Badge variant="success">Active</Badge>
                   </div>
                   <div className="flex items-center justify-between">
-                    <span className="text-xs text-warm-text-secondary">{integration.toolsCount} tools</span>
-                    <Button size="sm" variant="outline">
-                      <Settings className="mr-1 h-3 w-3" />
-                      Configure
-                    </Button>
+                    <span className="text-xs text-warm-text-secondary">{integration.toolsCount ?? 0} tools</span>
+                    <Badge variant="secondary" className="text-xs">{integration.connectionModel ?? 'team'}</Badge>
                   </div>
                 </CardContent>
               </Card>
@@ -147,24 +164,27 @@ export function Tools() {
               <Card key={integration.id} className="transition-colors hover:bg-warm-bg/30">
                 <CardContent className="p-5">
                   <div className="mb-3">
-                    <h3 className="font-semibold">{integration.displayName}</h3>
-                    <p className="text-xs text-warm-text-secondary mt-1">{integration.description}</p>
+                    <h3 className="font-semibold">{integration.displayName ?? integration.name ?? 'Unknown'}</h3>
+                    <p className="text-xs text-warm-text-secondary mt-1">{integration.description || 'Available for connection'}</p>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setRegisterDialog({
-                        id: integration.id,
-                        name: integration.displayName,
-                        configKeys: integration.configKeys,
-                      });
-                      setConfigValues({});
-                    }}
-                  >
-                    Register
-                    <Check className="ml-1 h-3 w-3" />
-                  </Button>
+                  <div className="flex items-center justify-between">
+                    <Badge variant="secondary" className="text-xs">{integration.connectionModel ?? 'team'}</Badge>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setRegisterDialog({
+                          id: integration.id,
+                          name: integration.displayName ?? integration.name ?? 'Integration',
+                          configKeys: integration.configKeys ?? [],
+                        });
+                        setConfigValues({});
+                      }}
+                    >
+                      Register
+                      <Check className="ml-1 h-3 w-3" />
+                    </Button>
+                  </div>
                 </CardContent>
               </Card>
             ))}
@@ -177,11 +197,18 @@ export function Tools() {
         <h2 className="text-lg font-semibold mb-4">Custom Tools</h2>
         {ctLoading ? (
           <Skeleton className="h-[200px]" />
+        ) : ctError ? (
+          <Card>
+            <CardContent className="py-8 text-center text-red-500">
+              <AlertCircle className="h-5 w-5 mx-auto mb-2" />
+              Failed to load custom tools
+            </CardContent>
+          </Card>
         ) : (customTools ?? []).length === 0 ? (
           <EmptyState
             icon={Wrench}
             title="No custom tools"
-            description="Custom tools created by agents will appear here for review"
+            description="Custom tools created by agents will appear here for review and approval"
           />
         ) : (
           <Card>
@@ -193,6 +220,7 @@ export function Tools() {
                     <TableHead>Type</TableHead>
                     <TableHead>Access</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Creator</TableHead>
                     <TableHead>Created</TableHead>
                     <TableHead className="w-10"></TableHead>
                   </TableRow>
@@ -202,16 +230,16 @@ export function Tools() {
                     <TableRow key={tool.id}>
                       <TableCell>
                         <div>
-                          <p className="font-medium">{tool.displayName}</p>
-                          <p className="text-xs text-warm-text-secondary">{tool.description}</p>
+                          <p className="font-medium">{tool.displayName || tool.name || 'Unnamed tool'}</p>
+                          <p className="text-xs text-warm-text-secondary line-clamp-1">{tool.description || 'No description'}</p>
                         </div>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="secondary">{tool.type}</Badge>
+                        <Badge variant="secondary">{tool.type || 'custom'}</Badge>
                       </TableCell>
                       <TableCell>
                         <Badge variant={tool.accessLevel === 'read-write' ? 'warning' : 'default'}>
-                          {tool.accessLevel}
+                          {tool.accessLevel || 'read-only'}
                         </Badge>
                       </TableCell>
                       <TableCell>
@@ -220,7 +248,12 @@ export function Tools() {
                         </Badge>
                       </TableCell>
                       <TableCell className="text-warm-text-secondary text-xs">
-                        {formatDistanceToNow(new Date(tool.createdAt), { addSuffix: true })}
+                        {fmtUserId(tool.createdBy)}
+                      </TableCell>
+                      <TableCell className="text-warm-text-secondary text-xs">
+                        {tool.createdAt
+                          ? formatDistanceToNow(new Date(tool.createdAt), { addSuffix: true })
+                          : '\u2014'}
                       </TableCell>
                       <TableCell>
                         <DropdownMenu>
@@ -230,6 +263,20 @@ export function Tools() {
                             </Button>
                           </DropdownMenuTrigger>
                           <DropdownMenuContent align="end">
+                            <DropdownMenuItem
+                              onClick={() =>
+                                setDetailDialog({
+                                  name: tool.name || '',
+                                  displayName: tool.displayName || tool.name || 'Unnamed',
+                                  description: tool.description || 'No description',
+                                  type: tool.type || 'custom',
+                                  accessLevel: tool.accessLevel || 'read-only',
+                                })
+                              }
+                            >
+                              <Eye className="mr-2 h-4 w-4" />
+                              View Details
+                            </DropdownMenuItem>
                             {!tool.approved && (
                               <DropdownMenuItem onClick={() => handleApprove(tool.id)}>
                                 <Check className="mr-2 h-4 w-4" />
@@ -238,7 +285,7 @@ export function Tools() {
                             )}
                             <DropdownMenuItem
                               className="text-red-600"
-                              onClick={() => handleDelete(tool.id, tool.displayName)}
+                              onClick={() => handleDelete(tool.id, tool.displayName || tool.name || 'tool')}
                             >
                               <Trash2 className="mr-2 h-4 w-4" />
                               Delete
@@ -283,6 +330,35 @@ export function Tools() {
             <Button onClick={handleRegister} disabled={registerIntegration.isPending}>
               Register
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Tool Detail Dialog */}
+      <Dialog open={!!detailDialog} onOpenChange={() => setDetailDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{detailDialog?.displayName}</DialogTitle>
+            <DialogDescription>{detailDialog?.description}</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-warm-text-secondary">Internal name:</span>
+              <code className="text-sm bg-warm-bg px-2 py-0.5 rounded">{detailDialog?.name}</code>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-warm-text-secondary">Type:</span>
+              <Badge variant="secondary">{detailDialog?.type}</Badge>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-warm-text-secondary">Access Level:</span>
+              <Badge variant={detailDialog?.accessLevel === 'read-write' ? 'warning' : 'default'}>
+                {detailDialog?.accessLevel}
+              </Badge>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDetailDialog(null)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

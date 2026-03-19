@@ -1,4 +1,4 @@
-import { Shield, Trash2 } from 'lucide-react';
+import { Shield, Trash2, AlertCircle, Info } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
@@ -12,8 +12,22 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { usePlatformRoles, useSetPlatformRole, useRemovePlatformRole } from '@/api/access';
 import { toast } from '@/components/ui/use-toast';
 
+function safeInitial(name: unknown): string {
+  if (!name || typeof name !== 'string' || name.length === 0) return '?';
+  return name.charAt(0).toUpperCase();
+}
+
+function fmtRelative(v: unknown): string {
+  if (!v) return '\u2014';
+  try {
+    return formatDistanceToNow(new Date(v as string), { addSuffix: true });
+  } catch {
+    return '\u2014';
+  }
+}
+
 export function AccessRoles() {
-  const { data: roles, isLoading } = usePlatformRoles();
+  const { data: roles, isLoading, isError } = usePlatformRoles();
   const setRole = useSetPlatformRole();
   const removeRole = useRemovePlatformRole();
 
@@ -25,7 +39,7 @@ export function AccessRoles() {
   };
 
   const handleRemove = (userId: string, name: string) => {
-    if (confirm(`Remove platform role for "${name}"?`)) {
+    if (confirm(`Remove platform role for "${name || 'this user'}"?`)) {
       removeRole.mutate(userId, {
         onSuccess: () => toast({ title: 'Role removed', variant: 'success' }),
       });
@@ -35,6 +49,18 @@ export function AccessRoles() {
   return (
     <div>
       <PageHeader title="Access & Roles" description="Manage platform-level roles and permissions" />
+
+      {/* Info banner */}
+      <Card className="mb-6 border-blue-200 bg-blue-50/50">
+        <CardContent className="py-4">
+          <div className="flex items-start gap-3">
+            <Info className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
+            <p className="text-sm text-blue-900">
+              Platform roles control who can manage workspace-wide settings. Agent-level access is configured per agent in the agent's Access tab.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Role descriptions */}
       <Card className="mb-8">
@@ -48,7 +74,7 @@ export function AccessRoles() {
                 <Badge variant="danger">Superadmin</Badge>
               </div>
               <p className="text-sm text-warm-text-secondary">
-                Full platform control. Can manage all agents, tools, settings, and assign roles. Cannot be removed.
+                Full control over workspace and all agents. Can manage platform settings, tools, integrations, and assign roles to other users.
               </p>
             </div>
             <div>
@@ -56,7 +82,7 @@ export function AccessRoles() {
                 <Badge variant="warning">Admin</Badge>
               </div>
               <p className="text-sm text-warm-text-secondary">
-                Can create and manage agents, approve tools and KB entries, manage connections, and view audit logs.
+                Manage tools, integrations, KB, and connections. Can approve custom tools and KB entries, view audit logs, and manage connections.
               </p>
             </div>
             <div>
@@ -64,7 +90,7 @@ export function AccessRoles() {
                 <Badge variant="secondary">Member</Badge>
               </div>
               <p className="text-sm text-warm-text-secondary">
-                Can interact with agents they have access to. Can request upgrades for restricted agents.
+                Create and use agents they have access to. Can request upgrades for restricted agents and manage their own personal connections.
               </p>
             </div>
           </div>
@@ -74,6 +100,13 @@ export function AccessRoles() {
       {/* Platform roles table */}
       {isLoading ? (
         <Skeleton className="h-[300px]" />
+      ) : isError ? (
+        <Card>
+          <CardContent className="py-8 text-center text-red-500">
+            <AlertCircle className="h-5 w-5 mx-auto mb-2" />
+            Failed to load platform roles
+          </CardContent>
+        </Card>
       ) : (roles ?? []).length === 0 ? (
         <EmptyState
           icon={Shield}
@@ -102,15 +135,17 @@ export function AccessRoles() {
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <Avatar className="h-8 w-8">
-                          <AvatarImage src={role.avatarUrl} />
-                          <AvatarFallback>{role.displayName.charAt(0)}</AvatarFallback>
+                          <AvatarImage src={role.avatarUrl ?? undefined} />
+                          <AvatarFallback>{safeInitial(role.displayName)}</AvatarFallback>
                         </Avatar>
-                        <span className="font-medium">{role.displayName}</span>
+                        <span className="font-medium">
+                          {role.displayName || (role.userId ? `@${role.userId}` : 'Unknown')}
+                        </span>
                       </div>
                     </TableCell>
                     <TableCell>
                       <Select
-                        value={role.role}
+                        value={role.role ?? 'member'}
                         onValueChange={(newRole) => handleRoleChange(role.userId, newRole)}
                         disabled={role.role === 'superadmin'}
                       >
@@ -125,7 +160,7 @@ export function AccessRoles() {
                       </Select>
                     </TableCell>
                     <TableCell className="text-warm-text-secondary text-xs">
-                      {formatDistanceToNow(new Date(role.assignedAt), { addSuffix: true })}
+                      {fmtRelative(role.assignedAt)}
                     </TableCell>
                     <TableCell>
                       {role.role !== 'superadmin' && (
@@ -133,7 +168,7 @@ export function AccessRoles() {
                           variant="ghost"
                           size="icon"
                           className="h-8 w-8 text-red-500"
-                          onClick={() => handleRemove(role.userId, role.displayName)}
+                          onClick={() => handleRemove(role.userId, role.displayName ?? '')}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>

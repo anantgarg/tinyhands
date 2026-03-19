@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "21st-magic": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "@anthropic-ai/claude-code@latest",
+        "run",
+        "@21st-dev/magic@latest"
+      ],
+      "env": {}
+    }
+  }
+}
