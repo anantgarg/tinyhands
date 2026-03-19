@@ -481,25 +481,8 @@ export function registerEvents(app: App): void {
     }
   });
 
-  // ── File Upload for KB ──
-  app.event('file_shared' as any, async ({ event, context }: any) => {
-    const workspaceId = context?.teamId || getDefaultWorkspaceId();
-    const channelId = event.channel_id;
-    const agent = await getAgentByChannel(workspaceId, channelId);
-    if (!agent) return;
-
-    try {
-      const { createWizardState, advanceWizard, completeWizard } = await import('../modules/kb-wizard');
-      // File uploads in agent channels auto-trigger KB wizard
-      await postMessage(
-        channelId,
-        ':file_folder: File received. Processing for knowledge base...\n' +
-        'Use `/kb add` to manually add content, or I\'ll index this automatically.',
-      );
-    } catch (err: any) {
-      logger.error('File upload KB processing failed', { error: err.message });
-    }
-  });
+  // File upload auto-indexing removed — was noisy and non-functional.
+  // Use /kb add to manually add content to the knowledge base.
 
   // (DM handling is consolidated into the main message handler above)
 
