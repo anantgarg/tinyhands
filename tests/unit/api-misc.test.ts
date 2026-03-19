@@ -134,6 +134,13 @@ vi.mock('../../src/utils/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
+const mockResolveUserNames = vi.fn();
+
+vi.mock('../../src/api/helpers/user-resolver', () => ({
+  resolveUserNames: (...args: any[]) => mockResolveUserNames(...args),
+  resolveUserName: vi.fn().mockImplementation((id: string) => Promise.resolve(id)),
+}));
+
 import connectionRoutes from '../../src/api/routes/connections';
 import triggerRoutes from '../../src/api/routes/triggers';
 import workflowRoutes from '../../src/api/routes/workflows';
@@ -1077,6 +1084,11 @@ describe('Observability Routes', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockResolveUserNames.mockImplementation(async (ids: string[]) => {
+      const result: Record<string, string> = {};
+      for (const id of ids) result[id] = id;
+      return result;
+    });
     app = createApp(observabilityRoutes, '/observability');
   });
 
@@ -1137,6 +1149,60 @@ describe('Observability Routes', () => {
       const res = await makeRequest(memberApp, 'GET', '/observability/error-rates');
 
       expect(res.status).toBe(403);
+    });
+  });
+
+  describe('GET /observability/error-log', () => {
+    it('returns failed runs with resolved display names (admin)', async () => {
+      const rows = [
+        { id: 'r1', agent_id: 'a1', agent_name: 'Bot1', avatar_emoji: '🤖', slack_user_id: 'U1', status: 'failed', output: 'Error occurred' },
+      ];
+      mockQuery.mockResolvedValueOnce(rows);
+      mockResolveUserNames.mockResolvedValueOnce({ U1: 'Alice' });
+
+      const res = await makeRequest(app, 'GET', '/observability/error-log');
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual([
+        { ...rows[0], displayName: 'Alice' },
+      ]);
+    });
+
+    it('uses default params', async () => {
+      mockQuery.mockResolvedValueOnce([]);
+
+      await makeRequest(app, 'GET', '/observability/error-log');
+
+      expect(mockQuery).toHaveBeenCalledTimes(1);
+      const sql = mockQuery.mock.calls[0][0];
+      expect(sql).toContain("status = 'failed'");
+    });
+
+    it('filters by agentId', async () => {
+      mockQuery.mockResolvedValueOnce([]);
+
+      await makeRequest(app, 'GET', '/observability/error-log?agentId=a1');
+
+      const sql = mockQuery.mock.calls[0][0];
+      expect(sql).toContain('r.agent_id = $3');
+      expect(mockQuery.mock.calls[0][1]).toContain('a1');
+    });
+
+    it('returns 403 for non-admin', async () => {
+      const memberApp = createApp(observabilityRoutes, '/observability', 'member');
+
+      const res = await makeRequest(memberApp, 'GET', '/observability/error-log');
+
+      expect(res.status).toBe(403);
+    });
+
+    it('returns 500 on error', async () => {
+      mockQuery.mockRejectedValueOnce(new Error('DB error'));
+
+      const res = await makeRequest(app, 'GET', '/observability/error-log');
+
+      expect(res.status).toBe(500);
+      expect(res.body).toEqual({ error: 'Failed to get error log' });
     });
   });
 });
@@ -1211,18 +1277,24 @@ describe('Run Routes', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockResolveUserNames.mockImplementation(async (ids: string[]) => {
+      const result: Record<string, string> = {};
+      for (const id of ids) result[id] = id;
+      return result;
+    });
     app = createApp(runRoutes, '/runs');
   });
 
   describe('GET /runs', () => {
-    it('lists recent runs', async () => {
-      const runs = [{ id: 'r1' }];
+    it('lists recent runs with resolved display names', async () => {
+      const runs = [{ id: 'r1', slack_user_id: 'U1' }];
       mockGetRecentRuns.mockResolvedValueOnce(runs);
+      mockResolveUserNames.mockResolvedValueOnce({ U1: 'Alice' });
 
       const res = await makeRequest(app, 'GET', '/runs');
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual(runs);
+      expect(res.body).toEqual([{ id: 'r1', slack_user_id: 'U1', displayName: 'Alice' }]);
       expect(mockGetRecentRuns).toHaveBeenCalledWith('W123', 20);
     });
 

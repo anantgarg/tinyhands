@@ -64,6 +64,7 @@ export interface Run {
   agentId: string;
   traceId: string;
   slackUserId: string;
+  displayName?: string;
   status: string;
   model: string;
   inputTokens: number;
@@ -71,6 +72,7 @@ export interface Run {
   estimatedCostUsd: number;
   durationMs: number;
   queueWaitMs: number;
+  output?: string;
   createdAt: string;
 }
 
