@@ -34,25 +34,32 @@ Only existing superadmins can change platform roles. There must always be at lea
 
 ## Integration & Tool Management
 
-DM the TinyHands bot and type `/tools` to open the integration dashboard. This is superadmin-only.
+DM the TinyHands bot and type `/tools` to open the integration dashboard. The `/tools` command is now accessible to **all users**, showing three sections: Shared Tools, My Connections, and Available integrations. Admins see additional management options (register, configure, delete).
 
 ### Registering an Integration
 
 1. Open `/tools` in the bot DM
-2. Under **Available Integrations**, click **Register** next to the integration you want
+2. Under **Available** integrations, click **Register** next to the integration you want (admin only)
 3. Fill in the required credentials in the modal (API keys, tokens, etc.)
-4. Submit — the integration's tools are now available to agents
+4. Submit — the credentials are encrypted (AES-256-GCM) and stored as a **team connection**, and the integration's tools become available to agents
+
+Registration now automatically creates an encrypted team connection. This means credentials are never stored in plain text — they are encrypted at rest and decrypted only at execution time.
 
 ### Supported Integrations
 
-| Integration | Required Config | Tools Provided |
-|-------------|----------------|----------------|
-| **Zendesk** | Subdomain, email, API token | Search/create tickets, add comments, update tags/priority/assignee |
-| **Linear** | API key | Search/create issues, manage projects/cycles, update status |
-| **PostHog** | API key, team ID, personal API key | Query events, feature flags, user analytics (read-only) |
-| **HubSpot** | API key | Search/manage contacts, deals, companies |
-| **SerpAPI** | API key | Track search rankings across Google, Bing, Yahoo (read-only) |
-| **Chargebee** | API key, site name | List customers, subscriptions, invoices, plans (read-only) |
+| Integration | Required Config | Connection Model | Tools Provided |
+|-------------|----------------|-----------------|----------------|
+| **Zendesk** | Subdomain, email, API token | Team | Search/create tickets, add comments, update tags/priority/assignee |
+| **Linear** | API key | Team | Search/create issues, manage projects/cycles, update status |
+| **PostHog** | API key, team ID, personal API key | Team | Query events, feature flags, user analytics (read-only) |
+| **HubSpot** | API key | Team | Search/manage contacts, deals, companies |
+| **SerpAPI** | API key | Team | Track search rankings across Google, Bing, Yahoo (read-only) |
+| **Chargebee** | API key, site name | Team | List customers, subscriptions, invoices, plans (read-only) |
+| **Google** | OAuth | Personal/Hybrid | Drive, Sheets, Gmail access |
+| **Notion** | OAuth | Personal/Hybrid | Workspace access |
+| **GitHub** | OAuth | Personal/Hybrid | Repository access |
+
+Each integration manifest declares a `connectionModel` property: `team` (shared creds only), `personal` (each user connects individually), or `hybrid` (supports both team and personal).
 
 ### Managing Tools
 
@@ -70,6 +77,20 @@ From the `/tools` dashboard, use the overflow menu on any tool to:
 
 - **Read-only**: Safe for any agent — cannot modify external data
 - **Read-write**: Can create/update/delete external data — requires admin approval before agents can use it
+
+### Credential Resolution
+
+When an agent runs and needs tool credentials, the system resolves them in this order based on the tool's connection mode on that agent:
+
+1. **Team mode** — uses the encrypted team connection registered by an admin
+2. **Delegated mode** — uses the agent owner's personal connection
+3. **Runtime mode** — uses the invoking user's personal connection
+
+If the required credential is missing at execution time, the agent pauses and DMs the user with a prompt to connect. Once the user completes the connection (OAuth or API key), the agent automatically retries the action.
+
+### Agent Tool Connection Editing
+
+After an agent is created, admins and owners can change how each tool resolves credentials. From `/agents` → overflow menu → **View Config**, the tool connections section shows each tool's current connection mode with an **Edit** button. Clicking Edit opens a modal where you can switch between team, delegated, and runtime modes for that tool on that agent.
 
 ---
 
@@ -206,14 +227,18 @@ The agent creator automatically becomes the owner. Platform admins (superadmin/a
 
 ### Write Policies
 
-Each agent has a **write policy** controlling how write tool actions are handled:
+Each agent has a **write policy** controlling how write tool actions are handled at runtime:
 
 | Policy | Behavior |
 |--------|----------|
 | **Auto** | Write actions execute immediately for members |
-| **Confirm** | Write actions require the requesting user to confirm |
-| **Admin Confirm** | Write actions require an agent owner to approve |
-| **Deny** | Write actions are blocked entirely |
+| **Confirm** | Agent pauses and DMs the requesting user with action details and Approve/Deny buttons |
+| **Admin Confirm** | Agent pauses and DMs the agent owner with action details and Approve/Deny buttons |
+| **Deny** | Write actions are blocked — the agent receives an error and cannot perform writes |
+
+Approval gates are enforced at runtime via Redis-backed state. When an approval request is created, the agent's execution is suspended until the approver responds. If approved, execution resumes and the write action completes. If denied, the requesting user receives a DM notification explaining which action was blocked.
+
+Approval requests expire after a configurable timeout. Expired requests are treated as denied.
 
 ### Auto-Upgrade Requests
 
@@ -244,16 +269,21 @@ Each tool on an agent can be configured with a connection mode:
 
 ### Personal Connections
 
-Users connect their personal accounts via `/connect`:
-1. Run `/connect` in a bot DM
+Users connect their personal accounts via `/tools` or `/connect`:
+1. Run `/tools` in a bot DM — the **Available** section shows integrations that support personal connections
 2. Click **Connect** next to the desired service
-3. Complete the OAuth flow in the browser
+3. Complete the OAuth flow in the browser, or enter an API key in the modal
 4. Credentials are encrypted with AES-256-GCM and stored securely
 
+Users can also run `/connect` as a shortcut for the same flow.
+
+Connected services appear in the **My Connections** section of `/tools`, where users can disconnect at any time.
+
 Supported personal connection types:
-- **Google** — Drive, Sheets, Gmail
-- **Notion** — Workspace access
-- **GitHub** — Personal repository access
+- **Google** — Drive, Sheets, Gmail (OAuth)
+- **Notion** — Workspace access (OAuth)
+- **GitHub** — Personal repository access (OAuth)
+- **API key integrations** — Any integration with `connectionModel: "personal"` or `"hybrid"` that accepts API keys
 
 ### Setting Up OAuth (Admin)
 
@@ -390,7 +420,7 @@ These notifications include the agent name, requesting user, and context, with o
 |---------|-------|-----|--------------|
 | `/agents` | Bot DM | All users | View and manage agents |
 | `/update-agent` | Bot DM | Agent owners/admins | Update an agent via conversation |
-| `/tools` | Bot DM | Platform admins | Manage integrations and tools |
+| `/tools` | Bot DM | All users (admin actions restricted) | Browse tools, manage personal connections, register integrations (admin) |
 | `/kb` | Bot DM | Platform admins | KB dashboard (sources, entries, API keys) |
 | `/kb search <query>` | Bot DM | All users | Search the knowledge base |
 | `/kb add` | Bot DM | All users | Submit a KB entry (pending approval if non-admin) |

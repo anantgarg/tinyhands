@@ -9,6 +9,7 @@ import { retrieveMemories, storeMemories } from '../sources/memory';
 // Permissions module only handles integration access now (per-tool)
 import { getAgentSkills } from '../skills';
 import { listCustomTools } from '../tools';
+import { getIntegration } from '../tools/integrations';
 import { getToolExecutionScript, getMcpConfigs, getCodeArtifacts, recordToolRun } from '../self-authoring';
 import { bufferEvent, cleanupStatusMessage } from '../../slack/buffer';
 import { config } from '../../config';
@@ -219,8 +220,21 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
     ? `<user_message>\n${data.input}\n</user_message>\n${contextBlock}`
     : `<user_message>\n${data.input}\n</user_message>`;
 
-  // All agents use the same standard security config — access control is per-tool
+  // Write policy enforcement — determine which tools to block or gate
+  const writePolicy = (agent as any).write_policy || 'auto';
   const disallowedTools: string[] = [];
+
+  // For 'deny' policy, block all write tools
+  if (writePolicy === 'deny') {
+    try {
+      const allCustomTools = await listCustomTools(workspaceId);
+      for (const t of allCustomTools) {
+        if (agent.tools.includes(t.name) && t.access_level === 'read-write') {
+          disallowedTools.push(t.name);
+        }
+      }
+    } catch { /* best-effort */ }
+  }
 
   // Collect agent's skills and custom tools for injection
   let skillsConfig = '[]';
@@ -239,13 +253,76 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
     const customToolEntries = [];
     for (const t of agentCustomTools) {
       const execScript = await getToolExecutionScript(workspaceId, t.name);
+
+      // Resolve credentials via connection system, fall back to config_json
+      let toolConfig: Record<string, any>;
+      try {
+        const { resolveToolCredentials, getAgentToolConnection, getIntegrationIdForTool } = await import('../connections');
+        const resolved = await resolveToolCredentials(workspaceId, agent.id, t.name, data.userId || undefined);
+
+        if (!resolved) {
+          // Check if this is a runtime mode tool missing user credentials
+          const atc = await getAgentToolConnection(workspaceId, agent.id, t.name);
+          if (atc?.connection_mode === 'runtime' && data.userId && data.channelId) {
+            const integrationId = getIntegrationIdForTool(t.name);
+            const manifest = getIntegration(integrationId);
+            const { getSupportedOAuthIntegrations } = await import('../connections/oauth');
+            const oauthIntegrations = getSupportedOAuthIntegrations();
+            const isOAuth = oauthIntegrations.includes(integrationId);
+
+            // Post connect prompt in thread
+            const { postBlocks: postConnBlocks } = await import('../../slack');
+            await postConnBlocks(data.channelId, [
+              { type: 'section', text: { type: 'mrkdwn', text: `:key: I need your *${manifest?.label || integrationId}* credentials to proceed.` } },
+              {
+                type: 'actions',
+                elements: [{
+                  type: 'button',
+                  text: { type: 'plain_text', text: isOAuth ? ':link: Connect' : ':key: Connect' },
+                  action_id: isOAuth ? 'connect_personal_oauth' : 'connect_personal_apikey',
+                  value: integrationId,
+                }],
+              },
+            ], `Connect ${integrationId}`, data.threadTs);
+
+            // Store pending retry
+            try {
+              const { execute: dbExec } = await import('../../db');
+              const { v4: retryUuid } = await import('uuid');
+              await dbExec(
+                `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
+                [retryUuid(), JSON.stringify({
+                  type: 'pending_connection_retry',
+                  userId: data.userId,
+                  integrationId,
+                  jobData: data,
+                })],
+              );
+            } catch { /* best-effort */ }
+
+            // Skip this run gracefully
+            await updateRunRecord(workspaceId, runRecord.id, {
+              status: 'failed',
+              output: `Missing ${manifest?.label || integrationId} credentials for user`,
+              completed_at: new Date().toISOString(),
+            });
+            return 'Waiting for user credentials';
+          }
+        }
+
+        toolConfig = resolved || JSON.parse(t.config_json || '{}');
+      } catch (resolveErr) {
+        logger.warn('Credential resolution failed', { tool: t.name, error: String(resolveErr) });
+        toolConfig = JSON.parse(t.config_json || '{}');
+      }
+
       customToolEntries.push({
         name: t.name,
         schema: JSON.parse(t.schema_json),
         script_path: t.script_path,
         script_code: execScript,
         language: t.language,
-        config: JSON.parse(t.config_json || '{}'),
+        config: toolConfig,
       });
     }
     customToolsConfig = JSON.stringify(customToolEntries);
@@ -299,6 +376,10 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
         PERMISSION_MODE: 'bypassPermissions',
         SKILLS_CONFIG: skillsConfig,
         CUSTOM_TOOLS_CONFIG: customToolsConfig,
+        ...(writePolicy === 'confirm' || writePolicy === 'admin_confirm' ? {
+          WRITE_APPROVAL_ENDPOINT: `http://host.docker.internal:${config.server.port}/internal/approval`,
+          WRITE_APPROVAL_POLICY: writePolicy,
+        } : {}),
         CODE_ARTIFACTS_CONFIG: codeArtifactsConfig,
         MEMORY_ENABLED: agent.memory_enabled ? '1' : '0',
       },

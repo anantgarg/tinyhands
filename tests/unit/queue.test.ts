@@ -67,6 +67,8 @@ import {
   isDuplicateEvent,
   createQueueEvents,
   closeQueue,
+  setApprovalState,
+  getApprovalState,
 } from '../../src/queue';
 
 import type { JobData } from '../../src/types';
@@ -533,6 +535,73 @@ describe('Queue Module', () => {
 
       expect(mockQueueClose).toHaveBeenCalled();
       expect(mockRedisQuit).toHaveBeenCalled();
+    });
+  });
+
+  // ────────────────────────────────────────────────
+  // setApprovalState / getApprovalState
+  // ────────────────────────────────────────────────
+  describe('setApprovalState', () => {
+    it('sets approval state with custom TTL', async () => {
+      await setApprovalState('req-1', 'pending', 300);
+
+      expect(mockRedisSet).toHaveBeenCalledWith(
+        'tinyhands:approval:req-1',
+        'pending',
+        'EX',
+        300,
+      );
+    });
+
+    it('sets approval state with default 1 hour TTL when no TTL provided', async () => {
+      await setApprovalState('req-2', 'approved');
+
+      expect(mockRedisSet).toHaveBeenCalledWith(
+        'tinyhands:approval:req-2',
+        'approved',
+      );
+      expect(mockRedisExpire).toHaveBeenCalledWith(
+        'tinyhands:approval:req-2',
+        3600,
+      );
+    });
+
+    it('sets denied state', async () => {
+      await setApprovalState('req-3', 'denied', 600);
+
+      expect(mockRedisSet).toHaveBeenCalledWith(
+        'tinyhands:approval:req-3',
+        'denied',
+        'EX',
+        600,
+      );
+    });
+  });
+
+  describe('getApprovalState', () => {
+    it('returns the current approval state', async () => {
+      mockRedisGet.mockResolvedValueOnce('approved');
+
+      const result = await getApprovalState('req-1');
+
+      expect(result).toBe('approved');
+      expect(mockRedisGet).toHaveBeenCalledWith('tinyhands:approval:req-1');
+    });
+
+    it('returns null when request ID does not exist (expired)', async () => {
+      mockRedisGet.mockResolvedValueOnce(null);
+
+      const result = await getApprovalState('req-expired');
+
+      expect(result).toBeNull();
+    });
+
+    it('returns pending for a newly created request', async () => {
+      mockRedisGet.mockResolvedValueOnce('pending');
+
+      const result = await getApprovalState('req-new');
+
+      expect(result).toBe('pending');
     });
   });
 });

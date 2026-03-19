@@ -87,11 +87,13 @@ Register and manage third-party tool integrations entirely from Slack via `/tool
 | **HubSpot** | Search contacts/deals/companies, list pipelines | Create/update contacts/deals/companies, add notes/tasks |
 | **SerpAPI** | SERP rankings across Google, Bing, Yahoo | — (read-only) |
 
-- Platform admins register tools by entering API credentials in Slack
+- `/tools` is accessible to **all users** — three-section view: Shared Tools, My Connections, Available
+- **Personal connections** — connect your own credentials via OAuth or API key directly from `/tools`
+- **Encrypted credentials** — all tool registrations create AES-256-GCM encrypted connections (team or personal)
 - **Connection modes**: team (shared creds), delegated (owner's personal creds), runtime (each user brings own)
-- **Write policies** per agent: auto, confirm, admin_confirm, or deny
-- **Unconfigured tool detection** — if a tool exists but has no API key, the system blocks agent creation and prompts the admin to configure it
-- **Personal connections** via `/connect` — OAuth for Google Drive, Sheets, Gmail, Notion, GitHub
+- **Write policies** per agent with **runtime approval gates**: auto, confirm (user approves via DM), admin_confirm (owner approves via DM), deny
+- **Missing credential detection** — if a user lacks required credentials, they're prompted to connect and the agent auto-retries
+- **Credential selection during agent creation** — choose connection mode per tool when setting up an agent
 
 ### Knowledge Base
 Manage a shared knowledge base via `/kb`:
@@ -131,7 +133,8 @@ The GitHub connector automatically detects Mintlify documentation projects:
 - **Self-Evolution** — Agents can write their own tools, create MCP configs, and update their prompts
 - **Role-Based Access Control** — Platform roles (superadmin/admin/member), per-agent access levels (owner/member/viewer/none), write policies, auto-upgrade requests
 - **Nginx Reverse Proxy with Auto-SSL** — Built-in Nginx + Let's Encrypt for HTTPS, required for OAuth callbacks (Google, GitHub, Notion). One command to bootstrap certificates.
-- **Personal Tool Connections** — Encrypted credential storage (AES-256-GCM), OAuth flows for Google/Notion/GitHub, team/delegated/runtime connection modes
+- **Complete Tool Connections UX** — Encrypted credential storage (AES-256-GCM), OAuth and API key flows, team/delegated/runtime connection modes, credential selection during agent creation, missing-credential prompts with auto-retry
+- **Runtime Approval Gates** — Write policies enforced at execution time with DM-based approve/deny flows for confirm and admin_confirm modes
 - **Audit Logging** — Comprehensive action audit trail for role changes, tool invocations, agent operations, and connection management
 - **Pull-Based Deploy** — Multiple deployments poll for updates automatically. No webhook needed.
 - **Agent Templates** — 10 pre-built agent templates. Browse via `/templates`, activate with one click.
@@ -145,7 +148,7 @@ The GitHub connector automatically detects Mintlify documentation projects:
 |---------|-------------|
 | `/agents` | Interactive agent dashboard — create, update, pause, resume, delete |
 | `/templates` | Browse and activate pre-built agent templates |
-| `/tools` | View registered tool integrations, register new ones |
+| `/tools` | Browse tools, manage personal connections, register integrations (all users) |
 | `/kb` | Knowledge base dashboard — sources, entries, API keys |
 | `/connect` | Manage personal tool connections (Google, Notion, GitHub) |
 | `/audit` | View action audit log (platform admins only) |
@@ -371,10 +374,17 @@ The first user to run `/agents` is automatically promoted to superadmin. Superad
 
 ### Connecting Tool Integrations
 
-1. Run `/tools` to see available integrations
-2. Click **Register** on an integration (e.g., Zendesk)
-3. Enter your API credentials
+**Admins** register team-wide integrations:
+1. Run `/tools` to see the tools dashboard
+2. Under **Available**, click **Register** on an integration (e.g., Zendesk)
+3. Enter your API credentials — stored encrypted as a team connection
 4. The tool is now available for agents to use
+
+**All users** can connect personal credentials:
+1. Run `/tools` to see the tools dashboard
+2. Under **Available**, click **Connect** on an integration that supports personal connections
+3. Complete the OAuth flow or enter an API key
+4. Your credentials are encrypted and available to agents configured to use them
 
 ### Setting Up the Knowledge Base
 

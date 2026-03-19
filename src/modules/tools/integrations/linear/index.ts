@@ -266,6 +266,7 @@ export const manifest: ToolManifest = {
   configPlaceholders: {
     api_key: 'lin_api_xxxx (Personal API key: Settings > API)',
   },
+  connectionModel: 'team',
   tools: [
     { name: 'linear-read', schema: READ_SCHEMA, code: READ_CODE, accessLevel: 'read-only', displayName: 'Checking Linear' },
     { name: 'linear-write', schema: WRITE_SCHEMA, code: WRITE_CODE, accessLevel: 'read-write', displayName: 'Updating Linear' },

@@ -141,19 +141,45 @@ export function createWebhookServer(): express.Application {
 
     try {
       const { handleOAuthCallback } = await import('./modules/connections/oauth');
-      const { channelId } = await handleOAuthCallback(
+      const { userId, channelId } = await handleOAuthCallback(
         integration,
         code as string,
         state as string,
       );
 
-      // Notify user in Slack
+      // DM the user about successful connection + notify in channel
       try {
-        const { postMessage } = await import('./slack');
+        const { sendDMBlocks, postMessage } = await import('./slack');
+        await sendDMBlocks(userId, [
+          { type: 'section', text: { type: 'mrkdwn', text: `:white_check_mark: Your *${integration}* account is now connected. You can use it with your agents.` } },
+        ], `${integration} connected`);
         if (channelId) {
-          await postMessage(channelId, `:white_check_mark: Successfully connected *${integration}*! You can now use it with your agents.`);
+          await postMessage(channelId, `:white_check_mark: Successfully connected *${integration}*!`);
         }
       } catch { /* Slack notification is best-effort */ }
+
+      // Check for pending retries waiting on this connection
+      try {
+        const { queryOne, execute: dbExecute } = await import('./db');
+        const pendingRetry = await queryOne<{ id: string; data: any }>(
+          `SELECT id, data FROM pending_confirmations
+           WHERE data->>'type' = 'pending_connection_retry'
+             AND data->>'userId' = $1
+             AND data->>'integrationId' = $2
+             AND expires_at > NOW()
+           LIMIT 1`,
+          [userId, integration],
+        );
+        if (pendingRetry) {
+          const { enqueueRun } = await import('./queue');
+          await enqueueRun(pendingRetry.data.jobData);
+          await dbExecute('DELETE FROM pending_confirmations WHERE id = $1', [pendingRetry.id]);
+          const { sendDMBlocks: dmBlocks } = await import('./slack');
+          await dmBlocks(userId, [
+            { type: 'section', text: { type: 'mrkdwn', text: `:arrows_counterclockwise: Got it! Retrying your previous request now.` } },
+          ], 'Retrying request');
+        }
+      } catch { /* retry check is best-effort */ }
 
       res.status(200).send(`
         <html><body style="font-family: sans-serif; text-align: center; padding: 40px;">
@@ -169,6 +195,80 @@ export function createWebhookServer(): express.Application {
           <p>${err.message}</p>
         </body></html>
       `);
+    }
+  });
+
+  // ── Internal Approval API (used by runner containers for write policy enforcement) ──
+
+  app.post('/internal/approval/request', async (req, res) => {
+    const secret = req.headers['x-internal-secret'] as string;
+    if (config.server.internalSecret && secret !== config.server.internalSecret) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const { agentId, agentName, toolName, details, userId, channelId, threadTs, writePolicy } = req.body;
+    if (!agentId || !toolName || !channelId) {
+      res.status(400).json({ error: 'Missing required fields' });
+      return;
+    }
+
+    try {
+      const requestId = uuid();
+      const { setApprovalState } = await import('./queue');
+      const ttl = writePolicy === 'confirm' ? 300 : undefined; // 5 min for user confirm, no TTL for admin
+      await setApprovalState(requestId, 'pending', ttl);
+
+      // Post approval message in Slack thread
+      const { postBlocks: postApprovalBlocks } = await import('./slack');
+      const isAdminConfirm = writePolicy === 'admin_confirm';
+      const promptText = isAdminConfirm
+        ? `:warning: *${agentName}* wants to perform a write action:\n\`${toolName}\`${details ? `\n${details}` : ''}\n\n_Waiting for owner approval..._`
+        : `:warning: *${agentName}* wants to perform a write action:\n\`${toolName}\`${details ? `\n${details}` : ''}\n\n_Approve or deny to continue._`;
+
+      await postApprovalBlocks(channelId, [
+        { type: 'section', text: { type: 'mrkdwn', text: promptText } },
+        {
+          type: 'actions',
+          elements: [
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: ':white_check_mark: Approve' },
+              style: 'primary',
+              action_id: 'approve_write_action',
+              value: JSON.stringify({ requestId, writePolicy, agentName, toolName }),
+            },
+            {
+              type: 'button',
+              text: { type: 'plain_text', text: ':x: Deny' },
+              style: 'danger',
+              action_id: 'deny_write_action',
+              value: JSON.stringify({ requestId, writePolicy, agentName, toolName }),
+            },
+          ],
+        },
+      ], `Write approval: ${toolName}`, threadTs);
+
+      res.json({ requestId });
+    } catch (err: any) {
+      logger.error('Approval request failed', { error: err.message });
+      res.status(500).json({ error: 'Failed to create approval request' });
+    }
+  });
+
+  app.get('/internal/approval/poll/:requestId', async (req, res) => {
+    const secret = req.headers['x-internal-secret'] as string;
+    if (config.server.internalSecret && secret !== config.server.internalSecret) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    try {
+      const { getApprovalState } = await import('./queue');
+      const state = await getApprovalState(req.params.requestId);
+      res.json({ status: state || 'expired' });
+    } catch (err: any) {
+      res.status(500).json({ error: 'Failed to check approval state' });
     }
   });
 

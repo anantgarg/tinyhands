@@ -79,7 +79,7 @@ src/
 │   ├── document-filling/    # Google Docs/Sheets template automation
 │   ├── auto-update/         # Pull-based deploy from GitHub
 │   ├── permissions/         # Tool access control (read-only vs read-write)
-│   ├── connections/         # Encrypted credential storage, OAuth flows, connection modes
+│   ├── connections/         # Encrypted credential storage, OAuth flows, connection modes, credential resolution
 │   ├── audit/               # Action audit logging (fire-and-forget)
 │   └── workspace-settings/  # Per-workspace configuration settings
 ├── types/index.ts           # All TypeScript interfaces
@@ -205,6 +205,19 @@ Types: `slack_channel`, `linear`, `zendesk`, `intercom`, `webhook`, `schedule`. 
 
 ### Agent Memory
 Optional per-agent. Categories: customer_preference, decision, context, technical, general, preference, procedure, correction, entity. Stored in `agent_memories` table with relevance scores.
+
+### Tool Connections & Credential Resolution
+The connections module (`src/modules/connections/`) manages encrypted credential storage and resolution. Key helpers:
+- `listTeamConnections(workspaceId)` — all team-level connections
+- `listPersonalConnectionsForUser(workspaceId, userId)` — user's personal connections
+- `getToolAgentUsage(toolId)` — which agents use a given tool
+- `listAgentToolConnections(agentId)` — connection mode config per tool on an agent
+- `getIntegrationIdForTool(toolName)` — resolve integration ID from tool name
+
+Integration manifests declare a `connectionModel` property (`team`, `personal`, or `hybrid`) that controls which connection flows are available.
+
+### Write Policy Approval Gates
+Write policies (`confirm`, `admin_confirm`) are enforced at runtime via Redis-backed approval state. Approval routes in `src/server.ts` handle approve/deny actions from Slack DM buttons. Redis helpers in `src/queue/index.ts` manage approval request creation, polling, and expiration.
 
 ## Slack App Configuration
 

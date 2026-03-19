@@ -144,6 +144,7 @@ export const manifest: ToolManifest = {
   configPlaceholders: {
     api_key: 'API key from serpapi.com/manage-api-key',
   },
+  connectionModel: 'team',
   tools: [
     { name: 'serpapi-read', schema: READ_SCHEMA, code: READ_CODE, accessLevel: 'read-only', displayName: 'Searching SerpAPI' },
   ],

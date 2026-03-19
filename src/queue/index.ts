@@ -167,6 +167,28 @@ export async function isDuplicateEvent(workspaceId: string, idempotencyKey: stri
   return result === null; // null means key already existed
 }
 
+// ── Approval State ──
+
+export async function setApprovalState(
+  requestId: string,
+  state: 'pending' | 'approved' | 'denied',
+  ttlSeconds?: number,
+): Promise<void> {
+  const redis = getRedisConnection();
+  const key = `tinyhands:approval:${requestId}`;
+  if (ttlSeconds) {
+    await redis.set(key, state, 'EX', ttlSeconds);
+  } else {
+    await redis.set(key, state);
+    await redis.expire(key, 3600); // default 1 hour TTL
+  }
+}
+
+export async function getApprovalState(requestId: string): Promise<string | null> {
+  const redis = getRedisConnection();
+  return redis.get(`tinyhands:approval:${requestId}`);
+}
+
 // ── Queue Events ──
 
 export function createQueueEvents(): QueueEvents {

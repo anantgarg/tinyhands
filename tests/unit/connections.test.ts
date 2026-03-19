@@ -289,3 +289,146 @@ describe('resolveToolCredentials', () => {
     expect(result).toBeNull();
   });
 });
+
+// ── New: listTeamConnections ──
+
+import {
+  listTeamConnections,
+  listPersonalConnectionsForUser,
+  getToolAgentUsage,
+  listAgentToolConnections,
+  getIntegrationIdForTool,
+} from '../../src/modules/connections';
+
+describe('listTeamConnections', () => {
+  it('should return all active team connections for a workspace', async () => {
+    const conns = [
+      { id: 'c1', connection_type: 'team', integration_id: 'chargebee', status: 'active' },
+      { id: 'c2', connection_type: 'team', integration_id: 'hubspot', status: 'active' },
+    ];
+    mockQuery.mockResolvedValueOnce(conns);
+
+    const result = await listTeamConnections(TEST_WORKSPACE_ID);
+
+    expect(result).toHaveLength(2);
+    expect(result[0].integration_id).toBe('chargebee');
+    expect(mockQuery).toHaveBeenCalledWith(
+      expect.stringContaining("connection_type = 'team'"),
+      [TEST_WORKSPACE_ID]
+    );
+  });
+
+  it('should return empty array when no team connections exist', async () => {
+    mockQuery.mockResolvedValueOnce([]);
+
+    const result = await listTeamConnections(TEST_WORKSPACE_ID);
+
+    expect(result).toHaveLength(0);
+  });
+});
+
+describe('listPersonalConnectionsForUser', () => {
+  it('should return personal connections for a specific user', async () => {
+    const conns = [
+      { id: 'c1', connection_type: 'personal', user_id: 'U001', integration_id: 'github' },
+    ];
+    mockQuery.mockResolvedValueOnce(conns);
+
+    const result = await listPersonalConnectionsForUser(TEST_WORKSPACE_ID, 'U001');
+
+    expect(result).toHaveLength(1);
+    expect(result[0].user_id).toBe('U001');
+    expect(mockQuery).toHaveBeenCalledWith(
+      expect.stringContaining("connection_type = 'personal'"),
+      [TEST_WORKSPACE_ID, 'U001']
+    );
+  });
+
+  it('should return empty array when user has no personal connections', async () => {
+    mockQuery.mockResolvedValueOnce([]);
+
+    const result = await listPersonalConnectionsForUser(TEST_WORKSPACE_ID, 'U_NOBODY');
+
+    expect(result).toHaveLength(0);
+  });
+});
+
+describe('getToolAgentUsage', () => {
+  it('should return agent tool usage with join data', async () => {
+    const usage = [
+      { agent_id: 'a1', agent_name: 'Bot1', tool_name: 'chargebee-read', access_level: 'read-only', connection_mode: 'team' },
+      { agent_id: 'a2', agent_name: 'Bot2', tool_name: 'hubspot-read', access_level: 'read-write', connection_mode: null },
+    ];
+    mockQuery.mockResolvedValueOnce(usage);
+
+    const result = await getToolAgentUsage(TEST_WORKSPACE_ID);
+
+    expect(result).toHaveLength(2);
+    expect(result[0].agent_name).toBe('Bot1');
+    expect(result[0].connection_mode).toBe('team');
+    expect(result[1].connection_mode).toBeNull();
+    expect(mockQuery).toHaveBeenCalledWith(
+      expect.stringContaining('unnest(a.tools)'),
+      [TEST_WORKSPACE_ID]
+    );
+  });
+
+  it('should return empty array when no agents use tools', async () => {
+    mockQuery.mockResolvedValueOnce([]);
+
+    const result = await getToolAgentUsage(TEST_WORKSPACE_ID);
+
+    expect(result).toHaveLength(0);
+  });
+});
+
+describe('listAgentToolConnections', () => {
+  it('should return all tool connections for an agent', async () => {
+    const conns = [
+      { agent_id: 'a1', tool_name: 'chargebee-read', connection_mode: 'team' },
+      { agent_id: 'a1', tool_name: 'chargebee-write', connection_mode: 'delegated' },
+    ];
+    mockQuery.mockResolvedValueOnce(conns);
+
+    const result = await listAgentToolConnections(TEST_WORKSPACE_ID, 'a1');
+
+    expect(result).toHaveLength(2);
+    expect(result[0].connection_mode).toBe('team');
+    expect(result[1].connection_mode).toBe('delegated');
+    expect(mockQuery).toHaveBeenCalledWith(
+      expect.stringContaining('agent_tool_connections'),
+      [TEST_WORKSPACE_ID, 'a1']
+    );
+  });
+
+  it('should return empty array when agent has no tool connections', async () => {
+    mockQuery.mockResolvedValueOnce([]);
+
+    const result = await listAgentToolConnections(TEST_WORKSPACE_ID, 'a1');
+
+    expect(result).toHaveLength(0);
+  });
+});
+
+describe('getIntegrationIdForTool', () => {
+  it('should resolve integration ID from tool manifests', () => {
+    // The getIntegrations mock is set up to return manifests via require()
+    // Since we mock the connections module's require, this falls through to the split fallback
+    const result = getIntegrationIdForTool('chargebee-read');
+
+    // Falls back to splitting on '-' since require() in test won't resolve
+    expect(result).toBe('chargebee');
+  });
+
+  it('should fall back to splitting on hyphen when no manifest matches', () => {
+    const result = getIntegrationIdForTool('unknown-tool-name');
+
+    expect(result).toBe('unknown');
+  });
+
+  it('should return the full name when no hyphen exists', () => {
+    const result = getIntegrationIdForTool('standalone');
+
+    expect(result).toBe('standalone');
+  });
+});

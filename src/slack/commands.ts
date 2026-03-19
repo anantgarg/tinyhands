@@ -277,105 +277,193 @@ export function registerCommands(app: App): void {
     await startUpdateAgentFlow(workspaceId, command.user_id, command.channel_id);
   });
 
-  // /tools — Interactive admin tool management
+  // /tools — Interactive tool management for all users
   app.command('/tools', async ({ command, ack, respond }) => {
     if (!(await requireDM(command, ack, respond))) return;
     await ack();
     const workspaceId = command.team_id || getDefaultWorkspaceId();
     const userId = command.user_id;
 
-    const { isPlatformAdmin } = await import('../modules/access-control');
-    if (!(await isPlatformAdmin(workspaceId, userId))) {
-      await respond({ response_type: 'ephemeral', text: ':lock: Only admins can manage tools. Use `/agents` to create agents with existing tools.' });
-      return;
-    }
+    const { isPlatformAdmin: checkAdmin } = await import('../modules/access-control');
+    const isAdmin = await checkAdmin(workspaceId, userId);
 
-    const { listCustomTools: listAll, getCustomTool } = await import('../modules/tools');
+    const { listCustomTools: listAll } = await import('../modules/tools');
+    const { listTeamConnections, listPersonalConnectionsForUser, getToolAgentUsage } = await import('../modules/connections');
+    const { getSupportedOAuthIntegrations } = await import('../modules/connections/oauth');
+
     const tools = await listAll(workspaceId);
     const registeredNames = new Set(tools.map(t => t.name));
-
-    // Build a lookup: tool name → tool record
     const toolByName = new Map(tools.map(t => [t.name, t]));
+
+    const teamConns = await listTeamConnections(workspaceId);
+    const personalConns = await listPersonalConnectionsForUser(workspaceId, userId);
+    const agentUsage = await getToolAgentUsage(workspaceId);
+    const oauthIntegrations = getSupportedOAuthIntegrations();
+
+    const teamConnByIntegration = new Map(teamConns.map(c => [c.integration_id, c]));
+    const personalConnByIntegration = new Map(personalConns.map(c => [c.integration_id, c]));
+
+    // Group agent usage by integration
+    const usageByIntegration = new Map<string, Array<{ agent_name: string; access_level: string; connection_mode: string | null }>>();
+    for (const u of agentUsage) {
+      const intId = findIntegrationForTool(u.tool_name);
+      if (intId) {
+        if (!usageByIntegration.has(intId)) usageByIntegration.set(intId, []);
+        const existing = usageByIntegration.get(intId)!;
+        if (!existing.some(e => e.agent_name === u.agent_name)) {
+          existing.push({ agent_name: u.agent_name, access_level: u.access_level, connection_mode: u.connection_mode });
+        }
+      }
+    }
 
     const blocks: any[] = [
       { type: 'header', text: { type: 'plain_text', text: `:toolbox: Tools` } },
     ];
 
-    // ── Connected Integrations (grouped by integration) ──
-    const connectedIntegrations: typeof TOOL_INTEGRATIONS = [];
+    // ── Section 1: Shared Tools (team connections) ──
+    const sharedIntegrations: typeof TOOL_INTEGRATIONS = [];
+    const myIntegrations: typeof TOOL_INTEGRATIONS = [];
     const availableIntegrations: typeof TOOL_INTEGRATIONS = [];
 
     for (const integration of TOOL_INTEGRATIONS) {
-      const registeredTools = integration.tools.filter(t => registeredNames.has(t));
-      if (registeredTools.length > 0) {
-        // Check if ANY tool has config set (meaning it's "connected")
-        const hasConfig = registeredTools.some(t => {
-          const tool = toolByName.get(t);
-          if (!tool) return false;
-          const config = JSON.parse(tool.config_json || '{}');
-          return Object.keys(config).length > 0;
-        });
-        if (hasConfig) {
-          connectedIntegrations.push(integration);
-        } else {
-          // Registered but not configured — show as available with "Needs setup"
-          availableIntegrations.push(integration);
-        }
-      } else {
+      const hasTeamConn = teamConnByIntegration.has(integration.id);
+      const hasPersonalConn = personalConnByIntegration.has(integration.id);
+      const hasConfig = integration.tools.some(t => {
+        const tool = toolByName.get(t);
+        if (!tool) return false;
+        const cfg = JSON.parse(tool.config_json || '{}');
+        return Object.keys(cfg).length > 0;
+      });
+
+      if (hasTeamConn || hasConfig) {
+        sharedIntegrations.push(integration);
+      }
+      if (hasPersonalConn) {
+        myIntegrations.push(integration);
+      }
+      if (!hasTeamConn && !hasConfig && !hasPersonalConn) {
         availableIntegrations.push(integration);
       }
     }
 
-    if (connectedIntegrations.length > 0) {
-      blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `:white_check_mark: *Connected (${connectedIntegrations.length})*` } });
+    // Format agent usage line
+    const formatUsage = (intId: string): string => {
+      const usage = usageByIntegration.get(intId);
+      if (!usage || usage.length === 0) return '';
+      const items = usage.slice(0, 3).map(u => {
+        const level = u.access_level === 'read-write' ? 'view+action' : 'view only';
+        const mode = u.connection_mode ? ` (${u.connection_mode})` : '';
+        return `${u.agent_name} [${level}${mode}]`;
+      });
+      const more = usage.length > 3 ? ` +${usage.length - 3} more` : '';
+      return `\nUsed by: ${items.join(', ')}${more}`;
+    };
 
-      for (const integration of connectedIntegrations) {
-        // Use the first registered tool name for overflow actions
+    if (sharedIntegrations.length > 0) {
+      blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `:white_check_mark: *Shared Tools (${sharedIntegrations.length})*` } });
+
+      for (const integration of sharedIntegrations) {
         const firstTool = integration.tools.find(t => registeredNames.has(t)) || integration.tools[0];
+        const usageLine = formatUsage(integration.id);
+
+        if (isAdmin) {
+          blocks.push({
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `:large_green_circle: ${integration.icon} *${integration.label}* — ${integration.description}${usageLine}`,
+            },
+            accessory: {
+              type: 'overflow',
+              action_id: 'tool_overflow',
+              options: [
+                { text: { type: 'plain_text', text: ':gear: Configure' }, value: `configure:${firstTool}` },
+                { text: { type: 'plain_text', text: ':link: Add to Agent' }, value: `add_to_agent:${firstTool}` },
+                { text: { type: 'plain_text', text: ':wastebasket: Remove' }, value: `delete:${firstTool}` },
+              ],
+            },
+          });
+        } else {
+          blocks.push({
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `:large_green_circle: ${integration.icon} *${integration.label}* — ${integration.description}${usageLine}`,
+            },
+          });
+        }
+      }
+      blocks.push({ type: 'divider' });
+    }
+
+    // ── Section 2: My Connections (personal) ──
+    if (myIntegrations.length > 0) {
+      blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `:bust_in_silhouette: *My Connections (${myIntegrations.length})*` } });
+
+      for (const integration of myIntegrations) {
+        const usageLine = formatUsage(integration.id);
         blocks.push({
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `:large_green_circle: ${integration.icon} *${integration.label}* — ${integration.description}`,
-          },
-          accessory: {
-            type: 'overflow',
-            action_id: 'tool_overflow',
-            options: [
-              { text: { type: 'plain_text', text: ':gear: Configure' }, value: `configure:${firstTool}` },
-              { text: { type: 'plain_text', text: ':link: Add to Agent' }, value: `add_to_agent:${firstTool}` },
-              { text: { type: 'plain_text', text: ':wastebasket: Delete' }, value: `delete:${firstTool}` },
-            ],
+            text: `:large_blue_circle: ${integration.icon} *${integration.label}* — ${integration.description}${usageLine}`,
           },
         });
       }
       blocks.push({ type: 'divider' });
     }
 
-    // ── Available Integrations ──
+    // ── Section 3: Available ──
     if (availableIntegrations.length > 0) {
       blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `:heavy_plus_sign: *Available*` } });
 
       for (const integration of availableIntegrations) {
-        const isRegisteredButUnconfigured = integration.tools.some(t => registeredNames.has(t));
-        const statusNote = isRegisteredButUnconfigured ? ' · _Needs setup_' : '';
-        blocks.push({
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `${integration.icon} *${integration.label}* — ${integration.description}${statusNote}`,
-          },
-          accessory: {
-            type: 'button',
-            text: { type: 'plain_text', text: ':heavy_plus_sign: Register' },
-            action_id: 'register_tool_integration',
-            value: integration.id,
-          },
-        });
+        const manifest = getIntegration(integration.id);
+        const connModel = manifest?.connectionModel;
+        const isOAuth = oauthIntegrations.includes(integration.id);
+
+        if (isAdmin) {
+          blocks.push({
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `${integration.icon} *${integration.label}* — ${integration.description}`,
+            },
+            accessory: {
+              type: 'button',
+              text: { type: 'plain_text', text: ':heavy_plus_sign: Set Up for Workspace' },
+              action_id: 'register_tool_integration',
+              value: integration.id,
+            },
+          });
+        } else if (connModel === 'hybrid' || connModel === 'personal') {
+          // Users can connect their own credentials for hybrid/personal integrations
+          blocks.push({
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `${integration.icon} *${integration.label}* — ${integration.description}`,
+            },
+            accessory: {
+              type: 'button',
+              text: { type: 'plain_text', text: isOAuth ? ':link: Connect' : ':key: Connect with API Key' },
+              action_id: isOAuth ? 'connect_personal_oauth' : 'connect_personal_apikey',
+              value: integration.id,
+            },
+          });
+        } else {
+          blocks.push({
+            type: 'section',
+            text: {
+              type: 'mrkdwn',
+              text: `${integration.icon} *${integration.label}* — ${integration.description}\n_Ask a workspace admin to set up_`,
+            },
+          });
+        }
       }
     }
 
-    if (connectedIntegrations.length === 0 && availableIntegrations.length === 0) {
+    if (sharedIntegrations.length === 0 && myIntegrations.length === 0 && availableIntegrations.length === 0) {
       blocks.push({ type: 'section', text: { type: 'mrkdwn', text: '_No tools available._' } });
     }
 
@@ -744,9 +832,30 @@ export function registerInlineActions(app: App): void {
 
   app.action('deny_upgrade', async ({ action, ack, body }: any) => {
     await ack();
-    const { denyUpgrade } = await import('../modules/access-control');
-    await denyUpgrade(body.team?.id || getDefaultWorkspaceId(), action.value, body.user.id);
+    const workspaceId = body.team?.id || getDefaultWorkspaceId();
+    const { denyUpgrade, getUpgradeRequest } = await import('../modules/access-control');
+
+    // Get request details before denying
+    let requestUserId: string | null = null;
+    let agentName: string | null = null;
+    try {
+      const request = await getUpgradeRequest(workspaceId, action.value);
+      if (request) {
+        requestUserId = request.user_id;
+        const agent = await getAgent(workspaceId, request.agent_id);
+        agentName = agent?.name || 'the agent';
+      }
+    } catch { /* best-effort */ }
+
+    await denyUpgrade(workspaceId, action.value, body.user.id);
     await postMessage(body.channel?.id || body.user.id, `:no_entry: Upgrade request denied.`);
+
+    // DM the requesting user
+    if (requestUserId) {
+      await sendDMBlocks(requestUserId, [
+        { type: 'section', text: { type: 'mrkdwn', text: `:no_entry: Your access request for *${agentName}* was denied by <@${body.user.id}>.` } },
+      ], 'Upgrade denied').catch(() => {});
+    }
   });
 
   // ── Agent overflow menu ──
@@ -781,13 +890,24 @@ export function registerInlineActions(app: App): void {
           if (viewerUsers.length > 0) rolesText += `\n:eye: View only: ${viewerUsers.join(', ')}`;
         }
 
+        // Build tool connections section
+        let toolConnsText = '';
+        try {
+          const { listAgentToolConnections } = await import('../modules/connections');
+          const toolConns = await listAgentToolConnections(workspaceId, agentId);
+          if (toolConns.length > 0) {
+            const modeLabel = (m: string) => m === 'team' ? 'shared' : m === 'delegated' ? "creator's" : m === 'runtime' ? 'per-user' : m;
+            toolConnsText = '\n*Tool Credentials:*\n' + toolConns.map(tc => `• \`${tc.tool_name}\`: ${modeLabel(tc.connection_mode)}`).join('\n');
+          }
+        } catch { /* best-effort */ }
+
         const blocks: any[] = [
           { type: 'header', text: { type: 'plain_text', text: `${agent.avatar_emoji} ${agent.name}` } },
           {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `*Status:* ${agent.status}\n*Model:* ${agent.model}\n*Effort:* ${maxTurnsToEffort(agent.max_turns)}\n*Memory:* ${agent.memory_enabled ? 'on' : 'off'}\n*Access:* ${agent.default_access === 'none' ? ':lock: Invite only' : formatAccessLevel(agent.default_access)}\n*Writes:* ${formatWritePolicy(agent.write_policy || 'auto')}\n*Channels:* ${channels}\n*Tools:* ${agent.tools.join(', ') || 'none'}\n*Responds to:* ${respondModeLabelFromAgent(agent)}`,
+              text: `*Status:* ${agent.status}\n*Model:* ${agent.model}\n*Effort:* ${maxTurnsToEffort(agent.max_turns)}\n*Memory:* ${agent.memory_enabled ? 'on' : 'off'}\n*Access:* ${agent.default_access === 'none' ? ':lock: Invite only' : formatAccessLevel(agent.default_access)}\n*Writes:* ${formatWritePolicy(agent.write_policy || 'auto')}\n*Channels:* ${channels}\n*Tools:* ${agent.tools.join(', ') || 'none'}\n*Responds to:* ${respondModeLabelFromAgent(agent)}${toolConnsText}`,
             },
           },
           { type: 'divider' },
@@ -801,6 +921,21 @@ export function registerInlineActions(app: App): void {
             text: { type: 'mrkdwn', text: `*System Prompt:*\n\`\`\`${agent.system_prompt.slice(0, 2500)}${agent.system_prompt.length > 2500 ? '...' : ''}\`\`\`` },
           },
         ];
+
+        // Add "Edit Tool Connections" button if user can modify
+        const canEdit = await canModifyAgent(workspaceId, agentId, userId);
+        if (canEdit && agent.tools.some((t: string) => findIntegrationForTool(t))) {
+          blocks.push({
+            type: 'actions',
+            elements: [{
+              type: 'button',
+              text: { type: 'plain_text', text: ':key: Edit Tool Connections' },
+              action_id: 'edit_agent_tool_connections',
+              value: agentId,
+            }],
+          });
+        }
+
         if (channelId) await postBlocks(channelId, blocks, `Config: ${agent.name}`);
         break;
       }
@@ -1452,8 +1587,8 @@ export function registerInlineActions(app: App): void {
         type: 'modal',
         callback_id: 'register_tool_modal',
         private_metadata: JSON.stringify({ integrationId, requiredKeys: integration.requiredConfigKeys }),
-        title: { type: 'plain_text', text: `Register ${integration.label}`.slice(0, 24) },
-        submit: { type: 'plain_text', text: 'Register' },
+        title: { type: 'plain_text', text: `Set Up ${integration.label}`.slice(0, 24) },
+        submit: { type: 'plain_text', text: 'Set Up' },
         blocks,
       });
     } catch (err: any) {
@@ -1462,6 +1597,89 @@ export function registerInlineActions(app: App): void {
         { type: 'section', text: { type: 'mrkdwn', text: `:x: Failed to open registration modal for *${integrationId}*: ${err.message}` } },
       ], 'Registration error').catch(() => {});
     }
+  });
+
+  // ── Personal connection: OAuth ──
+  app.action('connect_personal_oauth', async ({ action, ack, body }) => {
+    await ack();
+    const integrationId = (action as any).value;
+    const userId = body.user.id;
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
+    const channelId = (body as any).channel?.id;
+
+    try {
+      const { getOAuthUrl } = await import('../modules/connections/oauth');
+      const { url } = await getOAuthUrl(integrationId, workspaceId, userId, channelId);
+
+      await sendDMBlocks(userId, [
+        { type: 'section', text: { type: 'mrkdwn', text: `:link: *Connect your ${integrationId} account*\n\nClick the button below to authorize access.` } },
+        {
+          type: 'actions',
+          elements: [{
+            type: 'button',
+            text: { type: 'plain_text', text: ':key: Authorize' },
+            url,
+            action_id: 'oauth_link_clicked',
+          }],
+        },
+      ], `Connect ${integrationId}`);
+    } catch (err: any) {
+      await sendDMBlocks(userId, [
+        { type: 'section', text: { type: 'mrkdwn', text: `:x: Failed to start OAuth for *${integrationId}*: ${err.message}` } },
+      ], 'OAuth error');
+    }
+  });
+
+  // Acknowledge OAuth link click (no-op, the URL handles everything)
+  app.action('oauth_link_clicked', async ({ ack }) => { await ack(); });
+
+  // ── Personal connection: API Key ──
+  app.action('connect_personal_apikey', async ({ action, ack, body }) => {
+    await ack();
+    const integrationId = (action as any).value;
+    const triggerId = (body as any).trigger_id;
+    if (!triggerId) return;
+
+    const manifest = getIntegration(integrationId);
+    if (!manifest) return;
+
+    const blocks: any[] = [
+      {
+        type: 'section',
+        text: {
+          type: 'mrkdwn',
+          text: `${manifest.icon} *Connect your ${manifest.label} account*\n\nEnter your credentials below. These will be stored securely and only used when you invoke this tool.`,
+        },
+      },
+      { type: 'divider' },
+    ];
+
+    if (manifest.setupGuide) {
+      blocks.push({ type: 'section', text: { type: 'mrkdwn', text: manifest.setupGuide } });
+      blocks.push({ type: 'divider' });
+    }
+
+    for (const key of manifest.configKeys) {
+      const label = key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+      const placeholder = manifest.configPlaceholders?.[key] || `Enter ${label}...`;
+      blocks.push({
+        type: 'input', block_id: `personal_cfg_${key}`,
+        label: { type: 'plain_text', text: label },
+        element: {
+          type: 'plain_text_input', action_id: `personal_input_${key}`,
+          placeholder: { type: 'plain_text', text: placeholder },
+        },
+      });
+    }
+
+    await openModal(triggerId, {
+      type: 'modal',
+      callback_id: 'personal_connection_modal',
+      private_metadata: JSON.stringify({ integrationId, configKeys: manifest.configKeys }),
+      title: { type: 'plain_text', text: `Connect ${manifest.label}`.slice(0, 24) },
+      submit: { type: 'plain_text', text: 'Connect' },
+      blocks,
+    });
   });
 
   // "Add Entry" button from KB dashboard
@@ -1907,6 +2125,22 @@ export function registerToolAndKBModals(app: App): void {
       if (removeKey) {
         await removeToolConfigKey(workspaceId, toolName, removeKey, userId);
       }
+
+      // Sync updated config to team connection
+      try {
+        const { getCustomTool: getToolForSync } = await import('../modules/tools');
+        const { createTeamConnection } = await import('../modules/connections');
+        const { getIntegrationIdForTool } = await import('../modules/connections');
+        const updatedTool = await getToolForSync(workspaceId, toolName);
+        if (updatedTool) {
+          const fullConfig = JSON.parse(updatedTool.config_json || '{}');
+          if (Object.keys(fullConfig).length > 0) {
+            const integrationId = getIntegrationIdForTool(toolName);
+            await createTeamConnection(workspaceId, integrationId, fullConfig, userId);
+          }
+        }
+      } catch { /* team connection sync is best-effort */ }
+
       // DM the user confirmation
       await sendDMBlocks(userId, [
         { type: 'section', text: { type: 'mrkdwn', text: `:white_check_mark: *${toolName}* config updated.` + (key ? `\nSet \`${key}\`` : '') + (removeKey ? `\nRemoved \`${removeKey}\`` : '') } },
@@ -1962,6 +2196,84 @@ export function registerToolAndKBModals(app: App): void {
           { type: 'section', text: { type: 'mrkdwn', text: `:x: ${err.message}` } },
         ], 'Add to agent failed');
       }
+    }
+  });
+
+  // Personal connection modal
+  app.view('personal_connection_modal', async ({ ack, body, view }) => {
+    await ack();
+    const userId = body.user.id;
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
+    const meta = JSON.parse(view.private_metadata);
+    const { integrationId, configKeys } = meta;
+    const vals = view.state.values;
+
+    const credentials: Record<string, string> = {};
+    for (const key of configKeys) {
+      const val = vals[`personal_cfg_${key}`]?.[`personal_input_${key}`]?.value?.trim();
+      if (val) credentials[key] = val;
+    }
+
+    const missingKeys = configKeys.filter((k: string) => !credentials[k]);
+    if (missingKeys.length > 0) {
+      await sendDMBlocks(userId, [
+        { type: 'section', text: { type: 'mrkdwn', text: `:x: Missing required fields: ${missingKeys.join(', ')}` } },
+      ], 'Connection failed');
+      return;
+    }
+
+    try {
+      const { createPersonalConnection } = await import('../modules/connections');
+      const manifest = getIntegration(integrationId);
+      await createPersonalConnection(workspaceId, integrationId, userId, credentials, `${manifest?.label || integrationId} (API Key)`);
+
+      await sendDMBlocks(userId, [
+        { type: 'section', text: { type: 'mrkdwn', text: `:white_check_mark: Your *${manifest?.label || integrationId}* account is now connected! Your credentials are stored securely.` } },
+      ], `${manifest?.label || integrationId} connected`);
+    } catch (err: any) {
+      await sendDMBlocks(userId, [
+        { type: 'section', text: { type: 'mrkdwn', text: `:x: Failed to save credentials: ${err.message}` } },
+      ], 'Connection failed');
+    }
+  });
+
+  // Agent tool connections modal
+  app.view('agent_tool_connections_modal', async ({ ack, body, view }) => {
+    await ack();
+    const userId = body.user.id;
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
+    const meta = JSON.parse(view.private_metadata);
+    const { agentId, integrations } = meta;
+    const vals = view.state.values;
+
+    try {
+      const { setAgentToolConnection } = await import('../modules/connections');
+
+      for (const intId of integrations) {
+        const selectedMode = vals[`conn_mode_${intId}`]?.[`conn_mode_select_${intId}`]?.selected_option?.value;
+        if (!selectedMode) continue;
+
+        const manifest = getIntegration(intId);
+        if (!manifest) continue;
+
+        // Set connection mode for all tools of this integration
+        const agent = await getAgent(workspaceId, agentId);
+        if (!agent) continue;
+
+        for (const toolDef of manifest.tools) {
+          if (agent.tools.includes(toolDef.name)) {
+            await setAgentToolConnection(workspaceId, agentId, toolDef.name, selectedMode, null, userId);
+          }
+        }
+      }
+
+      await sendDMBlocks(userId, [
+        { type: 'section', text: { type: 'mrkdwn', text: ':white_check_mark: Tool connection modes updated successfully.' } },
+      ], 'Tool connections updated');
+    } catch (err: any) {
+      await sendDMBlocks(userId, [
+        { type: 'section', text: { type: 'mrkdwn', text: `:x: Failed to update tool connections: ${err.message}` } },
+      ], 'Update failed');
     }
   });
 
@@ -2274,9 +2586,17 @@ export function registerToolAndKBModals(app: App): void {
       if (!manifest) throw new Error(`Unknown integration: ${integrationId}`);
       await manifest.register(workspaceId, userId, config);
 
+      // Also create a team connection in the encrypted connections table
+      try {
+        const { createTeamConnection } = await import('../modules/connections');
+        await createTeamConnection(workspaceId, integrationId, config, userId, `${integration.label} (Workspace)`);
+      } catch (connErr: any) {
+        logger.warn('Failed to create team connection during registration', { integrationId, error: connErr.message });
+      }
+
       const toolList = integration.tools.map(t => `\`${t}\``).join(', ');
       await sendDMBlocks(userId, [
-        { type: 'section', text: { type: 'mrkdwn', text: `:white_check_mark: *${integration.label}* registered!\n\nTools created: ${toolList}\nAPI credentials saved.\n\nUse \`/tools\` to manage, or add them to agents via the overflow menu.` } },
+        { type: 'section', text: { type: 'mrkdwn', text: `:white_check_mark: *${integration.label}* set up for workspace!\n\nTools created: ${toolList}\nAPI credentials saved securely.\n\nUse \`/tools\` to manage, or add them to agents via the overflow menu.` } },
       ], `${integration.label} registered`);
 
     } catch (err: any) {
@@ -2560,10 +2880,110 @@ async function handleInfeasibleRequest(
   logger.info('Infeasible agent request queued', { requestId, userId, blockers: analysis.blockers });
 }
 
+async function buildCredentialSelectionBlocks(
+  workspaceId: string, userId: string, customToolNames: string[], confirmId: string,
+): Promise<any[]> {
+  const blocks: any[] = [];
+  try {
+    const { getTeamConnection, getPersonalConnection } = await import('../modules/connections');
+    const { getSupportedOAuthIntegrations } = await import('../modules/connections/oauth');
+    const oauthIntegrations = getSupportedOAuthIntegrations();
+
+    // Group tools by integration
+    const integrationTools = new Map<string, string[]>();
+    for (const toolName of customToolNames) {
+      const intId = findIntegrationForTool(toolName);
+      if (intId) {
+        if (!integrationTools.has(intId)) integrationTools.set(intId, []);
+        integrationTools.get(intId)!.push(toolName);
+      }
+    }
+
+    if (integrationTools.size === 0) return blocks;
+
+    blocks.push({ type: 'section', text: { type: 'mrkdwn', text: '*:key: Credentials*' } });
+
+    for (const [intId, _tools] of integrationTools) {
+      const manifest = getIntegration(intId);
+      if (!manifest) continue;
+
+      const teamConn = await getTeamConnection(workspaceId, intId);
+      const personalConn = await getPersonalConnection(workspaceId, intId, userId);
+      const isOAuth = oauthIntegrations.includes(intId);
+
+      if (teamConn && personalConn) {
+        // Both available — let user choose
+        blocks.push({
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `${manifest.icon} *${manifest.label}:* Shared + personal available`,
+          },
+        });
+        blocks.push({
+          type: 'actions',
+          elements: [{
+            type: 'radio_buttons',
+            action_id: `credential_mode_select:${confirmId}:${intId}`,
+            initial_option: { text: { type: 'plain_text', text: 'Use shared credentials' }, value: 'team' },
+            options: [
+              { text: { type: 'plain_text', text: 'Use shared credentials' }, value: 'team' },
+              { text: { type: 'plain_text', text: 'Use my credentials' }, value: 'delegated' },
+              { text: { type: 'plain_text', text: 'Each user uses their own' }, value: 'runtime' },
+            ],
+          }],
+        });
+      } else if (teamConn) {
+        // Only shared — auto-set, just inform
+        blocks.push({
+          type: 'section',
+          text: { type: 'mrkdwn', text: `${manifest.icon} *${manifest.label}:* Using shared credentials` },
+        });
+      } else if (personalConn) {
+        // Only personal
+        blocks.push({
+          type: 'section',
+          text: { type: 'mrkdwn', text: `${manifest.icon} *${manifest.label}:* Using your credentials` },
+        });
+        blocks.push({
+          type: 'actions',
+          elements: [{
+            type: 'radio_buttons',
+            action_id: `credential_mode_select:${confirmId}:${intId}`,
+            initial_option: { text: { type: 'plain_text', text: 'Use my credentials' }, value: 'delegated' },
+            options: [
+              { text: { type: 'plain_text', text: 'Use my credentials' }, value: 'delegated' },
+              { text: { type: 'plain_text', text: 'Each user uses their own' }, value: 'runtime' },
+            ],
+          }],
+        });
+      } else {
+        // Neither — prompt to connect
+        const connectBtn = isOAuth
+          ? { type: 'button', text: { type: 'plain_text', text: ':link: Connect' }, action_id: 'connect_personal_oauth', value: intId }
+          : { type: 'button', text: { type: 'plain_text', text: ':key: Connect' }, action_id: 'connect_personal_apikey', value: intId };
+        blocks.push({
+          type: 'section',
+          text: { type: 'mrkdwn', text: `${manifest.icon} *${manifest.label}:* No credentials configured` },
+        });
+        blocks.push({
+          type: 'actions',
+          elements: [connectBtn],
+        });
+      }
+    }
+  } catch (err: any) {
+    logger.warn('Failed to build credential selection blocks', { error: err.message });
+  }
+  return blocks;
+}
+
 async function showNewAgentConfirmation(
   analysis: any, agentName: string, goal: string, userId: string,
   channelId: string, threadTs: string, selectedChannels: string[] | null,
+  workspaceId?: string,
 ): Promise<void> {
+  const wsId = workspaceId || getDefaultWorkspaceId();
   const confirmId = uuid();
   const channelLabel = selectedChannels?.length
     ? selectedChannels.map(c => `<#${c}>`).join(', ')
@@ -2623,6 +3043,7 @@ async function showNewAgentConfirmation(
         },
       ],
     },
+    ...await buildCredentialSelectionBlocks(wsId, userId, analysis.custom_tools || [], confirmId),
     {
       type: 'actions',
       elements: [
@@ -3028,6 +3449,26 @@ export function registerConfirmationActions(app: App): void {
         await withTimeout(addAgentMembers(workspaceId, agent.id, memberIds, userId), 10000, 'addAgentMembers');
       }
 
+      // Set credential modes for tools
+      const credentialModes = row.data.credentialModes || {};
+      if (Object.keys(credentialModes).length > 0) {
+        try {
+          const { setAgentToolConnection } = await import('../modules/connections');
+          for (const [integrationId, mode] of Object.entries(credentialModes)) {
+            const manifest = getIntegration(integrationId);
+            if (manifest) {
+              for (const toolDef of manifest.tools) {
+                if (agent.tools.includes(toolDef.name)) {
+                  await setAgentToolConnection(workspaceId, agent.id, toolDef.name, mode as string, null, userId);
+                }
+              }
+            }
+          }
+        } catch (err: any) {
+          logger.warn('Failed to set agent tool connections', { agentId: agent.id, error: err.message });
+        }
+      }
+
       const allTools = [...analysis.tools, ...resolvedCustomTools];
       const accessLabel = formatAccessLevel(defaultAccess || 'viewer');
       const writePolicyLabel = formatWritePolicy(writePolicy || 'auto');
@@ -3319,6 +3760,32 @@ export function registerConfirmationActions(app: App): void {
     );
   });
 
+  app.action(/^credential_mode_select:/, async ({ action, ack }: any) => {
+    await ack();
+    const selectedMode = action.selected_option?.value;
+    if (!selectedMode) return;
+
+    // action_id format: credential_mode_select:confirmId:integrationId
+    const parts = action.action_id.split(':');
+    const confirmId = parts[1];
+    const integrationId = parts[2];
+    if (!confirmId || !integrationId) return;
+
+    // Store credential modes as a JSON object keyed by integration
+    const row = await queryOne<{ data: any }>(
+      'SELECT data FROM pending_confirmations WHERE id = $1', [confirmId],
+    );
+    if (!row) return;
+
+    const credentialModes = row.data.credentialModes || {};
+    credentialModes[integrationId] = selectedMode;
+
+    await execute(
+      `UPDATE pending_confirmations SET data = jsonb_set(data, '{credentialModes}', $1::jsonb) WHERE id = $2`,
+      [JSON.stringify(credentialModes), confirmId],
+    );
+  });
+
   app.action(/^member_select:/, async ({ action, ack }: any) => {
     await ack();
     const selectedUsers = action.selected_users || [];
@@ -3484,14 +3951,122 @@ export function registerConfirmationActions(app: App): void {
   app.action('deny_write_tools', async ({ action, ack, body }) => {
     await ack();
     const requestId = (action as any).value;
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
+    const row = await queryOne<{ data: any }>(
+      `SELECT data FROM pending_confirmations WHERE id = $1`, [requestId],
+    );
+
     await execute(`DELETE FROM pending_confirmations WHERE id = $1`, [requestId]);
     await replyToAction(body, ':x: Write tool request denied.');
+
+    // DM the requesting user
+    if (row?.data?.requestedBy && row.data.agentName) {
+      await sendDMBlocks(row.data.requestedBy, [
+        { type: 'section', text: { type: 'mrkdwn', text: `:no_entry: An admin denied write access for *${(row.data.writeTools || []).join(', ')}* on agent *${row.data.agentName}*. The tools can still be used in view-only mode.` } },
+      ], 'Write access denied').catch(() => {});
+    }
   });
 
   app.action('ack_new_tool_request', async ({ action, ack, body }) => {
     await ack();
     const requestId = (action as any).value;
     await replyToAction(body, ':white_check_mark: Acknowledged. The tool(s) will need to be created by an admin via code.');
+  });
+
+  // ── Agent Tool Connection Editing ──
+
+  app.action('edit_agent_tool_connections', async ({ action, ack, body }) => {
+    await ack();
+    const agentId = (action as any).value;
+    const triggerId = (body as any).trigger_id;
+    const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
+    if (!triggerId) return;
+
+    const agent = await getAgent(workspaceId, agentId);
+    if (!agent) return;
+
+    const { listAgentToolConnections } = await import('../modules/connections');
+    const existingConns = await listAgentToolConnections(workspaceId, agentId);
+    const connByTool = new Map(existingConns.map(c => [c.tool_name, c.connection_mode]));
+
+    const blocks: any[] = [];
+    const integrationsSeen = new Set<string>();
+
+    for (const toolName of agent.tools) {
+      const intId = findIntegrationForTool(toolName);
+      if (!intId || integrationsSeen.has(intId)) continue;
+      integrationsSeen.add(intId);
+
+      const manifest = getIntegration(intId);
+      if (!manifest) continue;
+
+      const currentMode = connByTool.get(toolName) || 'team';
+      blocks.push({
+        type: 'input',
+        block_id: `conn_mode_${intId}`,
+        label: { type: 'plain_text', text: `${manifest.label} credentials` },
+        element: {
+          type: 'static_select',
+          action_id: `conn_mode_select_${intId}`,
+          initial_option: { text: { type: 'plain_text', text: formatConnectionMode(currentMode) }, value: currentMode },
+          options: [
+            { text: { type: 'plain_text', text: 'Shared (workspace)' }, value: 'team' },
+            { text: { type: 'plain_text', text: "Creator's credentials" }, value: 'delegated' },
+            { text: { type: 'plain_text', text: 'Each user uses their own' }, value: 'runtime' },
+          ],
+        },
+      });
+    }
+
+    if (blocks.length === 0) {
+      await replyToAction(body, ':information_source: This agent has no tools with configurable credentials.');
+      return;
+    }
+
+    await openModal(triggerId, {
+      type: 'modal',
+      callback_id: 'agent_tool_connections_modal',
+      private_metadata: JSON.stringify({ agentId, integrations: [...integrationsSeen] }),
+      title: { type: 'plain_text', text: 'Tool Connections' },
+      submit: { type: 'plain_text', text: 'Save' },
+      blocks,
+    });
+  });
+
+  // ── Runtime Write Approval Actions ──
+
+  app.action('approve_write_action', async ({ action, ack, body }) => {
+    await ack();
+    try {
+      const data = JSON.parse((action as any).value);
+      const { setApprovalState } = await import('../queue');
+      await setApprovalState(data.requestId, 'approved');
+
+      if (data.writePolicy === 'admin_confirm') {
+        await replyToAction(body, `:white_check_mark: Approved by <@${body.user.id}>. Continuing...`);
+      } else {
+        await replyToAction(body, `:white_check_mark: Approved. Continuing...`);
+      }
+    } catch (err: any) {
+      await replyToAction(body, `:x: Failed to approve: ${err.message}`);
+    }
+  });
+
+  app.action('deny_write_action', async ({ action, ack, body }) => {
+    await ack();
+    try {
+      const data = JSON.parse((action as any).value);
+      const { setApprovalState } = await import('../queue');
+      await setApprovalState(data.requestId, 'denied');
+
+      if (data.writePolicy === 'admin_confirm') {
+        await replyToAction(body, `:no_entry: Denied by <@${body.user.id}>. Skipping this action.`);
+      } else {
+        await replyToAction(body, `:no_entry: Denied. Skipping this action.`);
+      }
+    } catch (err: any) {
+      await replyToAction(body, `:x: Failed to deny: ${err.message}`);
+    }
   });
 
   // ── Unconfigured Tool Configuration Action ──
@@ -3682,6 +4257,15 @@ function formatAccessLevel(level: string): string {
     case 'member': return 'Everyone (full access)';
     case 'owner': return 'Owner';
     default: return level;
+  }
+}
+
+function formatConnectionMode(mode: string): string {
+  switch (mode) {
+    case 'team': return 'Shared (workspace)';
+    case 'delegated': return "Creator's credentials";
+    case 'runtime': return 'Each user uses their own';
+    default: return mode;
   }
 }
 

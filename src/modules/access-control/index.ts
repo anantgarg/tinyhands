@@ -348,6 +348,14 @@ export async function denyUpgrade(workspaceId: string, requestId: string, denied
   }).catch(() => {});
 }
 
+export async function getUpgradeRequest(workspaceId: string, requestId: string): Promise<UpgradeRequest | null> {
+  const result = await queryOne<UpgradeRequest>(
+    'SELECT * FROM upgrade_requests WHERE workspace_id = $1 AND id = $2',
+    [workspaceId, requestId]
+  );
+  return result || null;
+}
+
 export async function getPendingUpgradeRequest(workspaceId: string, agentId: string, userId: string): Promise<UpgradeRequest | null> {
   const result = await queryOne<UpgradeRequest>(
     "SELECT * FROM upgrade_requests WHERE workspace_id = $1 AND agent_id = $2 AND user_id = $3 AND status = 'pending'",

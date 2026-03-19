@@ -92,6 +92,42 @@ Your agents come with built-in tools (web search, file operations, code analysis
 
 When you create an agent, TinyHands automatically selects the right tools based on the agent's goal. If you need an integration that isn't available yet, ask your admin to set it up.
 
+### Browsing Tools with `/tools`
+
+Run `/tools` to open the tools dashboard. This is available to **all users** (not just admins) and shows three sections:
+
+| Section | What it shows |
+|---------|---------------|
+| **Shared Tools** | Team-wide integrations registered by admins, available to all agents |
+| **My Connections** | Your personal connections (OAuth or API key), with options to disconnect |
+| **Available** | Integrations you can connect personally via OAuth or API key |
+
+From this view you can:
+- See which tools are active and which agents use them
+- Connect your own credentials for integrations that support personal connections
+- Disconnect personal connections you no longer need
+
+### Personal Connections
+
+Some integrations support personal credentials so agents can act on your behalf. From the **Available** section in `/tools`, click **Connect** to set up a personal connection:
+
+- **OAuth integrations** (Google, Notion, GitHub) — opens a browser flow; credentials are stored encrypted
+- **API key integrations** — enter your API key in a modal; credentials are encrypted with AES-256-GCM
+
+Personal connections are used when an agent's tool is configured in **delegated** or **runtime** connection mode. If an agent needs your credentials and you haven't connected yet, you'll receive a DM prompting you to connect. After you complete the connection, the agent automatically retries your request.
+
+### Credential Selection During Agent Creation
+
+When creating an agent, if the selected tools require credentials, you'll see a **credential selection step**. For each tool, you choose which connection mode to use:
+
+| Mode | Behavior |
+|------|----------|
+| **Team** | Uses the shared team credential registered by an admin |
+| **Delegated** | Uses the agent owner's personal credential |
+| **Runtime** | Each user provides their own credential at run time |
+
+This ensures agents always have the right credentials configured before they start running.
+
 ---
 
 ## Agent Access Levels
@@ -113,18 +149,15 @@ Each agent has a **write policy** that controls how write tool actions are handl
 | Policy | Behavior |
 |--------|----------|
 | **Auto** | Write actions execute immediately for members |
-| **Confirm** | Write actions require the requesting user to confirm |
-| **Admin Confirm** | Write actions require an agent owner to approve |
-| **Deny** | Write actions are blocked entirely |
+| **Confirm** | The agent pauses and DMs you an approval request with the action details. Click **Approve** to proceed or **Deny** to cancel. |
+| **Admin Confirm** | The agent pauses and DMs the agent owner with an approval request. You're notified once they approve or deny. |
+| **Deny** | Write actions are blocked entirely — the agent is told it cannot perform writes |
 
-### Personal Tool Connections
+When an approval is **denied**, you receive a DM explaining which action was blocked and why. When an approval is **granted**, the agent automatically resumes and completes the write action.
 
-Some agents use tools that require your personal credentials (e.g., Google Drive, Notion, GitHub). Use `/connect` to manage your personal connections:
+### Missing Credentials
 
-1. Run `/connect` in a bot DM
-2. Click **Connect** next to the service you want
-3. Complete the OAuth flow in your browser
-4. Your connection is securely stored and available to agents configured to use it
+If an agent tries to use a tool and the required credentials are missing (e.g., you haven't connected your personal account), you'll receive a DM prompting you to connect. The message includes a direct link to set up the connection. After you complete the connection, the agent automatically retries the action — no need to re-send your original message.
 
 ---
 
@@ -155,6 +188,7 @@ You can change this in the agent's settings via `/agents` → Update.
 |---------|--------------|
 | `/agents` | View and manage all your agents (in bot DM) |
 | `/update-agent` | Update an existing agent (in bot DM) |
+| `/tools` | Browse shared tools, manage personal connections (in bot DM) |
 | `/kb search <query>` | Search the knowledge base (in bot DM) |
 | `/connect` | Manage your personal tool connections (in bot DM) |
 | DM the bot | Talk to any agent directly |

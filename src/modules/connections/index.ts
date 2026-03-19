@@ -168,7 +168,61 @@ export async function getAgentToolConnection(
   return row || null;
 }
 
+// ── Query Helpers ──
+
+export async function listTeamConnections(wsId: string): Promise<Connection[]> {
+  return query<Connection>(
+    "SELECT * FROM connections WHERE workspace_id = $1 AND connection_type = 'team' AND status = 'active' ORDER BY created_at DESC",
+    [wsId]
+  );
+}
+
+export async function listPersonalConnectionsForUser(wsId: string, userId: string): Promise<Connection[]> {
+  return query<Connection>(
+    "SELECT * FROM connections WHERE workspace_id = $1 AND user_id = $2 AND connection_type = 'personal' AND status = 'active' ORDER BY created_at DESC",
+    [wsId, userId]
+  );
+}
+
+export async function getToolAgentUsage(wsId: string): Promise<Array<{ agent_id: string; agent_name: string; tool_name: string; access_level: string; connection_mode: string | null }>> {
+  return query(
+    `SELECT a.id AS agent_id, a.name AS agent_name, unnest(a.tools) AS tool_name,
+            COALESCE(ct.access_level, 'read-only') AS access_level,
+            atc.connection_mode
+     FROM agents a
+     LEFT JOIN custom_tools ct ON ct.name = ANY(a.tools) AND ct.workspace_id = a.workspace_id
+     LEFT JOIN agent_tool_connections atc ON atc.agent_id = a.id AND atc.tool_name = ct.name AND atc.workspace_id = a.workspace_id
+     WHERE a.workspace_id = $1 AND a.status = 'active'
+     ORDER BY a.name, tool_name`,
+    [wsId]
+  );
+}
+
+export async function listAgentToolConnections(wsId: string, agentId: string): Promise<AgentToolConnection[]> {
+  return query<AgentToolConnection>(
+    'SELECT * FROM agent_tool_connections WHERE workspace_id = $1 AND agent_id = $2 ORDER BY tool_name',
+    [wsId, agentId]
+  );
+}
+
 // ── Credential Resolution ──
+
+/**
+ * Resolve integration ID from a tool name using manifest-based lookup.
+ * Falls back to splitting on '-' if no manifest matches.
+ */
+export function getIntegrationIdForTool(toolName: string): string {
+  try {
+    const { getIntegrations } = require('../tools/integrations');
+    const manifests = getIntegrations();
+    for (const m of manifests) {
+      if (m.tools.some((t: any) => t.name === toolName)) {
+        return m.id;
+      }
+    }
+  } catch { /* fallback below */ }
+  return toolName.split('-')[0];
+}
 
 export async function resolveToolCredentials(
   wsId: string,
@@ -177,12 +231,11 @@ export async function resolveToolCredentials(
   userId?: string,
 ): Promise<Record<string, string> | null> {
   const atc = await getAgentToolConnection(wsId, agentId, toolName);
+  const integrationId = getIntegrationIdForTool(toolName);
 
   if (atc) {
     switch (atc.connection_mode) {
       case 'team': {
-        // Find the integration from toolName (e.g. "chargebee-read" → "chargebee")
-        const integrationId = toolName.split('-')[0];
         const conn = await getTeamConnection(wsId, integrationId);
         if (conn) return decryptCredentials(conn);
         break;
@@ -191,7 +244,6 @@ export async function resolveToolCredentials(
         // Find first agent owner's personal connection
         const { getAgentOwners } = await import('../access-control');
         const owners = await getAgentOwners(wsId, agentId);
-        const integrationId = toolName.split('-')[0];
         for (const owner of owners) {
           const conn = await getPersonalConnection(wsId, integrationId, owner.user_id);
           if (conn) return decryptCredentials(conn);
@@ -200,7 +252,6 @@ export async function resolveToolCredentials(
       }
       case 'runtime': {
         if (userId) {
-          const integrationId = toolName.split('-')[0];
           const conn = await getPersonalConnection(wsId, integrationId, userId);
           if (conn) return decryptCredentials(conn);
         }
@@ -210,7 +261,6 @@ export async function resolveToolCredentials(
   }
 
   // Fallback: try team connection for integration
-  const integrationId = toolName.split('-')[0];
   const teamConn = await getTeamConnection(wsId, integrationId);
   if (teamConn) return decryptCredentials(teamConn);
 

@@ -45,6 +45,7 @@ const mockListPlatformAdmins = vi.fn().mockResolvedValue([{ user_id: 'UADMIN' }]
 const mockIsPlatformAdmin = vi.fn().mockResolvedValue(true);
 const mockApproveUpgrade = vi.fn().mockResolvedValue({ agent_id: 'agent-1', user_id: 'U_REQUESTER' });
 const mockDenyUpgrade = vi.fn().mockResolvedValue(undefined);
+const mockGetUpgradeRequest = vi.fn().mockResolvedValue(null);
 const mockGetAgentRole = vi.fn().mockResolvedValue('owner');
 const mockGetAgentRoles = vi.fn().mockResolvedValue([]);
 const mockSetAgentRole = vi.fn().mockResolvedValue(undefined);
@@ -59,6 +60,7 @@ vi.mock('../../src/modules/access-control', () => ({
   isSuperadmin: (...args: any[]) => mockIsPlatformAdmin(...args),
   approveUpgrade: (...args: any[]) => mockApproveUpgrade(...args),
   denyUpgrade: (...args: any[]) => mockDenyUpgrade(...args),
+  getUpgradeRequest: (...args: any[]) => mockGetUpgradeRequest(...args),
   getAgentRole: (...args: any[]) => mockGetAgentRole(...args),
   getAgentRoles: (...args: any[]) => mockGetAgentRoles(...args),
   setAgentRole: (...args: any[]) => mockSetAgentRole(...args),
@@ -114,10 +116,12 @@ vi.mock('../../src/utils/logger', () => ({
 
 const mockExecute = vi.fn().mockResolvedValue(undefined);
 const mockQueryOne = vi.fn();
+const mockQuery = vi.fn().mockResolvedValue([]);
 
 vi.mock('../../src/db', () => ({
   execute: (...args: any[]) => mockExecute(...args),
   queryOne: (...args: any[]) => mockQueryOne(...args),
+  query: (...args: any[]) => mockQuery(...args),
   getDefaultWorkspaceId: () => 'W_TEST_123',
 }));
 
@@ -203,6 +207,49 @@ vi.mock('../../src/modules/tools', () => ({
   approveCustomTool: (...args: any[]) => mockApproveCustomTool(...args),
   deleteCustomTool: (...args: any[]) => mockDeleteCustomTool(...args),
   getToolConfig: (...args: any[]) => mockGetToolConfig(...args),
+}));
+
+// Mock connections module
+const mockListTeamConnections = vi.fn().mockResolvedValue([]);
+const mockListPersonalConnectionsForUser = vi.fn().mockResolvedValue([]);
+const mockGetToolAgentUsage = vi.fn().mockResolvedValue([]);
+const mockListAgentToolConnections = vi.fn().mockResolvedValue([]);
+const mockCreateTeamConnection = vi.fn().mockResolvedValue({ id: 'conn-1' });
+const mockCreatePersonalConnection = vi.fn().mockResolvedValue({ id: 'conn-2' });
+const mockSetAgentToolConnection = vi.fn().mockResolvedValue({ id: 'atc-1' });
+const mockGetTeamConnection = vi.fn().mockResolvedValue(null);
+const mockGetPersonalConnection = vi.fn().mockResolvedValue(null);
+const mockGetIntegrationIdForTool = vi.fn().mockImplementation((name: string) => name.split('-')[0]);
+
+vi.mock('../../src/modules/connections', () => ({
+  listTeamConnections: (...args: any[]) => mockListTeamConnections(...args),
+  listPersonalConnectionsForUser: (...args: any[]) => mockListPersonalConnectionsForUser(...args),
+  getToolAgentUsage: (...args: any[]) => mockGetToolAgentUsage(...args),
+  listAgentToolConnections: (...args: any[]) => mockListAgentToolConnections(...args),
+  createTeamConnection: (...args: any[]) => mockCreateTeamConnection(...args),
+  createPersonalConnection: (...args: any[]) => mockCreatePersonalConnection(...args),
+  setAgentToolConnection: (...args: any[]) => mockSetAgentToolConnection(...args),
+  getTeamConnection: (...args: any[]) => mockGetTeamConnection(...args),
+  getPersonalConnection: (...args: any[]) => mockGetPersonalConnection(...args),
+  getIntegrationIdForTool: (...args: any[]) => mockGetIntegrationIdForTool(...args),
+}));
+
+// Mock OAuth module
+const mockGetSupportedOAuthIntegrations = vi.fn().mockReturnValue([]);
+const mockGetOAuthUrl = vi.fn().mockResolvedValue({ url: 'https://oauth.example.com/auth', state: 'test-state' });
+
+vi.mock('../../src/modules/connections/oauth', () => ({
+  getSupportedOAuthIntegrations: (...args: any[]) => mockGetSupportedOAuthIntegrations(...args),
+  getOAuthUrl: (...args: any[]) => mockGetOAuthUrl(...args),
+}));
+
+// Mock queue module for approval
+const mockSetApprovalState = vi.fn().mockResolvedValue(undefined);
+const mockGetApprovalState = vi.fn().mockResolvedValue('pending');
+
+vi.mock('../../src/queue', () => ({
+  setApprovalState: (...args: any[]) => mockSetApprovalState(...args),
+  getApprovalState: (...args: any[]) => mockGetApprovalState(...args),
 }));
 
 const mockSearchKB = vi.fn().mockResolvedValue([]);
@@ -528,6 +575,22 @@ describe('Commands Module', () => {
         pass_through_message: 'update the agent goal',
       }) }],
     });
+    // Reset connections and OAuth mocks
+    mockListTeamConnections.mockResolvedValue([]);
+    mockListPersonalConnectionsForUser.mockResolvedValue([]);
+    mockGetToolAgentUsage.mockResolvedValue([]);
+    mockListAgentToolConnections.mockResolvedValue([]);
+    mockCreateTeamConnection.mockResolvedValue({ id: 'conn-1' });
+    mockCreatePersonalConnection.mockResolvedValue({ id: 'conn-2' });
+    mockSetAgentToolConnection.mockResolvedValue({ id: 'atc-1' });
+    mockGetTeamConnection.mockResolvedValue(null);
+    mockGetPersonalConnection.mockResolvedValue(null);
+    mockGetSupportedOAuthIntegrations.mockReturnValue([]);
+    mockGetOAuthUrl.mockResolvedValue({ url: 'https://oauth.example.com/auth', state: 'test-state' });
+    mockGetUpgradeRequest.mockResolvedValue(null);
+    mockQuery.mockResolvedValue([]);
+    mockSetApprovalState.mockResolvedValue(undefined);
+    mockGetApprovalState.mockResolvedValue('pending');
   });
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1083,7 +1146,8 @@ describe('Commands Module', () => {
       await app.handlers.command['/tools']({ command, ack, respond: mockRespond });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockRespond).toHaveBeenCalledWith({ response_type: 'ephemeral', text: expect.stringContaining('Only admins') });
+      // Non-admins can now access /tools — they see available tools without admin buttons
+      expect(mockPostBlocks).toHaveBeenCalled();
     });
 
     it('should show empty state when no tools or integrations exist', async () => {
@@ -1130,12 +1194,12 @@ describe('Commands Module', () => {
       expect(allText).toContain('configure:test-tool-read');
     });
 
-    it('should show unapproved tools as available (needs setup)', async () => {
+    it('should show unconfigured tools in Available section', async () => {
       const app = createMockApp();
       registerCommands(app as any);
 
       mockIsPlatformAdmin.mockResolvedValue(true);
-      // Registered tool with no config shows as unconfigured / needs setup
+      // Registered tool with no config and no team connection shows as available
       mockListCustomTools.mockResolvedValue([
         {
           name: 'test-tool-read',
@@ -1151,10 +1215,10 @@ describe('Commands Module', () => {
 
       await app.handlers.command['/tools']({ command, ack, respond: mockRespond });
 
-      // Now uses postBlocks - unconfigured tools show in Available section
+      // Unconfigured tools show in Available section with Set Up button
       const allText = JSON.stringify(mockPostBlocks.mock.calls[0]);
-      expect(allText).toContain('Needs setup');
       expect(allText).toContain('Available');
+      expect(allText).toContain('Set Up for Workspace');
     });
 
     it('should show available integrations not yet registered', async () => {
@@ -4029,7 +4093,7 @@ describe('Commands Module', () => {
     it('registerConfirmationActions should register action handlers', () => {
       const app = createMockApp();
       registerConfirmationActions(app as any);
-      expect(app.action).toHaveBeenCalledTimes(20);
+      expect(app.action).toHaveBeenCalledTimes(24);
     });
 
     it('all registration functions should be idempotent (safe to call twice)', async () => {
@@ -4108,7 +4172,7 @@ describe('Commands Module', () => {
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   describe('/tools command - no tools and no integrations', () => {
-    it('should show no tools message when no tools and all integrations registered', async () => {
+    it('should show registered but unconfigured tools in Available section', async () => {
       const app = createMockApp();
       registerCommands(app as any);
 
@@ -4123,9 +4187,9 @@ describe('Commands Module', () => {
 
       await app.handlers.command['/tools']({ command, ack, respond: mockRespond });
 
-      // Now uses postBlocks; registered but unconfigured tools show as Available with Needs setup
+      // Registered but unconfigured tools show in Available section
       const allText = JSON.stringify(mockPostBlocks.mock.calls[0]);
-      expect(allText).toContain('Needs setup');
+      expect(allText).toContain('Available');
     });
   });
 
@@ -4972,10 +5036,12 @@ describe('Commands Module', () => {
       expect(mockSendDMBlocks).toHaveBeenCalledWith(
         'U1',
         expect.arrayContaining([
-          expect.objectContaining({ text: expect.objectContaining({ text: expect.stringContaining('registered') }) }),
+          expect.objectContaining({ text: expect.objectContaining({ text: expect.stringContaining('set up for workspace') }) }),
         ]),
         expect.any(String),
       );
+      // Should also create a team connection
+      expect(mockCreateTeamConnection).toHaveBeenCalledWith('W_TEST_123', 'test-integration', { api_key: 'sk-123', site: 'mysite' }, 'U1', 'Test Integration (Workspace)');
     });
 
     it('should reject when required keys are missing', async () => {
@@ -8966,6 +9032,591 @@ describe('Commands Module', () => {
           }),
         ]),
       }));
+    });
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // /tools command — Tool Connections UX
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  describe('/tools command — Tool Connections UX', () => {
+    it('should be accessible by non-admins and show 3 sections', async () => {
+      const app = createMockApp();
+      registerCommands(app as any);
+
+      mockIsPlatformAdmin.mockResolvedValue(false);
+      mockListCustomTools.mockResolvedValue([
+        { name: 'test-tool-read', config_json: '{"api_key":"sk"}' },
+      ]);
+      mockListTeamConnections.mockResolvedValue([
+        { integration_id: 'test-integration', connection_type: 'team' },
+      ]);
+      mockListPersonalConnectionsForUser.mockResolvedValue([]);
+      mockGetToolAgentUsage.mockResolvedValue([]);
+
+      await app.handlers.command['/tools']({
+        command: { team_id: 'W_TEST_123', user_id: 'U_REGULAR', channel_id: 'C_DM', channel_name: 'directmessage' },
+        ack: vi.fn(),
+        respond: vi.fn(),
+      });
+
+      expect(mockPostBlocks).toHaveBeenCalled();
+      const blocks = mockPostBlocks.mock.calls[0][1];
+      const allText = JSON.stringify(blocks);
+      // Header section
+      expect(allText).toContain('Tools');
+      // Shared Tools section
+      expect(allText).toContain('Shared Tools');
+    });
+
+    it('admin should see admin buttons (overflow), non-admin should not', async () => {
+      // Admin case
+      const app1 = createMockApp();
+      registerCommands(app1 as any);
+
+      mockIsPlatformAdmin.mockResolvedValue(true);
+      mockListCustomTools.mockResolvedValue([
+        { name: 'test-tool-read', config_json: '{"api_key":"sk"}' },
+      ]);
+      mockListTeamConnections.mockResolvedValue([
+        { integration_id: 'test-integration', connection_type: 'team' },
+      ]);
+      mockListPersonalConnectionsForUser.mockResolvedValue([]);
+      mockGetToolAgentUsage.mockResolvedValue([]);
+
+      await app1.handlers.command['/tools']({
+        command: { team_id: 'W_TEST_123', user_id: 'UADMIN', channel_id: 'C_DM', channel_name: 'directmessage' },
+        ack: vi.fn(),
+        respond: vi.fn(),
+      });
+
+      const adminBlocks = mockPostBlocks.mock.calls[0][1];
+      const adminText = JSON.stringify(adminBlocks);
+      expect(adminText).toContain('tool_overflow');
+
+      // Non-admin case
+      vi.clearAllMocks();
+      // Re-set mocks after clearAllMocks
+      mockPostBlocks.mockResolvedValue('msg-ts-456');
+      mockIsPlatformAdmin.mockResolvedValue(false);
+      mockListCustomTools.mockResolvedValue([
+        { name: 'test-tool-read', config_json: '{"api_key":"sk"}' },
+      ]);
+      mockListTeamConnections.mockResolvedValue([
+        { integration_id: 'test-integration', connection_type: 'team' },
+      ]);
+      mockListPersonalConnectionsForUser.mockResolvedValue([]);
+      mockGetToolAgentUsage.mockResolvedValue([]);
+      mockGetToolIntegrations.mockReturnValue([
+        {
+          id: 'test-integration',
+          label: 'Test Integration',
+          icon: ':test:',
+          description: 'A test integration',
+          tools: ['test-tool-read', 'test-tool-write'],
+          requiredConfigKeys: ['api_key', 'site'],
+          configPlaceholders: { api_key: 'Enter API key', site: 'Enter site' },
+        },
+      ]);
+      mockGetSupportedOAuthIntegrations.mockReturnValue([]);
+      mockGetIntegration.mockReturnValue({
+        id: 'test-integration',
+        label: 'Test Integration',
+        icon: ':test:',
+        description: 'A test integration',
+        tools: [{ name: 'test-tool-read' }, { name: 'test-tool-write' }],
+        configKeys: ['api_key', 'site'],
+        configPlaceholders: { api_key: 'Enter API key', site: 'Enter site' },
+        register: (...args: any[]) => mockRegister(...args),
+      });
+      mockGetIntegrations.mockReturnValue([
+        {
+          id: 'test-integration',
+          tools: [{ name: 'test-tool-read' }, { name: 'test-tool-write' }],
+        },
+      ]);
+
+      const app2 = createMockApp();
+      registerCommands(app2 as any);
+
+      await app2.handlers.command['/tools']({
+        command: { team_id: 'W_TEST_123', user_id: 'U_REGULAR', channel_id: 'C_DM', channel_name: 'directmessage' },
+        ack: vi.fn(),
+        respond: vi.fn(),
+      });
+
+      const regularBlocks = mockPostBlocks.mock.calls[0][1];
+      const regularText = JSON.stringify(regularBlocks);
+      // Non-admin should NOT see tool_overflow for shared tools
+      // They see plain text without overflow accessory
+      expect(regularText).not.toContain('tool_overflow');
+    });
+
+    it('non-admin should see connect buttons for available hybrid/personal integrations', async () => {
+      const app = createMockApp();
+      registerCommands(app as any);
+
+      mockIsPlatformAdmin.mockResolvedValue(false);
+      mockListCustomTools.mockResolvedValue([]);
+      mockListTeamConnections.mockResolvedValue([]);
+      mockListPersonalConnectionsForUser.mockResolvedValue([]);
+      mockGetToolAgentUsage.mockResolvedValue([]);
+      // Mark integration as hybrid so non-admin sees Connect button
+      mockGetIntegration.mockReturnValue({
+        id: 'test-integration',
+        label: 'Test Integration',
+        icon: ':test:',
+        description: 'A test integration',
+        tools: [{ name: 'test-tool-read' }, { name: 'test-tool-write' }],
+        configKeys: ['api_key'],
+        connectionModel: 'hybrid',
+        configPlaceholders: { api_key: 'Enter API key' },
+        register: (...args: any[]) => mockRegister(...args),
+      });
+      mockGetSupportedOAuthIntegrations.mockReturnValue([]);
+
+      await app.handlers.command['/tools']({
+        command: { team_id: 'W_TEST_123', user_id: 'U_REGULAR', channel_id: 'C_DM', channel_name: 'directmessage' },
+        ack: vi.fn(),
+        respond: vi.fn(),
+      });
+
+      const blocks = mockPostBlocks.mock.calls[0][1];
+      const allText = JSON.stringify(blocks);
+      expect(allText).toContain('connect_personal_apikey');
+    });
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // connect_personal_oauth action
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  describe('connect_personal_oauth action', () => {
+    it('should send DM with OAuth URL', async () => {
+      const app = createMockApp();
+      await safeRegisterInlineActions(app);
+
+      if (!app.handlers.action['connect_personal_oauth']) return;
+
+      const ack = vi.fn();
+      const action = { value: 'google_drive' };
+      const body = { user: { id: 'U001' }, team: { id: 'W_TEST_123' }, channel: { id: 'C123' } };
+
+      await app.handlers.action['connect_personal_oauth']({ action, ack, body });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockGetOAuthUrl).toHaveBeenCalledWith('google_drive', 'W_TEST_123', 'U001', 'C123');
+      expect(mockSendDMBlocks).toHaveBeenCalledWith(
+        'U001',
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'section',
+            text: expect.objectContaining({ text: expect.stringContaining('Connect your google_drive account') }),
+          }),
+        ]),
+        expect.stringContaining('Connect'),
+      );
+      // Check that the OAuth URL is included in the actions block
+      const dmBlocks = mockSendDMBlocks.mock.calls[0][1];
+      const actionsBlock = dmBlocks.find((b: any) => b.type === 'actions');
+      expect(actionsBlock).toBeDefined();
+      expect(actionsBlock.elements[0].url).toBe('https://oauth.example.com/auth');
+    });
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // connect_personal_apikey action
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  describe('connect_personal_apikey action', () => {
+    it('should open modal with correct config fields', async () => {
+      const app = createMockApp();
+      await safeRegisterInlineActions(app);
+
+      if (!app.handlers.action['connect_personal_apikey']) return;
+
+      const ack = vi.fn();
+      const action = { value: 'test-integration' };
+      const body = { user: { id: 'U001' }, trigger_id: 'trig-1', team: { id: 'W_TEST_123' } };
+
+      await app.handlers.action['connect_personal_apikey']({ action, ack, body });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockOpenModal).toHaveBeenCalledWith('trig-1', expect.objectContaining({
+        callback_id: 'personal_connection_modal',
+      }));
+
+      // Verify modal contains input blocks for each config key
+      const modalArg = mockOpenModal.mock.calls[0][1];
+      const blocksText = JSON.stringify(modalArg.blocks);
+      expect(blocksText).toContain('personal_cfg_api_key');
+      expect(blocksText).toContain('personal_cfg_site');
+      // Should include setup guide
+      expect(blocksText).toContain('example.com');
+    });
+
+    it('should return early if no trigger_id', async () => {
+      const app = createMockApp();
+      await safeRegisterInlineActions(app);
+
+      if (!app.handlers.action['connect_personal_apikey']) return;
+
+      const ack = vi.fn();
+      const action = { value: 'test-integration' };
+      const body = { user: { id: 'U001' }, team: { id: 'W_TEST_123' } }; // no trigger_id
+
+      await app.handlers.action['connect_personal_apikey']({ action, ack, body });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockOpenModal).not.toHaveBeenCalled();
+    });
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // personal_connection_modal view handler
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  describe('personal_connection_modal view handler', () => {
+    it('should create a personal connection and confirm via DM', async () => {
+      const app = createMockApp();
+      registerToolAndKBModals(app as any);
+
+      const ack = vi.fn();
+      const body = { user: { id: 'U001' }, team: { id: 'W_TEST_123' } };
+      const view = {
+        private_metadata: JSON.stringify({ integrationId: 'test-integration', configKeys: ['api_key', 'site'] }),
+        state: {
+          values: {
+            personal_cfg_api_key: { personal_input_api_key: { value: 'my-key' } },
+            personal_cfg_site: { personal_input_site: { value: 'my-site' } },
+          },
+        },
+      };
+
+      await app.handlers.view['personal_connection_modal']({ ack, body, view });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockCreatePersonalConnection).toHaveBeenCalledWith(
+        'W_TEST_123', 'test-integration', 'U001',
+        { api_key: 'my-key', site: 'my-site' },
+        'Test Integration (API Key)',
+      );
+      expect(mockSendDMBlocks).toHaveBeenCalledWith(
+        'U001',
+        expect.arrayContaining([
+          expect.objectContaining({ text: expect.objectContaining({ text: expect.stringContaining('now connected') }) }),
+        ]),
+        expect.any(String),
+      );
+    });
+
+    it('should reject when required keys are missing', async () => {
+      const app = createMockApp();
+      registerToolAndKBModals(app as any);
+
+      const ack = vi.fn();
+      const body = { user: { id: 'U001' }, team: { id: 'W_TEST_123' } };
+      const view = {
+        private_metadata: JSON.stringify({ integrationId: 'test-integration', configKeys: ['api_key', 'site'] }),
+        state: {
+          values: {
+            personal_cfg_api_key: { personal_input_api_key: { value: 'my-key' } },
+            personal_cfg_site: { personal_input_site: { value: '' } },
+          },
+        },
+      };
+
+      await app.handlers.view['personal_connection_modal']({ ack, body, view });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockCreatePersonalConnection).not.toHaveBeenCalled();
+      expect(mockSendDMBlocks).toHaveBeenCalledWith(
+        'U001',
+        expect.arrayContaining([
+          expect.objectContaining({ text: expect.objectContaining({ text: expect.stringContaining('Missing required') }) }),
+        ]),
+        expect.any(String),
+      );
+    });
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // approve_write_action / deny_write_action
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  describe('approve_write_action', () => {
+    it('should set approval state to approved', async () => {
+      const app = createMockApp();
+      await safeRegisterInlineActions(app);
+
+      if (!app.handlers.action['approve_write_action']) return;
+
+      const ack = vi.fn();
+      const actionData = JSON.stringify({ requestId: 'req-1', writePolicy: 'confirm', agentName: 'Bot1', toolName: 'chargebee-write' });
+      const action = { value: actionData };
+      const body = { user: { id: 'U001' }, team: { id: 'W_TEST_123' }, channel: { id: 'C123' }, message: { ts: '111' } };
+
+      await app.handlers.action['approve_write_action']({ action, ack, body });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockSetApprovalState).toHaveBeenCalledWith('req-1', 'approved');
+    });
+
+    it('should mention approver for admin_confirm write policy', async () => {
+      const app = createMockApp();
+      await safeRegisterInlineActions(app);
+
+      if (!app.handlers.action['approve_write_action']) return;
+
+      const ack = vi.fn();
+      const actionData = JSON.stringify({ requestId: 'req-1', writePolicy: 'admin_confirm', agentName: 'Bot1', toolName: 'chargebee-write' });
+      const action = { value: actionData };
+      const body = { user: { id: 'U_ADMIN' }, team: { id: 'W_TEST_123' }, channel: { id: 'C123' }, message: { ts: '111' } };
+
+      await app.handlers.action['approve_write_action']({ action, ack, body });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockSetApprovalState).toHaveBeenCalledWith('req-1', 'approved');
+      // Should post a reply mentioning the approver
+      expect(mockPostMessage).toHaveBeenCalledWith(
+        'C123',
+        expect.stringContaining('U_ADMIN'),
+      );
+    });
+  });
+
+  describe('deny_write_action', () => {
+    it('should set approval state to denied', async () => {
+      const app = createMockApp();
+      await safeRegisterInlineActions(app);
+
+      if (!app.handlers.action['deny_write_action']) return;
+
+      const ack = vi.fn();
+      const actionData = JSON.stringify({ requestId: 'req-2', writePolicy: 'confirm', agentName: 'Bot1', toolName: 'chargebee-write' });
+      const action = { value: actionData };
+      const body = { user: { id: 'U001' }, team: { id: 'W_TEST_123' }, channel: { id: 'C123' }, message: { ts: '111' } };
+
+      await app.handlers.action['deny_write_action']({ action, ack, body });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockSetApprovalState).toHaveBeenCalledWith('req-2', 'denied');
+    });
+
+    it('should mention denier for admin_confirm write policy', async () => {
+      const app = createMockApp();
+      await safeRegisterInlineActions(app);
+
+      if (!app.handlers.action['deny_write_action']) return;
+
+      const ack = vi.fn();
+      const actionData = JSON.stringify({ requestId: 'req-2', writePolicy: 'admin_confirm', agentName: 'Bot1', toolName: 'chargebee-write' });
+      const action = { value: actionData };
+      const body = { user: { id: 'U_ADMIN' }, team: { id: 'W_TEST_123' }, channel: { id: 'C123' }, message: { ts: '111' } };
+
+      await app.handlers.action['deny_write_action']({ action, ack, body });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockSetApprovalState).toHaveBeenCalledWith('req-2', 'denied');
+      expect(mockPostMessage).toHaveBeenCalledWith(
+        'C123',
+        expect.stringContaining('U_ADMIN'),
+      );
+    });
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // deny_write_tools action
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  describe('deny_write_tools action', () => {
+    it('should DM requesting user about denied write tools', async () => {
+      const app = createMockApp();
+      await safeRegisterInlineActions(app);
+
+      if (!app.handlers.action['deny_write_tools']) return;
+
+      const ack = vi.fn();
+      const action = { value: 'request-1' };
+      const body = { user: { id: 'U_ADMIN' }, team: { id: 'W_TEST_123' }, channel: { id: 'C123' }, message: { ts: '111' } };
+
+      // Mock pending_confirmations row
+      mockQueryOne.mockResolvedValueOnce({
+        data: {
+          requestedBy: 'U_REQUESTER',
+          agentName: 'Bot1',
+          writeTools: ['chargebee-write'],
+        },
+      });
+
+      await app.handlers.action['deny_write_tools']({ action, ack, body });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockExecute).toHaveBeenCalledWith(
+        expect.stringContaining('DELETE FROM pending_confirmations'),
+        ['request-1'],
+      );
+      expect(mockSendDMBlocks).toHaveBeenCalledWith(
+        'U_REQUESTER',
+        expect.arrayContaining([
+          expect.objectContaining({
+            text: expect.objectContaining({ text: expect.stringContaining('denied write access') }),
+          }),
+        ]),
+        expect.any(String),
+      );
+    });
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // deny_upgrade action — DMs requesting user
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  describe('deny_upgrade action — DMs requesting user', () => {
+    it('should DM the requesting user about denied upgrade', async () => {
+      const app = createMockApp();
+      await safeRegisterInlineActions(app);
+
+      if (!app.handlers.action['deny_upgrade']) return;
+
+      // Mock getUpgradeRequest to return a request with a user
+      mockGetUpgradeRequest.mockResolvedValueOnce({
+        id: 'req-id-1',
+        agent_id: 'agent-1',
+        user_id: 'U_REQUESTER',
+        status: 'pending',
+      });
+      mockGetAgent.mockResolvedValue({ name: 'TestAgent' });
+
+      const ack = vi.fn();
+      const action = { value: 'req-id-1' };
+      const body = { user: { id: 'U_DENIER' }, team: { id: 'W_TEST_123' }, channel: { id: 'C123' } };
+
+      await app.handlers.action['deny_upgrade']({ action, ack, body });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockDenyUpgrade).toHaveBeenCalledWith('W_TEST_123', 'req-id-1', 'U_DENIER');
+      // Should DM the requester
+      expect(mockSendDMBlocks).toHaveBeenCalledWith(
+        'U_REQUESTER',
+        expect.arrayContaining([
+          expect.objectContaining({
+            text: expect.objectContaining({ text: expect.stringContaining('denied') }),
+          }),
+        ]),
+        expect.any(String),
+      );
+    });
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // Agent config view — tool connection modes
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  describe('Agent config view — tool connection modes', () => {
+    it('should show tool connection modes in agent config', async () => {
+      const app = createMockApp();
+      await safeRegisterInlineActions(app);
+
+      if (!app.handlers.action['agent_overflow']) return;
+
+      mockGetAgent.mockResolvedValue(makeFakeAgent({
+        tools: ['test-tool-read'],
+      }));
+      mockListAgentToolConnections.mockResolvedValue([
+        { tool_name: 'test-tool-read', connection_mode: 'team' },
+      ]);
+      mockCanModifyAgent.mockResolvedValue(true);
+
+      const ack = vi.fn();
+      const action = { selected_option: { value: 'view_config:agent-1' } };
+      const body = { user: { id: 'U001' }, team: { id: 'W_TEST_123' }, channel: { id: 'C_DM' } };
+
+      await app.handlers.action['agent_overflow']({ action, ack, body });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockPostBlocks).toHaveBeenCalled();
+      const blocks = mockPostBlocks.mock.calls[0][1];
+      const allText = JSON.stringify(blocks);
+      // Tool connections section should appear
+      expect(allText).toContain('Tool Credentials');
+      expect(allText).toContain('test-tool-read');
+      // Edit button should be visible since user can modify
+      expect(allText).toContain('edit_agent_tool_connections');
+    });
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // agent_tool_connections_modal view handler
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  describe('agent_tool_connections_modal view handler', () => {
+    it('should update connection modes for agent tools', async () => {
+      const app = createMockApp();
+      registerToolAndKBModals(app as any);
+
+      mockGetAgent.mockResolvedValue(makeFakeAgent({
+        tools: ['test-tool-read', 'test-tool-write'],
+      }));
+
+      const ack = vi.fn();
+      const body = { user: { id: 'U001' }, team: { id: 'W_TEST_123' } };
+      const view = {
+        private_metadata: JSON.stringify({ agentId: 'agent-1', integrations: ['test-integration'] }),
+        state: {
+          values: {
+            'conn_mode_test-integration': {
+              'conn_mode_select_test-integration': {
+                selected_option: { value: 'delegated' },
+              },
+            },
+          },
+        },
+      };
+
+      await app.handlers.view['agent_tool_connections_modal']({ ack, body, view });
+
+      expect(ack).toHaveBeenCalled();
+      // Should call setAgentToolConnection for each tool in the integration that the agent uses
+      expect(mockSetAgentToolConnection).toHaveBeenCalledWith(
+        'W_TEST_123', 'agent-1', 'test-tool-read', 'delegated', null, 'U001',
+      );
+      expect(mockSetAgentToolConnection).toHaveBeenCalledWith(
+        'W_TEST_123', 'agent-1', 'test-tool-write', 'delegated', null, 'U001',
+      );
+      // Success DM
+      expect(mockSendDMBlocks).toHaveBeenCalledWith(
+        'U001',
+        expect.arrayContaining([
+          expect.objectContaining({ text: expect.objectContaining({ text: expect.stringContaining('updated successfully') }) }),
+        ]),
+        expect.any(String),
+      );
+    });
+
+    it('should skip integration when no mode is selected', async () => {
+      const app = createMockApp();
+      registerToolAndKBModals(app as any);
+
+      const ack = vi.fn();
+      const body = { user: { id: 'U001' }, team: { id: 'W_TEST_123' } };
+      const view = {
+        private_metadata: JSON.stringify({ agentId: 'agent-1', integrations: ['test-integration'] }),
+        state: {
+          values: {
+            'conn_mode_test-integration': {
+              'conn_mode_select_test-integration': {
+                selected_option: null,
+              },
+            },
+          },
+        },
+      };
+
+      await app.handlers.view['agent_tool_connections_modal']({ ack, body, view });
+
+      expect(ack).toHaveBeenCalled();
+      expect(mockSetAgentToolConnection).not.toHaveBeenCalled();
     });
   });
 });

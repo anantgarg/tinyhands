@@ -54,8 +54,19 @@ vi.mock('../../src/modules/connections/oauth', () => ({
 }));
 
 const mockSlackPostMessage = vi.fn();
+const mockSlackPostBlocks = vi.fn().mockResolvedValue('msg-ts-789');
 vi.mock('../../src/slack', () => ({
   postMessage: (...args: any[]) => mockSlackPostMessage(...args),
+  postBlocks: (...args: any[]) => mockSlackPostBlocks(...args),
+  sendDMBlocks: vi.fn(),
+}));
+
+// Mock queue module for approval state
+const mockSetApprovalState = vi.fn().mockResolvedValue(undefined);
+const mockGetApprovalState = vi.fn().mockResolvedValue('pending');
+vi.mock('../../src/queue', () => ({
+  setApprovalState: (...args: any[]) => mockSetApprovalState(...args),
+  getApprovalState: (...args: any[]) => mockGetApprovalState(...args),
 }));
 
 vi.mock('uuid', () => ({
@@ -737,6 +748,148 @@ describe('Webhook Server', () => {
       expect(res.status).toBe(400);
       expect(typeof res.body).toBe('string');
       expect(res.body).toContain('Connection Failed');
+    });
+  });
+
+  // ────────────────────────────────────────────────
+  // Internal Approval API
+  // ────────────────────────────────────────────────
+
+  describe('POST /internal/approval/request', () => {
+    it('creates approval and posts Slack message', async () => {
+      mockSetApprovalState.mockResolvedValue(undefined);
+      mockSlackPostBlocks.mockResolvedValue('msg-ts-789');
+
+      const res = await makeTestRequest(app, 'POST', '/internal/approval/request', {
+        agentId: 'agent-1',
+        agentName: 'TestBot',
+        toolName: 'chargebee-write',
+        details: 'Creating customer',
+        userId: 'U001',
+        channelId: 'C123',
+        threadTs: '111.222',
+        writePolicy: 'confirm',
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body.requestId).toBe('test-uuid-1234');
+      expect(mockSetApprovalState).toHaveBeenCalledWith('test-uuid-1234', 'pending', 300);
+      expect(mockSlackPostBlocks).toHaveBeenCalledWith(
+        'C123',
+        expect.arrayContaining([
+          expect.objectContaining({
+            type: 'section',
+            text: expect.objectContaining({ text: expect.stringContaining('TestBot') }),
+          }),
+          expect.objectContaining({
+            type: 'actions',
+            elements: expect.arrayContaining([
+              expect.objectContaining({ action_id: 'approve_write_action' }),
+              expect.objectContaining({ action_id: 'deny_write_action' }),
+            ]),
+          }),
+        ]),
+        expect.stringContaining('Write approval'),
+        '111.222',
+      );
+    });
+
+    it('sets no TTL for admin_confirm write policy', async () => {
+      mockSetApprovalState.mockResolvedValue(undefined);
+      mockSlackPostBlocks.mockResolvedValue('msg-ts-789');
+
+      const res = await makeTestRequest(app, 'POST', '/internal/approval/request', {
+        agentId: 'agent-1',
+        agentName: 'TestBot',
+        toolName: 'chargebee-write',
+        userId: 'U001',
+        channelId: 'C123',
+        threadTs: '111.222',
+        writePolicy: 'admin_confirm',
+      });
+
+      expect(res.status).toBe(200);
+      // admin_confirm should pass undefined TTL
+      expect(mockSetApprovalState).toHaveBeenCalledWith('test-uuid-1234', 'pending', undefined);
+    });
+
+    it('returns 400 when required fields are missing', async () => {
+      const res = await makeTestRequest(app, 'POST', '/internal/approval/request', {
+        agentId: 'agent-1',
+        // missing toolName and channelId
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toBe('Missing required fields');
+    });
+
+    it('returns 401 when internal secret is wrong', async () => {
+      const { config: appConfig } = await import('../../src/config');
+      const origSecret = appConfig.server.internalSecret;
+      appConfig.server.internalSecret = 'my-secret';
+
+      const secretApp = createWebhookServer();
+      const res = await makeTestRequest(secretApp, 'POST', '/internal/approval/request', {
+        agentId: 'agent-1',
+        toolName: 'test',
+        channelId: 'C123',
+      }, { 'x-internal-secret': 'wrong-secret' });
+
+      expect(res.status).toBe(401);
+      appConfig.server.internalSecret = origSecret;
+    });
+  });
+
+  describe('GET /internal/approval/poll/:requestId', () => {
+    it('returns correct approval state', async () => {
+      mockGetApprovalState.mockResolvedValue('approved');
+
+      const res = await makeTestRequest(app, 'GET', '/internal/approval/poll/req-123');
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('approved');
+      expect(mockGetApprovalState).toHaveBeenCalledWith('req-123');
+    });
+
+    it('returns expired when state is null', async () => {
+      mockGetApprovalState.mockResolvedValue(null);
+
+      const res = await makeTestRequest(app, 'GET', '/internal/approval/poll/req-expired');
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('expired');
+    });
+
+    it('returns pending for a new request', async () => {
+      mockGetApprovalState.mockResolvedValue('pending');
+
+      const res = await makeTestRequest(app, 'GET', '/internal/approval/poll/req-new');
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('pending');
+    });
+
+    it('returns denied state', async () => {
+      mockGetApprovalState.mockResolvedValue('denied');
+
+      const res = await makeTestRequest(app, 'GET', '/internal/approval/poll/req-denied');
+
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe('denied');
+    });
+
+    it('returns 401 when internal secret is wrong', async () => {
+      const { config: appConfig } = await import('../../src/config');
+      const origSecret = appConfig.server.internalSecret;
+      appConfig.server.internalSecret = 'my-secret';
+
+      const secretApp = createWebhookServer();
+      const res = await makeTestRequest(secretApp, 'GET', '/internal/approval/poll/req-123', undefined, {
+        'x-internal-secret': 'wrong-secret',
+      });
+
+      expect(res.status).toBe(401);
+      appConfig.server.internalSecret = origSecret;
     });
   });
 });

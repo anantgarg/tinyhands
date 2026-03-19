@@ -83,6 +83,27 @@ vi.mock('../../src/modules/audit', () => ({
   logAuditEvent: (...args: any[]) => mockLogAuditEvent(...args),
 }));
 
+// Mock connections module for credential resolution
+const mockResolveToolCredentials = vi.fn().mockResolvedValue(null);
+const mockGetAgentToolConnection = vi.fn().mockResolvedValue(null);
+const mockGetIntegrationIdForTool = vi.fn().mockImplementation((name: string) => name.split('-')[0]);
+vi.mock('../../src/modules/connections', () => ({
+  resolveToolCredentials: (...args: any[]) => mockResolveToolCredentials(...args),
+  getAgentToolConnection: (...args: any[]) => mockGetAgentToolConnection(...args),
+  getIntegrationIdForTool: (...args: any[]) => mockGetIntegrationIdForTool(...args),
+}));
+
+// Mock connections/oauth for runtime mode
+vi.mock('../../src/modules/connections/oauth', () => ({
+  getSupportedOAuthIntegrations: vi.fn().mockReturnValue([]),
+}));
+
+// Mock tools/integrations for getIntegration
+const mockGetIntegration = vi.fn().mockReturnValue(undefined);
+vi.mock('../../src/modules/tools/integrations', () => ({
+  getIntegration: (...args: any[]) => mockGetIntegration(...args),
+}));
+
 // Mock Anthropic SDK for memory extraction
 const mockAnthropicCreate = vi.fn();
 vi.mock('@anthropic-ai/sdk', () => ({
@@ -2062,5 +2083,116 @@ describe('Execution Module – createWorker', () => {
     failedHandler(fakeJob, new Error('Some random error'));
 
     expect(mockWorkerPause).not.toHaveBeenCalled();
+  });
+});
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Execution Module – Credential Resolution
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+describe('Execution Module – Credential Resolution', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should use resolved credentials when connection exists', async () => {
+    const agent = makeAgent({ tools: ['chargebee-read'] });
+    mockGetAgent.mockResolvedValue(agent);
+    mockListCustomTools.mockResolvedValue([
+      { name: 'chargebee-read', schema_json: '{}', config_json: '{"api_key":"fallback-key"}', language: 'javascript' },
+    ]);
+    mockGetToolExecutionScript.mockResolvedValue('console.log("test")');
+    mockResolveToolCredentials.mockResolvedValue({ api_key: 'resolved-key', site: 'resolved-site' });
+
+    // Mock container lifecycle
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"Done","input_tokens":50,"output_tokens":25,"tool_calls_count":0,"cost_usd":0.001}',
+    });
+
+    const data = makeJobData();
+    const job = makeFakeJob(data);
+
+    await executeAgentRun(job);
+
+    // Should have called resolveToolCredentials
+    expect(mockResolveToolCredentials).toHaveBeenCalledWith(
+      TEST_WORKSPACE_ID, 'agent-1', 'chargebee-read', 'U001',
+    );
+
+    // The resolved credentials should be passed to the container (embedded in customToolsConfig)
+    expect(mockCreateAgentContainer).toHaveBeenCalled();
+    const containerArgs = mockCreateAgentContainer.mock.calls[0];
+    const customToolsArg = containerArgs.find((arg: any) => typeof arg === 'string' && arg.includes('chargebee-read'));
+    if (customToolsArg) {
+      expect(customToolsArg).toContain('resolved-key');
+    }
+  });
+
+  it('should fall back to config_json when no connection exists', async () => {
+    const agent = makeAgent({ tools: ['chargebee-read'] });
+    mockGetAgent.mockResolvedValue(agent);
+    mockListCustomTools.mockResolvedValue([
+      { name: 'chargebee-read', schema_json: '{}', config_json: '{"api_key":"fallback-key"}', language: 'javascript' },
+    ]);
+    mockGetToolExecutionScript.mockResolvedValue('console.log("test")');
+    mockResolveToolCredentials.mockResolvedValue(null); // No connection found
+    mockGetAgentToolConnection.mockResolvedValue(null);
+
+    // Mock container lifecycle
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"Done","input_tokens":50,"output_tokens":25,"tool_calls_count":0,"cost_usd":0.001}',
+    });
+
+    const data = makeJobData();
+    const job = makeFakeJob(data);
+
+    await executeAgentRun(job);
+
+    // Should have tried to resolve but got null, falling back to config_json
+    expect(mockResolveToolCredentials).toHaveBeenCalled();
+
+    // The fallback config should be used
+    expect(mockCreateAgentContainer).toHaveBeenCalled();
+    const containerArgs = mockCreateAgentContainer.mock.calls[0];
+    const customToolsArg = containerArgs.find((arg: any) => typeof arg === 'string' && arg.includes('chargebee-read'));
+    if (customToolsArg) {
+      expect(customToolsArg).toContain('fallback-key');
+    }
+  });
+
+  it('should fall back to config_json when credential resolution throws', async () => {
+    const agent = makeAgent({ tools: ['chargebee-read'] });
+    mockGetAgent.mockResolvedValue(agent);
+    mockListCustomTools.mockResolvedValue([
+      { name: 'chargebee-read', schema_json: '{}', config_json: '{"api_key":"fallback-key"}', language: 'javascript' },
+    ]);
+    mockGetToolExecutionScript.mockResolvedValue('console.log("test")');
+    mockResolveToolCredentials.mockRejectedValue(new Error('Connection DB error'));
+
+    // Mock container lifecycle
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"Done","input_tokens":50,"output_tokens":25,"tool_calls_count":0,"cost_usd":0.001}',
+    });
+
+    const data = makeJobData();
+    const job = makeFakeJob(data);
+
+    await executeAgentRun(job);
+
+    // Should have tried to resolve and caught the error
+    expect(mockResolveToolCredentials).toHaveBeenCalled();
+    // Should log the warning
+    expect(mockLoggerWarn).toHaveBeenCalledWith('Credential resolution failed', expect.objectContaining({ tool: 'chargebee-read' }));
+    // Container should still be created with fallback config
+    expect(mockCreateAgentContainer).toHaveBeenCalled();
   });
 });
