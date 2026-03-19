@@ -4,17 +4,23 @@ import { api } from './client';
 export interface Agent {
   id: string;
   name: string;
-  avatar: string;
+  avatarEmoji: string;
   systemPrompt: string;
+  status: string;
   model: string;
   tools: string[];
-  channels: string[];
-  memoryEnabled: boolean;
-  status: string;
+  channelId: string;
+  channelIds: string[];
   maxTurns: number;
-  respondTo: string;
+  memoryEnabled: boolean;
+  respondToAllMessages: boolean;
+  mentionsOnly: boolean;
+  selfEvolutionMode: string;
   defaultAccess: string;
   writePolicy: string;
+  relevanceKeywords: string[];
+  streamingDetail: boolean;
+  visibility: string;
   createdBy: string;
   createdAt: string;
   updatedAt: string;
@@ -22,62 +28,73 @@ export interface Agent {
 
 interface CreateAgentPayload {
   name: string;
-  avatar?: string;
+  avatarEmoji?: string;
   systemPrompt: string;
   model?: string;
   tools?: string[];
-  channels?: string[];
+  channelIds?: string[];
   memoryEnabled?: boolean;
   maxTurns?: number;
-  respondTo?: string;
+  mentionsOnly?: boolean;
+  respondToAllMessages?: boolean;
+  relevanceKeywords?: string[];
+  selfEvolutionMode?: string;
   defaultAccess?: string;
   writePolicy?: string;
+  streamingDetail?: boolean;
 }
 
 interface UpdateAgentPayload extends Partial<CreateAgentPayload> {
   id: string;
+  status?: string;
 }
 
-interface AgentVersion {
+export interface AgentVersion {
+  id: string;
+  agentId: string;
   version: number;
   systemPrompt: string;
-  model: string;
-  tools: string[];
+  changeNote: string;
   changedBy: string;
-  changedAt: string;
+  createdAt: string;
 }
 
-interface Run {
+export interface Run {
   id: string;
   agentId: string;
   traceId: string;
-  userId: string;
+  slackUserId: string;
   status: string;
   model: string;
   inputTokens: number;
   outputTokens: number;
-  cost: number;
+  estimatedCostUsd: number;
   durationMs: number;
-  error: string | null;
+  queueWaitMs: number;
   createdAt: string;
 }
 
-interface Memory {
+export interface Memory {
   id: string;
   agentId: string;
   fact: string;
   category: string;
-  relevance: number;
+  relevanceScore: number;
+  source: 'agent' | 'user';
   createdAt: string;
 }
 
-interface AgentRole {
+export interface AgentRole {
+  agentId: string;
   userId: string;
-  displayName: string;
   role: 'owner' | 'member' | 'viewer';
+  grantedBy: string;
+  grantedAt: string;
+  workspaceId: string;
+  displayName?: string;
 }
 
-interface UpgradeRequest {
+export interface UpgradeRequest {
   id: string;
   userId: string;
   displayName: string;
@@ -92,14 +109,15 @@ interface RunParams {
   status?: string;
 }
 
-interface AnalyzeGoalResult {
+export interface AnalyzeGoalResult {
   name: string;
-  avatar: string;
+  avatarEmoji: string;
   systemPrompt: string;
   model: string;
   tools: string[];
-  respondTo: string;
+  mentionsOnly: boolean;
   memoryEnabled: boolean;
+  changes?: Record<string, { from: unknown; to: unknown }>;
 }
 
 export function useAgents() {
@@ -252,18 +270,19 @@ export function useUpdateAgentAccess() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ agentId, defaultAccess, writePolicy }: { agentId: string; defaultAccess?: string; writePolicy?: string }) =>
-      api.patch(`/agents/${agentId}/access`, { default_access: defaultAccess, write_policy: writePolicy }),
+      api.patch(`/agents/${agentId}/access`, { defaultAccess, writePolicy }),
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: ['agents', variables.agentId] });
     },
   });
 }
 
-export function useUpgradeRequests(id: string) {
+export function useUpgradeRequests(agentId?: string) {
+  const path = agentId ? `/agents/${agentId}/upgrade-requests` : '/upgrade-requests';
   return useQuery<UpgradeRequest[]>({
-    queryKey: ['agents', id, 'upgrade-requests'],
-    queryFn: () => api.get(`/agents/${id}/upgrade-requests`),
-    enabled: !!id,
+    queryKey: agentId ? ['agents', agentId, 'upgrade-requests'] : ['upgrade-requests'],
+    queryFn: () => api.get(path),
+    enabled: agentId ? !!agentId : true,
   });
 }
 
@@ -275,6 +294,7 @@ export function useApproveUpgrade() {
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: ['agents', variables.agentId, 'upgrade-requests'] });
       qc.invalidateQueries({ queryKey: ['agents', variables.agentId, 'roles'] });
+      qc.invalidateQueries({ queryKey: ['upgrade-requests'] });
     },
   });
 }
@@ -286,6 +306,7 @@ export function useDenyUpgrade() {
       api.post(`/agents/${agentId}/upgrade-requests/${requestId}/deny`),
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: ['agents', variables.agentId, 'upgrade-requests'] });
+      qc.invalidateQueries({ queryKey: ['upgrade-requests'] });
     },
   });
 }
@@ -355,5 +376,33 @@ export function useDetachSkill() {
 export function useAnalyzeGoal() {
   return useMutation({
     mutationFn: (goal: string) => api.post<AnalyzeGoalResult>('/agents/analyze-goal', { goal }),
+  });
+}
+
+export function useAgentTriggers(agentId: string) {
+  return useQuery<Array<{
+    id: string;
+    agentId: string;
+    type: 'slack_channel' | 'linear' | 'zendesk' | 'intercom' | 'webhook' | 'schedule';
+    config: Record<string, unknown>;
+    enabled: boolean;
+    lastTriggeredAt: string | null;
+    createdAt: string;
+  }>>({
+    queryKey: ['agents', agentId, 'triggers'],
+    queryFn: () => api.get(`/agents/${agentId}/triggers`),
+    enabled: !!agentId,
+  });
+}
+
+export function useAddAgentTrigger() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ agentId, type, config }: { agentId: string; type: string; config: Record<string, unknown> }) =>
+      api.post(`/agents/${agentId}/triggers`, { type, config }),
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: ['agents', variables.agentId, 'triggers'] });
+      qc.invalidateQueries({ queryKey: ['triggers'] });
+    },
   });
 }

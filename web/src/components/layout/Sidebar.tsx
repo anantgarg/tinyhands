@@ -8,6 +8,7 @@ import {
   Zap,
   GitBranch,
   Lightbulb,
+  Bell,
   FileText,
   Shield,
   Settings,
@@ -42,6 +43,7 @@ const manageNav: NavItem[] = [
 ];
 
 const reviewNav: NavItem[] = [
+  { label: 'Requests', to: '/requests', icon: Bell },
   { label: 'Evolution Proposals', to: '/evolution', icon: Lightbulb },
   { label: 'Audit Log', to: '/audit', icon: FileText },
 ];

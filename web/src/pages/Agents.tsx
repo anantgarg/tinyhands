@@ -1,15 +1,15 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { Bot, Plus, Search, MoreVertical, Pause, Play, Trash2, Eye, Settings } from 'lucide-react';
+import { Bot, Plus, Search, MoreVertical, Pause, Play, Trash2, Pencil } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -25,6 +25,7 @@ export function Agents() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [modelFilter, setModelFilter] = useState<string>('all');
+  const [creatorFilter, setCreatorFilter] = useState<string>('all');
   const { data: agents, isLoading } = useAgents();
   const deleteAgent = useDeleteAgent();
   const updateAgent = useUpdateAgent();
@@ -33,22 +34,26 @@ export function Agents() {
     if (search && !agent.name.toLowerCase().includes(search.toLowerCase())) return false;
     if (statusFilter !== 'all' && agent.status !== statusFilter) return false;
     if (modelFilter !== 'all' && agent.model !== modelFilter) return false;
+    if (creatorFilter !== 'all' && agent.createdBy !== creatorFilter) return false;
     return true;
   });
 
   const models = [...new Set((agents ?? []).map((a) => a.model))];
+  const creators = [...new Set((agents ?? []).map((a) => a.createdBy).filter(Boolean))];
 
-  const handleToggleStatus = (agent: { id: string; status: string }) => {
+  const handleToggleStatus = (e: React.MouseEvent, agent: { id: string; status: string }) => {
+    e.stopPropagation();
     const newStatus = agent.status === 'active' ? 'paused' : 'active';
     updateAgent.mutate(
-      { id: agent.id, status: newStatus } as Parameters<typeof updateAgent.mutate>[0],
+      { id: agent.id, status: newStatus },
       {
         onSuccess: () => toast({ title: `Agent ${newStatus}`, variant: 'success' }),
       },
     );
   };
 
-  const handleDelete = (id: string, name: string) => {
+  const handleDelete = (e: React.MouseEvent, id: string, name: string) => {
+    e.stopPropagation();
     if (confirm(`Delete agent "${name}"? This cannot be undone.`)) {
       deleteAgent.mutate(id, {
         onSuccess: () => toast({ title: 'Agent deleted', variant: 'success' }),
@@ -102,90 +107,121 @@ export function Agents() {
             ))}
           </SelectContent>
         </Select>
+        <Select value={creatorFilter} onValueChange={setCreatorFilter}>
+          <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder="Creator" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Creators</SelectItem>
+            {creators.map((c) => (
+              <SelectItem key={c} value={c}>{c}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
-      {/* Agent List */}
+      {/* Agent Table */}
       {isLoading ? (
         <div className="space-y-3">
           {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-[120px]" />
+            <Skeleton key={i} className="h-12" />
           ))}
         </div>
       ) : filtered.length === 0 ? (
         <EmptyState
           icon={Bot}
           title="No agents found"
-          description={search || statusFilter !== 'all' || modelFilter !== 'all' ? 'Try adjusting your filters' : 'Create your first agent to get started'}
-          action={!search && statusFilter === 'all' && modelFilter === 'all' ? { label: 'Create Agent', onClick: () => navigate('/agents/new') } : undefined}
+          description={search || statusFilter !== 'all' || modelFilter !== 'all' || creatorFilter !== 'all' ? 'Try adjusting your filters' : 'Create your first agent to get started'}
+          action={!search && statusFilter === 'all' && modelFilter === 'all' && creatorFilter === 'all' ? { label: 'Create Agent', onClick: () => navigate('/agents/new') } : undefined}
         />
       ) : (
-        <div className="space-y-3">
-          {filtered.map((agent) => (
-            <Card
-              key={agent.id}
-              className="cursor-pointer transition-colors hover:bg-warm-bg/30"
-              onClick={() => navigate(`/agents/${agent.id}`)}
-            >
-              <CardContent className="p-5">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-start gap-3 flex-1 min-w-0">
-                    <span className="text-2xl shrink-0">{agent.avatar || '🤖'}</span>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-semibold truncate">{agent.name}</h3>
-                        <Badge variant={agent.status === 'active' ? 'success' : 'secondary'}>
-                          {agent.status}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-warm-text-secondary line-clamp-1 mb-2">
-                        {agent.systemPrompt?.split('\n')[0] ?? 'No description'}
-                      </p>
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-warm-text-secondary">
-                        <span>Model: {agent.model}</span>
-                        <span>Tools: {agent.tools?.length ?? 0}</span>
-                        <span>Channels: {agent.channels?.length ?? 0}</span>
-                        {agent.memoryEnabled && <Badge variant="default" className="text-[10px] px-1.5 py-0">Memory</Badge>}
-                        <span>by {agent.createdBy}</span>
-                        <span>{formatDistanceToNow(new Date(agent.createdAt), { addSuffix: true })}</span>
-                      </div>
+        <div className="rounded-card border border-warm-border bg-white">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Agent</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Model</TableHead>
+                <TableHead>Channels</TableHead>
+                <TableHead>Tools</TableHead>
+                <TableHead>Memory</TableHead>
+                <TableHead>Created by</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead className="w-12"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filtered.map((agent) => (
+                <TableRow
+                  key={agent.id}
+                  className="cursor-pointer hover:bg-warm-bg/30"
+                  onClick={() => navigate(`/agents/${agent.id}`)}
+                >
+                  <TableCell>
+                    <div className="flex items-center gap-2.5">
+                      <span className="text-lg shrink-0">{agent.avatarEmoji || '🤖'}</span>
+                      <span className="font-medium">{agent.name}</span>
                     </div>
-                  </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                      <Button variant="ghost" size="icon" className="shrink-0">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                      <DropdownMenuItem onClick={() => navigate(`/agents/${agent.id}`)}>
-                        <Eye className="mr-2 h-4 w-4" />
-                        View Details
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => navigate(`/agents/${agent.id}`)}>
-                        <Settings className="mr-2 h-4 w-4" />
-                        Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => handleToggleStatus(agent)}>
-                        {agent.status === 'active' ? (
-                          <><Pause className="mr-2 h-4 w-4" /> Pause</>
-                        ) : (
-                          <><Play className="mr-2 h-4 w-4" /> Resume</>
-                        )}
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        className="text-red-600"
-                        onClick={() => handleDelete(agent.id, agent.name)}
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={agent.status === 'active' ? 'success' : 'secondary'}>
+                      {agent.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-warm-text-secondary text-sm">
+                    {agent.model}
+                  </TableCell>
+                  <TableCell className="text-warm-text-secondary text-sm">
+                    {agent.channelIds?.length ?? 0}
+                  </TableCell>
+                  <TableCell className="text-warm-text-secondary text-sm">
+                    {agent.tools?.length ?? 0}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={agent.memoryEnabled ? 'default' : 'secondary'}>
+                      {agent.memoryEnabled ? 'On' : 'Off'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-warm-text-secondary text-sm">
+                    {agent.createdBy}
+                  </TableCell>
+                  <TableCell className="text-warm-text-secondary text-sm">
+                    {formatDistanceToNow(new Date(agent.createdAt), { addSuffix: true })}
+                  </TableCell>
+                  <TableCell>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                        <DropdownMenuItem onClick={() => navigate(`/agents/${agent.id}`)}>
+                          <Pencil className="mr-2 h-4 w-4" />
+                          Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={(e) => handleToggleStatus(e, agent)}>
+                          {agent.status === 'active' ? (
+                            <><Pause className="mr-2 h-4 w-4" /> Pause</>
+                          ) : (
+                            <><Play className="mr-2 h-4 w-4" /> Resume</>
+                          )}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="text-red-600"
+                          onClick={(e) => handleDelete(e, agent.id, agent.name)}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
         </div>
       )}
     </div>

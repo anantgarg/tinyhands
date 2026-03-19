@@ -214,7 +214,7 @@ export function Triggers() {
                 </SelectTrigger>
                 <SelectContent>
                   {(agents ?? []).map((a) => (
-                    <SelectItem key={a.id} value={a.id}>{a.avatar} {a.name}</SelectItem>
+                    <SelectItem key={a.id} value={a.id}>{a.avatarEmoji} {a.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>

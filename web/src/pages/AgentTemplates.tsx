@@ -122,13 +122,13 @@ export function AgentTemplates() {
     createAgent.mutate(
       {
         name: selectedTemplate.name,
-        avatar: selectedTemplate.avatar,
+        avatarEmoji: selectedTemplate.avatar,
         systemPrompt: selectedTemplate.systemPrompt,
         model: selectedTemplate.model,
         tools: selectedTemplate.tools,
-        channels: channels.split(',').map((c) => c.trim()).filter(Boolean),
+        channelIds: channels.split(',').map((c) => c.trim()).filter(Boolean),
         memoryEnabled: selectedTemplate.memoryEnabled,
-        respondTo: selectedTemplate.respondTo,
+        mentionsOnly: selectedTemplate.respondTo === 'mentions',
       },
       {
         onSuccess: () => {

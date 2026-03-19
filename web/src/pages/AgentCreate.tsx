@@ -22,15 +22,15 @@ export function AgentCreate() {
 
   const [goal, setGoal] = useState('');
   const [name, setName] = useState('');
-  const [avatar, setAvatar] = useState('');
+  const [avatarEmoji, setAvatarEmoji] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
-  const [channels, setChannels] = useState('');
+  const [channelIds, setChannelIds] = useState('');
   const [model, setModel] = useState('claude-sonnet-4-20250514');
   const [maxTurns, setMaxTurns] = useState('25');
   const [memoryEnabled, setMemoryEnabled] = useState(false);
-  const [respondTo, setRespondTo] = useState('all');
+  const [mentionsOnly, setMentionsOnly] = useState(false);
   const [defaultAccess, setDefaultAccess] = useState('member');
-  const [writePolicy, setWritePolicy] = useState('allow');
+  const [writePolicy, setWritePolicy] = useState('auto');
   const [selectedTools, setSelectedTools] = useState<string[]>([]);
 
   const handleAnalyze = () => {
@@ -38,11 +38,11 @@ export function AgentCreate() {
     analyzeGoal.mutate(goal, {
       onSuccess: (result) => {
         setName(result.name);
-        setAvatar(result.avatar);
+        setAvatarEmoji(result.avatarEmoji);
         setSystemPrompt(result.systemPrompt);
         setModel(result.model);
         setSelectedTools(result.tools);
-        setRespondTo(result.respondTo);
+        setMentionsOnly(result.mentionsOnly);
         setMemoryEnabled(result.memoryEnabled);
         toast({ title: 'Agent configuration generated', variant: 'success' });
       },
@@ -54,20 +54,20 @@ export function AgentCreate() {
 
   const handleCreate = () => {
     if (!name.trim() || !systemPrompt.trim()) {
-      toast({ title: 'Name and system prompt are required', variant: 'error' });
+      toast({ title: 'Name and instructions are required', variant: 'error' });
       return;
     }
     createAgent.mutate(
       {
         name,
-        avatar: avatar || undefined,
+        avatarEmoji: avatarEmoji || undefined,
         systemPrompt,
         model,
         tools: selectedTools,
-        channels: channels.split(',').map((c) => c.trim()).filter(Boolean),
+        channelIds: channelIds.split(',').map((c) => c.trim()).filter(Boolean),
         memoryEnabled,
         maxTurns: Number(maxTurns),
-        respondTo: respondTo,
+        mentionsOnly,
         defaultAccess,
         writePolicy,
       },
@@ -159,8 +159,8 @@ export function AgentCreate() {
             <div>
               <Label>Avatar (emoji)</Label>
               <Input
-                value={avatar}
-                onChange={(e) => setAvatar(e.target.value)}
+                value={avatarEmoji}
+                onChange={(e) => setAvatarEmoji(e.target.value)}
                 placeholder="🤖"
                 className="mt-1"
               />
@@ -168,7 +168,7 @@ export function AgentCreate() {
           </div>
 
           <div>
-            <Label>System Prompt *</Label>
+            <Label>Instructions *</Label>
             <Textarea
               value={systemPrompt}
               onChange={(e) => setSystemPrompt(e.target.value)}
@@ -181,8 +181,8 @@ export function AgentCreate() {
           <div>
             <Label>Channels (comma separated)</Label>
             <Input
-              value={channels}
-              onChange={(e) => setChannels(e.target.value)}
+              value={channelIds}
+              onChange={(e) => setChannelIds(e.target.value)}
               placeholder="#general, #support"
               className="mt-1"
             />
@@ -213,14 +213,13 @@ export function AgentCreate() {
             </div>
             <div>
               <Label>Respond To</Label>
-              <Select value={respondTo} onValueChange={setRespondTo}>
+              <Select value={mentionsOnly ? 'mentions' : 'all'} onValueChange={(v) => setMentionsOnly(v === 'mentions')}>
                 <SelectTrigger className="mt-1">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Messages</SelectItem>
                   <SelectItem value="mentions">Mentions Only</SelectItem>
-                  <SelectItem value="direct">Direct Messages Only</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -243,6 +242,7 @@ export function AgentCreate() {
                 <SelectContent>
                   <SelectItem value="viewer">Viewer</SelectItem>
                   <SelectItem value="member">Member</SelectItem>
+                  <SelectItem value="none">None</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -253,7 +253,7 @@ export function AgentCreate() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="allow">Allow</SelectItem>
+                  <SelectItem value="auto">Auto</SelectItem>
                   <SelectItem value="confirm">Confirm</SelectItem>
                   <SelectItem value="admin_confirm">Admin Confirm</SelectItem>
                 </SelectContent>
@@ -269,7 +269,7 @@ export function AgentCreate() {
               {(availableTools ?? []).map((tool) => (
                 <label
                   key={tool.name}
-                  className="flex items-center gap-2 rounded-btn border border-warm-border p-3 cursor-pointer hover:bg-warm-sidebar transition-colors"
+                  className="flex items-center gap-2 rounded-lg border border-warm-border p-3 cursor-pointer hover:bg-warm-bg transition-colors"
                 >
                   <input
                     type="checkbox"
