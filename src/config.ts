@@ -3,6 +3,8 @@ export const config = {
     botToken: process.env.SLACK_BOT_TOKEN || '',
     appToken: process.env.SLACK_APP_TOKEN || '',
     signingSecret: process.env.SLACK_SIGNING_SECRET || '',
+    clientId: process.env.SLACK_CLIENT_ID || '',
+    clientSecret: process.env.SLACK_CLIENT_SECRET || '',
   },
   anthropic: {
     apiKey: process.env.ANTHROPIC_API_KEY || '',
@@ -26,6 +28,8 @@ export const config = {
     port: parseInt(process.env.PORT || '3000', 10),
     nodeEnv: process.env.NODE_ENV || 'development',
     internalSecret: process.env.INTERNAL_API_SECRET || '',
+    sessionSecret: process.env.SESSION_SECRET || 'tinyhands-default-session-secret',
+    webDashboardUrl: process.env.WEB_DASHBOARD_URL || '',
   },
   observability: {
     logLevel: process.env.LOG_LEVEL || 'info',

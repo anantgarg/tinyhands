@@ -1,6 +1,7 @@
 import { query, queryOne } from '../../db';
 import { listAgents } from '../agents';
 import { getRecentRuns } from '../execution';
+import { config } from '../../config';
 import type { DashboardMetrics, ModelAlias } from '../../types';
 import { logger } from '../../utils/logger';
 import { version } from '../../../package.json';
@@ -14,6 +15,19 @@ export async function buildDashboardBlocks(workspaceId: string): Promise<Record<
   blocks.push({
     type: 'header',
     text: { type: 'plain_text', text: `✋ TinyHands Dashboard  v${version}` },
+  });
+
+  // Open Dashboard button
+  const dashboardUrl = config.server.webDashboardUrl || config.oauth.redirectBaseUrl || `http://localhost:${config.server.port}`;
+  blocks.push({
+    type: 'actions',
+    elements: [{
+      type: 'button',
+      text: { type: 'plain_text', text: '\ud83d\udda5\ufe0f Open Dashboard' },
+      url: dashboardUrl,
+      style: 'primary',
+      action_id: 'open_dashboard',
+    }],
   });
 
   blocks.push({ type: 'divider' });

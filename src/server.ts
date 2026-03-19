@@ -1,6 +1,11 @@
 import express from 'express';
+import path from 'path';
+import session from 'express-session';
+import RedisStore from 'connect-redis';
+import Redis from 'ioredis';
 import { config } from './config';
 import { getDefaultWorkspaceId } from './db';
+import { createApiRouter } from './api';
 import { deployWebhookHandler } from './modules/auto-update';
 import { fireTrigger, getActiveTriggersByType } from './modules/triggers';
 import { searchKB, listKBEntries, getCategories } from './modules/knowledge-base';
@@ -11,12 +16,36 @@ import { v4 as uuid } from 'uuid';
 export function createWebhookServer(): express.Application {
   const app = express();
 
-  // Raw body for signature verification
+  // Raw body for signature verification (for webhooks)
   app.use(express.json({
     verify: (req: any, _res, buf) => {
       req.rawBody = buf.toString();
     },
   }));
+
+  // URL-encoded form data support
+  app.use(express.urlencoded({ extended: true }));
+
+  // ── Session middleware (for web dashboard auth) ──
+  const redisClient = new Redis(config.redis.url);
+  app.use(session({
+    store: new RedisStore({ client: redisClient }),
+    secret: config.server.sessionSecret,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      secure: config.server.nodeEnv === 'production',
+      httpOnly: true,
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      sameSite: 'lax',
+    },
+  }));
+
+  // ── Web Dashboard API ──
+  app.use('/api/v1', createApiRouter());
+
+  // ── Serve static files for web dashboard ──
+  app.use(express.static(path.join(__dirname, '../dist/web')));
 
   // Health check
   app.get('/health', (_req, res) => {
@@ -362,6 +391,18 @@ export function createWebhookServer(): express.Application {
       logger.error('Internal KB categories failed', { error: err.message });
       res.status(500).json({ error: 'Categories failed' });
     }
+  });
+
+  // ── SPA fallback — serve index.html for all non-API, non-webhook routes ──
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api/') || req.path.startsWith('/webhooks/') ||
+        req.path.startsWith('/internal/') || req.path.startsWith('/auth/') ||
+        req.path === '/health') {
+      return next();
+    }
+    res.sendFile(path.join(__dirname, '../dist/web/index.html'), (err) => {
+      if (err) next(); // File doesn't exist yet, fall through
+    });
   });
 
   return app;
