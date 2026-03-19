@@ -11,6 +11,7 @@ vi.mock('../../src/db', () => ({
 vi.mock('../../src/config', () => ({
   config: {
     observability: { dailyBudgetUsd: 50, logLevel: 'info', dailyDigestTime: '09:00' },
+    docker: { defaultJobTimeoutMs: 1800000 },
   },
 }));
 
@@ -32,6 +33,7 @@ import {
   getAgentErrorRates,
   generateDailyDigest,
   getRunByTraceId,
+  resetAlertCooldowns,
 } from '../../src/modules/observability';
 
 const TEST_WORKSPACE_ID = 'W_TEST_123';
@@ -68,7 +70,7 @@ describe('getAlertRules', () => {
     expect(byCondition['single_run_cost'].threshold).toBe(5.0);
     expect(byCondition['daily_spend'].threshold).toBe(50); // from mocked config
     expect(byCondition['queue_depth'].threshold).toBe(50);
-    expect(byCondition['run_duration'].threshold).toBe(600000);
+    expect(byCondition['run_duration'].threshold).toBe(1800000);
   });
 
   it('should have non-empty action strings', () => {
@@ -84,6 +86,7 @@ describe('getAlertRules', () => {
 describe('checkAlerts', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetAlertCooldowns();
   });
 
   it('should return empty array when no alerts are triggered', async () => {
@@ -111,8 +114,8 @@ describe('checkAlerts', () => {
     expect(errorAlert!.triggered).toBe(true);
     expect(errorAlert!.value).toBeCloseTo(0.25);
     expect(errorAlert!.threshold).toBe(0.10);
-    expect(errorAlert!.message).toContain('25.0%');
-    expect(errorAlert!.message).toContain('5/20');
+    expect(errorAlert!.message).toContain('25%');
+    expect(errorAlert!.message).toContain('5 out of 20');
   });
 
   it('should not trigger error_rate when exactly 10%', async () => {
@@ -145,6 +148,10 @@ describe('checkAlerts', () => {
       .mockResolvedValueOnce({
         id: 'run-12345678-aaaa-bbbb-cccc-dddddddddddd',
         agent_id: 'agent-001',
+        agent_name: 'CostlyBot',
+        model: 'claude-3-opus',
+        input_tokens: 50000,
+        output_tokens: 12000,
         estimated_cost_usd: '7.50',
       }) // expensive run
       .mockResolvedValueOnce({ total: '10.00' })
@@ -156,7 +163,7 @@ describe('checkAlerts', () => {
     expect(costAlert!.triggered).toBe(true);
     expect(costAlert!.value).toBeCloseTo(7.5);
     expect(costAlert!.threshold).toBe(5.0);
-    expect(costAlert!.message).toContain('run-1234');
+    expect(costAlert!.message).toContain('CostlyBot');
     expect(costAlert!.message).toContain('$7.50');
   });
 
@@ -197,16 +204,18 @@ describe('checkAlerts', () => {
       .mockResolvedValueOnce({
         id: 'longrun-1234-aaaa-bbbb-ccccddddeeee',
         agent_id: 'agent-001',
-        duration_ms: 900000, // 900s
+        agent_name: 'SlowBot',
+        duration_ms: 2400000, // 2400s = 40 minutes, exceeds 1800000ms threshold
       });
 
     const alerts = await checkAlerts(TEST_WORKSPACE_ID);
     const durAlert = alerts.find((a) => a.condition === 'run_duration');
     expect(durAlert).toBeDefined();
     expect(durAlert!.triggered).toBe(true);
-    expect(durAlert!.value).toBe(900000);
-    expect(durAlert!.threshold).toBe(600000);
-    expect(durAlert!.message).toContain('900s');
+    expect(durAlert!.value).toBe(2400000);
+    expect(durAlert!.threshold).toBe(1800000);
+    expect(durAlert!.message).toContain('SlowBot');
+    expect(durAlert!.message).toContain('40.0 minutes');
   });
 
   it('should return multiple triggered alerts at once', async () => {
@@ -215,13 +224,18 @@ describe('checkAlerts', () => {
       .mockResolvedValueOnce({
         id: 'expensive-1234-aaaa-bbbb-ccccddddeeee',
         agent_id: 'agent-001',
+        agent_name: 'SpendyBot',
+        model: 'claude-3-opus',
+        input_tokens: 80000,
+        output_tokens: 20000,
         estimated_cost_usd: '10.00',
       }) // expensive run
       .mockResolvedValueOnce({ total: '100.00' }) // over budget
       .mockResolvedValueOnce({
         id: 'longlong-1234-aaaa-bbbb-ccccddddeeee',
         agent_id: 'agent-001',
-        duration_ms: 1200000,
+        agent_name: 'SlowBot',
+        duration_ms: 2400000, // exceeds 1800000ms threshold
       }); // long run
 
     const alerts = await checkAlerts(TEST_WORKSPACE_ID);

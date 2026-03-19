@@ -89,7 +89,7 @@ async function main(): Promise<void> {
         try {
           await postMessage(
             TINYHANDS_CHANNEL,
-            `:rotating_light: *Alert: ${alert.condition}*\n${alert.message}\nThreshold: ${alert.threshold} | Value: ${typeof alert.value === 'number' ? alert.value.toFixed(4) : alert.value}`
+            `:rotating_light: ${alert.message}`
           );
         } catch (slackErr: any) {
           logger.error('Failed to post alert to Slack', { error: slackErr.message });

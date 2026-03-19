@@ -12,8 +12,25 @@ const DEFAULT_ALERT_RULES: AlertRule[] = [
   { condition: 'single_run_cost', threshold: 5.0, action: 'Warning to agent channel + #tinyhands' },
   { condition: 'daily_spend', threshold: config.observability.dailyBudgetUsd, action: 'Pause non-critical triggers. Alert.' },
   { condition: 'queue_depth', threshold: 50, action: 'Alert. Suggest scaling workers.' },
-  { condition: 'run_duration', threshold: 600000, action: 'Alert to channel. Job not killed.' },
+  { condition: 'run_duration', threshold: config.docker.defaultJobTimeoutMs, action: 'Alert to channel. Job not killed.' },
 ];
+
+// ── Alert Deduplication ──
+// Track which alerts have been posted recently to avoid spamming
+const alertCooldowns = new Map<string, number>();
+const ALERT_COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes between same alert
+
+function shouldFireAlert(key: string): boolean {
+  const lastFired = alertCooldowns.get(key) || 0;
+  if (Date.now() - lastFired < ALERT_COOLDOWN_MS) return false;
+  alertCooldowns.set(key, Date.now());
+  return true;
+}
+
+/** Reset dedup state — exposed for testing only */
+export function resetAlertCooldowns(): void {
+  alertCooldowns.clear();
+}
 
 export function getAlertRules(): AlertRule[] {
   return [...DEFAULT_ALERT_RULES];
@@ -41,34 +58,37 @@ export async function checkAlerts(workspaceId: string): Promise<AlertResult[]> {
     FROM run_history WHERE created_at >= $1 AND workspace_id = $2
   `, [oneHourAgo, workspaceId]);
 
-  if (hourStats && parseInt(hourStats.total, 10) > 0) {
+  if (hourStats && parseInt(hourStats.total, 10) >= 3) {
     const total = parseInt(hourStats.total, 10);
     const failed = parseInt(hourStats.failed, 10);
     const errorRate = failed / total;
-    results.push({
-      triggered: errorRate > 0.10,
-      condition: 'error_rate',
-      value: errorRate,
-      threshold: 0.10,
-      message: `Error rate: ${(errorRate * 100).toFixed(1)}% (${failed}/${total} in last hour)`,
-    });
+    if (errorRate > 0.10 && shouldFireAlert(`error_rate:${Math.floor(Date.now() / ALERT_COOLDOWN_MS)}`)) {
+      results.push({
+        triggered: true,
+        condition: 'error_rate',
+        value: errorRate,
+        threshold: 0.10,
+        message: `${(errorRate * 100).toFixed(0)}% of runs failed in the last hour (${failed} out of ${total} runs)`,
+      });
+    }
   }
 
   // Single run cost
   const expensiveRun = await queryOne<any>(`
-    SELECT id, agent_id, estimated_cost_usd
-    FROM run_history
-    WHERE estimated_cost_usd > $1 AND created_at >= $2 AND workspace_id = $3
-    ORDER BY estimated_cost_usd DESC LIMIT 1
+    SELECT rh.id, rh.agent_id, rh.estimated_cost_usd, rh.model, rh.input_tokens, rh.output_tokens, a.name as agent_name
+    FROM run_history rh JOIN agents a ON rh.agent_id = a.id
+    WHERE rh.estimated_cost_usd > $1 AND rh.created_at >= $2 AND rh.workspace_id = $3
+    ORDER BY rh.estimated_cost_usd DESC LIMIT 1
   `, [5.0, oneHourAgo, workspaceId]);
 
   if (expensiveRun) {
+    const cost = parseFloat(expensiveRun.estimated_cost_usd);
     results.push({
-      triggered: true,
+      triggered: shouldFireAlert(`single_run_cost:${expensiveRun.id}`),
       condition: 'single_run_cost',
-      value: parseFloat(expensiveRun.estimated_cost_usd),
+      value: cost,
       threshold: 5.0,
-      message: `Run ${expensiveRun.id.slice(0, 8)} cost $${parseFloat(expensiveRun.estimated_cost_usd).toFixed(2)}`,
+      message: `*${expensiveRun.agent_name}* had an expensive run: *$${cost.toFixed(2)}* (${expensiveRun.model}, ${expensiveRun.input_tokens.toLocaleString()} in / ${expensiveRun.output_tokens.toLocaleString()} out tokens)`,
     });
   }
 
@@ -80,29 +100,33 @@ export async function checkAlerts(workspaceId: string): Promise<AlertResult[]> {
   `, [today, workspaceId]);
 
   const dailyTotal = parseFloat(dailySpend?.total || '0');
-  results.push({
-    triggered: dailyTotal > config.observability.dailyBudgetUsd,
-    condition: 'daily_spend',
-    value: dailyTotal,
-    threshold: config.observability.dailyBudgetUsd,
-    message: `Daily spend: $${dailyTotal.toFixed(2)} / $${config.observability.dailyBudgetUsd}`,
-  });
+  if (dailyTotal > config.observability.dailyBudgetUsd && shouldFireAlert(`daily_spend:${today}`)) {
+    results.push({
+      triggered: true,
+      condition: 'daily_spend',
+      value: dailyTotal,
+      threshold: config.observability.dailyBudgetUsd,
+      message: `Daily spend has reached *$${dailyTotal.toFixed(2)}* (budget: $${config.observability.dailyBudgetUsd})`,
+    });
+  }
 
   // Long running tasks
+  const durationThreshold = config.docker.defaultJobTimeoutMs;
   const longRun = await queryOne<any>(`
-    SELECT id, agent_id, duration_ms
-    FROM run_history
-    WHERE duration_ms > $1 AND created_at >= $2 AND workspace_id = $3
-    ORDER BY duration_ms DESC LIMIT 1
-  `, [600000, oneHourAgo, workspaceId]);
+    SELECT rh.id, rh.agent_id, rh.duration_ms, a.name as agent_name
+    FROM run_history rh JOIN agents a ON rh.agent_id = a.id
+    WHERE rh.duration_ms > $1 AND rh.created_at >= $2 AND rh.workspace_id = $3
+    ORDER BY rh.duration_ms DESC LIMIT 1
+  `, [durationThreshold, oneHourAgo, workspaceId]);
 
-  if (longRun) {
+  if (longRun && shouldFireAlert(`run_duration:${longRun.id}`)) {
+    const mins = (longRun.duration_ms / 60000).toFixed(1);
     results.push({
       triggered: true,
       condition: 'run_duration',
       value: longRun.duration_ms,
-      threshold: 600000,
-      message: `Run ${longRun.id.slice(0, 8)} took ${(longRun.duration_ms / 1000).toFixed(0)}s`,
+      threshold: durationThreshold,
+      message: `*${longRun.agent_name}* ran for ${mins} minutes (timeout is ${(durationThreshold / 60000).toFixed(0)} min)`,
     });
   }
 
