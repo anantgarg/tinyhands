@@ -150,7 +150,7 @@ export function Sidebar() {
       {/* Header */}
       <div className="flex h-12 items-center justify-between px-4">
         <div className="flex items-center gap-2">
-          <span className="text-lg">✋</span>
+          <img src="https://avatars.slack-edge.com/2026-03-12/10669603251543_4076da95a48800f96b7c_512.png" alt="TinyHands" className="h-7 w-7 rounded-md" />
           <span className="text-[15px] font-extrabold text-warm-text tracking-tight">TinyHands</span>
         </div>
         <button

@@ -5,7 +5,7 @@ export function Login() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-warm-bg p-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-8">
-          <span className="text-5xl">✋</span>
+          <img src="https://avatars.slack-edge.com/2026-03-12/10669603251543_4076da95a48800f96b7c_512.png" alt="TinyHands" className="mx-auto h-16 w-16 rounded-2xl" />
           <h1 className="mt-4 text-[28px] font-extrabold text-warm-text tracking-tight">TinyHands</h1>
           <p className="mt-1 text-warm-text-secondary">AI Agent Platform for Slack</p>
         </div>
