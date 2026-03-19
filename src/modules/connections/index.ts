@@ -190,7 +190,7 @@ export async function getToolAgentUsage(wsId: string): Promise<Array<{ agent_id:
             COALESCE(ct.access_level, 'read-only') AS access_level,
             atc.connection_mode
      FROM agents a
-     CROSS JOIN LATERAL unnest(COALESCE(a.tools, ARRAY[]::text[])) AS t(tool_name)
+     CROSS JOIN LATERAL json_array_elements_text(CASE WHEN a.tools IS NOT NULL AND a.tools != '' THEN a.tools::json ELSE '[]'::json END) AS t(tool_name)
      LEFT JOIN custom_tools ct ON ct.name = t.tool_name AND ct.workspace_id = a.workspace_id
      LEFT JOIN agent_tool_connections atc ON atc.agent_id = a.id AND atc.tool_name = t.tool_name AND atc.workspace_id = a.workspace_id
      WHERE a.workspace_id = $1 AND a.status = 'active'
