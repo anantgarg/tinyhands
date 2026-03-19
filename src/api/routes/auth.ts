@@ -84,7 +84,7 @@ router.get('/slack/callback', async (req: Request, res: Response) => {
     // Get platform role
     const platformRole = await getPlatformRole(workspaceId, userId);
 
-    // Create session
+    // Create session and save before redirecting
     const session = (req as any).session;
     session.user = {
       userId,
@@ -94,8 +94,15 @@ router.get('/slack/callback', async (req: Request, res: Response) => {
       platformRole,
     };
 
-    // Redirect to dashboard
-    res.redirect('/');
+    // Explicitly save session before redirect to avoid race condition
+    session.save((err: any) => {
+      if (err) {
+        logger.error('Session save error', { error: err.message });
+        res.status(500).json({ error: 'Failed to create session' });
+        return;
+      }
+      res.redirect('/');
+    });
   } catch (err: any) {
     logger.error('Slack OAuth callback error', { error: err.message });
     res.status(500).json({ error: 'Authentication failed' });

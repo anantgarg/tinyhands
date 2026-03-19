@@ -101,6 +101,7 @@ describe('Auth Routes', () => {
         platformRole: 'admin',
       },
       destroy: vi.fn((cb: any) => cb()),
+      save: vi.fn((cb: any) => cb()),
     };
 
     app = express();

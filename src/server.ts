@@ -16,6 +16,9 @@ import { v4 as uuid } from 'uuid';
 export function createWebhookServer(): express.Application {
   const app = express();
 
+  // Trust proxy (nginx terminates SSL)
+  app.set('trust proxy', 1);
+
   // Raw body for signature verification (for webhooks)
   app.use(express.json({
     verify: (req: any, _res, buf) => {
@@ -33,8 +36,9 @@ export function createWebhookServer(): express.Application {
     secret: config.server.sessionSecret,
     resave: false,
     saveUninitialized: false,
+    proxy: true,
     cookie: {
-      secure: config.server.nodeEnv === 'production',
+      secure: 'auto',
       httpOnly: true,
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
       sameSite: 'lax',
