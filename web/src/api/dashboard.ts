@@ -88,7 +88,7 @@ export function usePowerUsers(days: number = 7) {
 export function useAgentCreators() {
   return useQuery<AgentCreator[]>({
     queryKey: ['dashboard', 'creators'],
-    queryFn: () => api.get('/dashboard/creators'),
+    queryFn: () => api.get('/dashboard/agent-creators'),
   });
 }
 

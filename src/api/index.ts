@@ -42,5 +42,10 @@ export function createApiRouter(): Router {
   router.use('/skills', requireAuth, skillRoutes);
   router.use('/slack', requireAuth, slackHelperRoutes);
 
+  // Catch-all 404 for API routes (return JSON, not HTML)
+  router.use((_req, res) => {
+    res.status(404).json({ error: 'Not found' });
+  });
+
   return router;
 }
