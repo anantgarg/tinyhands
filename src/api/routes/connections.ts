@@ -22,7 +22,7 @@ router.get('/team', requireAdmin, async (req: Request, res: Response) => {
     const connections = await listTeamConnections(workspaceId);
 
     // Build integration name map
-    let integrationMap: Record<string, string> = {};
+    const integrationMap: Record<string, string> = {};
     try {
       const integrations = getIntegrations();
       for (const int of integrations as any[]) {
@@ -53,7 +53,7 @@ router.get('/personal', async (req: Request, res: Response) => {
     const { workspaceId, userId } = getSessionUser(req);
     const connections = await listPersonalConnectionsForUser(workspaceId, userId);
 
-    let integrationMap: Record<string, string> = {};
+    const integrationMap: Record<string, string> = {};
     try {
       const integrations = getIntegrations();
       for (const int of integrations as any[]) {

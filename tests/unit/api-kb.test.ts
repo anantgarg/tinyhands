@@ -8,7 +8,6 @@ const mockCreateKBEntry = vi.fn();
 const mockApproveKBEntry = vi.fn();
 const mockGetKBEntry = vi.fn();
 const mockDeleteKBEntry = vi.fn();
-const mockListKBEntries = vi.fn();
 const mockSearchKB = vi.fn();
 const mockGetCategories = vi.fn();
 
@@ -17,7 +16,6 @@ vi.mock('../../src/modules/knowledge-base', () => ({
   approveKBEntry: (...args: any[]) => mockApproveKBEntry(...args),
   getKBEntry: (...args: any[]) => mockGetKBEntry(...args),
   deleteKBEntry: (...args: any[]) => mockDeleteKBEntry(...args),
-  listKBEntries: (...args: any[]) => mockListKBEntries(...args),
   searchKB: (...args: any[]) => mockSearchKB(...args),
   getCategories: (...args: any[]) => mockGetCategories(...args),
 }));

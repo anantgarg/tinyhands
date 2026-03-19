@@ -177,7 +177,7 @@ router.get('/integrations', requireAdmin, async (req: Request, res: Response) =>
     const integrations = getIntegrations();
 
     // Check which integrations have active connections
-    let activeIds: Set<string> = new Set();
+    const activeIds: Set<string> = new Set();
     try {
       const { listTeamConnections } = await import('../../modules/connections');
       const connections = await listTeamConnections(workspaceId);

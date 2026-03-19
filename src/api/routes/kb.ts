@@ -3,7 +3,7 @@ import { getSessionUser } from '../middleware/auth';
 import { requireAdmin } from '../middleware/admin';
 import {
   createKBEntry, approveKBEntry, getKBEntry, deleteKBEntry,
-  listKBEntries, searchKB, getCategories,
+  searchKB, getCategories,
 } from '../../modules/knowledge-base';
 import {
   listSources, createSource, updateSource, deleteSource,
