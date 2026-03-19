@@ -138,15 +138,15 @@ export function Agents() {
                         </Badge>
                       </div>
                       <p className="text-sm text-warm-text-secondary line-clamp-1 mb-2">
-                        {agent.system_prompt?.split('\n')[0] ?? 'No description'}
+                        {agent.systemPrompt?.split('\n')[0] ?? 'No description'}
                       </p>
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-warm-text-secondary">
                         <span>Model: {agent.model}</span>
                         <span>Tools: {agent.tools?.length ?? 0}</span>
                         <span>Channels: {agent.channels?.length ?? 0}</span>
-                        {agent.memory_enabled && <Badge variant="default" className="text-[10px] px-1.5 py-0">Memory</Badge>}
-                        <span>by {agent.created_by}</span>
-                        <span>{formatDistanceToNow(new Date(agent.created_at), { addSuffix: true })}</span>
+                        {agent.memoryEnabled && <Badge variant="default" className="text-[10px] px-1.5 py-0">Memory</Badge>}
+                        <span>by {agent.createdBy}</span>
+                        <span>{formatDistanceToNow(new Date(agent.createdAt), { addSuffix: true })}</span>
                       </div>
                     </div>
                   </div>

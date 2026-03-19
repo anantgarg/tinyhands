@@ -39,11 +39,11 @@ export function AgentCreate() {
       onSuccess: (result) => {
         setName(result.name);
         setAvatar(result.avatar);
-        setSystemPrompt(result.system_prompt);
+        setSystemPrompt(result.systemPrompt);
         setModel(result.model);
         setSelectedTools(result.tools);
-        setRespondTo(result.respond_to);
-        setMemoryEnabled(result.memory_enabled);
+        setRespondTo(result.respondTo);
+        setMemoryEnabled(result.memoryEnabled);
         toast({ title: 'Agent configuration generated', variant: 'success' });
       },
       onError: (err) => {
@@ -61,15 +61,15 @@ export function AgentCreate() {
       {
         name,
         avatar: avatar || undefined,
-        system_prompt: systemPrompt,
+        systemPrompt,
         model,
         tools: selectedTools,
         channels: channels.split(',').map((c) => c.trim()).filter(Boolean),
-        memory_enabled: memoryEnabled,
-        max_turns: Number(maxTurns),
-        respond_to: respondTo,
-        default_access: defaultAccess,
-        write_policy: writePolicy,
+        memoryEnabled,
+        maxTurns: Number(maxTurns),
+        respondTo: respondTo,
+        defaultAccess,
+        writePolicy,
       },
       {
         onSuccess: (agent) => {

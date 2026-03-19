@@ -35,27 +35,9 @@ import {
   useApproveUpgrade,
   useDenyUpgrade,
 } from '@/api/agents';
+import type { Agent as AgentData } from '@/api/agents';
 import { useTriggers } from '@/api/triggers';
 import { toast } from '@/components/ui/use-toast';
-
-interface AgentData {
-  id: string;
-  name: string;
-  avatar: string;
-  system_prompt: string;
-  model: string;
-  tools: string[];
-  channels: string[];
-  memory_enabled: boolean;
-  status: string;
-  max_turns: number;
-  respond_to: string;
-  default_access: string;
-  write_policy: string;
-  created_by: string;
-  created_at: string;
-  updated_at: string;
-}
 
 function formatCost(cost: number): string {
   return `$${cost.toFixed(4)}`;
@@ -185,7 +167,7 @@ function ConfigTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
         </CardHeader>
         <CardContent>
           <pre className="max-h-[400px] overflow-y-auto whitespace-pre-wrap text-sm bg-warm-sidebar rounded-btn p-4 font-mono">
-            {agent.system_prompt ?? ''}
+            {agent.systemPrompt ?? ''}
           </pre>
         </CardContent>
       </Card>
@@ -208,7 +190,7 @@ function ConfigTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                     <div>
                       <p className="text-sm font-medium">Version {v.version}</p>
                       <p className="text-xs text-warm-text-secondary">
-                        by {v.changed_by} - {format(new Date(v.changed_at), 'MMM d, yyyy HH:mm')}
+                        by {v.changedBy} - {format(new Date(v.changedAt), 'MMM d, yyyy HH:mm')}
                       </p>
                       <p className="text-xs text-warm-text-secondary mt-1">Model: {v.model}</p>
                     </div>
@@ -235,15 +217,15 @@ function ConfigTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
             </div>
             <div>
               <Label className="text-warm-text-secondary">Max Turns</Label>
-              <p className="text-sm mt-1">{agent.max_turns}</p>
+              <p className="text-sm mt-1">{agent.maxTurns}</p>
             </div>
             <div>
               <Label className="text-warm-text-secondary">Respond To</Label>
-              <p className="text-sm mt-1">{agent.respond_to}</p>
+              <p className="text-sm mt-1">{agent.respondTo}</p>
             </div>
             <div>
               <Label className="text-warm-text-secondary">Memory</Label>
-              <p className="text-sm mt-1">{agent.memory_enabled ? 'Enabled' : 'Disabled'}</p>
+              <p className="text-sm mt-1">{agent.memoryEnabled ? 'Enabled' : 'Disabled'}</p>
             </div>
             <div className="col-span-2">
               <Label className="text-warm-text-secondary">Channels</Label>
@@ -307,18 +289,18 @@ function RunsTab({ agentId }: { agentId: string }) {
           <TableBody>
             {runs.map((run) => (
               <TableRow key={run.id}>
-                <TableCell className="font-mono text-xs">{run.trace_id?.slice(0, 12)}</TableCell>
-                <TableCell>{run.user_id}</TableCell>
+                <TableCell className="font-mono text-xs">{run.traceId?.slice(0, 12)}</TableCell>
+                <TableCell>{run.userId}</TableCell>
                 <TableCell>
                   <Badge variant={run.status === 'success' ? 'success' : run.status === 'error' ? 'danger' : 'secondary'}>
                     {run.status}
                   </Badge>
                 </TableCell>
                 <TableCell className="text-warm-text-secondary">{run.model}</TableCell>
-                <TableCell>{formatDuration(run.duration_ms)}</TableCell>
+                <TableCell>{formatDuration(run.durationMs)}</TableCell>
                 <TableCell>{formatCost(run.cost)}</TableCell>
                 <TableCell className="text-warm-text-secondary">
-                  {formatDistanceToNow(new Date(run.created_at), { addSuffix: true })}
+                  {formatDistanceToNow(new Date(run.createdAt), { addSuffix: true })}
                 </TableCell>
               </TableRow>
             ))}
@@ -418,7 +400,7 @@ function MemoryTab({ agentId }: { agentId: string }) {
                   </TableCell>
                   <TableCell>{mem.relevance.toFixed(2)}</TableCell>
                   <TableCell className="text-warm-text-secondary">
-                    {formatDistanceToNow(new Date(mem.created_at), { addSuffix: true })}
+                    {formatDistanceToNow(new Date(mem.createdAt), { addSuffix: true })}
                   </TableCell>
                   <TableCell>
                     <Button
@@ -546,12 +528,12 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
   const approveUpgrade = useApproveUpgrade();
   const denyUpgrade = useDenyUpgrade();
 
-  const [defaultAccess, setDefaultAccess] = useState(agent.default_access ?? 'viewer');
-  const [writePolicy, setWritePolicy] = useState(agent.write_policy ?? 'allow');
+  const [defaultAccess, setDefaultAccess] = useState(agent.defaultAccess ?? 'viewer');
+  const [writePolicy, setWritePolicy] = useState(agent.writePolicy ?? 'allow');
 
   const handleSaveAccess = () => {
     updateAccess.mutate(
-      { agentId, default_access: defaultAccess, write_policy: writePolicy },
+      { agentId, defaultAccess, writePolicy },
       { onSuccess: () => toast({ title: 'Access settings updated', variant: 'success' }) },
     );
   };
@@ -614,13 +596,13 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
               </TableHeader>
               <TableBody>
                 {(roles ?? []).map((role) => (
-                  <TableRow key={role.user_id}>
-                    <TableCell>{role.display_name}</TableCell>
+                  <TableRow key={role.userId}>
+                    <TableCell>{role.displayName}</TableCell>
                     <TableCell>
                       <Select
                         value={role.role}
                         onValueChange={(newRole) =>
-                          setRole.mutate({ agentId, userId: role.user_id, role: newRole })
+                          setRole.mutate({ agentId, userId: role.userId, role: newRole })
                         }
                       >
                         <SelectTrigger className="w-[120px]">
@@ -638,7 +620,7 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                         variant="ghost"
                         size="icon"
                         className="h-8 w-8"
-                        onClick={() => removeRole.mutate({ agentId, userId: role.user_id })}
+                        onClick={() => removeRole.mutate({ agentId, userId: role.userId })}
                       >
                         <X className="h-4 w-4" />
                       </Button>
@@ -677,7 +659,7 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
               <TableBody>
                 {(upgradeRequests ?? []).map((req) => (
                   <TableRow key={req.id}>
-                    <TableCell>{req.display_name}</TableCell>
+                    <TableCell>{req.displayName}</TableCell>
                     <TableCell className="max-w-[200px] truncate">{req.reason}</TableCell>
                     <TableCell>
                       <Badge variant={req.status === 'pending' ? 'warning' : req.status === 'approved' ? 'success' : 'danger'}>
@@ -685,7 +667,7 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-warm-text-secondary">
-                      {formatDistanceToNow(new Date(req.created_at), { addSuffix: true })}
+                      {formatDistanceToNow(new Date(req.createdAt), { addSuffix: true })}
                     </TableCell>
                     <TableCell>
                       {req.status === 'pending' && (

@@ -8,6 +8,20 @@ class ApiError extends Error {
   }
 }
 
+function snakeToCamel(str: string): string {
+  return str.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
+}
+
+function transformKeys(obj: unknown): unknown {
+  if (Array.isArray(obj)) return obj.map(transformKeys);
+  if (obj !== null && typeof obj === 'object' && !(obj instanceof Date)) {
+    return Object.fromEntries(
+      Object.entries(obj as Record<string, unknown>).map(([k, v]) => [snakeToCamel(k), transformKeys(v)])
+    );
+  }
+  return obj;
+}
+
 async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   const url = `/api/v1${path.startsWith('/') ? path : `/${path}`}`;
   const headers: Record<string, string> = {};
@@ -36,7 +50,8 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
   if (res.status === 204) return undefined as T;
 
-  return res.json() as Promise<T>;
+  const json = await res.json();
+  return transformKeys(json) as T;
 }
 
 export const api = {

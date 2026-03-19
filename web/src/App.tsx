@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useAuthStore } from '@/store/auth';
 import { Shell } from '@/components/layout/Shell';
+import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
@@ -84,7 +85,9 @@ export function App() {
               path="/*"
               element={
                 <RequireAuth>
-                  <Shell />
+                  <ErrorBoundary>
+                    <Shell />
+                  </ErrorBoundary>
                 </RequireAuth>
               }
             >

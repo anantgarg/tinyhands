@@ -26,9 +26,9 @@ interface Template {
   description: string;
   model: string;
   tools: string[];
-  system_prompt: string;
-  respond_to: string;
-  memory_enabled: boolean;
+  systemPrompt: string;
+  respondTo: string;
+  memoryEnabled: boolean;
 }
 
 const templates: Template[] = [
@@ -40,9 +40,9 @@ const templates: Template[] = [
     description: 'Handles customer inquiries using knowledge base and creates tickets',
     model: 'claude-sonnet-4-20250514',
     tools: ['kb_search', 'zendesk'],
-    system_prompt: 'You are a helpful customer support agent. Use the knowledge base to answer questions and create tickets when issues need escalation.',
-    respond_to: 'all',
-    memory_enabled: true,
+    systemPrompt: 'You are a helpful customer support agent. Use the knowledge base to answer questions and create tickets when issues need escalation.',
+    respondTo: 'all',
+    memoryEnabled: true,
   },
   {
     id: 'code-reviewer',
@@ -52,9 +52,9 @@ const templates: Template[] = [
     description: 'Reviews pull requests and provides code feedback',
     model: 'claude-sonnet-4-20250514',
     tools: ['linear'],
-    system_prompt: 'You are a code review assistant. Review code changes, provide constructive feedback, and suggest improvements.',
-    respond_to: 'mentions',
-    memory_enabled: false,
+    systemPrompt: 'You are a code review assistant. Review code changes, provide constructive feedback, and suggest improvements.',
+    respondTo: 'mentions',
+    memoryEnabled: false,
   },
   {
     id: 'research-analyst',
@@ -64,9 +64,9 @@ const templates: Template[] = [
     description: 'Conducts web research and summarizes findings',
     model: 'claude-sonnet-4-20250514',
     tools: ['serpapi'],
-    system_prompt: 'You are a research analyst. Search the web, gather information, and provide well-structured summaries with citations.',
-    respond_to: 'mentions',
-    memory_enabled: true,
+    systemPrompt: 'You are a research analyst. Search the web, gather information, and provide well-structured summaries with citations.',
+    respondTo: 'mentions',
+    memoryEnabled: true,
   },
   {
     id: 'sales-assistant',
@@ -76,9 +76,9 @@ const templates: Template[] = [
     description: 'Helps with CRM updates and sales pipeline management',
     model: 'claude-sonnet-4-20250514',
     tools: ['hubspot'],
-    system_prompt: 'You are a sales assistant. Help the team manage contacts, deals, and pipeline activities in HubSpot.',
-    respond_to: 'all',
-    memory_enabled: true,
+    systemPrompt: 'You are a sales assistant. Help the team manage contacts, deals, and pipeline activities in HubSpot.',
+    respondTo: 'all',
+    memoryEnabled: true,
   },
   {
     id: 'data-analyst',
@@ -88,9 +88,9 @@ const templates: Template[] = [
     description: 'Analyzes product analytics and generates reports',
     model: 'claude-sonnet-4-20250514',
     tools: ['posthog'],
-    system_prompt: 'You are a data analyst. Query product analytics, identify trends, and create clear reports with actionable insights.',
-    respond_to: 'mentions',
-    memory_enabled: false,
+    systemPrompt: 'You are a data analyst. Query product analytics, identify trends, and create clear reports with actionable insights.',
+    respondTo: 'mentions',
+    memoryEnabled: false,
   },
   {
     id: 'onboarding-buddy',
@@ -100,9 +100,9 @@ const templates: Template[] = [
     description: 'Guides new team members through onboarding',
     model: 'claude-sonnet-4-20250514',
     tools: ['kb_search'],
-    system_prompt: 'You are a friendly onboarding buddy. Help new team members find information, answer questions about processes, and make them feel welcome.',
-    respond_to: 'all',
-    memory_enabled: true,
+    systemPrompt: 'You are a friendly onboarding buddy. Help new team members find information, answer questions about processes, and make them feel welcome.',
+    respondTo: 'all',
+    memoryEnabled: true,
   },
 ];
 
@@ -123,12 +123,12 @@ export function AgentTemplates() {
       {
         name: selectedTemplate.name,
         avatar: selectedTemplate.avatar,
-        system_prompt: selectedTemplate.system_prompt,
+        systemPrompt: selectedTemplate.systemPrompt,
         model: selectedTemplate.model,
         tools: selectedTemplate.tools,
         channels: channels.split(',').map((c) => c.trim()).filter(Boolean),
-        memory_enabled: selectedTemplate.memory_enabled,
-        respond_to: selectedTemplate.respond_to,
+        memoryEnabled: selectedTemplate.memoryEnabled,
+        respondTo: selectedTemplate.respondTo,
       },
       {
         onSuccess: () => {
@@ -206,8 +206,8 @@ export function AgentTemplates() {
             <div className="text-sm text-warm-text-secondary">
               <p><strong>Model:</strong> {selectedTemplate?.model}</p>
               <p><strong>Tools:</strong> {selectedTemplate?.tools.join(', ') || 'None'}</p>
-              <p><strong>Memory:</strong> {selectedTemplate?.memory_enabled ? 'Enabled' : 'Disabled'}</p>
-              <p><strong>Respond to:</strong> {selectedTemplate?.respond_to}</p>
+              <p><strong>Memory:</strong> {selectedTemplate?.memoryEnabled ? 'Enabled' : 'Disabled'}</p>
+              <p><strong>Respond to:</strong> {selectedTemplate?.respondTo}</p>
             </div>
           </div>
           <DialogFooter>

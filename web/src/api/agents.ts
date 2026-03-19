@@ -1,37 +1,37 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from './client';
 
-interface Agent {
+export interface Agent {
   id: string;
   name: string;
   avatar: string;
-  system_prompt: string;
+  systemPrompt: string;
   model: string;
   tools: string[];
   channels: string[];
-  memory_enabled: boolean;
+  memoryEnabled: boolean;
   status: string;
-  max_turns: number;
-  respond_to: string;
-  default_access: string;
-  write_policy: string;
-  created_by: string;
-  created_at: string;
-  updated_at: string;
+  maxTurns: number;
+  respondTo: string;
+  defaultAccess: string;
+  writePolicy: string;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
 }
 
 interface CreateAgentPayload {
   name: string;
   avatar?: string;
-  system_prompt: string;
+  systemPrompt: string;
   model?: string;
   tools?: string[];
   channels?: string[];
-  memory_enabled?: boolean;
-  max_turns?: number;
-  respond_to?: string;
-  default_access?: string;
-  write_policy?: string;
+  memoryEnabled?: boolean;
+  maxTurns?: number;
+  respondTo?: string;
+  defaultAccess?: string;
+  writePolicy?: string;
 }
 
 interface UpdateAgentPayload extends Partial<CreateAgentPayload> {
@@ -40,50 +40,50 @@ interface UpdateAgentPayload extends Partial<CreateAgentPayload> {
 
 interface AgentVersion {
   version: number;
-  system_prompt: string;
+  systemPrompt: string;
   model: string;
   tools: string[];
-  changed_by: string;
-  changed_at: string;
+  changedBy: string;
+  changedAt: string;
 }
 
 interface Run {
   id: string;
-  agent_id: string;
-  trace_id: string;
-  user_id: string;
+  agentId: string;
+  traceId: string;
+  userId: string;
   status: string;
   model: string;
-  input_tokens: number;
-  output_tokens: number;
+  inputTokens: number;
+  outputTokens: number;
   cost: number;
-  duration_ms: number;
+  durationMs: number;
   error: string | null;
-  created_at: string;
+  createdAt: string;
 }
 
 interface Memory {
   id: string;
-  agent_id: string;
+  agentId: string;
   fact: string;
   category: string;
   relevance: number;
-  created_at: string;
+  createdAt: string;
 }
 
 interface AgentRole {
-  user_id: string;
-  display_name: string;
+  userId: string;
+  displayName: string;
   role: 'owner' | 'member' | 'viewer';
 }
 
 interface UpgradeRequest {
   id: string;
-  user_id: string;
-  display_name: string;
+  userId: string;
+  displayName: string;
   reason: string;
   status: string;
-  created_at: string;
+  createdAt: string;
 }
 
 interface RunParams {
@@ -95,11 +95,11 @@ interface RunParams {
 interface AnalyzeGoalResult {
   name: string;
   avatar: string;
-  system_prompt: string;
+  systemPrompt: string;
   model: string;
   tools: string[];
-  respond_to: string;
-  memory_enabled: boolean;
+  respondTo: string;
+  memoryEnabled: boolean;
 }
 
 export function useAgents() {
@@ -251,8 +251,8 @@ export function useRemoveAgentRole() {
 export function useUpdateAgentAccess() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ agentId, default_access, write_policy }: { agentId: string; default_access?: string; write_policy?: string }) =>
-      api.patch(`/agents/${agentId}/access`, { default_access, write_policy }),
+    mutationFn: ({ agentId, defaultAccess, writePolicy }: { agentId: string; defaultAccess?: string; writePolicy?: string }) =>
+      api.patch(`/agents/${agentId}/access`, { default_access: defaultAccess, write_policy: writePolicy }),
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: ['agents', variables.agentId] });
     },
