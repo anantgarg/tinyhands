@@ -1,11 +1,12 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Send, X, ChevronDown, Sparkles, Command } from 'lucide-react';
+import { Send, X, ChevronDown, Sparkles, Command, Plus, Clock, Maximize2, Minimize2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { renderEmoji } from '@/lib/emoji';
 import { useChatStore, generateMessageId } from '@/store/chat';
 import { useAgents, useUpdateAgent } from '@/api/agents';
 import { api } from '@/api/client';
+import { formatDistanceToNow } from 'date-fns';
 
 interface ChatResponse {
   response: string;
@@ -51,15 +52,22 @@ export function FloatingChat() {
   const location = useLocation();
   const {
     isOpen,
+    isExpanded,
     messages,
     selectedAgentId,
     isLoading,
     toggle,
     close,
+    toggleExpand,
     setSelectedAgentId,
     addMessage,
     setLoading,
     clearMessages,
+    newConversation,
+    showHistory,
+    toggleHistory,
+    conversations,
+    loadConversation,
   } = useChatStore();
 
   const [inputValue, setInputValue] = useState('');
@@ -127,6 +135,20 @@ export function FloatingChat() {
 
     try {
       const agentId = selectedAgentId || pageAgentId;
+
+      // Don't trigger agent analysis for simple greetings
+      const greetings = ['hi', 'hello', 'hey', 'sup', 'howdy', 'hola', 'yo'];
+      if (agentId && greetings.includes(trimmed.toLowerCase())) {
+        const agentName = agents?.find(a => a.id === agentId)?.name || 'this agent';
+        addMessage({
+          id: generateMessageId(),
+          role: 'assistant',
+          content: `Hi! I can help you update "${agentName}". Try things like:\n\u2022 "Respond to all messages"\n\u2022 "Add the Linear tool"\n\u2022 "Change the model to Opus"\n\u2022 "Update the instructions to focus on customer support"`,
+        });
+        setLoading(false);
+        return;
+      }
+
       const result = await api.post<ChatResponse>('/chat', {
         message: trimmed,
         agentId: agentId || undefined,
@@ -158,6 +180,7 @@ export function FloatingChat() {
     pageContext,
     addMessage,
     setLoading,
+    agents,
   ]);
 
   const handleApplyChanges = useCallback(
@@ -239,8 +262,11 @@ export function FloatingChat() {
   return (
     <div
       ref={panelRef}
-      className="fixed bottom-6 left-1/2 z-50 flex w-full max-w-xl -translate-x-1/2 flex-col rounded-2xl border border-[#E0DED9] bg-white px-4 shadow-lg"
-      style={{ maxHeight: '500px' }}
+      className={cn(
+        'fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 flex-col rounded-2xl border border-[#E0DED9] bg-white px-4 shadow-lg transition-all',
+        isExpanded ? 'w-[700px]' : 'w-full max-w-xl',
+      )}
+      style={{ maxHeight: isExpanded ? '600px' : '500px' }}
     >
       {/* Header */}
       <div className="flex items-center justify-between border-b border-[#E0DED9] px-1 py-3">
@@ -248,9 +274,36 @@ export function FloatingChat() {
           <Sparkles className="h-4 w-4 text-brand" />
           <span className="text-sm font-semibold text-warm-text">AI Assistant</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
+          {/* New Chat button */}
+          <button
+            onClick={newConversation}
+            className="flex h-6 w-6 items-center justify-center rounded-md text-warm-text-secondary hover:bg-warm-bg hover:text-warm-text transition-colors"
+            title="New Chat"
+          >
+            <Plus className="h-3.5 w-3.5" />
+          </button>
+          {/* History button */}
+          <button
+            onClick={toggleHistory}
+            className={cn(
+              'flex h-6 w-6 items-center justify-center rounded-md transition-colors',
+              showHistory ? 'bg-warm-bg text-brand' : 'text-warm-text-secondary hover:bg-warm-bg hover:text-warm-text',
+            )}
+            title="History"
+          >
+            <Clock className="h-3.5 w-3.5" />
+          </button>
+          {/* Expand button */}
+          <button
+            onClick={toggleExpand}
+            className="flex h-6 w-6 items-center justify-center rounded-md text-warm-text-secondary hover:bg-warm-bg hover:text-warm-text transition-colors"
+            title={isExpanded ? 'Minimize' : 'Expand'}
+          >
+            {isExpanded ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
+          </button>
           {/* Agent selector */}
-          <div className="relative">
+          <div className="relative ml-1">
             <button
               onClick={() => setAgentDropdownOpen(!agentDropdownOpen)}
               className="flex items-center gap-1.5 rounded-lg border border-[#E0DED9] px-2.5 py-1 text-xs text-warm-text-secondary hover:bg-warm-bg transition-colors"
@@ -307,9 +360,38 @@ export function FloatingChat() {
         </div>
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-1 py-3 space-y-3" style={{ maxHeight: '360px', minHeight: '120px' }}>
-        {messages.length === 0 && (
+      {/* Messages / History */}
+      <div className="relative flex-1 overflow-y-auto px-1 py-3 space-y-3" style={{ maxHeight: isExpanded ? '460px' : '360px', minHeight: '120px' }}>
+        {/* History overlay */}
+        {showHistory && (
+          <div className="absolute inset-0 z-10 bg-white rounded-lg overflow-y-auto p-3">
+            <p className="text-xs font-semibold text-warm-text-secondary uppercase tracking-wider mb-3">Conversation History</p>
+            {conversations.length === 0 ? (
+              <p className="text-xs text-warm-text-secondary/60 text-center py-6">
+                No previous conversations
+              </p>
+            ) : (
+              <div className="space-y-1">
+                {conversations.map((conv) => (
+                  <button
+                    key={conv.id}
+                    onClick={() => loadConversation(conv.id)}
+                    className="w-full text-left rounded-lg border border-[#E0DED9] p-2.5 hover:bg-warm-bg transition-colors"
+                  >
+                    <p className="text-sm font-medium text-warm-text truncate">{conv.title}</p>
+                    <p className="text-[11px] text-warm-text-secondary mt-0.5">
+                      {conv.messages.length} messages
+                      {' \u00b7 '}
+                      {formatDistanceToNow(new Date(conv.createdAt), { addSuffix: true })}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {messages.length === 0 && !showHistory && (
           <div className="flex items-center justify-center py-8">
             <p className="text-xs text-warm-text-secondary/60">
               {currentAgent

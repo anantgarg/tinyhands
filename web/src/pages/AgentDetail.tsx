@@ -290,7 +290,6 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
   const handleAddSelectedTools = () => {
     const tools = Array.from(selectedToolsToAdd);
     if (tools.length === 0) return;
-    // Add them one by one
     let completed = 0;
     for (const tool of tools) {
       addAgentTool.mutate(
@@ -319,12 +318,6 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
     acc[group].push(tool);
     return acc;
   }, {});
-
-  const getToolType = (toolName: string): string => {
-    const meta = (availableTools ?? []).find((t) => t.name === toolName);
-    if (!meta) return 'Built-in';
-    return meta.source === 'integration' ? 'Integration' : meta.source === 'custom' ? 'Custom' : 'Built-in';
-  };
 
   const getToolDisplayName = (toolName: string): string => {
     const meta = (availableTools ?? []).find((t) => t.name === toolName);
@@ -409,12 +402,6 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
               </Select>
             </div>
 
-            {/* Activation */}
-            <div>
-              <Label className="text-warm-text-secondary text-xs">Activation</Label>
-              <p className="text-sm mt-1">{activationLabel(agent)}</p>
-            </div>
-
             {/* Memory */}
             <div>
               <Label className="text-warm-text-secondary text-xs">Memory</Label>
@@ -443,25 +430,6 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
               </Select>
             </div>
 
-            {/* Write Safety */}
-            <div>
-              <Label className="text-warm-text-secondary text-xs">
-                Write Safety
-                <InfoTooltip text="Automatic = agent writes freely. Ask User = agent asks the invoking user. Ask Admin = agent asks an agent owner to approve writes." />
-              </Label>
-              <Select
-                value={configDraft.writePolicy}
-                onValueChange={(v) => updateConfig({ writePolicy: v })}
-              >
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="auto">Automatic</SelectItem>
-                  <SelectItem value="confirm">Ask User</SelectItem>
-                  <SelectItem value="admin_confirm">Ask Admin</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
             {/* Access */}
             <div>
               <Label className="text-warm-text-secondary text-xs">
@@ -484,15 +452,32 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
         </CardContent>
       </Card>
 
-      {/* Section 3: Tools */}
+      {/* Section 3: Tools & Actions */}
       <Card>
         <CardHeader className="flex-row items-center justify-between">
-          <CardTitle className="text-base">Tools ({currentTools.length})</CardTitle>
+          <CardTitle className="text-base">Tools & Actions</CardTitle>
           <Button variant="ghost" size="sm" onClick={() => { setShowAddTool(true); setSelectedToolsToAdd(new Set()); }}>
             <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Tool
           </Button>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-6">
+          {/* Action Approval setting */}
+          <div>
+            <Label className="text-warm-text-secondary text-xs">
+              Action Approval
+              <InfoTooltip text="Controls whether the agent needs approval before making changes. Automatic = no approval needed. Ask User = asks the person who triggered the agent. Ask Owner/Admins = asks an agent owner or admin to approve." />
+            </Label>
+            <Select value={configDraft.writePolicy} onValueChange={(v) => updateConfig({ writePolicy: v })}>
+              <SelectTrigger className="mt-1 max-w-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="auto">Automatic</SelectItem>
+                <SelectItem value="confirm">Ask User First</SelectItem>
+                <SelectItem value="admin_confirm">Ask Owner/Admins</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Tools table */}
           {currentTools.length === 0 ? (
             <p className="text-sm text-warm-text-secondary">No tools configured</p>
           ) : (
@@ -501,7 +486,6 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
-                    <TableHead>Type</TableHead>
                     <TableHead className="w-10"></TableHead>
                   </TableRow>
                 </TableHeader>
@@ -509,9 +493,6 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
                   {currentTools.map((tool) => (
                     <TableRow key={tool}>
                       <TableCell className="font-medium">{getToolDisplayName(tool)}</TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">{getToolType(tool)}</Badge>
-                      </TableCell>
                       <TableCell>
                         <Button
                           variant="ghost"
@@ -528,6 +509,10 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
               </Table>
             </div>
           )}
+
+          <p className="text-xs text-warm-text-secondary">
+            Tools use team credentials by default. Configure per-tool credentials in <Link to="/connections" className="text-brand hover:underline">Connections</Link>.
+          </p>
         </CardContent>
       </Card>
 

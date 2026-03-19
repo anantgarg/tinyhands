@@ -427,35 +427,67 @@ describe('Trigger Routes', () => {
   });
 
   describe('GET /triggers', () => {
-    it('lists all triggers when no type filter', async () => {
-      mockGetActiveTriggersByType.mockResolvedValue([]);
+    it('lists all triggers with JOIN query when no type filter', async () => {
+      const rows = [
+        {
+          id: 't1', agent_id: 'a1', agent_name: 'Bot1', agent_avatar: '',
+          trigger_type: 'webhook', config_json: '{}', status: 'active',
+          last_triggered_at: null, last_fired_at: null, created_at: '2025-01-01',
+        },
+      ];
+      mockQuery.mockResolvedValueOnce(rows);
 
       const res = await makeRequest(app, 'GET', '/triggers');
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual([]);
-      // Called for each trigger type
-      expect(mockGetActiveTriggersByType).toHaveBeenCalledTimes(6);
+      expect(res.body).toEqual([{
+        id: 't1', agentId: 'a1', agentName: 'Bot1', agentAvatar: '',
+        type: 'webhook', config: {}, enabled: true,
+        lastTriggeredAt: null, createdAt: '2025-01-01',
+      }]);
+      expect(mockQuery).toHaveBeenCalledTimes(1);
+      expect(mockQuery.mock.calls[0][0]).toContain('LEFT JOIN agents');
     });
 
     it('filters by type when provided', async () => {
-      const triggers = [{ id: 't1', type: 'webhook' }];
-      mockGetActiveTriggersByType.mockResolvedValueOnce(triggers);
+      mockQuery.mockResolvedValueOnce([]);
 
       const res = await makeRequest(app, 'GET', '/triggers?type=webhook');
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual(triggers);
-      expect(mockGetActiveTriggersByType).toHaveBeenCalledWith('W123', 'webhook');
+      expect(res.body).toEqual([]);
+      expect(mockQuery).toHaveBeenCalledTimes(1);
+      const sql = mockQuery.mock.calls[0][0];
+      expect(sql).toContain('trigger_type = $2');
+      expect(mockQuery.mock.calls[0][1]).toEqual(['W123', 'webhook']);
     });
 
     it('returns 500 on error', async () => {
-      mockGetActiveTriggersByType.mockRejectedValueOnce(new Error('DB error'));
+      mockQuery.mockRejectedValueOnce(new Error('DB error'));
 
-      const res = await makeRequest(app, 'GET', '/triggers?type=webhook');
+      const res = await makeRequest(app, 'GET', '/triggers');
 
       expect(res.status).toBe(500);
       expect(res.body).toEqual({ error: 'Failed to list triggers' });
+    });
+
+    it('maps disabled triggers correctly', async () => {
+      const rows = [
+        {
+          id: 't2', agent_id: 'a2', agent_name: null, agent_avatar: null,
+          trigger_type: 'schedule', config_json: '{"cron":"0 9 * * 1-5"}', status: 'paused',
+          last_triggered_at: null, last_fired_at: '2025-06-01T12:00:00Z', created_at: '2025-01-01',
+        },
+      ];
+      mockQuery.mockResolvedValueOnce(rows);
+
+      const res = await makeRequest(app, 'GET', '/triggers');
+
+      expect(res.status).toBe(200);
+      expect(res.body[0].enabled).toBe(false);
+      expect(res.body[0].agentName).toBe('Unknown');
+      expect(res.body[0].config).toEqual({ cron: '0 9 * * 1-5' });
+      expect(res.body[0].lastTriggeredAt).toBe('2025-06-01T12:00:00Z');
     });
   });
 
@@ -495,6 +527,20 @@ describe('Trigger Routes', () => {
       expect(res.body).toEqual(trigger);
     });
 
+    it('creates trigger with type field (frontend compat)', async () => {
+      const trigger = { id: 't1', type: 'schedule' };
+      mockCreateTrigger.mockResolvedValueOnce(trigger);
+
+      const res = await makeRequest(app, 'POST', '/triggers', {
+        agentId: 'a1',
+        type: 'schedule',
+        config: { cron: '0 9 * * 1-5' },
+      });
+
+      expect(res.status).toBe(201);
+      expect(res.body).toEqual(trigger);
+    });
+
     it('returns 400 when required fields missing', async () => {
       const res = await makeRequest(app, 'POST', '/triggers', {});
 
@@ -512,6 +558,37 @@ describe('Trigger Routes', () => {
 
       expect(res.status).toBe(400);
       expect(res.body).toEqual({ error: 'Invalid type' });
+    });
+  });
+
+  describe('PATCH /triggers/:id', () => {
+    it('enables trigger', async () => {
+      mockResumeTrigger.mockResolvedValueOnce(undefined);
+
+      const res = await makeRequest(app, 'PATCH', '/triggers/t1', { enabled: true });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ ok: true });
+      expect(mockResumeTrigger).toHaveBeenCalledWith('W123', 't1', 'U123');
+    });
+
+    it('disables trigger', async () => {
+      mockPauseTrigger.mockResolvedValueOnce(undefined);
+
+      const res = await makeRequest(app, 'PATCH', '/triggers/t1', { enabled: false });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ ok: true });
+      expect(mockPauseTrigger).toHaveBeenCalledWith('W123', 't1', 'U123');
+    });
+
+    it('returns 400 on error', async () => {
+      mockResumeTrigger.mockRejectedValueOnce(new Error('Not found'));
+
+      const res = await makeRequest(app, 'PATCH', '/triggers/t1', { enabled: true });
+
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({ error: 'Not found' });
     });
   });
 
@@ -1155,7 +1232,7 @@ describe('Observability Routes', () => {
   describe('GET /observability/error-log', () => {
     it('returns failed runs with resolved display names (admin)', async () => {
       const rows = [
-        { id: 'r1', agent_id: 'a1', agent_name: 'Bot1', avatar_emoji: '🤖', slack_user_id: 'U1', status: 'failed', output: 'Error occurred' },
+        { id: 'r1', agent_id: 'a1', agent_name: 'Bot1', avatar_emoji: '\uD83E\uDD16', slack_user_id: 'U1', status: 'failed', output: 'Error occurred' },
       ];
       mockQuery.mockResolvedValueOnce(rows);
       mockResolveUserNames.mockResolvedValueOnce({ U1: 'Alice' });
