@@ -9199,19 +9199,19 @@ describe('Commands Module', () => {
       if (!app.handlers.action['connect_personal_oauth']) return;
 
       const ack = vi.fn();
-      const action = { value: 'google_drive' };
+      const action = { value: 'test-integration' };
       const body = { user: { id: 'U001' }, team: { id: 'W_TEST_123' }, channel: { id: 'C123' } };
 
       await app.handlers.action['connect_personal_oauth']({ action, ack, body });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockGetOAuthUrl).toHaveBeenCalledWith('google_drive', 'W_TEST_123', 'U001', 'C123');
+      expect(mockGetOAuthUrl).toHaveBeenCalledWith('test-integration', 'W_TEST_123', 'U001', 'C123');
       expect(mockSendDMBlocks).toHaveBeenCalledWith(
         'U001',
         expect.arrayContaining([
           expect.objectContaining({
             type: 'section',
-            text: expect.objectContaining({ text: expect.stringContaining('Connect your google_drive account') }),
+            text: expect.objectContaining({ text: expect.stringContaining('Connect your Test Integration account') }),
           }),
         ]),
         expect.stringContaining('Connect'),

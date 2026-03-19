@@ -147,6 +147,16 @@ export function createWebhookServer(): express.Application {
         state as string,
       );
 
+      // Auto-register tools for this integration if they don't exist yet
+      try {
+        const { getIntegration: getManifest } = await import('./modules/tools/integrations');
+        const manifest = getManifest(integration);
+        if (manifest) {
+          const wsId = (await import('./db')).getDefaultWorkspaceId();
+          await manifest.register(wsId, userId, {});
+        }
+      } catch { /* tool registration is best-effort */ }
+
       // DM the user about successful connection + notify in channel
       try {
         const { sendDMBlocks, postMessage } = await import('./slack');

@@ -9,6 +9,7 @@ import type { ToolManifest } from './manifest';
 // ── Static imports — one line per integration ──
 // To add a new integration, add one import line here.
 import { manifest as chargebee } from './chargebee';
+import { manifest as google } from './google';
 import { manifest as hubspot } from './hubspot';
 import { manifest as kb } from './kb';
 import { manifest as linear } from './linear';
@@ -19,6 +20,7 @@ import { manifest as zendesk } from './zendesk';
 /** All registered integration manifests, keyed by id. */
 const ALL_MANIFESTS: ToolManifest[] = [
   chargebee,
+  google,
   hubspot,
   kb,
   linear,

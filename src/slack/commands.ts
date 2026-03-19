@@ -422,7 +422,8 @@ export function registerCommands(app: App): void {
         const connModel = manifest?.connectionModel;
         const isOAuth = oauthIntegrations.includes(integration.id);
 
-        if (isAdmin) {
+        if (isAdmin && connModel !== 'personal') {
+          // Admin can set up team-wide or hybrid integrations
           blocks.push({
             type: 'section',
             text: {
@@ -1610,9 +1611,11 @@ export function registerInlineActions(app: App): void {
     try {
       const { getOAuthUrl } = await import('../modules/connections/oauth');
       const { url } = await getOAuthUrl(integrationId, workspaceId, userId, channelId);
+      const manifest = getIntegration(integrationId);
+      const label = manifest?.label || integrationId;
 
       await sendDMBlocks(userId, [
-        { type: 'section', text: { type: 'mrkdwn', text: `:link: *Connect your ${integrationId} account*\n\nClick the button below to authorize access.` } },
+        { type: 'section', text: { type: 'mrkdwn', text: `:link: *Connect your ${label} account*\n\nClick the button below to authorize access.` } },
         {
           type: 'actions',
           elements: [{

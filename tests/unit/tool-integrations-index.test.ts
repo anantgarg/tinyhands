@@ -20,6 +20,23 @@ vi.mock('../../src/modules/tools/integrations/chargebee', () => ({
   },
 }));
 
+vi.mock('../../src/modules/tools/integrations/google', () => ({
+  manifest: {
+    id: 'google',
+    label: 'Google Workspace',
+    icon: ':file_folder:',
+    description: 'Google Workspace integration',
+    configKeys: ['access_token'],
+    connectionModel: 'personal',
+    tools: [
+      { name: 'google-read', schema: '{}', code: '', accessLevel: 'read-only', displayName: 'Checking Google Workspace' },
+      { name: 'google-write', schema: '{}', code: '', accessLevel: 'read-write', displayName: 'Updating Google Workspace' },
+    ],
+    register: vi.fn(),
+    updateConfig: vi.fn(),
+  },
+}));
+
 vi.mock('../../src/modules/tools/integrations/hubspot', () => ({
   manifest: {
     id: 'hubspot',
@@ -129,9 +146,10 @@ describe('Tool Integrations Index', () => {
   describe('getIntegrations', () => {
     it('should return all integration manifests', () => {
       const integrations = getIntegrations();
-      expect(integrations).toHaveLength(7);
+      expect(integrations).toHaveLength(8);
       const ids = integrations.map(m => m.id);
       expect(ids).toContain('chargebee');
+      expect(ids).toContain('google');
       expect(ids).toContain('hubspot');
       expect(ids).toContain('kb');
       expect(ids).toContain('linear');
@@ -158,7 +176,7 @@ describe('Tool Integrations Index', () => {
   describe('getToolIntegrations', () => {
     it('should return an array of integration objects with correct shape', () => {
       const integrations = getToolIntegrations();
-      expect(integrations).toHaveLength(7);
+      expect(integrations).toHaveLength(8);
 
       const chargebee = integrations.find(i => i.id === 'chargebee');
       expect(chargebee).toBeDefined();
