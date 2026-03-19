@@ -92,6 +92,7 @@ export interface AgentRole {
   userId: string;
   role: 'owner' | 'member' | 'viewer';
   grantedBy: string;
+  grantedByName?: string;
   grantedAt: string;
   workspaceId: string;
   displayName?: string;
@@ -251,7 +252,7 @@ export function useSetAgentRole() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ agentId, userId, role }: { agentId: string; userId: string; role: string }) =>
-      api.put(`/agents/${agentId}/roles/${userId}`, { role }),
+      api.post(`/agents/${agentId}/roles`, { targetUserId: userId, role }),
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: ['agents', variables.agentId, 'roles'] });
     },

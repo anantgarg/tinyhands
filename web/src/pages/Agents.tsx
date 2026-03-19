@@ -258,7 +258,7 @@ export function Agents() {
           {/* All Agents */}
           <section>
             <h2 className="text-sm font-semibold text-warm-text-secondary uppercase tracking-wider mb-3">
-              {yourAgents.length > 0 ? `All Agents (${allAgents.length})` : `All Agents (${filtered.length})`}
+              {yourAgents.length > 0 ? `Other Agents (${allAgents.length})` : `All Agents (${filtered.length})`}
             </h2>
             {renderAgentTable(yourAgents.length > 0 ? allAgents : filtered)}
           </section>

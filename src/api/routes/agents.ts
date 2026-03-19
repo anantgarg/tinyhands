@@ -9,7 +9,7 @@ import {
   getAgentRole, setAgentRole, removeAgentRole, getAgentRoles,
   requestUpgrade, approveUpgrade, denyUpgrade,
 } from '../../modules/access-control';
-import { getRunsByAgent } from '../../modules/execution';
+import { getRunsByAgent as _getRunsByAgent } from '../../modules/execution';
 import { addToolToAgent, removeToolFromAgent, getAgentToolSummary } from '../../modules/tools';
 import { attachSkillToAgent, detachSkillFromAgent, getAgentSkills } from '../../modules/skills';
 import { getAgentTriggers } from '../../modules/triggers';
@@ -26,7 +26,16 @@ router.get('/', async (req: Request, res: Response) => {
     const agents = (platformRole === 'superadmin' || platformRole === 'admin')
       ? await listAgents(workspaceId)
       : await getAccessibleAgents(workspaceId, userId);
-    res.json(agents);
+
+    // Resolve creator display names
+    const creatorIds = (agents as any[]).map((a: any) => a.created_by).filter(Boolean);
+    const names = await resolveUserNames(creatorIds);
+    const enriched = (agents as any[]).map((a: any) => ({
+      ...a,
+      createdByDisplayName: names[a.created_by] || undefined,
+    }));
+
+    res.json(enriched);
   } catch (err: any) {
     logger.error('List agents error', { error: err.message });
     res.status(500).json({ error: 'Failed to list agents' });
@@ -249,14 +258,41 @@ router.get('/:id/runs', async (req: Request, res: Response) => {
       res.status(403).json({ error: 'Insufficient permissions' });
       return;
     }
+    const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 20;
-    const runs = await getRunsByAgent(workspaceId, id, limit);
+    const status = req.query.status as string | undefined;
+
+    // Get total count
+    const countQuery = status
+      ? await query('SELECT count(*)::int as count FROM run_history WHERE workspace_id = $1 AND agent_id = $2 AND status = $3', [workspaceId, id, status])
+      : await query('SELECT count(*)::int as count FROM run_history WHERE workspace_id = $1 AND agent_id = $2', [workspaceId, id]);
+    const total = countQuery[0]?.count ?? 0;
+
+    // Get paginated runs
+    const offset = (page - 1) * limit;
+    let runs;
+    if (status) {
+      runs = await query(
+        'SELECT * FROM run_history WHERE workspace_id = $1 AND agent_id = $2 AND status = $3 ORDER BY created_at DESC LIMIT $4 OFFSET $5',
+        [workspaceId, id, status, limit, offset]
+      );
+    } else {
+      runs = await query(
+        'SELECT * FROM run_history WHERE workspace_id = $1 AND agent_id = $2 ORDER BY created_at DESC LIMIT $3 OFFSET $4',
+        [workspaceId, id, limit, offset]
+      );
+    }
+
     const userIds = (runs as any[]).map((r: any) => r.slack_user_id).filter(Boolean);
     const names = await resolveUserNames(userIds);
-    res.json((runs as any[]).map((r: any) => ({
-      ...r,
-      displayName: names[r.slack_user_id] || r.slack_user_id,
-    })));
+
+    res.json({
+      runs: (runs as any[]).map((r: any) => ({
+        ...r,
+        displayName: names[r.slack_user_id] || r.slack_user_id,
+      })),
+      total,
+    });
   } catch (err: any) {
     logger.error('Get agent runs error', { error: err.message });
     res.status(500).json({ error: 'Failed to get runs' });

@@ -450,27 +450,35 @@ describe('Agent Routes', () => {
   describe('GET /agents/:id/runs', () => {
     it('returns paginated runs with resolved display names', async () => {
       mockCanView.mockResolvedValueOnce(true);
+      // First query call: count
+      mockQuery.mockResolvedValueOnce([{ count: 2 }]);
+      // Second query call: runs
       const runs = [{ id: 'r1', slack_user_id: 'U1' }, { id: 'r2', slack_user_id: 'U2' }];
-      mockGetRunsByAgent.mockResolvedValueOnce(runs);
+      mockQuery.mockResolvedValueOnce(runs);
       mockResolveUserNames.mockResolvedValueOnce({ U1: 'Alice', U2: 'Bob' });
 
       const res = await makeRequest(app, 'GET', '/agents/a1/runs?limit=10');
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual([
-        { id: 'r1', slack_user_id: 'U1', displayName: 'Alice' },
-        { id: 'r2', slack_user_id: 'U2', displayName: 'Bob' },
-      ]);
-      expect(mockGetRunsByAgent).toHaveBeenCalledWith('W123', 'a1', 10);
+      expect(res.body).toEqual({
+        runs: [
+          { id: 'r1', slack_user_id: 'U1', displayName: 'Alice' },
+          { id: 'r2', slack_user_id: 'U2', displayName: 'Bob' },
+        ],
+        total: 2,
+      });
     });
 
-    it('uses default limit of 20', async () => {
+    it('uses default limit of 20 and returns { runs, total }', async () => {
       mockCanView.mockResolvedValueOnce(true);
-      mockGetRunsByAgent.mockResolvedValueOnce([]);
+      mockQuery.mockResolvedValueOnce([{ count: 0 }]);
+      mockQuery.mockResolvedValueOnce([]);
+      mockResolveUserNames.mockResolvedValueOnce({});
 
-      await makeRequest(app, 'GET', '/agents/a1/runs');
+      const res = await makeRequest(app, 'GET', '/agents/a1/runs');
 
-      expect(mockGetRunsByAgent).toHaveBeenCalledWith('W123', 'a1', 20);
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ runs: [], total: 0 });
     });
 
     it('returns 403 when user cannot view', async () => {
@@ -483,7 +491,7 @@ describe('Agent Routes', () => {
 
     it('returns 500 on error', async () => {
       mockCanView.mockResolvedValueOnce(true);
-      mockGetRunsByAgent.mockRejectedValueOnce(new Error('DB error'));
+      mockQuery.mockRejectedValueOnce(new Error('DB error'));
 
       const res = await makeRequest(app, 'GET', '/agents/a1/runs');
 
