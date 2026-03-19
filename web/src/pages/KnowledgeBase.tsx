@@ -131,7 +131,7 @@ export function KnowledgeBase() {
 
       {/* Stats */}
       {statsLoading ? (
-        <div className="grid grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           {Array.from({ length: 4 }).map((_, i) => (
             <Skeleton key={i} className="h-[80px]" />
           ))}
@@ -144,7 +144,7 @@ export function KnowledgeBase() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <StatCard label="Total Entries" value={stats?.totalEntries ?? 0} color="blue" />
           <StatCard label="Pending Review" value={stats?.pendingEntries ?? 0} color="amber" />
           <StatCard label="Categories" value={stats?.categories ?? 0} color="green" />
@@ -203,7 +203,8 @@ export function KnowledgeBase() {
           ) : (
             <Card>
               <CardContent className="pt-6">
-                <Table>
+                <div className="overflow-x-auto">
+              <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Title</TableHead>
@@ -301,6 +302,7 @@ export function KnowledgeBase() {
                     ))}
                   </TableBody>
                 </Table>
+                </div>
                 {totalPages > 1 && (
                   <div className="flex items-center justify-between mt-4">
                     <p className="text-sm text-warm-text-secondary">{total} entries</p>

@@ -54,7 +54,7 @@ const settingsNav: NavItem[] = [
   { label: 'Workspace Settings', to: '/settings', icon: Settings, adminOnly: true },
 ];
 
-function NavSection({ title, items, isAdmin }: { title?: string; items: NavItem[]; isAdmin: boolean }) {
+function NavSection({ title, items, isAdmin, onNavigate }: { title?: string; items: NavItem[]; isAdmin: boolean; onNavigate?: () => void }) {
   const visibleItems = items.filter((item) => !item.adminOnly || isAdmin);
   if (visibleItems.length === 0) return null;
 
@@ -71,6 +71,7 @@ function NavSection({ title, items, isAdmin }: { title?: string; items: NavItem[
             key={item.to}
             to={item.to}
             end={item.to === '/'}
+            onClick={onNavigate}
             className={({ isActive }) =>
               cn(
                 'flex items-center gap-2.5 rounded-lg px-3 py-[7px] text-[14px] transition-colors',
@@ -94,7 +95,7 @@ function NavSection({ title, items, isAdmin }: { title?: string; items: NavItem[
   );
 }
 
-export function Sidebar() {
+export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const navigate = useNavigate();
   const { user, clearUser, isAdmin } = useAuthStore();
   const admin = isAdmin();
@@ -134,6 +135,7 @@ export function Sidebar() {
               key={item.to}
               to={item.to}
               end={item.to === '/'}
+              onClick={onNavigate}
               className={({ isActive }) =>
                 cn(
                   'relative flex h-9 w-9 items-center justify-center rounded-lg transition-colors',
@@ -173,10 +175,10 @@ export function Sidebar() {
 
       {/* Navigation */}
       <div className="flex-1 overflow-y-auto pt-1 pb-3">
-        <NavSection items={mainNav} isAdmin={admin} />
-        <NavSection title="Manage" items={manageNav} isAdmin={admin} />
-        <NavSection title="Review" items={reviewItems} isAdmin={admin} />
-        <NavSection title="Settings" items={settingsNav} isAdmin={admin} />
+        <NavSection items={mainNav} isAdmin={admin} onNavigate={onNavigate} />
+        <NavSection title="Manage" items={manageNav} isAdmin={admin} onNavigate={onNavigate} />
+        <NavSection title="Review" items={reviewItems} isAdmin={admin} onNavigate={onNavigate} />
+        <NavSection title="Settings" items={settingsNav} isAdmin={admin} onNavigate={onNavigate} />
       </div>
 
       {/* User footer */}

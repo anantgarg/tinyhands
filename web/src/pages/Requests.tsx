@@ -104,7 +104,7 @@ function UpgradeRequestsTab() {
         </Select>
       </div>
 
-      <div className="rounded-card border border-warm-border bg-white">
+      <div className="rounded-card border border-warm-border bg-white overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>

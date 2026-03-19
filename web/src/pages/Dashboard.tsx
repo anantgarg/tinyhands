@@ -89,7 +89,7 @@ export function Dashboard() {
 
       {/* Stat Cards */}
       {metrics.isLoading ? (
-        <div className="grid grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           {[1,2,3,4].map(i => <Skeleton key={i} className="h-[100px]" />)}
         </div>
       ) : metrics.isError ? (
@@ -101,7 +101,7 @@ export function Dashboard() {
         </Card>
       ) : (
         <>
-          <div className="grid grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <StatCard label="Total Runs" value={m?.totalRuns ?? 0} icon={Activity} color="blue" />
             <StatCard label="Total Cost" value={fmt$(m?.totalCostUsd)} icon={DollarSign} color="green" />
             <StatCard label="Total Tokens" value={fmtTok(m?.totalTokens)} icon={Hash} color="amber" />
@@ -173,19 +173,21 @@ export function Dashboard() {
           {popularAgents.isLoading ? <Skeleton className="h-[200px]" /> : popularAgents.isError ? (
             <p className="text-sm text-red-500 text-center py-4">Failed to load</p>
           ) : (
-            <Table>
-              <TableHeader><TableRow><TableHead>Agent</TableHead><TableHead>Runs</TableHead><TableHead>Cost</TableHead></TableRow></TableHeader>
-              <TableBody>
-                {(popularAgents.data ?? []).map((a) => (
-                  <TableRow key={a.id}>
-                    <TableCell><div className="flex items-center gap-2"><span>{renderEmoji(a.avatar || '🤖')}</span><span className="font-medium">{a.name || 'Unknown'}</span></div></TableCell>
-                    <TableCell>{a.runCount || 0}</TableCell>
-                    <TableCell>{fmt$(a.totalCost)}</TableCell>
-                  </TableRow>
-                ))}
-                {(popularAgents.data ?? []).length === 0 && <TableRow><TableCell colSpan={3} className="text-center text-warm-text-secondary">No data yet</TableCell></TableRow>}
-              </TableBody>
-            </Table>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader><TableRow><TableHead>Agent</TableHead><TableHead>Runs</TableHead><TableHead>Cost</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {(popularAgents.data ?? []).map((a) => (
+                    <TableRow key={a.id}>
+                      <TableCell><div className="flex items-center gap-2"><span>{renderEmoji(a.avatar || '🤖')}</span><span className="font-medium">{a.name || 'Unknown'}</span></div></TableCell>
+                      <TableCell>{a.runCount || 0}</TableCell>
+                      <TableCell>{fmt$(a.totalCost)}</TableCell>
+                    </TableRow>
+                  ))}
+                  {(popularAgents.data ?? []).length === 0 && <TableRow><TableCell colSpan={3} className="text-center text-warm-text-secondary">No data yet</TableCell></TableRow>}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -198,20 +200,22 @@ export function Dashboard() {
             {fleet.isLoading ? <Skeleton className="h-[200px]" /> : fleet.isError ? (
               <p className="text-sm text-red-500 text-center py-4">Failed to load</p>
             ) : (
-              <Table>
-                <TableHeader><TableRow><TableHead>Agent</TableHead><TableHead>Status</TableHead><TableHead>Model</TableHead><TableHead>Tools</TableHead></TableRow></TableHeader>
-                <TableBody>
-                  {(fleet.data ?? []).map((a) => (
-                    <TableRow key={a.id}>
-                      <TableCell><div className="flex items-center gap-2"><span>{renderEmoji(a.avatar || '🤖')}</span><span className="font-medium">{a.name || 'Unknown'}</span></div></TableCell>
-                      <TableCell><Badge variant={a.status === 'active' ? 'success' : 'secondary'}>{a.status || 'unknown'}</Badge></TableCell>
-                      <TableCell className="text-warm-text-secondary">{a.model || '\u2014'}</TableCell>
-                      <TableCell>{a.toolsCount ?? 0}</TableCell>
-                    </TableRow>
-                  ))}
-                  {(fleet.data ?? []).length === 0 && <TableRow><TableCell colSpan={4} className="text-center text-warm-text-secondary">No agents yet</TableCell></TableRow>}
-                </TableBody>
-              </Table>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader><TableRow><TableHead>Agent</TableHead><TableHead>Status</TableHead><TableHead>Model</TableHead><TableHead>Tools</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {(fleet.data ?? []).map((a) => (
+                      <TableRow key={a.id}>
+                        <TableCell><div className="flex items-center gap-2"><span>{renderEmoji(a.avatar || '🤖')}</span><span className="font-medium">{a.name || 'Unknown'}</span></div></TableCell>
+                        <TableCell><Badge variant={a.status === 'active' ? 'success' : 'secondary'}>{a.status || 'unknown'}</Badge></TableCell>
+                        <TableCell className="text-warm-text-secondary">{a.model || '\u2014'}</TableCell>
+                        <TableCell>{a.toolsCount ?? 0}</TableCell>
+                      </TableRow>
+                    ))}
+                    {(fleet.data ?? []).length === 0 && <TableRow><TableCell colSpan={4} className="text-center text-warm-text-secondary">No agents yet</TableCell></TableRow>}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </CardContent>
         </Card>
@@ -225,6 +229,7 @@ export function Dashboard() {
             <p className="text-sm text-red-500 text-center py-4">Failed to load</p>
           ) : (
             <TooltipProvider>
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader><TableRow><TableHead>Agent</TableHead><TableHead>Status</TableHead><TableHead>Duration</TableHead><TableHead>Cost</TableHead><TableHead>Time</TableHead></TableRow></TableHeader>
                 <TableBody>
@@ -258,6 +263,7 @@ export function Dashboard() {
                   {(recentRuns.data ?? []).length === 0 && <TableRow><TableCell colSpan={5} className="text-center text-warm-text-secondary">No runs yet</TableCell></TableRow>}
                 </TableBody>
               </Table>
+              </div>
             </TooltipProvider>
           )}
         </CardContent>
@@ -270,20 +276,22 @@ export function Dashboard() {
           {recentActivity.isLoading ? <Skeleton className="h-[200px]" /> : recentActivity.isError ? (
             <p className="text-sm text-red-500 text-center py-4">Failed to load</p>
           ) : (
-            <Table>
-              <TableHeader><TableRow><TableHead>Action</TableHead><TableHead>Actor</TableHead><TableHead>Details</TableHead><TableHead>Time</TableHead></TableRow></TableHeader>
-              <TableBody>
-                {(recentActivity.data ?? []).map((e) => (
-                  <TableRow key={e.id}>
-                    <TableCell><Badge variant="secondary">{humanizeAction(e.action)}</Badge></TableCell>
-                    <TableCell>{fmtUserId(e.displayName, e.userId)}</TableCell>
-                    <TableCell className="text-warm-text-secondary max-w-[250px] truncate">{e.details || '\u2014'}</TableCell>
-                    <TableCell className="text-warm-text-secondary text-xs">{fmtRelative(e.createdAt)}</TableCell>
-                  </TableRow>
-                ))}
-                {(recentActivity.data ?? []).length === 0 && <TableRow><TableCell colSpan={4} className="text-center text-warm-text-secondary">No activity yet</TableCell></TableRow>}
-              </TableBody>
-            </Table>
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader><TableRow><TableHead>Action</TableHead><TableHead>Actor</TableHead><TableHead>Details</TableHead><TableHead>Time</TableHead></TableRow></TableHeader>
+                <TableBody>
+                  {(recentActivity.data ?? []).map((e) => (
+                    <TableRow key={e.id}>
+                      <TableCell><Badge variant="secondary">{humanizeAction(e.action)}</Badge></TableCell>
+                      <TableCell>{fmtUserId(e.displayName, e.userId)}</TableCell>
+                      <TableCell className="text-warm-text-secondary max-w-[250px] truncate">{e.details || '\u2014'}</TableCell>
+                      <TableCell className="text-warm-text-secondary text-xs">{fmtRelative(e.createdAt)}</TableCell>
+                    </TableRow>
+                  ))}
+                  {(recentActivity.data ?? []).length === 0 && <TableRow><TableCell colSpan={4} className="text-center text-warm-text-secondary">No activity yet</TableCell></TableRow>}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </CardContent>
       </Card>

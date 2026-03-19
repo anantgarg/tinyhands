@@ -167,6 +167,7 @@ function AuditLogContent() {
       ) : (
         <Card>
           <CardContent className="pt-6">
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -199,6 +200,7 @@ function AuditLogContent() {
                 ))}
               </TableBody>
             </Table>
+            </div>
             {totalPages > 1 && (
               <div className="flex items-center justify-between mt-4">
                 <p className="text-sm text-warm-text-secondary">{total} entries</p>

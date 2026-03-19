@@ -230,7 +230,7 @@ export function FloatingChat() {
   // Collapsed bar
   if (!isOpen) {
     return (
-      <div className="fixed bottom-6 left-1/2 z-50 w-full max-w-xl -translate-x-1/2 px-4">
+      <div className="fixed bottom-6 left-1/2 z-50 w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 px-4 sm:w-full">
         <div
           className="flex cursor-pointer items-center gap-3 rounded-full border border-[#E0DED9] bg-white px-5 py-3 shadow-lg transition-all hover:shadow-xl hover:border-[#D0CEC9]"
           onClick={handleCollapsedFocus}
@@ -264,7 +264,7 @@ export function FloatingChat() {
       ref={panelRef}
       className={cn(
         'fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 flex-col rounded-2xl border border-[#E0DED9] bg-white px-4 shadow-lg transition-all',
-        isExpanded ? 'w-[700px]' : 'w-full max-w-xl',
+        isExpanded ? 'w-[calc(100%-2rem)] sm:w-[700px]' : 'w-[calc(100%-2rem)] sm:w-full max-w-xl',
       )}
       style={{ maxHeight: isExpanded ? '600px' : '500px' }}
     >

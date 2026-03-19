@@ -371,7 +371,7 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
           )}
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 gap-x-8 gap-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5">
             {/* Model */}
             <div>
               <Label className="text-warm-text-secondary text-xs">Model</Label>
@@ -481,7 +481,7 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
           {currentTools.length === 0 ? (
             <p className="text-sm text-warm-text-secondary">No tools configured</p>
           ) : (
-            <div className="rounded-card border border-warm-border">
+            <div className="rounded-card border border-warm-border overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -593,7 +593,7 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
           ) : (versions ?? []).length === 0 ? (
             <p className="text-sm text-warm-text-secondary">No version history</p>
           ) : (
-            <div className="rounded-card border border-warm-border">
+            <div className="rounded-card border border-warm-border overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -712,7 +712,7 @@ function RunsTab({ agentId }: { agentId: string }) {
         </Select>
       </div>
 
-      <div className="rounded-card border border-warm-border bg-white">
+      <div className="rounded-card border border-warm-border bg-white overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
@@ -836,7 +836,7 @@ function MemoryTab({ agentId }: { agentId: string }) {
         </Button>
       </div>
 
-      <div className="rounded-card border border-warm-border bg-white">
+      <div className="rounded-card border border-warm-border bg-white overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
@@ -1016,7 +1016,7 @@ function TriggersTab({ agentId }: { agentId: string }) {
         </Button>
       </div>
 
-      <div className="rounded-card border border-warm-border bg-white">
+      <div className="rounded-card border border-warm-border bg-white overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
@@ -1265,6 +1265,7 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
           {rolesLoading ? (
             <Skeleton className="h-[100px]" />
           ) : (
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -1321,6 +1322,7 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                 )}
               </TableBody>
             </Table>
+            </div>
           )}
         </CardContent>
       </Card>
@@ -1370,6 +1372,7 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
             <CardTitle className="text-base">Pending Requests</CardTitle>
           </CardHeader>
           <CardContent>
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -1410,6 +1413,7 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                 ))}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
       )}

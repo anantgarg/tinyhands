@@ -209,6 +209,7 @@ export function Triggers() {
                   </div>
                 </CardHeader>
                 <CardContent>
+                  <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -248,6 +249,7 @@ export function Triggers() {
                       })}
                     </TableBody>
                   </Table>
+                  </div>
                 </CardContent>
               </Card>
             </section>
@@ -267,6 +269,7 @@ export function Triggers() {
                   </div>
                 </CardHeader>
                 <CardContent>
+                  <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -309,6 +312,7 @@ export function Triggers() {
                       })}
                     </TableBody>
                   </Table>
+                  </div>
                 </CardContent>
               </Card>
             </section>
@@ -328,6 +332,7 @@ export function Triggers() {
                   </div>
                 </CardHeader>
                 <CardContent>
+                  <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -364,6 +369,7 @@ export function Triggers() {
                       ))}
                     </TableBody>
                   </Table>
+                  </div>
                 </CardContent>
               </Card>
             </section>

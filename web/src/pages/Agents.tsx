@@ -84,7 +84,7 @@ export function Agents() {
 
   function renderAgentTable(agentList: Agent[]) {
     return (
-      <div className="rounded-card border border-warm-border bg-white">
+      <div className="rounded-card border border-warm-border bg-white overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Wrench, Check, Trash2, MoreVertical, Eye, AlertCircle, Shield } from 'lucide-react';
+import { Wrench, Check, Trash2, MoreVertical, AlertCircle, Shield } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
@@ -84,7 +84,7 @@ export function Tools() {
 
 function ToolsContent() {
   const { data: integrations, isLoading: intLoading, isError: intError } = useIntegrations();
-  const { data: customTools, isLoading: ctLoading, isError: ctError } = useCustomTools();
+  const { data: customTools, isLoading: ctLoading } = useCustomTools();
   const registerIntegration = useRegisterIntegration();
   const approveCustomTool = useApproveCustomTool();
   const deleteCustomTool = useDeleteCustomTool();
@@ -95,16 +95,22 @@ function ToolsContent() {
     configKeys: { key: string; label: string; required: boolean; secret: boolean }[];
   } | null>(null);
   const [configValues, setConfigValues] = useState<Record<string, string>>({});
-  const [detailDialog, setDetailDialog] = useState<{
-    name: string;
-    displayName: string;
-    description: string;
-    type: string;
-    accessLevel: string;
-  } | null>(null);
 
   const connected = (integrations ?? []).filter((i) => i.status === 'active');
   const available = (integrations ?? []).filter((i) => i.status !== 'active');
+
+  // Group custom tools by integration base name
+  const toolGroups = groupToolsByIntegration(customTools ?? []);
+
+  // Map integration IDs to their tool groups
+  const integrationToolMap = new Map<string, ToolGroup>();
+  for (const group of toolGroups) {
+    integrationToolMap.set(group.name, group);
+  }
+
+  // Determine which custom tools are NOT associated with a known integration
+  const knownIntegrationIds = new Set((integrations ?? []).map(i => i.id));
+  const standaloneTools = toolGroups.filter(g => !knownIntegrationIds.has(g.name));
 
   const handleRegister = () => {
     if (!registerDialog) return;
@@ -112,12 +118,12 @@ function ToolsContent() {
       { integrationId: registerDialog.id, config: configValues },
       {
         onSuccess: () => {
-          toast({ title: 'Integration registered', variant: 'success' });
+          toast({ title: 'Integration connected', variant: 'success' });
           setRegisterDialog(null);
           setConfigValues({});
         },
         onError: (err) => {
-          toast({ title: 'Registration failed', description: err.message, variant: 'error' });
+          toast({ title: 'Connection failed', description: err.message, variant: 'error' });
         },
       },
     );
@@ -130,24 +136,22 @@ function ToolsContent() {
   };
 
   const handleDelete = (id: string, name: string) => {
-    if (confirm(`Delete custom tool "${name}"?`)) {
+    if (confirm(`Delete tool "${name}"?`)) {
       deleteCustomTool.mutate(id, {
         onSuccess: () => toast({ title: 'Tool deleted', variant: 'success' }),
       });
     }
   };
 
-  const toolGroups = groupToolsByIntegration(customTools ?? []);
-
   return (
     <div>
-      <PageHeader title="Tools & Integrations" description="Manage tool connections and custom tools" />
+      <PageHeader title="Tools & Integrations" description="Connect external services for your agents to use" />
 
       {/* Connected Integrations */}
       <section className="mb-8">
-        <h2 className="text-lg font-semibold mb-4">Connected Integrations</h2>
+        <h2 className="text-lg font-semibold mb-4">Connected</h2>
         {intLoading ? (
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {Array.from({ length: 3 }).map((_, i) => (
               <Skeleton key={i} className="h-[120px]" />
             ))}
@@ -160,76 +164,70 @@ function ToolsContent() {
             </CardContent>
           </Card>
         ) : connected.length === 0 ? (
-          <Card>
-            <CardContent className="py-8 text-center text-warm-text-secondary">
-              No integrations connected yet. Register one below.
-            </CardContent>
-          </Card>
+          <p className="text-sm text-warm-text-secondary">No integrations connected yet.</p>
         ) : (
-          <div className="grid grid-cols-3 gap-4">
-            {connected.map((integration) => (
-              <Card key={integration.id}>
-                <CardContent className="p-5">
-                  <div className="flex items-start justify-between mb-3">
-                    <div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {connected.map((integration) => {
+              const tools = integrationToolMap.get(integration.id);
+              return (
+                <Card key={integration.id}>
+                  <CardContent className="p-5">
+                    <div className="flex items-start justify-between mb-2">
                       <h3 className="font-semibold">{integration.displayName ?? integration.name ?? 'Unknown'}</h3>
-                      <p className="text-xs text-warm-text-secondary mt-1">{integration.description || 'Connected integration'}</p>
+                      <Badge variant="success">Connected</Badge>
                     </div>
-                    <Badge variant="success">Active</Badge>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-warm-text-secondary">{integration.toolsCount ?? 0} tools</span>
-                    <Badge variant="secondary" className="text-xs">{integration.connectionModel ?? 'team'}</Badge>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                    <p className="text-xs text-warm-text-secondary mb-3">{integration.description || ''}</p>
+                    <div className="flex items-center justify-between">
+                      {tools ? (
+                        <div className="flex gap-1">
+                          {tools.accessLevels.includes('read') && <Badge variant="default" className="text-xs">Read</Badge>}
+                          {tools.accessLevels.includes('write') && <Badge variant="warning" className="text-xs">Write</Badge>}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-warm-text-secondary">{integration.toolsCount ?? 0} tools</span>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
       </section>
 
       {/* Available Integrations */}
       <section className="mb-8">
-        <h2 className="text-lg font-semibold mb-4">Available Integrations</h2>
+        <h2 className="text-lg font-semibold mb-4">Available</h2>
         {intLoading ? (
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {Array.from({ length: 3 }).map((_, i) => (
               <Skeleton key={i} className="h-[120px]" />
             ))}
           </div>
         ) : available.length === 0 ? (
-          <Card>
-            <CardContent className="py-8 text-center text-warm-text-secondary">
-              All integrations are connected.
-            </CardContent>
-          </Card>
+          <p className="text-sm text-warm-text-secondary">All integrations are connected.</p>
         ) : (
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {available.map((integration) => (
               <Card key={integration.id} className="transition-colors hover:bg-warm-bg/30">
                 <CardContent className="p-5">
-                  <div className="mb-3">
-                    <h3 className="font-semibold">{integration.displayName ?? integration.name ?? 'Unknown'}</h3>
-                    <p className="text-xs text-warm-text-secondary mt-1">{integration.description || 'Available for connection'}</p>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <Badge variant="secondary" className="text-xs">{integration.connectionModel ?? 'team'}</Badge>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setRegisterDialog({
-                          id: integration.id,
-                          name: integration.displayName ?? integration.name ?? 'Integration',
-                          configKeys: integration.configKeys ?? [],
-                        });
-                        setConfigValues({});
-                      }}
-                    >
-                      Register
-                      <Check className="ml-1 h-3 w-3" />
-                    </Button>
-                  </div>
+                  <h3 className="font-semibold mb-1">{integration.displayName ?? integration.name ?? 'Unknown'}</h3>
+                  <p className="text-xs text-warm-text-secondary mb-3">{integration.description || 'Available for connection'}</p>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => {
+                      setRegisterDialog({
+                        id: integration.id,
+                        name: integration.displayName ?? integration.name ?? 'Integration',
+                        configKeys: integration.configKeys ?? [],
+                      });
+                      setConfigValues({});
+                    }}
+                  >
+                    Connect
+                    <Check className="ml-1 h-3 w-3" />
+                  </Button>
                 </CardContent>
               </Card>
             ))}
@@ -237,138 +235,111 @@ function ToolsContent() {
         )}
       </section>
 
-      {/* Custom Tools */}
-      <section>
-        <h2 className="text-lg font-semibold mb-4">Custom Tools</h2>
-        {ctLoading ? (
-          <Skeleton className="h-[200px]" />
-        ) : ctError ? (
-          <Card>
-            <CardContent className="py-8 text-center text-red-500">
-              <AlertCircle className="h-5 w-5 mx-auto mb-2" />
-              Failed to load custom tools
-            </CardContent>
-          </Card>
-        ) : (customTools ?? []).length === 0 ? (
-          <EmptyState
-            icon={Wrench}
-            title="No custom tools"
-            description="Custom tools created by agents will appear here for review and approval"
-          />
-        ) : (
+      {/* Agent-Created Tools (only standalone tools not linked to integrations) */}
+      {!ctLoading && standaloneTools.length > 0 && (
+        <section>
+          <h2 className="text-lg font-semibold mb-4">Agent-Created Tools</h2>
           <Card>
             <CardContent className="pt-6">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Access</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Creator</TableHead>
-                    <TableHead>Created</TableHead>
-                    <TableHead className="w-10"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {toolGroups.map((group) => {
-                    const firstTool = group.tools[0];
-                    const allApproved = group.tools.every(t => t.approved);
-                    const earliestDate = group.tools
-                      .filter(t => t.createdAt)
-                      .map(t => new Date(t.createdAt).getTime())
-                      .sort((a, b) => a - b)[0];
-                    return (
-                      <TableRow key={group.name}>
-                        <TableCell>
-                          <div>
-                            <p className="font-medium">{group.displayName}</p>
-                            <p className="text-xs text-warm-text-secondary line-clamp-1">
-                              {firstTool?.description || 'No description'}
-                            </p>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-1">
-                            {group.accessLevels.includes('read') && (
-                              <Badge variant="default">Read</Badge>
-                            )}
-                            {group.accessLevels.includes('write') && (
-                              <Badge variant="warning">Write</Badge>
-                            )}
-                            {group.accessLevels.length === 0 && (
-                              <Badge variant="secondary">{firstTool?.accessLevel || 'read-only'}</Badge>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={allApproved ? 'success' : 'warning'}>
-                            {allApproved ? 'Approved' : 'Pending'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="text-warm-text-secondary text-xs">
-                          {fmtUserId(firstTool?.createdBy)}
-                        </TableCell>
-                        <TableCell className="text-warm-text-secondary text-xs">
-                          {earliestDate
-                            ? formatDistanceToNow(new Date(earliestDate), { addSuffix: true })
-                            : '\u2014'}
-                        </TableCell>
-                        <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8">
-                                <MoreVertical className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                onClick={() =>
-                                  setDetailDialog({
-                                    name: group.name,
-                                    displayName: group.displayName,
-                                    description: firstTool?.description || 'No description',
-                                    type: firstTool?.type || 'custom',
-                                    accessLevel: group.accessLevels.join(', ') || firstTool?.accessLevel || 'read-only',
-                                  })
-                                }
-                              >
-                                <Eye className="mr-2 h-4 w-4" />
-                                View Details
-                              </DropdownMenuItem>
-                              {!allApproved && group.tools.filter(t => !t.approved).map(t => (
-                                <DropdownMenuItem key={t.id} onClick={() => handleApprove(t.id)}>
-                                  <Check className="mr-2 h-4 w-4" />
-                                  Approve {group.tools.length > 1 ? t.name : ''}
-                                </DropdownMenuItem>
-                              ))}
-                              {group.tools.map(t => (
-                                <DropdownMenuItem
-                                  key={`del-${t.id}`}
-                                  className="text-red-600"
-                                  onClick={() => handleDelete(t.id, t.displayName || t.name || 'tool')}
-                                >
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  Delete {group.tools.length > 1 ? t.name : ''}
-                                </DropdownMenuItem>
-                              ))}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Access</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Creator</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead className="w-10"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {standaloneTools.map((group) => {
+                      const firstTool = group.tools[0];
+                      const allApproved = group.tools.every((t: any) => t.approved);
+                      const earliestDate = group.tools
+                        .filter((t: any) => t.createdAt)
+                        .map((t: any) => new Date(t.createdAt).getTime())
+                        .sort((a: number, b: number) => a - b)[0];
+                      return (
+                        <TableRow key={group.name}>
+                          <TableCell>
+                            <div>
+                              <p className="font-medium">{group.displayName}</p>
+                              <p className="text-xs text-warm-text-secondary line-clamp-1">
+                                {firstTool?.description || 'No description'}
+                              </p>
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-1">
+                              {group.accessLevels.includes('read') && (
+                                <Badge variant="default">Read</Badge>
+                              )}
+                              {group.accessLevels.includes('write') && (
+                                <Badge variant="warning">Write</Badge>
+                              )}
+                              {group.accessLevels.length === 0 && (
+                                <Badge variant="secondary">{firstTool?.accessLevel || 'read-only'}</Badge>
+                              )}
+                            </div>
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={allApproved ? 'success' : 'warning'}>
+                              {allApproved ? 'Approved' : 'Pending'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-warm-text-secondary text-xs">
+                            {fmtUserId(firstTool?.createdBy)}
+                          </TableCell>
+                          <TableCell className="text-warm-text-secondary text-xs">
+                            {earliestDate
+                              ? formatDistanceToNow(new Date(earliestDate), { addSuffix: true })
+                              : '\u2014'}
+                          </TableCell>
+                          <TableCell>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                  <MoreVertical className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                {!allApproved && group.tools.filter((t: any) => !t.approved).map((t: any) => (
+                                  <DropdownMenuItem key={t.id} onClick={() => handleApprove(t.id)}>
+                                    <Check className="mr-2 h-4 w-4" />
+                                    Approve {group.tools.length > 1 ? t.name : ''}
+                                  </DropdownMenuItem>
+                                ))}
+                                {group.tools.map((t: any) => (
+                                  <DropdownMenuItem
+                                    key={`del-${t.id}`}
+                                    className="text-red-600"
+                                    onClick={() => handleDelete(t.id, t.displayName || t.name || 'tool')}
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Delete {group.tools.length > 1 ? t.name : ''}
+                                  </DropdownMenuItem>
+                                ))}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
             </CardContent>
           </Card>
-        )}
-      </section>
+        </section>
+      )}
 
       {/* Register Dialog */}
       <Dialog open={!!registerDialog} onOpenChange={() => setRegisterDialog(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Register {registerDialog?.name}</DialogTitle>
+            <DialogTitle>Connect {registerDialog?.name}</DialogTitle>
             <DialogDescription>Enter the configuration values for this integration</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -390,37 +361,8 @@ function ToolsContent() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setRegisterDialog(null)}>Cancel</Button>
             <Button onClick={handleRegister} disabled={registerIntegration.isPending}>
-              Register
+              Connect
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Tool Detail Dialog */}
-      <Dialog open={!!detailDialog} onOpenChange={() => setDetailDialog(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{detailDialog?.displayName}</DialogTitle>
-            <DialogDescription>{detailDialog?.description}</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-warm-text-secondary">Internal name:</span>
-              <code className="text-sm bg-warm-bg px-2 py-0.5 rounded">{detailDialog?.name}</code>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-warm-text-secondary">Type:</span>
-              <Badge variant="secondary">{detailDialog?.type}</Badge>
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-warm-text-secondary">Access Level:</span>
-              <Badge variant={detailDialog?.accessLevel?.includes('write') ? 'warning' : 'default'}>
-                {detailDialog?.accessLevel}
-              </Badge>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDetailDialog(null)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

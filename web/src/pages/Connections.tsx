@@ -108,7 +108,7 @@ function ConnectionsContent() {
       );
     }
     return (
-      <div className="rounded-card border border-warm-border bg-white">
+      <div className="rounded-card border border-warm-border bg-white overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
@@ -207,7 +207,7 @@ function ConnectionsContent() {
             {modesLoading ? (
               <Skeleton className="h-[200px]" />
             ) : (
-              <div className="rounded-card border border-warm-border bg-white">
+              <div className="rounded-card border border-warm-border bg-white overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
