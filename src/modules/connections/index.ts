@@ -186,14 +186,15 @@ export async function listPersonalConnectionsForUser(wsId: string, userId: strin
 
 export async function getToolAgentUsage(wsId: string): Promise<Array<{ agent_id: string; agent_name: string; tool_name: string; access_level: string; connection_mode: string | null }>> {
   return query(
-    `SELECT a.id AS agent_id, a.name AS agent_name, unnest(a.tools) AS tool_name,
+    `SELECT a.id AS agent_id, a.name AS agent_name, t.tool_name,
             COALESCE(ct.access_level, 'read-only') AS access_level,
             atc.connection_mode
      FROM agents a
-     LEFT JOIN custom_tools ct ON ct.name = ANY(a.tools) AND ct.workspace_id = a.workspace_id
-     LEFT JOIN agent_tool_connections atc ON atc.agent_id = a.id AND atc.tool_name = ct.name AND atc.workspace_id = a.workspace_id
+     CROSS JOIN LATERAL unnest(COALESCE(a.tools, ARRAY[]::text[])) AS t(tool_name)
+     LEFT JOIN custom_tools ct ON ct.name = t.tool_name AND ct.workspace_id = a.workspace_id
+     LEFT JOIN agent_tool_connections atc ON atc.agent_id = a.id AND atc.tool_name = t.tool_name AND atc.workspace_id = a.workspace_id
      WHERE a.workspace_id = $1 AND a.status = 'active'
-     ORDER BY a.name, tool_name`,
+     ORDER BY a.name, t.tool_name`,
     [wsId]
   );
 }

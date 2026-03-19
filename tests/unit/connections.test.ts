@@ -368,7 +368,7 @@ describe('getToolAgentUsage', () => {
     expect(result[0].connection_mode).toBe('team');
     expect(result[1].connection_mode).toBeNull();
     expect(mockQuery).toHaveBeenCalledWith(
-      expect.stringContaining('unnest(a.tools)'),
+      expect.stringContaining('unnest(COALESCE(a.tools'),
       [TEST_WORKSPACE_ID]
     );
   });
