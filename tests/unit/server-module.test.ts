@@ -40,7 +40,13 @@ vi.mock('../../src/db', () => ({
 
 vi.mock('../../src/config', () => ({
   config: {
-    server: { port: 3000, internalSecret: '' },
+    server: { port: 3000, internalSecret: '', nodeEnv: 'test', sessionSecret: 'test-secret', webDashboardUrl: '' },
+    slack: { botToken: '', appToken: '', signingSecret: '', clientId: '', clientSecret: '' },
+    redis: { url: 'redis://localhost:6379' },
+    oauth: { redirectBaseUrl: 'http://localhost:3000', googleClientId: '', googleClientSecret: '', notionClientId: '', notionClientSecret: '', githubClientId: '', githubClientSecret: '' },
+    observability: { logLevel: 'info', dailyDigestTime: '09:00', dailyBudgetUsd: 50 },
+    docker: { baseImage: 'tinyhands-runner:latest', defaultCpu: 1, defaultMemory: 2147483648, defaultJobTimeoutMs: 1800000, maxConcurrentWorkers: 3 },
+    encryption: { key: '' },
   },
 }));
 
@@ -68,6 +74,157 @@ vi.mock('../../src/queue', () => ({
   setApprovalState: (...args: any[]) => mockSetApprovalState(...args),
   getApprovalState: (...args: any[]) => mockGetApprovalState(...args),
 }));
+
+// Mock modules imported transitively by API routes
+vi.mock('../../src/modules/agents', () => ({
+  createAgent: vi.fn(),
+  getAgent: vi.fn(),
+  listAgents: vi.fn().mockResolvedValue([]),
+  getAccessibleAgents: vi.fn().mockResolvedValue([]),
+  updateAgent: vi.fn(),
+  deleteAgent: vi.fn(),
+  getAgentVersions: vi.fn().mockResolvedValue([]),
+  revertAgent: vi.fn(),
+}));
+
+vi.mock('../../src/modules/access-control', () => ({
+  canModifyAgent: vi.fn().mockResolvedValue(true),
+  canView: vi.fn().mockResolvedValue(true),
+  isPlatformAdmin: vi.fn().mockResolvedValue(false),
+  getAgentRole: vi.fn().mockResolvedValue('viewer'),
+  setAgentRole: vi.fn(),
+  removeAgentRole: vi.fn(),
+  getAgentRoles: vi.fn().mockResolvedValue([]),
+  requestUpgrade: vi.fn(),
+  approveUpgrade: vi.fn(),
+  denyUpgrade: vi.fn(),
+  getPlatformRole: vi.fn().mockResolvedValue('member'),
+  setPlatformRole: vi.fn(),
+  removePlatformRole: vi.fn(),
+  listPlatformAdmins: vi.fn().mockResolvedValue([]),
+}));
+
+vi.mock('../../src/modules/execution', () => ({
+  getRecentRuns: vi.fn().mockResolvedValue([]),
+  getRunsByAgent: vi.fn().mockResolvedValue([]),
+  getRunRecord: vi.fn(),
+}));
+
+vi.mock('../../src/modules/tools', () => ({
+  getBuiltinTools: vi.fn().mockReturnValue([]),
+  addToolToAgent: vi.fn(),
+  removeToolFromAgent: vi.fn(),
+  listCustomTools: vi.fn().mockResolvedValue([]),
+  getCustomTool: vi.fn(),
+  registerCustomTool: vi.fn(),
+  approveCustomTool: vi.fn(),
+  deleteCustomTool: vi.fn(),
+  getToolConfig: vi.fn(),
+  updateToolConfig: vi.fn(),
+  setToolConfigKey: vi.fn(),
+  removeToolConfigKey: vi.fn(),
+  updateToolAccessLevel: vi.fn(),
+  getAgentToolSummary: vi.fn().mockResolvedValue({ builtin: [], custom: [], mcp: [] }),
+}));
+
+vi.mock('../../src/modules/dashboard', () => ({
+  getMetrics: vi.fn().mockResolvedValue({
+    totalRuns: 0, totalTokens: 0, totalCostUsd: 0, errorRate: 0,
+    avgDurationMs: 0, p50DurationMs: 0, p95DurationMs: 0, p99DurationMs: 0,
+    queueWaitP50Ms: 0, queueWaitP95Ms: 0, tokensByAgent: {}, tokensByUser: {},
+    tokensByModel: {}, runsByAgent: {},
+  }),
+  buildDashboardBlocks: vi.fn().mockResolvedValue([]),
+}));
+
+vi.mock('../../src/modules/audit', () => ({
+  getAuditLog: vi.fn().mockResolvedValue([]),
+  logAuditEvent: vi.fn(),
+}));
+
+vi.mock('../../src/modules/kb-sources', () => ({
+  listSources: vi.fn().mockResolvedValue([]),
+  createSource: vi.fn(),
+  updateSource: vi.fn(),
+  deleteSource: vi.fn(),
+  startSync: vi.fn(),
+  flushAndResync: vi.fn(),
+  listApiKeys: vi.fn().mockResolvedValue([]),
+  setApiKey: vi.fn(),
+  deleteApiKey: vi.fn(),
+}));
+
+vi.mock('../../src/modules/connections', () => ({
+  listTeamConnections: vi.fn().mockResolvedValue([]),
+  listPersonalConnectionsForUser: vi.fn().mockResolvedValue([]),
+  createTeamConnection: vi.fn(),
+  createPersonalConnection: vi.fn(),
+  deleteConnection: vi.fn(),
+  listAgentToolConnections: vi.fn().mockResolvedValue([]),
+  setAgentToolConnection: vi.fn(),
+  getToolAgentUsage: vi.fn().mockResolvedValue([]),
+}));
+
+vi.mock('../../src/modules/workflows', () => ({
+  createWorkflowDefinition: vi.fn(),
+  getWorkflowDefinition: vi.fn(),
+  startWorkflow: vi.fn(),
+  getWorkflowRun: vi.fn(),
+  resolveHumanAction: vi.fn(),
+}));
+
+vi.mock('../../src/modules/self-evolution', () => ({
+  getPendingProposals: vi.fn().mockResolvedValue([]),
+  getProposalHistory: vi.fn().mockResolvedValue([]),
+  approveProposal: vi.fn(),
+  rejectProposal: vi.fn(),
+}));
+
+vi.mock('../../src/modules/observability', () => ({
+  getAlertRules: vi.fn().mockReturnValue([]),
+  checkAlerts: vi.fn().mockResolvedValue([]),
+  getAgentErrorRates: vi.fn().mockResolvedValue([]),
+}));
+
+vi.mock('../../src/modules/workspace-settings', () => ({
+  getAllSettings: vi.fn().mockResolvedValue([]),
+  setSetting: vi.fn(),
+}));
+
+vi.mock('../../src/modules/skills', () => ({
+  getAvailableSkills: vi.fn().mockReturnValue({ mcp: [], prompt: [] }),
+  listSkills: vi.fn().mockResolvedValue([]),
+  attachSkillToAgent: vi.fn(),
+  detachSkillFromAgent: vi.fn(),
+  getAgentSkills: vi.fn().mockResolvedValue([]),
+}));
+
+vi.mock('connect-redis', () => {
+  return {
+    default: vi.fn().mockImplementation(() => ({
+      on: vi.fn(),
+      get: vi.fn(),
+      set: vi.fn(),
+      destroy: vi.fn(),
+      touch: vi.fn(),
+    })),
+  };
+});
+
+vi.mock('ioredis', () => {
+  return {
+    default: vi.fn().mockImplementation(() => ({
+      on: vi.fn(),
+      status: 'ready',
+    })),
+  };
+});
+
+vi.mock('express-session', () => {
+  const sessionMiddleware = (_req: any, _res: any, next: any) => next();
+  sessionMiddleware.Store = class Store {};
+  return { default: vi.fn(() => sessionMiddleware) };
+});
 
 vi.mock('uuid', () => ({
   v4: () => 'test-uuid-1234',
