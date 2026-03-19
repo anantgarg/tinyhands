@@ -30,8 +30,25 @@ export async function resolveUserName(userId: string): Promise<string> {
   try {
     const { getSlackApp } = await import('../../slack');
     const client = getSlackApp().client;
-    const result = await client.users.info({ user: userId });
-    const name = result.user?.real_name || result.user?.name || userId;
+
+    let name: string = userId;
+
+    // Bot IDs start with B, regular users start with U/W
+    if (userId.startsWith('B')) {
+      try {
+        const botResult = await client.bots.info({ bot: userId });
+        name = botResult.bot?.name ? `${botResult.bot.name} (bot)` : `Bot ${userId.slice(0, 6)}`;
+      } catch {
+        name = `Bot ${userId.slice(0, 6)}`;
+      }
+    } else {
+      const result = await client.users.info({ user: userId });
+      if (result.user?.is_bot) {
+        name = result.user?.real_name || result.user?.name || `Bot ${userId.slice(0, 6)}`;
+      } else {
+        name = result.user?.real_name || result.user?.name || userId;
+      }
+    }
 
     // Cache for 1 hour
     try {
@@ -43,7 +60,9 @@ export async function resolveUserName(userId: string): Promise<string> {
     return name;
   } catch (err) {
     logger.debug('Failed to resolve user name', { userId, error: String(err) });
-    return userId; // Fallback to raw ID
+    // Return a cleaner fallback for unresolvable IDs
+    if (userId.startsWith('B')) return `Bot ${userId.slice(0, 6)}`;
+    return userId;
   }
 }
 
