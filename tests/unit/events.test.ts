@@ -340,14 +340,13 @@ describe('Slack Events -- registerEvents', () => {
   // ── Registration ──
 
   describe('registration', () => {
-    it('should register message, file_shared, and app_home_opened events', () => {
+    it('should register message and app_home_opened events', () => {
       registerEvents(mockApp as any);
 
       const messageCalls = mockApp.event.mock.calls.filter(
         (c: any[]) => c[0] === 'message'
       );
       expect(messageCalls.length).toBe(1);
-      expect(mockApp.event).toHaveBeenCalledWith('file_shared', expect.any(Function));
       expect(mockApp.event).toHaveBeenCalledWith('app_home_opened', expect.any(Function));
     });
   });
@@ -1094,42 +1093,6 @@ describe('Slack Events -- registerEvents', () => {
       await mockApp._trigger('message', { event: makeMessageEvent(), client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockFireTrigger).not.toHaveBeenCalled();
-    });
-  });
-
-  // ── File Shared Event ──
-
-  describe('file_shared event', () => {
-    it('should post KB processing message when agent exists for channel', async () => {
-      mockGetAgentByChannel.mockResolvedValue(makeAgent());
-
-      registerEvents(mockApp as any);
-      await mockApp._trigger('file_shared', { event: { channel_id: 'C_AGENT' }, context: { teamId: 'W_TEST_123' } });
-
-      expect(mockPostMessage).toHaveBeenCalledWith(
-        'C_AGENT',
-        expect.stringContaining('File received'),
-      );
-    });
-
-    it('should do nothing when no agent exists for channel', async () => {
-      mockGetAgentByChannel.mockResolvedValue(null);
-
-      registerEvents(mockApp as any);
-      await mockApp._trigger('file_shared', { event: { channel_id: 'C_NONE' }, context: { teamId: 'W_TEST_123' } });
-
-      expect(mockPostMessage).not.toHaveBeenCalled();
-    });
-
-    it('should handle file processing errors gracefully', async () => {
-      mockGetAgentByChannel.mockResolvedValue(makeAgent());
-      mockPostMessage.mockRejectedValueOnce(new Error('Slack API error'));
-
-      registerEvents(mockApp as any);
-      // Should not throw
-      await expect(
-        mockApp._trigger('file_shared', { event: { channel_id: 'C_AGENT' }, context: { teamId: 'W_TEST_123' } })
-      ).resolves.not.toThrow();
     });
   });
 
