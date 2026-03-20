@@ -58,6 +58,7 @@ import { useAgentToolConnections, useSetAgentToolConnection } from '@/api/connec
 import { useSlackChannels, useSlackUsers } from '@/api/slack';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { renderEmoji } from '@/lib/emoji';
+import RichTextEditor from '@/components/RichTextEditor';
 import { useAuthStore } from '@/store/auth';
 import { toast } from '@/components/ui/use-toast';
 
@@ -551,13 +552,19 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
         </CardHeader>
         <CardContent>
           {editingPrompt ? (
-            <MarkdownEditor
-              value={promptDraft}
-              onChange={setPromptDraft}
-              onSave={savePrompt}
-              onCancel={() => setEditingPrompt(false)}
-              saving={updateAgent.isPending}
-            />
+            <div className="space-y-3">
+              <RichTextEditor
+                value={promptDraft}
+                onChange={setPromptDraft}
+                placeholder="Write your agent instructions here..."
+              />
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" size="sm" onClick={() => setEditingPrompt(false)}>Cancel</Button>
+                <Button size="sm" onClick={savePrompt} disabled={updateAgent.isPending}>
+                  {updateAgent.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Check className="mr-1.5 h-3.5 w-3.5" /> Save</>}
+                </Button>
+              </div>
+            </div>
           ) : (
             <div
               className="max-h-[400px] overflow-y-auto text-sm bg-warm-bg rounded-lg p-4 prose prose-sm"
