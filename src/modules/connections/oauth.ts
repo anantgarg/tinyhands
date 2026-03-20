@@ -76,7 +76,10 @@ export async function getOAuthUrl(
   if (!clientId) throw new Error(`OAuth not configured for ${integrationId}`);
 
   const state = uuid();
-  const redirectUri = `${config.oauth.redirectBaseUrl}/auth/callback/${integrationId}`;
+  // All Google integrations share one registered redirect URI
+  const GOOGLE_IDS = new Set(['google', 'google_drive', 'google-drive', 'google-sheets', 'google-docs', 'gmail']);
+  const callbackId = GOOGLE_IDS.has(integrationId) ? 'google' : integrationId;
+  const redirectUri = `${config.oauth.redirectBaseUrl}/auth/callback/${callbackId}`;
 
   // Store state in DB
   await execute(
@@ -107,45 +110,48 @@ export async function getOAuthUrl(
 }
 
 export async function handleOAuthCallback(
-  integrationId: string,
+  callbackIntegrationId: string,
   code: string,
   state: string,
 ): Promise<{ wsId: string; userId: string; channelId: string | null }> {
-  // Validate state
+  // Validate state — look up by state token only (integration_id in state may differ from callback path)
   const oauthState = await queryOne<OAuthState>(
-    'SELECT * FROM oauth_states WHERE state = $1 AND integration_id = $2 AND expires_at > NOW()',
-    [state, integrationId]
+    'SELECT * FROM oauth_states WHERE state = $1 AND expires_at > NOW()',
+    [state]
   );
 
   if (!oauthState) throw new Error('Invalid or expired OAuth state');
 
+  // Use the original integration ID from the stored state (e.g. google-drive, gmail)
+  const actualIntegrationId = oauthState.integration_id;
+
   // Clean up state
   await execute('DELETE FROM oauth_states WHERE state = $1', [state]);
 
-  const integration = OAUTH_INTEGRATIONS[integrationId];
-  if (!integration) throw new Error(`Unsupported OAuth integration: ${integrationId}`);
+  const integration = OAUTH_INTEGRATIONS[actualIntegrationId] || OAUTH_INTEGRATIONS[callbackIntegrationId];
+  if (!integration) throw new Error(`Unsupported OAuth integration: ${actualIntegrationId}`);
 
-  // Exchange code for tokens
-  const redirectUri = `${config.oauth.redirectBaseUrl}/auth/callback/${integrationId}`;
+  // Exchange code for tokens — use the callback path that Google expects
+  const redirectUri = `${config.oauth.redirectBaseUrl}/auth/callback/${callbackIntegrationId}`;
   const tokenData = await exchangeCodeForToken(
     integration.tokenUrl,
     code,
     redirectUri,
     integration.clientId(),
     integration.clientSecret(),
-    integrationId,
+    actualIntegrationId,
   );
 
-  // Store as personal connection
+  // Store as personal connection with the original integration ID
   await createPersonalConnection(
     oauthState.workspace_id,
-    integrationId,
+    actualIntegrationId,
     oauthState.user_id,
     tokenData,
-    `${integrationId} (OAuth)`,
+    `${actualIntegrationId} (OAuth)`,
   );
 
-  logger.info('OAuth connection created', { integrationId, userId: oauthState.user_id });
+  logger.info('OAuth connection created', { integrationId: actualIntegrationId, userId: oauthState.user_id });
 
   return {
     wsId: oauthState.workspace_id,
