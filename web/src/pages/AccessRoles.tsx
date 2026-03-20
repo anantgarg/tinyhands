@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Shield, Trash2, AlertCircle, Info, Plus, Search } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { EmptyState } from '@/components/EmptyState';
+
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';

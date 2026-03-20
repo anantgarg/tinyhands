@@ -36,7 +36,7 @@ function humanizeAction(action: unknown): string {
   return action.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function fmtUserId(displayName: unknown, userId: unknown): string {
+function fmtUserId(displayName: unknown, _userId?: unknown): string {
   if (displayName && typeof displayName === 'string' && displayName.trim()) return displayName;
   return '\u2014';
 }

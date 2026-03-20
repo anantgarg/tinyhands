@@ -74,11 +74,7 @@ function InfoTooltip({ text }: { text: string }) {
   );
 }
 
-function activationLabel(agent: AgentData): string {
-  if (agent.mentionsOnly) return 'Mentions Only';
-  if (agent.respondToAllMessages) return 'All Messages';
-  return 'Relevant Messages';
-}
+
 
 export function AgentDetail() {
   const { id } = useParams<{ id: string }>();
@@ -740,7 +736,7 @@ function RunsTab({ agentId }: { agentId: string }) {
                       {run.status}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-warm-text-secondary text-sm">{run.slackUserName || '\u2014'}</TableCell>
+                  <TableCell className="text-warm-text-secondary text-sm">{run.displayName || '\u2014'}</TableCell>
                   <TableCell className="text-sm">{formatDuration(run.durationMs)}</TableCell>
                   <TableCell className="text-sm">{formatCost(run.estimatedCostUsd)}</TableCell>
                   <TableCell className="text-warm-text-secondary text-sm">
@@ -1297,7 +1293,7 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                         </SelectContent>
                       </Select>
                     </TableCell>
-                    <TableCell className="text-warm-text-secondary text-sm">{role.grantedBy ?? '-'}</TableCell>
+                    <TableCell className="text-warm-text-secondary text-sm">{role.grantedByName ?? '\u2014'}</TableCell>
                     <TableCell className="text-warm-text-secondary text-sm">
                       {role.grantedAt ? formatDistanceToNow(new Date(role.grantedAt), { addSuffix: true }) : '-'}
                     </TableCell>

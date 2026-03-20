@@ -1,8 +1,7 @@
 import { useState } from 'react';
-import { Wrench, Check, Trash2, MoreVertical, AlertCircle, Shield } from 'lucide-react';
+import { Check, Trash2, MoreVertical, AlertCircle, Shield } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { EmptyState } from '@/components/EmptyState';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';

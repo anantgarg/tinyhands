@@ -27,7 +27,7 @@ function fmtRelative(v: unknown): string {
   }
 }
 
-function fmtUser(displayName: unknown, userId: unknown): string {
+function fmtUser(displayName: unknown, _userId?: unknown): string {
   if (displayName && typeof displayName === 'string' && displayName.trim()) return displayName;
   return '\u2014';
 }
