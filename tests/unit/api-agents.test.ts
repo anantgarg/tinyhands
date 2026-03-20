@@ -237,7 +237,8 @@ describe('Agent Routes', () => {
       const res = await makeRequest(app, 'GET', '/agents/a1');
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual(agent);
+      expect(res.body).toMatchObject(agent);
+      expect(res.body.channel_names).toEqual({});
     });
 
     it('returns 404 when agent not found', async () => {

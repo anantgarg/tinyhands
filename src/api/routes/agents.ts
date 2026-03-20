@@ -95,7 +95,27 @@ router.get('/:id', async (req: Request, res: Response) => {
       res.status(403).json({ error: 'Insufficient permissions' });
       return;
     }
-    res.json(agent);
+
+    // Resolve channel names (best-effort, never blocks response)
+    const channelIds = (agent as any).channel_ids || [];
+    let channelNames: Record<string, string> = {};
+    try {
+      if (channelIds.length > 0) {
+        const { getSlackApp } = await import('../../slack');
+        const client = getSlackApp().client;
+        const results = await Promise.allSettled(channelIds.map(async (chId: string) => {
+          const info = await client.conversations.info({ channel: chId });
+          return { id: chId, name: info.channel?.name };
+        }));
+        for (const r of results) {
+          if (r.status === 'fulfilled' && r.value.name) {
+            channelNames[r.value.id] = r.value.name;
+          }
+        }
+      }
+    } catch { /* Slack not available */ }
+
+    res.json({ ...(agent as any), channel_names: channelNames });
   } catch (err: any) {
     logger.error('Get agent error', { error: err.message });
     res.status(500).json({ error: 'Failed to get agent' });

@@ -757,8 +757,8 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="team">Team credentials</SelectItem>
-                                <SelectItem value="personal">Personal credentials</SelectItem>
-                                <SelectItem value="hybrid">Personal, fallback to team</SelectItem>
+                                <SelectItem value="personal">Requesting user's credentials</SelectItem>
+                                <SelectItem value="hybrid">User's if available, otherwise team</SelectItem>
                               </SelectContent>
                             </Select>
                           ) : (
@@ -1234,8 +1234,13 @@ function TriggersTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
   const currentChannelIds = agent.channelIds ?? [];
   const allChannels = slackChannelsData?.channels ?? [];
   const channelMap: Record<string, string> = {};
+  // Use server-resolved names first, then Slack API data as fallback
+  const serverNames = (agent as any).channelNames ?? {};
+  for (const [id, name] of Object.entries(serverNames)) {
+    channelMap[id] = name as string;
+  }
   for (const ch of allChannels) {
-    channelMap[ch.id] = ch.name;
+    if (!channelMap[ch.id]) channelMap[ch.id] = ch.name;
   }
 
   const availableChannels = allChannels
