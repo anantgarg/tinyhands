@@ -222,7 +222,7 @@ export function Agents() {
           <SelectContent>
             <SelectItem value="all">All Models</SelectItem>
             {models.map((m) => (
-              <SelectItem key={m} value={m}>{m}</SelectItem>
+              <SelectItem key={m} value={m}>{formatModelShort(m)}</SelectItem>
             ))}
           </SelectContent>
         </Select>

@@ -1456,7 +1456,6 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-end gap-3">
             <div className="max-w-md">
               <Select value={defaultAccess} onValueChange={(v) => {
                 setDefaultAccess(v);
