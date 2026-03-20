@@ -61,7 +61,9 @@ router.get('/entries', async (req: Request, res: Response) => {
       where += ` AND e.category = $${paramIdx++}`;
       params.push(category);
     }
-    if (sourceId) {
+    if (sourceId === 'manual') {
+      where += ` AND e.kb_source_id IS NULL`;
+    } else if (sourceId) {
       where += ` AND e.kb_source_id = $${paramIdx++}`;
       params.push(sourceId);
     }

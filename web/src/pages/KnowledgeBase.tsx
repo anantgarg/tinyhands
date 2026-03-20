@@ -512,6 +512,9 @@ export function KnowledgeBase() {
               </>
             ) : (
               <>
+                {isAdmin && detailEntry?.kbSourceId && (
+                  <p className="text-xs text-warm-text-secondary mr-auto">Auto-synced entries cannot be edited</p>
+                )}
                 <Button variant="outline" onClick={() => { setDetailEntry(null); setEditMode(false); }}>Close</Button>
                 {isAdmin && !detailEntry?.kbSourceId && (
                   <Button variant="outline" onClick={() => {
@@ -520,9 +523,6 @@ export function KnowledgeBase() {
                     setEditCategory(detailEntry?.category ?? '');
                     setEditMode(true);
                   }}>Edit</Button>
-                )}
-                {isAdmin && detailEntry?.kbSourceId && (
-                  <p className="text-xs text-warm-text-secondary mr-auto">Auto-synced entries cannot be edited</p>
                 )}
                 {isAdmin && (
                   <Button variant="danger" size="sm" onClick={() => {

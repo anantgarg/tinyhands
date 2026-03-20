@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowLeft, RefreshCw, Trash2, Plus, Key, Copy, AlertCircle, Pencil,
-  Github, Globe, FileText, Database, BookOpen, ChevronRight, Folder, Loader2,
+  Github, Globe, FileText, Database, BookOpen,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -32,8 +32,8 @@ import {
   useSetKBApiKey,
   useDeleteKBApiKey,
   useCreateKBSource,
-  useDriveFolders,
 } from '@/api/kb';
+import { DriveFolderPicker } from '@/components/DriveFolderPicker';
 import { toast } from '@/components/ui/use-toast';
 
 const SOURCE_TYPES = [
@@ -66,112 +66,6 @@ const SOURCE_CONFIG_FIELDS: Record<string, { key: string; label: string; placeho
     { key: 'rootPageId', label: 'Root Page ID', placeholder: 'Notion page ID', required: true, help: 'The ID of the top-level page to sync. Found in the page\'s URL after the workspace name.' },
   ],
 };
-
-function DriveFolderPicker({ value, onChange }: { value: string; onChange: (id: string, name: string) => void }) {
-  const [browsing, setBrowsing] = useState(false);
-  const [currentParent, setCurrentParent] = useState('root');
-  const [breadcrumbs, setBreadcrumbs] = useState<{ id: string; name: string }[]>([{ id: 'root', name: 'My Drive' }]);
-  const { data, isLoading, isError } = useDriveFolders(browsing ? currentParent : null);
-
-  const navigateInto = (folderId: string, folderName: string) => {
-    setCurrentParent(folderId);
-    setBreadcrumbs((prev) => [...prev, { id: folderId, name: folderName }]);
-  };
-
-  const navigateTo = (idx: number) => {
-    const target = breadcrumbs[idx];
-    setCurrentParent(target.id);
-    setBreadcrumbs((prev) => prev.slice(0, idx + 1));
-  };
-
-  if (!browsing) {
-    return (
-      <div>
-        <div className="flex items-center gap-2">
-          <Input value={value} onChange={(e) => onChange(e.target.value, '')} placeholder="Folder ID" className="flex-1" />
-          <Button type="button" variant="outline" size="sm" onClick={() => setBrowsing(true)}>
-            <Folder className="mr-1.5 h-3.5 w-3.5" /> Browse
-          </Button>
-        </div>
-        <p className="text-xs text-warm-text-secondary mt-1">Paste a folder ID or click Browse to pick a folder from your Google Drive.</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="rounded-lg border border-warm-border">
-      {/* Breadcrumbs */}
-      <div className="flex items-center gap-1 px-3 py-2 border-b border-warm-border text-xs text-warm-text-secondary overflow-x-auto">
-        {breadcrumbs.map((crumb, i) => (
-          <span key={crumb.id} className="flex items-center gap-1 shrink-0">
-            {i > 0 && <ChevronRight className="h-3 w-3" />}
-            <button className="hover:text-warm-text underline-offset-2 hover:underline" onClick={() => navigateTo(i)}>
-              {crumb.name}
-            </button>
-          </span>
-        ))}
-      </div>
-
-      {/* Folder list */}
-      <div className="max-h-[200px] overflow-y-auto">
-        {isLoading ? (
-          <div className="flex items-center justify-center py-6 text-warm-text-secondary">
-            <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading folders...
-          </div>
-        ) : isError ? (
-          <p className="text-sm text-red-500 text-center py-4">Failed to load folders. Is your Google account connected?</p>
-        ) : (data?.folders ?? []).length === 0 ? (
-          <p className="text-sm text-warm-text-secondary text-center py-4">No subfolders here</p>
-        ) : (
-          (data?.folders ?? []).map((folder) => (
-            <div
-              key={folder.id}
-              className="flex items-center justify-between px-3 py-2 hover:bg-warm-bg cursor-pointer group"
-            >
-              <button
-                className="flex items-center gap-2 text-sm flex-1 text-left"
-                onClick={() => navigateInto(folder.id, folder.name)}
-              >
-                <Folder className="h-4 w-4 text-blue-500 shrink-0" />
-                <span className="truncate">{folder.name}</span>
-              </button>
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 text-xs opacity-0 group-hover:opacity-100 shrink-0"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onChange(folder.id, folder.name);
-                  setBrowsing(false);
-                }}
-              >
-                Select
-              </Button>
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* Select current folder / cancel */}
-      <div className="flex items-center justify-between px-3 py-2 border-t border-warm-border">
-        <Button variant="ghost" size="sm" className="text-xs" onClick={() => setBrowsing(false)}>Cancel</Button>
-        {currentParent !== 'root' && (
-          <Button
-            size="sm"
-            className="text-xs"
-            onClick={() => {
-              const current = breadcrumbs[breadcrumbs.length - 1];
-              onChange(current.id, current.name);
-              setBrowsing(false);
-            }}
-          >
-            Use this folder
-          </Button>
-        )}
-      </div>
-    </div>
-  );
-}
 
 function getSourceTypeName(type: string | null): string {
   const names: Record<string, string> = {
