@@ -261,9 +261,11 @@ export async function resolveToolCredentials(
     }
   }
 
-  // Fallback: try team connection for integration
-  const teamConn = await getTeamConnection(wsId, integrationId);
-  if (teamConn) return decryptCredentials(teamConn);
+  // If no explicit mode set, default to team connection
+  if (!atc) {
+    const teamConn = await getTeamConnection(wsId, integrationId);
+    if (teamConn) return decryptCredentials(teamConn);
+  }
 
   return null;
 }
