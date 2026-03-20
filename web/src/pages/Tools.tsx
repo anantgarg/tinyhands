@@ -173,13 +173,13 @@ function ToolsContent() {
             {connected.map((integration) => {
               const tools = integrationToolMap.get(integration.id);
               return (
-                <Card key={integration.id}>
-                  <CardContent className="p-5">
+                <Card key={integration.id} className="flex flex-col">
+                  <CardContent className="p-5 flex flex-col flex-1">
                     <div className="flex items-start justify-between mb-2">
                       <h3 className="font-semibold">{integration.displayName ?? integration.name ?? 'Unknown'}</h3>
                       <Badge variant="success">Connected</Badge>
                     </div>
-                    <p className="text-xs text-warm-text-secondary mb-3">{integration.description || ''}</p>
+                    <p className="text-xs text-warm-text-secondary mb-3 flex-1">{integration.description || ''}</p>
                     <div className="flex items-center justify-between">
                       {tools ? (
                         <div className="flex gap-1">

@@ -721,25 +721,21 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
     toast({ title: `Removed ${group.displayName}`, variant: 'success' });
   };
 
-  const handleAddSelectedTools = () => {
+  const handleAddSelectedTools = async () => {
     const tools = Array.from(selectedToolsToAdd);
     if (tools.length === 0) return;
-    let completed = 0;
+    // Close dialog immediately and show adding state
+    setShowAddTool(false);
+    const names = tools.map(t => {
+      const friendly = BUILTIN_FRIENDLY_NAMES[t];
+      return friendly ? friendly.replace(/ \(.*\)$/, '') : t.replace(/-(read|write|search)$/, '').replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    });
+    const uniqueNames = [...new Set(names)];
+    toast({ title: `Adding ${uniqueNames.join(', ')}...`, variant: 'default' });
     for (const tool of tools) {
-      addAgentTool.mutate(
-        { agentId, tool },
-        {
-          onSuccess: () => {
-            completed++;
-            if (completed === tools.length) {
-              toast({ title: `Added ${tools.length} tool(s)`, variant: 'success' });
-              setShowAddTool(false);
-              setSelectedToolsToAdd(new Set());
-            }
-          },
-        },
-      );
+      addAgentTool.mutate({ agentId, tool });
     }
+    setSelectedToolsToAdd(new Set());
   };
 
 
@@ -829,26 +825,9 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                           <TableCell>
                             {group.isInteg ? (
                               <div className="flex gap-1.5">
-                                <button
-                                  onClick={() => {
-                                    if (group.writeTool) return; // Can't remove read when write is active
-                                    const readName = `${group.key}-read`;
-                                    const searchName = `${group.key}-search`;
-                                    if (group.readTool) {
-                                      handleRemoveTool(group.readTool);
-                                    } else {
-                                      const toolName = (availableTools ?? []).find(t => t.name === readName)?.name || (availableTools ?? []).find(t => t.name === searchName)?.name;
-                                      if (toolName) addAgentTool.mutate({ agentId, tool: toolName });
-                                    }
-                                  }}
-                                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                                    group.readTool || group.writeTool
-                                      ? `bg-blue-100 text-blue-700 ${group.writeTool ? 'opacity-70 cursor-default' : 'hover:bg-blue-200'}`
-                                      : 'bg-warm-bg text-warm-text-secondary hover:bg-warm-bg/80'
-                                  }`}
-                                >
+                                <span className="px-2.5 py-1 rounded-md text-xs font-medium bg-blue-100 text-blue-700">
                                   Can view data
-                                </button>
+                                </span>
                                 {(availableTools ?? []).some(t => t.name === `${group.key}-write`) && (() => {
                                   const writeName = `${group.key}-write`;
                                   const isPending = pendingWriteTools.has(writeName);
