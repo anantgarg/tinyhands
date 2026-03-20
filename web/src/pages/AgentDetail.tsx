@@ -696,14 +696,6 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
   const currentTools = agent.tools ?? [];
   const toolsNotAdded = (availableTools ?? []).filter((t) => !currentTools.includes(t.name));
 
-  // Group tools not added by source
-  const groupedToolsNotAdded = toolsNotAdded.reduce<Record<string, typeof toolsNotAdded>>((acc, tool) => {
-    const group = tool.source === 'integration' ? 'Connected Services' : tool.source === 'custom' ? 'Custom Tools' : 'Core Tools';
-    if (!acc[group]) acc[group] = [];
-    acc[group].push(tool);
-    return acc;
-  }, {});
-
   // Build a map of tool name -> current mode
   const toolModeMap: Record<string, string> = {};
   for (const tc of toolConnections ?? []) {
@@ -738,10 +730,6 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
     }
   };
 
-  const isIntegrationTool = (toolName: string) => {
-    const meta = (availableTools ?? []).find((t) => t.name === toolName);
-    return meta?.source === 'integration' || (toolName.includes('-') && !['sub-agent'].includes(toolName));
-  };
 
   return (
     <div className="space-y-6">
