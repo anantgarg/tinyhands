@@ -209,18 +209,15 @@ router.get('/sources', async (req: Request, res: Response) => {
   try {
     const { workspaceId } = getSessionUser(req);
     const sources = await listSources(workspaceId);
-    // Compute actual entry counts from kb_entries
-    const counts = await query(
-      'SELECT kb_source_id, count(*)::int as count FROM kb_entries WHERE workspace_id = $1 AND kb_source_id IS NOT NULL GROUP BY kb_source_id',
-      [workspaceId]
-    );
-    const countMap: Record<string, number> = {};
-    for (const row of counts as any[]) {
-      countMap[row.kb_source_id] = row.count;
-    }
     res.json((sources as any[]).map((s: any) => ({
-      ...s,
-      entry_count: countMap[s.id] ?? s.entry_count ?? 0,
+      id: s.id,
+      name: s.name,
+      type: s.source_type || s.type,
+      config: s.config_json ? (typeof s.config_json === 'string' ? JSON.parse(s.config_json) : s.config_json) : {},
+      status: s.status,
+      lastSyncAt: s.last_sync_at,
+      entriesCount: s.entry_count ?? 0,
+      createdAt: s.created_at,
     })));
   } catch (err: any) {
     logger.error('List KB sources error', { error: err.message });

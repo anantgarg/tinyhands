@@ -350,7 +350,7 @@ describe('listSources', () => {
     const result = await listSources(TEST_WORKSPACE_ID);
     expect(result).toEqual(sources);
     expect(mockQuery).toHaveBeenCalledWith(
-      'SELECT * FROM kb_sources WHERE workspace_id = $1 ORDER BY created_at DESC',
+      expect.stringContaining('FROM kb_sources'),
       [TEST_WORKSPACE_ID],
     );
   });

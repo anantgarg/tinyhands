@@ -177,7 +177,33 @@ export function KnowledgeBase() {
         </div>
       )}
 
-      {/* Source Cards (when no source selected) */}
+      {/* Search bar — always visible at top */}
+      <div className="flex items-center gap-3 mb-4">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-warm-text-secondary" />
+          <Input
+            placeholder="Search all entries..."
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            className="pl-9"
+          />
+        </div>
+        {(activeSource || search) && (
+          <Select value={category} onValueChange={(v) => { setCategory(v); setPage(1); }}>
+            <SelectTrigger className="w-[160px]">
+              <SelectValue placeholder="Category" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Categories</SelectItem>
+              {(categories ?? []).map((cat) => (
+                <SelectItem key={cat} value={cat}>{titleCase(cat)}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+      </div>
+
+      {/* Source Cards (when no source selected and not searching) */}
       {!activeSource && !search && (
         <div className="mb-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -239,54 +265,16 @@ export function KnowledgeBase() {
         </div>
       )}
 
-      {/* Search + Filters (always shown when inside a source or searching) */}
-      {(activeSource || search) && (
-        <div className="flex items-center gap-3 mb-4">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-warm-text-secondary" />
-            <Input
-              placeholder="Search entries..."
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              className="pl-9"
-            />
-          </div>
-          <Select value={category} onValueChange={(v) => { setCategory(v); setPage(1); }}>
-            <SelectTrigger className="w-[160px]">
-              <SelectValue placeholder="Category" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              {(categories ?? []).map((cat) => (
-                <SelectItem key={cat} value={cat}>{titleCase(cat)}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
-
-      {/* Global search bar (when no source selected and not searching yet) */}
-      {!activeSource && !search && (
-        <div className="mb-4">
-          <div className="relative max-w-sm">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-warm-text-secondary" />
-            <Input
-              placeholder="Search all entries..."
-              value={search}
-              onChange={(e) => { setSearch(e.target.value); setPage(1); }}
-              className="pl-9"
-            />
-          </div>
-        </div>
-      )}
-
       {/* Entry list (shown when a source is selected or searching) */}
       {(activeSource || search) && (
         <Tabs value={tab} onValueChange={(v) => { setTab(v); setPage(1); }}>
-          <TabsList>
-            <TabsTrigger value="approved">Published</TabsTrigger>
-            {isAdmin && <TabsTrigger value="pending">Pending Review</TabsTrigger>}
-          </TabsList>
+          {/* Only show tabs for manual entries or top-level search — synced sources don't have pending */}
+          {(activeSource === 'manual' || !activeSource) && isAdmin ? (
+            <TabsList>
+              <TabsTrigger value="approved">Published</TabsTrigger>
+              <TabsTrigger value="pending">Pending Review</TabsTrigger>
+            </TabsList>
+          ) : null}
 
           <TabsContent value={tab}>
             {isLoading ? (

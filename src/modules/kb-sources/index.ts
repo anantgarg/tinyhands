@@ -131,7 +131,15 @@ export async function getSource(workspaceId: string, id: string): Promise<KBSour
 }
 
 export async function listSources(workspaceId: string): Promise<KBSource[]> {
-  return query<KBSource>('SELECT * FROM kb_sources WHERE workspace_id = $1 ORDER BY created_at DESC', [workspaceId]);
+  return query<KBSource>(
+    `SELECT s.*, COALESCE(e.cnt, 0)::int AS entry_count
+     FROM kb_sources s
+     LEFT JOIN (SELECT kb_source_id, COUNT(*) AS cnt FROM kb_entries WHERE workspace_id = $1 GROUP BY kb_source_id) e
+       ON e.kb_source_id = s.id
+     WHERE s.workspace_id = $1
+     ORDER BY s.created_at DESC`,
+    [workspaceId]
+  );
 }
 
 export async function updateSource(workspaceId: string, id: string, updates: Partial<Pick<KBSource, 'name' | 'config_json' | 'status' | 'auto_sync' | 'sync_interval_hours' | 'error_message' | 'entry_count' | 'last_sync_at'>>): Promise<void> {
