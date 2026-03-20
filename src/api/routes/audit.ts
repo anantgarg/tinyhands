@@ -2,6 +2,8 @@ import { Router, Request, Response } from 'express';
 import { getSessionUser } from '../middleware/auth';
 import { requireAdmin } from '../middleware/admin';
 import { getAuditLog } from '../../modules/audit';
+import { resolveUserNames } from '../helpers/user-resolver';
+import { query as dbQuery } from '../../db';
 import { logger } from '../../utils/logger';
 
 const router = Router();
@@ -28,7 +30,34 @@ router.get('/', requireAdmin, async (req: Request, res: Response) => {
     options.offset = (page - 1) * limit;
 
     const entries = await getAuditLog(workspaceId, options);
-    res.json(entries);
+
+    // Get total count for pagination
+    let total = entries.length;
+    try {
+      const countConditions = ['workspace_id = $1'];
+      const countParams: any[] = [workspaceId];
+      let ci = 2;
+      if (options.agentId) { countConditions.push(`agent_id = $${ci++}`); countParams.push(options.agentId); }
+      if (options.userId) { countConditions.push(`actor_user_id = $${ci++}`); countParams.push(options.userId); }
+      if (options.actionType) { countConditions.push(`action_type = $${ci++}`); countParams.push(options.actionType); }
+      const [countRow] = await dbQuery(`SELECT count(*)::int as count FROM action_audit_log WHERE ${countConditions.join(' AND ')}`, countParams);
+      total = countRow?.count ?? entries.length;
+    } catch { /* best-effort count */ }
+
+    // Resolve user display names (best-effort)
+    let enriched = entries;
+    try {
+      const userIds = (entries as any[]).map((e: any) => e.actor_user_id).filter(Boolean);
+      if (userIds.length > 0) {
+        const names = await resolveUserNames(userIds);
+        enriched = (entries as any[]).map((e: any) => ({
+          ...e,
+          actorDisplayName: names[e.actor_user_id] || e.actor_user_id,
+        }));
+      }
+    } catch { /* best-effort */ }
+
+    res.json({ entries: enriched, total });
   } catch (err: any) {
     logger.error('Get audit log error', { error: err.message });
     res.status(500).json({ error: 'Failed to get audit log' });
