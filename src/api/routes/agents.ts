@@ -98,7 +98,7 @@ router.get('/:id', async (req: Request, res: Response) => {
 
     // Resolve channel names (best-effort, never blocks response)
     const channelIds = (agent as any).channel_ids || [];
-    let channelNames: Record<string, string> = {};
+    const channelNames: Record<string, string> = {};
     try {
       if (channelIds.length > 0) {
         const { getSlackApp } = await import('../../slack');
