@@ -183,7 +183,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
           </Avatar>
           <div className="flex-1 min-w-0">
             <p className="truncate text-sm font-medium leading-tight">{user?.displayName ?? 'Unknown'}</p>
-            <p className="truncate text-xs text-warm-text-secondary capitalize">{user?.platformRole ?? 'member'}</p>
+            <p className="truncate text-xs text-warm-text-secondary capitalize">{(user?.platformRole ?? 'member').replace('superadmin', 'Super Admin').replace('admin', 'Admin').replace('member', 'Member')}</p>
           </div>
           <button
             onClick={handleLogout}

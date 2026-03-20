@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Zap, Plus, Search, Trash2, MoreVertical, Power, PowerOff, MessageSquare, CalendarClock, Webhook, AlertCircle } from 'lucide-react';
+import { Zap, Plus, Search, Trash2, MoreVertical, MessageSquare, CalendarClock, Webhook, AlertCircle } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
