@@ -161,6 +161,8 @@ export function AgentDetail() {
   const updateAgent = useUpdateAgent();
   const deleteAgentMut = useDeleteAgent();
   const [activeTab, setActiveTab] = useState('overview');
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState('');
 
   if (isLoading) {
     return (
@@ -215,7 +217,36 @@ export function AgentDetail() {
           <span className="text-3xl">{renderEmoji(agent.avatarEmoji)}</span>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-extrabold">{agent.name}</h1>
+              {editingName ? (
+                <input
+                  autoFocus
+                  value={nameDraft}
+                  onChange={(e) => setNameDraft(e.target.value)}
+                  onBlur={() => {
+                    if (nameDraft.trim() && nameDraft !== agent.name) {
+                      updateAgent.mutate(
+                        { id: agent.id, name: nameDraft.trim() },
+                        { onSuccess: () => toast({ title: 'Name updated', variant: 'success' }) },
+                      );
+                    }
+                    setEditingName(false);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                    if (e.key === 'Escape') { setEditingName(false); }
+                  }}
+                  className="text-2xl font-extrabold bg-transparent border-b-2 border-brand outline-none px-0 py-0 w-auto min-w-[100px]"
+                  style={{ width: `${Math.max(nameDraft.length, 5)}ch` }}
+                />
+              ) : (
+                <h1
+                  className="text-2xl font-extrabold cursor-pointer hover:text-brand transition-colors"
+                  onClick={() => { setNameDraft(agent.name); setEditingName(true); }}
+                  title="Click to rename"
+                >
+                  {agent.name}
+                </h1>
+              )}
               <Badge variant={agent.status === 'active' ? 'success' : 'secondary'}>
                 {agent.status}
               </Badge>

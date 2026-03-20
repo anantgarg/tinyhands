@@ -66,16 +66,17 @@ export function AgentCreate() {
   const handleAnalyze = () => {
     if (!goal.trim()) return;
     analyzeGoal.mutate(goal, {
-      onSuccess: (result) => {
-        setName(result.name);
-        setAvatarEmoji(result.avatarEmoji);
-        setSystemPrompt(result.systemPrompt);
-        setModel(result.model);
-        setSelectedTools(result.tools);
-        setMentionsOnly(result.mentionsOnly);
-        setMemoryEnabled(result.memoryEnabled);
+      onSuccess: (result: any) => {
+        setName(result.agentName || result.name || '');
+        setAvatarEmoji(result.avatarEmoji || result.avatar_emoji || '');
+        setSystemPrompt(result.systemPrompt || result.system_prompt || '');
+        setModel(result.model || 'claude-sonnet-4-20250514');
+        setSelectedTools(result.tools || []);
+        setMentionsOnly(result.mentionsOnly ?? result.mentions_only ?? false);
+        setMemoryEnabled(result.memoryEnabled ?? result.memory_enabled ?? false);
         setAnalyzed(true);
-        toast({ title: 'Agent configuration generated', variant: 'success' });
+        setStep(2); // Auto-advance to Identity step
+        toast({ title: 'Configuration generated', variant: 'success' });
       },
       onError: (err) => {
         toast({ title: 'Analysis failed', description: err.message, variant: 'error' });
@@ -202,20 +203,6 @@ export function AgentCreate() {
             </CardContent>
           </Card>
 
-          {analyzed && (
-            <Card className="mt-6">
-              <CardContent className="p-6">
-                <div className="flex items-center gap-3 mb-4">
-                  <span className="text-3xl">{avatarEmoji}</span>
-                  <div>
-                    <h3 className="text-lg font-bold">{name}</h3>
-                    <p className="text-sm text-warm-text-secondary">{selectedTools.length} tools selected, {model.includes('opus') ? 'Opus' : model.includes('haiku') ? 'Haiku' : 'Sonnet'} model</p>
-                  </div>
-                </div>
-                <Button onClick={() => setStep(2)}>Looks good, continue</Button>
-              </CardContent>
-            </Card>
-          )}
         </>
       )}
 
