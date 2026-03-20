@@ -35,15 +35,15 @@ const mainNav: NavItem[] = [
 const manageNav: NavItem[] = [
   { label: 'Agents', to: '/agents', icon: Bot },
   { label: 'Tools & Integrations', to: '/tools', icon: Wrench, adminOnly: true },
+  { label: 'Connections', to: '/connections', icon: Link },
   { label: 'Knowledge Base', to: '/kb', icon: BookOpen },
-  { label: 'Connections', to: '/connections', icon: Link, adminOnly: true },
   { label: 'Triggers', to: '/triggers', icon: Zap },
 ];
 
 const reviewNav: NavItem[] = [
   { label: 'Requests', to: '/requests', icon: Bell },
   { label: 'Error Logs', to: '/errors', icon: AlertTriangle },
-  { label: 'Audit Log', to: '/audit', icon: FileText },
+  { label: 'Audit Log', to: '/audit', icon: FileText, adminOnly: true },
 ];
 
 const settingsNav: NavItem[] = [

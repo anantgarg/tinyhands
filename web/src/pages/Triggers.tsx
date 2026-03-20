@@ -60,7 +60,8 @@ function humanizeCron(cron: string | undefined): string {
   // Every N hours
   if (hour.startsWith('*/')) {
     const n = hour.slice(2);
-    return `Every ${n} hours at :${min.padStart(2, '0')}`;
+    const minPad = min.padStart(2, '0');
+    return minPad === '00' ? `Every ${n} hours` : `Every ${n} hours at :${minPad}`;
   }
 
   // Format time as 12-hour
@@ -205,12 +206,11 @@ export function Triggers() {
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => window.location.href = `/agents/${trigger.agentId}?tab=runs`}>
+          View Runs
+        </DropdownMenuItem>
         <DropdownMenuItem onClick={() => handleToggle(trigger.id, trigger.enabled)}>
-          {trigger.enabled ? (
-            <><PowerOff className="mr-2 h-4 w-4" /> Disable</>
-          ) : (
-            <><Power className="mr-2 h-4 w-4" /> Enable</>
-          )}
+          {trigger.enabled ? 'Disable' : 'Enable'}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem className="text-red-600" onClick={() => handleDelete(trigger.id)}>
