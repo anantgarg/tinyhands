@@ -90,12 +90,29 @@ function formatCategory(cat: string): string {
 }
 
 const BUILTIN_FRIENDLY_NAMES: Record<string, string> = {
-  'web-search': 'Web Search',
-  'code-exec': 'Code Execution',
-  'file-read': 'File Read',
-  'file-write': 'File Write',
-  'memory-store': 'Memory Store',
-  'memory-recall': 'Memory Recall',
+  Bash: 'Run Commands',
+  Read: 'Read Files',
+  Write: 'Write Files',
+  Edit: 'Edit Files',
+  Glob: 'Find Files',
+  Grep: 'Search Code',
+  WebSearch: 'Web Search',
+  WebFetch: 'Fetch Web Pages',
+  NotebookEdit: 'Edit Notebooks',
+  TodoWrite: 'Task Planner',
+  Agent: 'Sub-Agent',
+  Mcp: 'External Service',
+  'serpapi-read': 'SerpAPI (Search Rankings)',
+  'kb-search': 'Knowledge Base (Search)',
+  'chargebee-read': 'Chargebee (Read)',
+  'chargebee-write': 'Chargebee (Write)',
+  'hubspot-read': 'HubSpot (Read)',
+  'hubspot-write': 'HubSpot (Write)',
+  'linear-read': 'Linear (Read)',
+  'linear-write': 'Linear (Write)',
+  'zendesk-read': 'Zendesk (Read)',
+  'zendesk-write': 'Zendesk (Write)',
+  'posthog-read': 'PostHog (Read)',
 };
 
 /** Get a human-readable display name for a tool slug */
@@ -394,7 +411,7 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
                   <SelectItem value="10">Quick</SelectItem>
                   <SelectItem value="25">Standard</SelectItem>
                   <SelectItem value="50">Thorough</SelectItem>
-                  <SelectItem value="100">Unlimited</SelectItem>
+                  <SelectItem value="100">Maximum</SelectItem>
                 </SelectContent>
               </Select>
             </div>
