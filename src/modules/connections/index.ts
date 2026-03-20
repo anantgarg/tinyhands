@@ -21,7 +21,7 @@ export async function createTeamConnection(
     VALUES ($1, $2, $3, 'team', NULL, $4, $5, $6, $7)
     ON CONFLICT (workspace_id, integration_id) WHERE connection_type = 'team'
     DO UPDATE SET credentials_encrypted = EXCLUDED.credentials_encrypted,
-      credentials_iv = EXCLUDED.credentials_iv, label = EXCLUDED.label, updated_at = NOW()
+      credentials_iv = EXCLUDED.credentials_iv, label = EXCLUDED.label, status = 'active', updated_at = NOW()
     RETURNING *
   `, [id, wsId, integrationId, label || '', encrypted, iv, createdBy]);
 
@@ -57,7 +57,7 @@ export async function createPersonalConnection(
     VALUES ($1, $2, $3, 'personal', $4, $5, $6, $7, $4)
     ON CONFLICT (workspace_id, integration_id, user_id) WHERE connection_type = 'personal'
     DO UPDATE SET credentials_encrypted = EXCLUDED.credentials_encrypted,
-      credentials_iv = EXCLUDED.credentials_iv, label = EXCLUDED.label, updated_at = NOW()
+      credentials_iv = EXCLUDED.credentials_iv, label = EXCLUDED.label, status = 'active', updated_at = NOW()
     RETURNING *
   `, [id, wsId, integrationId, userId, label || '', encrypted, iv]);
 

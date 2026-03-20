@@ -11,7 +11,6 @@ import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import {
   useTeamConnections,
@@ -19,8 +18,6 @@ import {
   useCreatePersonalConnection,
   useDeleteConnection,
   useOAuthIntegrations,
-  useAgentToolModes,
-  useSetAgentToolMode,
 } from '@/api/connections';
 import { useIntegrations } from '@/api/tools';
 import { useAuthStore } from '@/store/auth';
@@ -46,10 +43,8 @@ function ConnectionsContent() {
   const { data: personalConns, isLoading: personalLoading, isError: personalError } = usePersonalConnections();
   const { data: oauthIntegrations } = useOAuthIntegrations();
   const { data: allIntegrations } = useIntegrations();
-  const { data: agentToolModes, isLoading: modesLoading } = useAgentToolModes();
   const deleteConnection = useDeleteConnection();
   const createPersonalConn = useCreatePersonalConnection();
-  const setToolMode = useSetAgentToolMode();
   const [tab, setTab] = useState('personal');
   const [showAddConnection, setShowAddConnection] = useState(false);
   const [apiKeyDialog, setApiKeyDialog] = useState<{ id: string; name: string; configKeys: { key: string; label: string; placeholder: string; secret: boolean }[] } | null>(null);
@@ -68,7 +63,6 @@ function ConnectionsContent() {
     window.open(`/api/v1/connections/oauth/${integration}/start`, '_blank');
   };
 
-  const hasToolModes = (agentToolModes ?? []).length > 0;
 
   const renderPersonalConnectionsTable = (connections: typeof personalConns, loading: boolean, hasError: boolean) => {
     if (loading) return <Skeleton className="h-[200px]" />;
@@ -209,7 +203,6 @@ function ConnectionsContent() {
         <TabsList>
           <TabsTrigger value="personal">Personal Connections</TabsTrigger>
           <TabsTrigger value="team">Team Connections</TabsTrigger>
-          {hasToolModes && <TabsTrigger value="modes">Agent Tool Modes</TabsTrigger>}
         </TabsList>
 
         <TabsContent value="personal">
@@ -232,60 +225,6 @@ function ConnectionsContent() {
           )}
         </TabsContent>
 
-        {hasToolModes && (
-          <TabsContent value="modes">
-            <Card className="mb-4">
-              <CardContent className="py-4">
-                <p className="text-sm text-warm-text-secondary">
-                  Agent tool modes control how credentials are resolved for each tool. <strong>Team</strong> uses shared workspace credentials, <strong>Personal</strong> uses the individual user's credentials, and <strong>Hybrid</strong> falls back to team credentials when personal ones are not available.
-                </p>
-              </CardContent>
-            </Card>
-            {modesLoading ? (
-              <Skeleton className="h-[200px]" />
-            ) : (
-              <div className="rounded-card border border-warm-border bg-white overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Agent</TableHead>
-                      <TableHead>Tool</TableHead>
-                      <TableHead>Mode</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {(agentToolModes ?? []).map((mode) => (
-                      <TableRow key={`${mode.agentId}-${mode.toolName}`}>
-                        <TableCell className="font-medium">{mode.agentName ?? '\u2014'}</TableCell>
-                        <TableCell>{mode.toolName ?? '\u2014'}</TableCell>
-                        <TableCell>
-                          <Select
-                            value={mode.mode ?? 'team'}
-                            onValueChange={(newMode) =>
-                              setToolMode.mutate(
-                                { agentId: mode.agentId, toolName: mode.toolName, mode: newMode },
-                                { onSuccess: () => toast({ title: 'Mode updated', variant: 'success' }) },
-                              )
-                            }
-                          >
-                            <SelectTrigger className="w-[120px]">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="team">Team</SelectItem>
-                              <SelectItem value="personal">Personal</SelectItem>
-                              <SelectItem value="hybrid">Hybrid</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </TabsContent>
-        )}
       </Tabs>
 
       {/* Add Connection Dialog */}

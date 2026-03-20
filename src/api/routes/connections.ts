@@ -146,11 +146,12 @@ router.get('/agent/:agentId', async (req: Request, res: Response) => {
     const { workspaceId } = getSessionUser(req);
     const agentId = req.params.agentId as string;
     const connections = await listAgentToolConnections(workspaceId, agentId);
-    // Map backend modes to frontend labels
     const REVERSE_MAP: Record<string, string> = { team: 'team', runtime: 'personal', delegated: 'creator' };
     res.json((connections as any[]).map((c: any) => ({
-      ...c,
-      connection_mode: REVERSE_MAP[c.connection_mode] || c.connection_mode,
+      agentId: c.agent_id,
+      toolName: c.tool_name,
+      mode: REVERSE_MAP[c.connection_mode] || c.connection_mode || 'team',
+      connectionId: c.connection_id,
     })));
   } catch (err: any) {
     logger.error('List agent tool connections error', { error: err.message });

@@ -183,8 +183,8 @@ function ToolsContent() {
                     <div className="flex items-center justify-between">
                       {tools ? (
                         <div className="flex gap-1">
-                          {tools.accessLevels.includes('read') && <Badge variant="default" className="text-xs">Read</Badge>}
-                          {tools.accessLevels.includes('write') && <Badge variant="warning" className="text-xs">Write</Badge>}
+                          {tools.accessLevels.includes('read') && <Badge variant="default" className="text-xs">Can view data</Badge>}
+                          {tools.accessLevels.includes('write') && <Badge variant="warning" className="text-xs">Can make changes</Badge>}
                         </div>
                       ) : (
                         <span className="text-xs text-warm-text-secondary">{integration.toolsCount ?? 0} tools</span>
@@ -328,10 +328,10 @@ function ToolsContent() {
                           <TableCell>
                             <div className="flex gap-1">
                               {group.accessLevels.includes('read') && (
-                                <Badge variant="default">Read</Badge>
+                                <Badge variant="default">Can view data</Badge>
                               )}
                               {group.accessLevels.includes('write') && (
-                                <Badge variant="warning">Write</Badge>
+                                <Badge variant="warning">Can make changes</Badge>
                               )}
                               {group.accessLevels.length === 0 && (
                                 <Badge variant="secondary">{firstTool?.accessLevel || 'read-only'}</Badge>

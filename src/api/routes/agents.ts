@@ -114,18 +114,20 @@ router.get('/:id', async (req: Request, res: Response) => {
       return;
     }
 
-    // Resolve channel names (best-effort, never blocks response)
+    // Resolve channel names (best-effort, 3s timeout to avoid blocking)
     const channelIds = (agent as any).channel_ids || [];
     const channelNames: Record<string, string> = {};
     try {
       if (channelIds.length > 0) {
         const { getSlackApp } = await import('../../slack');
         const client = getSlackApp().client;
-        const results = await Promise.allSettled(channelIds.map(async (chId: string) => {
+        const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000));
+        const lookup = Promise.allSettled(channelIds.map(async (chId: string) => {
           const info = await client.conversations.info({ channel: chId });
           return { id: chId, name: info.channel?.name };
         }));
-        for (const r of results) {
+        const results = await Promise.race([lookup, timeout]).catch(() => [] as PromiseSettledResult<any>[]);
+        for (const r of (results as PromiseSettledResult<any>[])) {
           if (r.status === 'fulfilled' && r.value.name) {
             channelNames[r.value.id] = r.value.name;
           }
