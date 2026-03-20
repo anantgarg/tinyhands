@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, Trash2, MoreVertical, AlertCircle, Shield } from 'lucide-react';
+import { Check, Trash2, MoreVertical, AlertCircle, Shield, Pencil, Unplug } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent } from '@/components/ui/card';
@@ -26,6 +26,7 @@ import {
 import {
   useIntegrations,
   useRegisterIntegration,
+  useDisconnectIntegration,
   useCustomTools,
   useApproveCustomTool,
   useDeleteCustomTool,
@@ -85,12 +86,14 @@ function ToolsContent() {
   const { data: integrations, isLoading: intLoading, isError: intError } = useIntegrations();
   const { data: customTools, isLoading: ctLoading } = useCustomTools();
   const registerIntegration = useRegisterIntegration();
+  const disconnectIntegration = useDisconnectIntegration();
   const approveCustomTool = useApproveCustomTool();
   const deleteCustomTool = useDeleteCustomTool();
 
   const [registerDialog, setRegisterDialog] = useState<{
     id: string;
     name: string;
+    isEdit: boolean;
     configKeys: { key: string; label: string; required: boolean; secret: boolean }[];
   } | null>(null);
   const [configValues, setConfigValues] = useState<Record<string, string>>({});
@@ -185,6 +188,41 @@ function ToolsContent() {
                       ) : (
                         <span className="text-xs text-warm-text-secondary">{integration.toolsCount ?? 0} tools</span>
                       )}
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={() => {
+                            setRegisterDialog({
+                              id: integration.id,
+                              name: integration.displayName ?? integration.name ?? 'Integration',
+                              isEdit: true,
+                              configKeys: integration.configKeys ?? [],
+                            });
+                            setConfigValues({});
+                          }}
+                        >
+                          <Pencil className="mr-1 h-3 w-3" />
+                          Edit
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs text-red-500 hover:text-red-600"
+                          onClick={() => {
+                            if (confirm(`Disconnect ${integration.displayName}? Agents using this integration will lose access.`)) {
+                              disconnectIntegration.mutate(integration.id, {
+                                onSuccess: () => toast({ title: 'Disconnected', variant: 'success' }),
+                                onError: (err) => toast({ title: 'Failed', description: err.message, variant: 'error' }),
+                              });
+                            }
+                          }}
+                        >
+                          <Unplug className="mr-1 h-3 w-3" />
+                          Disconnect
+                        </Button>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
@@ -219,6 +257,7 @@ function ToolsContent() {
                       setRegisterDialog({
                         id: integration.id,
                         name: integration.displayName ?? integration.name ?? 'Integration',
+                        isEdit: false,
                         configKeys: integration.configKeys ?? [],
                       });
                       setConfigValues({});
@@ -334,24 +373,29 @@ function ToolsContent() {
         </section>
       )}
 
-      {/* Register Dialog */}
+      {/* Register / Edit Dialog */}
       <Dialog open={!!registerDialog} onOpenChange={() => setRegisterDialog(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Connect {registerDialog?.name}</DialogTitle>
-            <DialogDescription>Enter the configuration values for this integration</DialogDescription>
+            <DialogTitle>{registerDialog?.isEdit ? 'Edit' : 'Connect'} {registerDialog?.name}</DialogTitle>
+            <DialogDescription>
+              {registerDialog?.isEdit
+                ? 'Update the credentials for this integration. Leave fields blank to keep the current values.'
+                : 'Enter the configuration values for this integration'}
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             {(registerDialog?.configKeys ?? []).map((key) => (
               <div key={key.key}>
                 <Label>
                   {key.label}
-                  {key.required && <span className="text-red-500 ml-1">*</span>}
+                  {key.required && !registerDialog?.isEdit && <span className="text-red-500 ml-1">*</span>}
                 </Label>
                 <Input
                   type={key.secret ? 'password' : 'text'}
                   value={configValues[key.key] ?? ''}
                   onChange={(e) => setConfigValues((prev) => ({ ...prev, [key.key]: e.target.value }))}
+                  placeholder={registerDialog?.isEdit && key.secret ? 'Leave blank to keep current' : ''}
                   className="mt-1"
                 />
               </div>
@@ -360,7 +404,7 @@ function ToolsContent() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setRegisterDialog(null)}>Cancel</Button>
             <Button onClick={handleRegister} disabled={registerIntegration.isPending}>
-              Connect
+              {registerDialog?.isEdit ? 'Save Changes' : 'Connect'}
             </Button>
           </DialogFooter>
         </DialogContent>

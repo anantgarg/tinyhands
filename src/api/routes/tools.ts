@@ -242,12 +242,12 @@ router.get('/integrations', requireAdmin, async (req: Request, res: Response) =>
     const integrations = getIntegrations();
 
     // Check which integrations have active connections
-    const activeIds: Set<string> = new Set();
+    const connectionMap: Record<string, string> = {};
     try {
       const { listTeamConnections } = await import('../../modules/connections');
       const connections = await listTeamConnections(workspaceId);
       for (const c of connections as any[]) {
-        if (c.integration_id) activeIds.add(c.integration_id);
+        if (c.integration_id) connectionMap[c.integration_id] = c.id;
       }
     } catch { /* ignore */ }
 
@@ -256,7 +256,8 @@ router.get('/integrations', requireAdmin, async (req: Request, res: Response) =>
       name: int.id,
       displayName: int.label || int.id,
       description: int.description || '',
-      status: activeIds.has(int.id) ? 'active' : 'inactive',
+      status: connectionMap[int.id] ? 'active' : 'inactive',
+      connectionId: connectionMap[int.id] || null,
       toolsCount: int.tools?.length ?? 0,
       connectionModel: int.connectionModel || 'team',
       configKeys: (int.configKeys ?? []).map((k: string) => ({
@@ -285,6 +286,27 @@ router.post('/integrations/register', requireAdmin, async (req: Request, res: Re
     res.status(201).json(connection);
   } catch (err: any) {
     logger.error('Register integration error', { error: err.message });
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// DELETE /tools/integrations/:id/disconnect — Disconnect an integration
+router.delete('/integrations/:id/disconnect', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { workspaceId } = getSessionUser(req);
+    const integrationId = req.params.id as string;
+
+    // Find the team connection for this integration
+    const { getTeamConnection, deleteConnection: delConn } = await import('../../modules/connections');
+    const conn = await getTeamConnection(workspaceId, integrationId);
+    if (!conn) {
+      res.status(404).json({ error: 'Connection not found' });
+      return;
+    }
+    await delConn(workspaceId, conn.id);
+    res.json({ ok: true });
+  } catch (err: any) {
+    logger.error('Disconnect integration error', { error: err.message });
     res.status(400).json({ error: err.message });
   }
 });

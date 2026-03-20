@@ -417,7 +417,7 @@ describe('Tool Routes', () => {
         { id: 'linear', label: 'Linear', description: 'Issue tracker', tools: [{ name: 'linear-read' }], configKeys: ['api_key'], connectionModel: 'team' },
       ]);
       mockListTeamConnectionsForTools.mockResolvedValueOnce([
-        { integration_id: 'linear' },
+        { id: 'conn-1', integration_id: 'linear' },
       ]);
 
       const res = await makeRequest(app, 'GET', '/tools/integrations');
@@ -426,6 +426,7 @@ describe('Tool Routes', () => {
       expect(res.body[0].id).toBe('linear');
       expect(res.body[0].displayName).toBe('Linear');
       expect(res.body[0].status).toBe('active');
+      expect(res.body[0].connectionId).toBe('conn-1');
       expect(res.body[0].toolsCount).toBe(1);
     });
 

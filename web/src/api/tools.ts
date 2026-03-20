@@ -15,6 +15,7 @@ interface Integration {
   displayName: string;
   description: string;
   status: 'active' | 'inactive';
+  connectionId: string | null;
   toolsCount: number;
   connectionModel: 'team' | 'personal' | 'hybrid';
   configKeys: { key: string; label: string; required: boolean; secret: boolean }[];
@@ -74,6 +75,15 @@ export function useRegisterIntegration() {
   return useMutation({
     mutationFn: (data: { integrationId: string; config: Record<string, string> }) =>
       api.post('/tools/integrations/register', data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['tools', 'integrations'] }),
+  });
+}
+
+export function useDisconnectIntegration() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (integrationId: string) =>
+      api.del(`/tools/integrations/${integrationId}/disconnect`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['tools', 'integrations'] }),
   });
 }
