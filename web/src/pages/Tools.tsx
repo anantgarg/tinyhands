@@ -189,6 +189,7 @@ function ToolsContent() {
                       ) : (
                         <span className="text-xs text-warm-text-secondary">{integration.toolsCount ?? 0} tools</span>
                       )}
+                      {(integration.configKeys ?? []).length > 0 && (
                       <div className="flex gap-1">
                         <Button
                           variant="ghost"
@@ -225,6 +226,7 @@ function ToolsContent() {
                           Disconnect
                         </Button>
                       </div>
+                      )}
                     </div>
                   </CardContent>
                 </Card>

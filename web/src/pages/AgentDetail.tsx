@@ -313,7 +313,6 @@ function MarkdownEditor({ value, onChange, onSave, onCancel, saving }: {
   onCancel: () => void;
   saving: boolean;
 }) {
-  const [previewMode, setPreviewMode] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleToolbar = (before: string, after: string = '') => {
@@ -329,62 +328,37 @@ function MarkdownEditor({ value, onChange, onSave, onCancel, saving }: {
 
   return (
     <div className="space-y-2">
-      {/* Toolbar + tabs */}
-      <div className="flex items-center justify-between border-b border-warm-border pb-2">
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => setPreviewMode(false)}
-            className={`px-3 py-1 text-xs rounded-md transition-colors ${!previewMode ? 'bg-warm-bg font-medium text-warm-text' : 'text-warm-text-secondary hover:text-warm-text'}`}
-          >
-            Write
-          </button>
-          <button
-            onClick={() => setPreviewMode(true)}
-            className={`px-3 py-1 text-xs rounded-md transition-colors ${previewMode ? 'bg-warm-bg font-medium text-warm-text' : 'text-warm-text-secondary hover:text-warm-text'}`}
-          >
-            Preview
-          </button>
-          {!previewMode && (
-            <div className="flex items-center gap-0.5 ml-3 border-l border-warm-border pl-3">
-              <button onClick={() => handleToolbar('**', '**')} className="p-1 rounded hover:bg-warm-bg text-warm-text-secondary" title="Bold">
-                <Bold className="h-3.5 w-3.5" />
-              </button>
-              <button onClick={() => handleToolbar('*', '*')} className="p-1 rounded hover:bg-warm-bg text-warm-text-secondary" title="Italic">
-                <Italic className="h-3.5 w-3.5" />
-              </button>
-              <button onClick={() => handleToolbar('## ')} className="p-1 rounded hover:bg-warm-bg text-warm-text-secondary" title="Heading">
-                <Heading className="h-3.5 w-3.5" />
-              </button>
-              <button onClick={() => handleToolbar('- ')} className="p-1 rounded hover:bg-warm-bg text-warm-text-secondary" title="Bullet List">
-                <List className="h-3.5 w-3.5" />
-              </button>
-              <button onClick={() => handleToolbar('1. ')} className="p-1 rounded hover:bg-warm-bg text-warm-text-secondary" title="Numbered List">
-                <ListOrdered className="h-3.5 w-3.5" />
-              </button>
-              <button onClick={() => handleToolbar('[', '](url)')} className="p-1 rounded hover:bg-warm-bg text-warm-text-secondary" title="Link">
-                <Link2 className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          )}
-        </div>
+      {/* Toolbar */}
+      <div className="flex items-center gap-0.5 border-b border-warm-border pb-2">
+        <button onClick={() => handleToolbar('**', '**')} className="p-1.5 rounded hover:bg-warm-bg text-warm-text-secondary" title="Bold">
+          <Bold className="h-3.5 w-3.5" />
+        </button>
+        <button onClick={() => handleToolbar('*', '*')} className="p-1.5 rounded hover:bg-warm-bg text-warm-text-secondary" title="Italic">
+          <Italic className="h-3.5 w-3.5" />
+        </button>
+        <button onClick={() => handleToolbar('## ')} className="p-1.5 rounded hover:bg-warm-bg text-warm-text-secondary" title="Heading">
+          <Heading className="h-3.5 w-3.5" />
+        </button>
+        <button onClick={() => handleToolbar('- ')} className="p-1.5 rounded hover:bg-warm-bg text-warm-text-secondary" title="Bullet List">
+          <List className="h-3.5 w-3.5" />
+        </button>
+        <button onClick={() => handleToolbar('1. ')} className="p-1.5 rounded hover:bg-warm-bg text-warm-text-secondary" title="Numbered List">
+          <ListOrdered className="h-3.5 w-3.5" />
+        </button>
+        <button onClick={() => handleToolbar('[', '](url)')} className="p-1.5 rounded hover:bg-warm-bg text-warm-text-secondary" title="Link">
+          <Link2 className="h-3.5 w-3.5" />
+        </button>
       </div>
 
-      {/* Editor / Preview */}
-      {previewMode ? (
-        <div
-          className="min-h-[200px] max-h-[400px] overflow-y-auto text-sm bg-warm-bg rounded-lg p-4 prose prose-sm"
-          dangerouslySetInnerHTML={{ __html: simpleMarkdownToHtml(value) }}
-        />
-      ) : (
-        <Textarea
-          ref={textareaRef}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          rows={16}
-          className="text-sm w-full min-h-[200px]"
-          placeholder="Write your agent instructions here. You can use **bold**, *italic*, ## headings, and - bullet lists."
-        />
-      )}
+      {/* Editor */}
+      <Textarea
+        ref={textareaRef}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        rows={16}
+        className="text-sm w-full min-h-[200px]"
+        placeholder="Write your agent instructions here..."
+      />
 
       {/* Actions */}
       <div className="flex justify-end gap-2">
@@ -467,9 +441,10 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
               saving={updateAgent.isPending}
             />
           ) : (
-            <div className="max-h-[400px] overflow-y-auto whitespace-pre-wrap text-sm bg-warm-bg rounded-lg p-4">
-              {agent.systemPrompt || 'No instructions set.'}
-            </div>
+            <div
+              className="max-h-[400px] overflow-y-auto text-sm bg-warm-bg rounded-lg p-4 prose prose-sm"
+              dangerouslySetInnerHTML={{ __html: agent.systemPrompt ? simpleMarkdownToHtml(agent.systemPrompt) : 'No instructions set.' }}
+            />
           )}
         </CardContent>
       </Card>
