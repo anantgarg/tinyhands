@@ -56,6 +56,24 @@ router.post('/', async (req: Request, res: Response) => {
   }
 });
 
+// POST /agents/analyze-goal — Analyze a goal and generate agent config (must be before /:id)
+router.post('/analyze-goal', async (req: Request, res: Response) => {
+  try {
+    const { workspaceId } = getSessionUser(req);
+    const { goal } = req.body;
+    if (!goal) {
+      res.status(400).json({ error: 'goal is required' });
+      return;
+    }
+    const { analyzeGoal } = await import('../../modules/agents/goal-analyzer');
+    const result = await analyzeGoal(workspaceId, goal);
+    res.json(result);
+  } catch (err: any) {
+    logger.error('Analyze goal error', { error: err.message });
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // GET /agents/tool-requests — List all tool requests (workspace-wide, must be before /:id)
 router.get('/tool-requests', async (req: Request, res: Response) => {
   try {

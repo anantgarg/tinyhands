@@ -10,6 +10,9 @@ interface KBEntry {
   createdBy: string;
   createdAt: string;
   updatedAt: string;
+  kbSourceId: string | null;
+  sourceName: string | null;
+  sourceType: string | null;
 }
 
 interface KBEntryParams {
@@ -18,6 +21,7 @@ interface KBEntryParams {
   category?: string;
   approved?: boolean;
   search?: string;
+  sourceId?: string;
 }
 
 interface KBStats {
@@ -64,6 +68,7 @@ export function useKBEntries(params?: KBEntryParams) {
   if (params?.category) searchParams.set('category', params.category);
   if (params?.approved !== undefined) searchParams.set('approved', String(params.approved));
   if (params?.search) searchParams.set('search', params.search);
+  if (params?.sourceId) searchParams.set('sourceId', params.sourceId);
   const qs = searchParams.toString();
 
   return useQuery<{ entries: KBEntry[]; total: number }>({
@@ -100,6 +105,15 @@ export function useDeleteKBEntry() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.del(`/kb/entries/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['kb'] }),
+  });
+}
+
+export function useUpdateKBEntry() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: { id: string; title?: string; content?: string; category?: string }) =>
+      api.patch(`/kb/entries/${id}`, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['kb'] }),
   });
 }

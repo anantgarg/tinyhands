@@ -47,30 +47,35 @@ router.get('/entries', async (req: Request, res: Response) => {
     const category = req.query.category as string | undefined;
     const approved = req.query.approved as string | undefined;
     const search = req.query.search as string | undefined;
+    const sourceId = req.query.sourceId as string | undefined;
 
-    let where = 'WHERE workspace_id = $1';
+    let where = 'WHERE e.workspace_id = $1';
     const params: any[] = [workspaceId];
     let paramIdx = 2;
 
     if (approved !== undefined) {
-      where += ` AND approved = $${paramIdx++}`;
+      where += ` AND e.approved = $${paramIdx++}`;
       params.push(approved === 'true');
     }
     if (category) {
-      where += ` AND category = $${paramIdx++}`;
+      where += ` AND e.category = $${paramIdx++}`;
       params.push(category);
     }
+    if (sourceId) {
+      where += ` AND e.kb_source_id = $${paramIdx++}`;
+      params.push(sourceId);
+    }
     if (search) {
-      where += ` AND (title ILIKE $${paramIdx} OR content ILIKE $${paramIdx})`;
+      where += ` AND (e.title ILIKE $${paramIdx} OR e.content ILIKE $${paramIdx})`;
       params.push(`%${search}%`);
       paramIdx++;
     }
 
-    const [countRow] = await query(`SELECT count(*)::int as count FROM kb_entries ${where}`, params);
+    const [countRow] = await query(`SELECT count(*)::int as count FROM kb_entries e ${where}`, params);
     const total = countRow?.count ?? 0;
 
     const entries = await query(
-      `SELECT * FROM kb_entries ${where} ORDER BY updated_at DESC LIMIT $${paramIdx++} OFFSET $${paramIdx}`,
+      `SELECT e.*, s.name as source_name, s.source_type FROM kb_entries e LEFT JOIN kb_sources s ON e.kb_source_id = s.id ${where} ORDER BY e.updated_at DESC LIMIT $${paramIdx++} OFFSET $${paramIdx}`,
       [...params, limit, offset]
     );
 
@@ -171,6 +176,32 @@ router.delete('/entries/:id', requireAdmin, async (req: Request, res: Response) 
   }
 });
 
+// PATCH /kb/entries/:id — Update KB entry (admin-only)
+router.patch('/entries/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { workspaceId } = getSessionUser(req);
+    const id = req.params.id as string;
+    const { title, content, category } = req.body;
+    const sets: string[] = [];
+    const vals: any[] = [];
+    let idx = 1;
+    if (title !== undefined) { sets.push(`title = $${idx++}`); vals.push(title); }
+    if (content !== undefined) { sets.push(`content = $${idx++}`); vals.push(content); }
+    if (category !== undefined) { sets.push(`category = $${idx++}`); vals.push(category || null); }
+    if (sets.length === 0) { res.status(400).json({ error: 'No fields to update' }); return; }
+    sets.push(`updated_at = NOW()`);
+    await query(
+      `UPDATE kb_entries SET ${sets.join(', ')} WHERE workspace_id = $${idx++} AND id = $${idx}`,
+      [...vals, workspaceId, id]
+    );
+    const entry = await getKBEntry(workspaceId, id);
+    res.json(entry);
+  } catch (err: any) {
+    logger.error('Update KB entry error', { error: err.message });
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // ── KB Sources ──
 
 // GET /kb/sources — List sources
@@ -178,7 +209,19 @@ router.get('/sources', async (req: Request, res: Response) => {
   try {
     const { workspaceId } = getSessionUser(req);
     const sources = await listSources(workspaceId);
-    res.json(sources);
+    // Compute actual entry counts from kb_entries
+    const counts = await query(
+      'SELECT kb_source_id, count(*)::int as count FROM kb_entries WHERE workspace_id = $1 AND kb_source_id IS NOT NULL GROUP BY kb_source_id',
+      [workspaceId]
+    );
+    const countMap: Record<string, number> = {};
+    for (const row of counts as any[]) {
+      countMap[row.kb_source_id] = row.count;
+    }
+    res.json((sources as any[]).map((s: any) => ({
+      ...s,
+      entry_count: countMap[s.id] ?? s.entry_count ?? 0,
+    })));
   } catch (err: any) {
     logger.error('List KB sources error', { error: err.message });
     res.status(500).json({ error: 'Failed to list sources' });

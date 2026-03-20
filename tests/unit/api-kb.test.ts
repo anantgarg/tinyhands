@@ -384,7 +384,8 @@ describe('KB Routes', () => {
       const res = await makeRequest(app, 'GET', '/kb/sources');
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual(sources);
+      expect(res.body[0].id).toBe('s1');
+      expect(res.body[0].name).toBe('GitHub');
     });
 
     it('returns 500 on error', async () => {

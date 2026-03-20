@@ -36,6 +36,7 @@ import {
   useCreateKBEntry,
   useApproveKBEntry,
   useDeleteKBEntry,
+  useUpdateKBEntry,
   useKBSources,
 } from '@/api/kb';
 import { useAuthStore } from '@/store/auth';
@@ -58,6 +59,7 @@ export function KnowledgeBase() {
   const isAdmin = useAuthStore((s) => s.user?.platformRole === 'superadmin' || s.user?.platformRole === 'admin');
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<string>('all');
+  const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [tab, setTab] = useState('approved');
   const [page, setPage] = useState(1);
   const [showAdd, setShowAdd] = useState(false);
@@ -66,12 +68,19 @@ export function KnowledgeBase() {
   const [newCategory, setNewCategory] = useState('');
   const [newTags, setNewTags] = useState('');
   const [detailEntry, setDetailEntry] = useState<{
+    id: string;
     title: string;
     content: string;
     category: string;
     createdBy: string;
     updatedAt: string;
+    kbSourceId: string | null;
+    sourceName: string | null;
   } | null>(null);
+  const [editMode, setEditMode] = useState(false);
+  const [editTitle, setEditTitle] = useState('');
+  const [editContent, setEditContent] = useState('');
+  const [editCategory, setEditCategory] = useState('');
 
   const approved = tab === 'approved';
   const { data: stats, isLoading: statsLoading, isError: statsError } = useKBStats();
@@ -81,6 +90,7 @@ export function KnowledgeBase() {
     page,
     limit: 20,
     category: category !== 'all' ? category : undefined,
+    sourceId: sourceFilter !== 'all' ? sourceFilter : undefined,
     approved,
     search: search || undefined,
   });
@@ -88,6 +98,7 @@ export function KnowledgeBase() {
   const createEntry = useCreateKBEntry();
   const approveEntry = useApproveKBEntry();
   const deleteEntry = useDeleteKBEntry();
+  const updateEntry = useUpdateKBEntry();
 
   const entries = data?.entries ?? [];
   const total = data?.total ?? 0;
@@ -181,6 +192,18 @@ export function KnowledgeBase() {
             ))}
           </SelectContent>
         </Select>
+        <Select value={sourceFilter} onValueChange={(v) => { setSourceFilter(v); setPage(1); }}>
+          <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder="Source" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Sources</SelectItem>
+            <SelectItem value="manual">Manual Entries</SelectItem>
+            {(sources ?? []).map((src) => (
+              <SelectItem key={src.id} value={src.id}>{src.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Tabs */}
@@ -215,8 +238,8 @@ export function KnowledgeBase() {
                   <TableHeader>
                     <TableRow>
                       <TableHead>Title</TableHead>
+                      <TableHead>Source</TableHead>
                       <TableHead>Category</TableHead>
-                      <TableHead>Created By</TableHead>
                       <TableHead>Updated</TableHead>
                       <TableHead className="w-10"></TableHead>
                     </TableRow>
@@ -228,11 +251,14 @@ export function KnowledgeBase() {
                         className="cursor-pointer"
                         onClick={() =>
                           setDetailEntry({
+                            id: entry.id,
                             title: entry.title || 'Untitled',
                             content: entry.content || '',
                             category: entry.category || 'Uncategorized',
                             createdBy: entry.createdBy || '',
                             updatedAt: entry.updatedAt || '',
+                            kbSourceId: (entry as any).kbSourceId || null,
+                            sourceName: (entry as any).sourceName || null,
                           })
                         }
                       >
@@ -242,6 +268,9 @@ export function KnowledgeBase() {
                             {entry.content || ''}
                           </p>
                         </TableCell>
+                        <TableCell className="text-warm-text-secondary text-xs">
+                          {(entry as any).sourceName || 'Manual'}
+                        </TableCell>
                         <TableCell>
                           {entry.category ? (
                             <Badge variant="secondary">{titleCase(entry.category)}</Badge>
@@ -249,7 +278,6 @@ export function KnowledgeBase() {
                             <span className="text-warm-text-secondary text-xs">Uncategorized</span>
                           )}
                         </TableCell>
-                        <TableCell className="text-warm-text-secondary text-xs">{fmtUserId(entry.createdBy)}</TableCell>
                         <TableCell className="text-warm-text-secondary text-xs">
                           {entry.updatedAt
                             ? formatDistanceToNow(new Date(entry.updatedAt), { addSuffix: true })
@@ -361,24 +389,87 @@ export function KnowledgeBase() {
       </Dialog>
 
       {/* Entry Detail Dialog */}
-      <Dialog open={!!detailEntry} onOpenChange={() => setDetailEntry(null)}>
+      <Dialog open={!!detailEntry} onOpenChange={() => { setDetailEntry(null); setEditMode(false); }}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{detailEntry?.title}</DialogTitle>
+            <DialogTitle>{editMode ? 'Edit Entry' : detailEntry?.title}</DialogTitle>
             <DialogDescription>
               <span className="flex items-center gap-2 mt-1">
-                <Badge variant="secondary">{detailEntry?.category}</Badge>
+                {detailEntry?.category && <Badge variant="secondary">{titleCase(detailEntry.category)}</Badge>}
+                {detailEntry?.sourceName && <Badge variant="default" className="text-[10px]">{detailEntry.sourceName}</Badge>}
                 <span className="text-xs">
-                  by {fmtUserId(detailEntry?.createdBy)} {detailEntry?.updatedAt ? formatDistanceToNow(new Date(detailEntry.updatedAt), { addSuffix: true }) : ''}
+                  {detailEntry?.updatedAt ? formatDistanceToNow(new Date(detailEntry.updatedAt), { addSuffix: true }) : ''}
                 </span>
               </span>
             </DialogDescription>
           </DialogHeader>
-          <div className="max-h-[400px] overflow-y-auto whitespace-pre-wrap text-sm bg-warm-bg rounded-lg p-4">
-            {detailEntry?.content}
-          </div>
+          {editMode ? (
+            <div className="space-y-3">
+              <div>
+                <Label>Title</Label>
+                <Input value={editTitle} onChange={(e) => setEditTitle(e.target.value)} className="mt-1" />
+              </div>
+              <div>
+                <Label>Category</Label>
+                <Input value={editCategory} onChange={(e) => setEditCategory(e.target.value)} className="mt-1" />
+              </div>
+              <div>
+                <Label>Content</Label>
+                <Textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} rows={12} className="mt-1" />
+              </div>
+            </div>
+          ) : (
+            <div className="max-h-[400px] overflow-y-auto whitespace-pre-wrap text-sm bg-warm-bg rounded-lg p-4">
+              {detailEntry?.content}
+            </div>
+          )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDetailEntry(null)}>Close</Button>
+            {editMode ? (
+              <>
+                <Button variant="outline" onClick={() => setEditMode(false)}>Cancel</Button>
+                <Button onClick={() => {
+                  if (!detailEntry) return;
+                  updateEntry.mutate(
+                    { id: detailEntry.id, title: editTitle, content: editContent, category: editCategory },
+                    {
+                      onSuccess: () => {
+                        toast({ title: 'Entry updated', variant: 'success' });
+                        setDetailEntry(null);
+                        setEditMode(false);
+                      },
+                    },
+                  );
+                }} disabled={updateEntry.isPending}>Save</Button>
+              </>
+            ) : (
+              <>
+                <Button variant="outline" onClick={() => { setDetailEntry(null); setEditMode(false); }}>Close</Button>
+                {isAdmin && !detailEntry?.kbSourceId && (
+                  <Button variant="outline" onClick={() => {
+                    setEditTitle(detailEntry?.title ?? '');
+                    setEditContent(detailEntry?.content ?? '');
+                    setEditCategory(detailEntry?.category ?? '');
+                    setEditMode(true);
+                  }}>Edit</Button>
+                )}
+                {isAdmin && detailEntry?.kbSourceId && (
+                  <p className="text-xs text-warm-text-secondary mr-auto">Auto-synced entries cannot be edited</p>
+                )}
+                {isAdmin && (
+                  <Button variant="danger" size="sm" onClick={() => {
+                    if (!detailEntry) return;
+                    if (confirm(`Delete "${detailEntry.title}"?${detailEntry.kbSourceId ? ' This entry will not be re-synced.' : ''}`)) {
+                      deleteEntry.mutate(detailEntry.id, {
+                        onSuccess: () => {
+                          toast({ title: 'Entry deleted', variant: 'success' });
+                          setDetailEntry(null);
+                        },
+                      });
+                    }
+                  }}>Delete</Button>
+                )}
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

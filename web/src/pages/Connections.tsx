@@ -1,24 +1,28 @@
 import { useState } from 'react';
-import { Link as LinkIcon, Trash2, ExternalLink, AlertCircle, Info, Plus } from 'lucide-react';
+import { Link as LinkIcon, Trash2, ExternalLink, AlertCircle, Info, Plus, Key } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import {
   useTeamConnections,
   usePersonalConnections,
+  useCreatePersonalConnection,
   useDeleteConnection,
   useOAuthIntegrations,
   useAgentToolModes,
   useSetAgentToolMode,
 } from '@/api/connections';
+import { useIntegrations } from '@/api/tools';
 import { useAuthStore } from '@/store/auth';
 import { toast } from '@/components/ui/use-toast';
 
@@ -41,11 +45,15 @@ function ConnectionsContent() {
   const { data: teamConns, isLoading: teamLoading, isError: teamError } = useTeamConnections();
   const { data: personalConns, isLoading: personalLoading, isError: personalError } = usePersonalConnections();
   const { data: oauthIntegrations } = useOAuthIntegrations();
+  const { data: allIntegrations } = useIntegrations();
   const { data: agentToolModes, isLoading: modesLoading } = useAgentToolModes();
   const deleteConnection = useDeleteConnection();
+  const createPersonalConn = useCreatePersonalConnection();
   const setToolMode = useSetAgentToolMode();
   const [tab, setTab] = useState('personal');
   const [showAddConnection, setShowAddConnection] = useState(false);
+  const [apiKeyDialog, setApiKeyDialog] = useState<{ id: string; name: string; configKeys: { key: string; label: string; placeholder: string; secret: boolean }[] } | null>(null);
+  const [apiKeyValues, setApiKeyValues] = useState<Record<string, string>>({});
 
   const handleDelete = (id: string) => {
     if (confirm('Delete this connection?')) {
@@ -206,7 +214,7 @@ function ConnectionsContent() {
 
         <TabsContent value="personal">
           <div className="flex justify-end mb-4">
-            <Button size="sm" onClick={() => setShowAddConnection(true)} disabled={oauthList.length === 0}>
+            <Button size="sm" onClick={() => setShowAddConnection(true)}>
               <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Connection
             </Button>
           </div>
@@ -287,28 +295,97 @@ function ConnectionsContent() {
             <DialogTitle>Add Personal Connection</DialogTitle>
             <DialogDescription>Connect your personal account to an integration.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-3">
-            {oauthList.length === 0 ? (
-              <p className="text-sm text-warm-text-secondary text-center py-4">No integrations available for personal connections.</p>
+          <div className="space-y-3 max-h-[400px] overflow-y-auto">
+            {(allIntegrations ?? []).length === 0 && oauthList.length === 0 ? (
+              <p className="text-sm text-warm-text-secondary text-center py-4">No integrations available.</p>
             ) : (
-              oauthList.map((integration) => (
-                <div key={integration.id} className="flex items-center justify-between rounded-lg border border-warm-border p-3">
-                  <div className="flex items-center gap-3">
-                    <ExternalLink className="h-5 w-5 text-brand shrink-0" />
-                    <div>
-                      <p className="text-sm font-medium">{integration.displayName ?? integration.name}</p>
-                      {integration.description && (
-                        <p className="text-xs text-warm-text-secondary line-clamp-1">{integration.description}</p>
-                      )}
+              <>
+                {oauthList.map((integration) => (
+                  <div key={integration.id} className="flex items-center justify-between rounded-lg border border-warm-border p-3">
+                    <div className="flex items-center gap-3">
+                      <ExternalLink className="h-5 w-5 text-brand shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium">{integration.displayName ?? integration.name}</p>
+                        {integration.description && (
+                          <p className="text-xs text-warm-text-secondary line-clamp-1">{integration.description}</p>
+                        )}
+                      </div>
                     </div>
+                    <Button size="sm" variant="outline" onClick={() => { handleOAuth(integration.name); setShowAddConnection(false); }}>
+                      Connect
+                    </Button>
                   </div>
-                  <Button size="sm" variant="outline" onClick={() => { handleOAuth(integration.name); setShowAddConnection(false); }}>
-                    Connect
-                  </Button>
-                </div>
-              ))
+                ))}
+                {(allIntegrations ?? [])
+                  .filter(i => (i.configKeys ?? []).length > 0 && !oauthList.some(o => o.id === i.id))
+                  .map((integration) => (
+                  <div key={integration.id} className="flex items-center justify-between rounded-lg border border-warm-border p-3">
+                    <div className="flex items-center gap-3">
+                      <Key className="h-5 w-5 text-warm-text-secondary shrink-0" />
+                      <div>
+                        <p className="text-sm font-medium">{integration.displayName ?? integration.name}</p>
+                        <p className="text-xs text-warm-text-secondary">API key</p>
+                      </div>
+                    </div>
+                    <Button size="sm" variant="outline" onClick={() => {
+                      setApiKeyDialog({
+                        id: integration.id,
+                        name: integration.displayName ?? integration.name ?? '',
+                        configKeys: integration.configKeys ?? [],
+                      });
+                      setApiKeyValues({});
+                      setShowAddConnection(false);
+                    }}>
+                      Connect
+                    </Button>
+                  </div>
+                ))}
+              </>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* API Key Connection Dialog */}
+      <Dialog open={!!apiKeyDialog} onOpenChange={() => setApiKeyDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Connect {apiKeyDialog?.name}</DialogTitle>
+            <DialogDescription>Enter your personal credentials for this integration.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {(apiKeyDialog?.configKeys ?? []).map((key) => (
+              <div key={key.key}>
+                <Label>{key.label}</Label>
+                <Input
+                  type={key.secret ? 'password' : 'text'}
+                  value={apiKeyValues[key.key] ?? ''}
+                  onChange={(e) => setApiKeyValues((prev) => ({ ...prev, [key.key]: e.target.value }))}
+                  placeholder={key.placeholder || ''}
+                  className="mt-1"
+                />
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setApiKeyDialog(null)}>Cancel</Button>
+            <Button onClick={() => {
+              if (!apiKeyDialog) return;
+              createPersonalConn.mutate(
+                { integrationId: apiKeyDialog.id, displayName: apiKeyDialog.name, credentials: apiKeyValues },
+                {
+                  onSuccess: () => {
+                    toast({ title: 'Connection added', variant: 'success' });
+                    setApiKeyDialog(null);
+                    setApiKeyValues({});
+                  },
+                  onError: (err) => toast({ title: 'Failed', description: err.message, variant: 'error' }),
+                },
+              );
+            }} disabled={createPersonalConn.isPending}>
+              Connect
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
