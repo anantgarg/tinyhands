@@ -54,10 +54,16 @@ export async function addToolToAgent(
     return tools;
   }
 
-  // Verify tool exists (check custom tools DB)
+  // Verify tool exists (check custom tools DB or integration manifests)
   if (!isBuiltinTool(toolName)) {
     const custom = await getCustomTool(workspaceId, toolName);
-    if (!custom) throw new Error(`Tool "${toolName}" not found`);
+    if (!custom) {
+      // Also check integration manifests — tool may exist in a manifest but not yet registered in DB
+      const { getIntegrations } = await import('./integrations');
+      const manifests = getIntegrations();
+      const inManifest = manifests.some(m => m.tools.some((t: any) => t.name === toolName));
+      if (!inManifest) throw new Error(`Tool "${toolName}" not found`);
+    }
   }
 
   tools.push(toolName);
