@@ -49,6 +49,7 @@ import {
   useAgentTriggers,
   useAddAgentTrigger,
   useAgentToolRequests,
+  useCreateToolRequest,
 } from '@/api/agents';
 import type { Agent as AgentData, AgentVersion } from '@/api/agents';
 import { useAvailableTools } from '@/api/tools';
@@ -57,6 +58,7 @@ import { useAgentToolConnections, useSetAgentToolConnection } from '@/api/connec
 import { useSlackChannels, useSlackUsers } from '@/api/slack';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { renderEmoji } from '@/lib/emoji';
+import { useAuthStore } from '@/store/auth';
 import { toast } from '@/components/ui/use-toast';
 
 function formatCost(cost: number): string {
@@ -687,11 +689,14 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
   const { data: toolConnections } = useAgentToolConnections(agentId);
   const setToolConnection = useSetAgentToolConnection();
   const { data: toolRequests } = useAgentToolRequests(agentId);
+  const createToolRequest = useCreateToolRequest();
+  const isAdmin = useAuthStore((s) => s.user?.platformRole === 'superadmin' || s.user?.platformRole === 'admin');
   const [showAddTool, setShowAddTool] = useState(false);
   const [selectedToolsToAdd, setSelectedToolsToAdd] = useState<Set<string>>(new Set());
   const [writePolicy, setWritePolicy] = useState(agent.writePolicy ?? 'auto');
 
   const pendingToolRequests = (toolRequests ?? []).filter((r) => r.status === 'pending');
+  const pendingWriteTools = new Set(pendingToolRequests.filter(r => r.toolName.endsWith('-write')).map(r => r.toolName));
 
   const currentTools = agent.tools ?? [];
   const toolsNotAdded = (availableTools ?? []).filter((t) => !currentTools.includes(t.name));
@@ -702,11 +707,18 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
     toolModeMap[tc.toolName] = tc.mode;
   }
 
-  const handleRemoveTool = (tool: string) => {
+  const handleRemoveTool = (tool: string, silentToast?: boolean) => {
     removeAgentTool.mutate(
       { agentId, tool },
-      { onSuccess: () => toast({ title: `Removed ${getToolDisplayName(tool, availableTools)}`, variant: 'success' }) },
+      { onSuccess: () => { if (!silentToast) toast({ title: `Removed ${getToolDisplayName(tool, availableTools)}`, variant: 'success' }); } },
     );
+  };
+
+  const handleRemoveGroup = (group: { key: string; displayName: string; readTool: string | null; writeTool: string | null; isInteg: boolean }) => {
+    if (group.readTool) handleRemoveTool(group.readTool, true);
+    if (group.writeTool) handleRemoveTool(group.writeTool, true);
+    if (!group.isInteg) handleRemoveTool(group.key, true);
+    toast({ title: `Removed ${group.displayName}`, variant: 'success' });
   };
 
   const handleAddSelectedTools = () => {
@@ -798,7 +810,7 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                         const hasWrite = currentTools.includes(`${base}-write`);
                         grouped.push({
                           key: base,
-                          displayName: base.charAt(0).toUpperCase() + base.slice(1).replace(/[-_]/g, ' '),
+                          displayName: (() => { const f = BUILTIN_FRIENDLY_NAMES[`${base}-read`] || BUILTIN_FRIENDLY_NAMES[`${base}-search`]; return f ? f.replace(/ \(.*\)$/, '') : base.charAt(0).toUpperCase() + base.slice(1).replace(/[-_]/g, ' '); })(),
                           readTool: hasRead ? (currentTools.find(t => t === `${base}-read` || t === `${base}-search`) ?? null) : null,
                           writeTool: hasWrite ? `${base}-write` : null,
                           isInteg: true,
@@ -819,6 +831,7 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                               <div className="flex gap-1.5">
                                 <button
                                   onClick={() => {
+                                    if (group.writeTool) return; // Can't remove read when write is active
                                     const readName = `${group.key}-read`;
                                     const searchName = `${group.key}-search`;
                                     if (group.readTool) {
@@ -829,32 +842,47 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                                     }
                                   }}
                                   className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                                    group.readTool
-                                      ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                                    group.readTool || group.writeTool
+                                      ? `bg-blue-100 text-blue-700 ${group.writeTool ? 'opacity-70 cursor-default' : 'hover:bg-blue-200'}`
                                       : 'bg-warm-bg text-warm-text-secondary hover:bg-warm-bg/80'
                                   }`}
                                 >
                                   Can view data
                                 </button>
-                                {(availableTools ?? []).some(t => t.name === `${group.key}-write`) && (
-                                <button
-                                  onClick={() => {
-                                    const writeName = `${group.key}-write`;
-                                    if (group.writeTool) {
-                                      handleRemoveTool(group.writeTool);
-                                    } else {
-                                      addAgentTool.mutate({ agentId, tool: writeName });
-                                    }
-                                  }}
-                                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
-                                    group.writeTool
-                                      ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
-                                      : 'bg-warm-bg text-warm-text-secondary hover:bg-warm-bg/80'
-                                  }`}
-                                >
-                                  Can make changes
-                                </button>
-                                )}
+                                {(availableTools ?? []).some(t => t.name === `${group.key}-write`) && (() => {
+                                  const writeName = `${group.key}-write`;
+                                  const isPending = pendingWriteTools.has(writeName);
+                                  if (isPending) {
+                                    return (
+                                      <span className="px-2.5 py-1 rounded-md text-xs font-medium bg-yellow-50 text-yellow-700 border border-yellow-200">
+                                        Pending approval
+                                      </span>
+                                    );
+                                  }
+                                  return (
+                                    <button
+                                      onClick={() => {
+                                        if (group.writeTool) {
+                                          handleRemoveTool(group.writeTool);
+                                        } else if (isAdmin) {
+                                          addAgentTool.mutate({ agentId, tool: writeName });
+                                        } else {
+                                          createToolRequest.mutate(
+                                            { agentId, toolName: writeName, accessLevel: 'read-write' },
+                                            { onSuccess: () => toast({ title: 'Write access requested — pending admin approval', variant: 'success' }) },
+                                          );
+                                        }
+                                      }}
+                                      className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                                        group.writeTool
+                                          ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                                          : 'bg-warm-bg text-warm-text-secondary hover:bg-warm-bg/80'
+                                      }`}
+                                    >
+                                      Can make changes
+                                    </button>
+                                  );
+                                })()}
                               </div>
                             ) : (
                               <span className="text-xs text-warm-text-secondary">&mdash;</span>
@@ -885,11 +913,7 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                             )}
                           </TableCell>
                           <TableCell>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => {
-                              if (group.readTool) handleRemoveTool(group.readTool);
-                              if (group.writeTool) handleRemoveTool(group.writeTool);
-                              if (!group.isInteg) handleRemoveTool(group.key);
-                            }}>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => handleRemoveGroup(group)}>
                               <X className="h-4 w-4" />
                             </Button>
                           </TableCell>
@@ -974,9 +998,11 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                     const base = readMatch?.[1] || writeMatch?.[1];
                     if (base) {
                       if (!integrationGroups[base]) {
+                        const friendly = BUILTIN_FRIENDLY_NAMES[`${base}-read`] || BUILTIN_FRIENDLY_NAMES[`${base}-search`];
+                        const baseName = friendly ? friendly.replace(/ \(.*\)$/, '') : base.charAt(0).toUpperCase() + base.slice(1).replace(/[-_]/g, ' ');
                         integrationGroups[base] = {
                           base,
-                          displayName: base.charAt(0).toUpperCase() + base.slice(1).replace(/[-_]/g, ' '),
+                          displayName: baseName,
                           description: tool.description,
                         };
                       }
@@ -1009,8 +1035,9 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                                 <p className="text-xs text-warm-text-secondary mb-2 line-clamp-1">{integ.description}</p>
                                 <div className="flex gap-2">
                                   {integ.readTool && (
-                                    <label className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs cursor-pointer transition-colors ${readSelected ? 'bg-blue-100 text-blue-700' : 'bg-warm-bg text-warm-text-secondary hover:bg-warm-bg/80'}`}>
-                                      <input type="checkbox" checked={readSelected} onChange={() => {
+                                    <label className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs transition-colors ${readSelected || writeSelected ? 'bg-blue-100 text-blue-700' : 'bg-warm-bg text-warm-text-secondary hover:bg-warm-bg/80 cursor-pointer'} ${writeSelected ? 'opacity-70' : 'cursor-pointer'}`}>
+                                      <input type="checkbox" checked={readSelected || writeSelected} disabled={writeSelected} onChange={() => {
+                                        if (writeSelected) return;
                                         setSelectedToolsToAdd(prev => {
                                           const next = new Set(prev);
                                           if (next.has(integ.readTool!)) next.delete(integ.readTool!); else next.add(integ.readTool!);
@@ -1025,7 +1052,13 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                                       <input type="checkbox" checked={writeSelected} onChange={() => {
                                         setSelectedToolsToAdd(prev => {
                                           const next = new Set(prev);
-                                          if (next.has(integ.writeTool!)) next.delete(integ.writeTool!); else next.add(integ.writeTool!);
+                                          if (next.has(integ.writeTool!)) {
+                                            next.delete(integ.writeTool!);
+                                          } else {
+                                            next.add(integ.writeTool!);
+                                            // Auto-add read when write is checked
+                                            if (integ.readTool) next.add(integ.readTool);
+                                          }
                                           return next;
                                         });
                                       }} className="h-3 w-3" />

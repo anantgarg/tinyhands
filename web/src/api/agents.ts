@@ -339,7 +339,7 @@ export function useAddAgentTool() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ agentId, tool }: { agentId: string; tool: string }) =>
-      api.post(`/agents/${agentId}/tools`, { tool }),
+      api.post(`/agents/${agentId}/tools`, { toolName: tool }),
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: ['agents', variables.agentId, 'tools'] });
       qc.invalidateQueries({ queryKey: ['agents', variables.agentId] });
