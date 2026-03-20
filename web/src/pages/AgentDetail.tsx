@@ -1412,13 +1412,6 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
   const [newUserId, setNewUserId] = useState('');
   const [newUserRole, setNewUserRole] = useState('member');
 
-  const handleSaveAccess = () => {
-    updateAccess.mutate(
-      { agentId, defaultAccess },
-      { onSuccess: () => toast({ title: 'Default access updated', variant: 'success' }) },
-    );
-  };
-
   const handleAddUser = () => {
     if (!newUserId.trim()) return;
     setRole.mutate(
