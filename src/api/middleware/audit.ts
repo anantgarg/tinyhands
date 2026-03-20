@@ -5,8 +5,7 @@ import { logAuditEvent } from '../../modules/audit';
 export function auditMiddleware(req: Request, res: Response, next: NextFunction) {
   // Only audit mutating requests
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
-    const originalEnd = res.end;
-    res.end = function(...args: any[]) {
+    res.on('finish', () => {
       try {
         const sessionUser = getSessionUser(req);
         if (sessionUser && res.statusCode < 400) {
@@ -26,8 +25,7 @@ export function auditMiddleware(req: Request, res: Response, next: NextFunction)
       } catch {
         // ignore auth errors
       }
-      return originalEnd.apply(res, args);
-    } as any;
+    });
   }
   next();
 }
