@@ -164,6 +164,7 @@ export function AgentDetail() {
   const [activeTab, setActiveTab] = useState('overview');
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
+  const platformRole = useAuthStore((s) => s.user?.platformRole);
 
   if (isLoading) {
     return (
@@ -185,7 +186,7 @@ export function AgentDetail() {
     );
   }
 
-  const canEdit = agent.userRole === 'owner' || useAuthStore.getState().user?.platformRole === 'superadmin' || useAuthStore.getState().user?.platformRole === 'admin';
+  const canEdit = agent.userRole === 'owner' || platformRole === 'superadmin' || platformRole === 'admin';
 
   const handleToggleStatus = () => {
     const newStatus = agent.status === 'active' ? 'paused' : 'active';
