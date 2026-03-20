@@ -19,7 +19,7 @@ const KnowledgeBase = lazy(() => import('@/pages/KnowledgeBase').then(m => ({ de
 const KBSources = lazy(() => import('@/pages/KBSources').then(m => ({ default: m.KBSources })));
 const Connections = lazy(() => import('@/pages/Connections').then(m => ({ default: m.Connections })));
 const Triggers = lazy(() => import('@/pages/Triggers').then(m => ({ default: m.Triggers })));
-const Evolution = lazy(() => import('@/pages/Evolution').then(m => ({ default: m.Evolution })));
+
 const AuditLog = lazy(() => import('@/pages/AuditLog').then(m => ({ default: m.AuditLog })));
 const AccessRoles = lazy(() => import('@/pages/AccessRoles').then(m => ({ default: m.AccessRoles })));
 const Settings = lazy(() => import('@/pages/Settings').then(m => ({ default: m.Settings })));
@@ -114,7 +114,7 @@ export function App() {
                 <Route path="triggers" element={<Suspense fallback={<PageLoader />}><Triggers /></Suspense>} />
                 <Route path="requests" element={<Suspense fallback={<PageLoader />}><Requests /></Suspense>} />
                 <Route path="errors" element={<Suspense fallback={<PageLoader />}><ErrorLogs /></Suspense>} />
-                <Route path="evolution" element={<Suspense fallback={<PageLoader />}><Evolution /></Suspense>} />
+
                 <Route path="audit" element={<Suspense fallback={<PageLoader />}><AuditLog /></Suspense>} />
                 <Route path="access" element={<Suspense fallback={<PageLoader />}><AccessRoles /></Suspense>} />
                 <Route path="settings" element={<Suspense fallback={<PageLoader />}><Settings /></Suspense>} />

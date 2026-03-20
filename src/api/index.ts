@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { requireAuth } from './middleware/auth';
+import { auditMiddleware } from './middleware/audit';
 import authRoutes from './routes/auth';
 import dashboardRoutes from './routes/dashboard';
 import agentRoutes from './routes/agents';
@@ -24,6 +25,9 @@ export function createApiRouter(): Router {
 
   // Auth routes (no auth middleware needed for login/callback)
   router.use('/auth', authRoutes);
+
+  // Audit middleware for all authenticated routes (fire-and-forget logging)
+  router.use(auditMiddleware);
 
   // All other routes require authentication
   router.use('/dashboard', requireAuth, dashboardRoutes);

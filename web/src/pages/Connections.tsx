@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link as LinkIcon, Trash2, ExternalLink, AlertCircle, Shield, Info } from 'lucide-react';
+import { Link as LinkIcon, Trash2, ExternalLink, AlertCircle, Shield, Info, Plus } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import {
   useTeamConnections,
   usePersonalConnections,
@@ -45,6 +46,7 @@ function ConnectionsContent() {
   const deleteConnection = useDeleteConnection();
   const setToolMode = useSetAgentToolMode();
   const [tab, setTab] = useState('personal');
+  const [showAddConnection, setShowAddConnection] = useState(false);
 
   const handleDelete = (id: string) => {
     if (confirm('Delete this connection?')) {
@@ -61,32 +63,7 @@ function ConnectionsContent() {
 
   const hasToolModes = (agentToolModes ?? []).length > 0;
 
-  const renderOAuthCards = () => {
-    const oauthList = (oauthIntegrations ?? []).filter((i) => i.oauthSupported);
-    if (oauthList.length === 0) return null;
-
-    return (
-      <div className="mb-6">
-        <h3 className="text-sm font-medium text-warm-text-secondary mb-3">Connect via OAuth</h3>
-        <div className="flex flex-wrap gap-3">
-          {oauthList.map((integration) => (
-            <Card key={integration.id} className="w-[200px]">
-              <CardContent className="p-4 flex flex-col items-center gap-2 text-center">
-                <ExternalLink className="h-6 w-6 text-brand" />
-                <p className="text-sm font-medium">{integration.displayName ?? integration.name}</p>
-                <p className="text-xs text-warm-text-secondary line-clamp-2">{integration.description}</p>
-                <Button size="sm" variant="outline" onClick={() => handleOAuth(integration.name)} className="mt-1 w-full">
-                  Connect
-                </Button>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
-  const renderConnectionsTable = (connections: typeof teamConns, loading: boolean, hasError: boolean, showUser: boolean) => {
+  const renderPersonalConnectionsTable = (connections: typeof personalConns, loading: boolean, hasError: boolean) => {
     if (loading) return <Skeleton className="h-[200px]" />;
     if (hasError) {
       return (
@@ -102,8 +79,8 @@ function ConnectionsContent() {
       return (
         <EmptyState
           icon={LinkIcon}
-          title="No connections"
-          description="Connect integrations to allow agents to authenticate with external services"
+          title="No personal connections"
+          description="Add a personal connection to use your own credentials with agents"
         />
       );
     }
@@ -113,10 +90,8 @@ function ConnectionsContent() {
           <TableHeader>
             <TableRow>
               <TableHead>Integration</TableHead>
-              <TableHead>Name</TableHead>
               <TableHead>Status</TableHead>
-              {showUser && <TableHead>User</TableHead>}
-              <TableHead>Created</TableHead>
+              <TableHead>Connected since</TableHead>
               <TableHead className="w-10"></TableHead>
             </TableRow>
           </TableHeader>
@@ -124,15 +99,11 @@ function ConnectionsContent() {
             {connections.map((conn) => (
               <TableRow key={conn.id}>
                 <TableCell className="font-medium">{conn.integrationName ?? '\u2014'}</TableCell>
-                <TableCell>{conn.displayName ?? '\u2014'}</TableCell>
                 <TableCell>
                   <Badge variant={conn.status === 'active' ? 'success' : conn.status === 'expired' ? 'warning' : 'danger'}>
                     {conn.status ?? 'unknown'}
                   </Badge>
                 </TableCell>
-                {showUser && (
-                  <TableCell className="text-warm-text-secondary">{conn.userDisplayName ?? '\u2014'}</TableCell>
-                )}
                 <TableCell className="text-warm-text-secondary text-xs">
                   {conn.createdAt
                     ? formatDistanceToNow(new Date(conn.createdAt), { addSuffix: true })
@@ -156,24 +127,78 @@ function ConnectionsContent() {
     );
   };
 
+  const renderTeamConnectionsTable = (connections: typeof teamConns, loading: boolean, hasError: boolean) => {
+    if (loading) return <Skeleton className="h-[200px]" />;
+    if (hasError) {
+      return (
+        <Card>
+          <CardContent className="py-8 text-center text-red-500">
+            <AlertCircle className="h-5 w-5 mx-auto mb-2" />
+            Failed to load connections
+          </CardContent>
+        </Card>
+      );
+    }
+    if (!connections?.length) {
+      return (
+        <EmptyState
+          icon={LinkIcon}
+          title="No team connections"
+          description="Team connections are managed by admins in Tools & Integrations."
+        />
+      );
+    }
+    return (
+      <>
+        <div className="rounded-card border border-warm-border bg-white overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Integration</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Connected since</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {connections.map((conn) => (
+                <TableRow key={conn.id}>
+                  <TableCell className="font-medium">{conn.integrationName ?? '\u2014'}</TableCell>
+                  <TableCell>
+                    <Badge variant={conn.status === 'active' ? 'success' : conn.status === 'expired' ? 'warning' : 'danger'}>
+                      {conn.status ?? 'unknown'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-warm-text-secondary text-xs">
+                    {conn.createdAt
+                      ? formatDistanceToNow(new Date(conn.createdAt), { addSuffix: true })
+                      : '\u2014'}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+        <p className="text-xs text-warm-text-secondary mt-3">
+          Team connections are managed by admins in Tools & Integrations.
+        </p>
+      </>
+    );
+  };
+
+  const oauthList = (oauthIntegrations ?? []).filter((i) => i.oauthSupported);
+
   return (
     <div>
       <PageHeader title="Connections" description="Manage tool connections and credentials" />
 
-      {/* Info section */}
+      {/* Info note */}
       <Card className="mb-6 border-blue-200 bg-blue-50/50">
         <CardContent className="py-4">
           <div className="flex items-start gap-3">
             <Info className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
-            <div className="text-sm text-blue-900">
-              <p className="font-medium mb-1">Credential Resolution Order</p>
-              <p>
-                When an agent runs a tool, credentials are resolved in this order:
-                1) <strong>Personal</strong> connection for the invoking user,
-                2) <strong>Team</strong> connection for the workspace.
-                Hybrid mode tries personal first, then falls back to team.
-              </p>
-            </div>
+            <p className="text-sm text-blue-900">
+              When an agent uses a tool, it first checks if you have a personal connection. If not, it uses the team connection.
+            </p>
           </div>
         </CardContent>
       </Card>
@@ -186,13 +211,16 @@ function ConnectionsContent() {
         </TabsList>
 
         <TabsContent value="personal">
-          {renderOAuthCards()}
-          {renderConnectionsTable(personalConns, personalLoading, personalError, true)}
+          <div className="flex justify-end mb-4">
+            <Button size="sm" onClick={() => setShowAddConnection(true)} disabled={oauthList.length === 0}>
+              <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Connection
+            </Button>
+          </div>
+          {renderPersonalConnectionsTable(personalConns, personalLoading, personalError)}
         </TabsContent>
 
         <TabsContent value="team">
-          {renderOAuthCards()}
-          {renderConnectionsTable(teamConns, teamLoading, teamError, false)}
+          {renderTeamConnectionsTable(teamConns, teamLoading, teamError)}
         </TabsContent>
 
         {hasToolModes && (
@@ -250,6 +278,38 @@ function ConnectionsContent() {
           </TabsContent>
         )}
       </Tabs>
+
+      {/* Add Connection Dialog */}
+      <Dialog open={showAddConnection} onOpenChange={setShowAddConnection}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Personal Connection</DialogTitle>
+            <DialogDescription>Connect your personal account to an integration.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            {oauthList.length === 0 ? (
+              <p className="text-sm text-warm-text-secondary text-center py-4">No integrations available for personal connections.</p>
+            ) : (
+              oauthList.map((integration) => (
+                <div key={integration.id} className="flex items-center justify-between rounded-lg border border-warm-border p-3">
+                  <div className="flex items-center gap-3">
+                    <ExternalLink className="h-5 w-5 text-brand shrink-0" />
+                    <div>
+                      <p className="text-sm font-medium">{integration.displayName ?? integration.name}</p>
+                      {integration.description && (
+                        <p className="text-xs text-warm-text-secondary line-clamp-1">{integration.description}</p>
+                      )}
+                    </div>
+                  </div>
+                  <Button size="sm" variant="outline" onClick={() => { handleOAuth(integration.name); setShowAddConnection(false); }}>
+                    Connect
+                  </Button>
+                </div>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

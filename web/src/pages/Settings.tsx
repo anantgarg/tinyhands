@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Loader2, AlertCircle, Shield } from 'lucide-react';
+import { Loader2, AlertCircle, Shield, HelpCircle } from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useSettings, useUpdateSettings } from '@/api/settings';
 import { useAuthStore } from '@/store/auth';
 import { toast } from '@/components/ui/use-toast';
@@ -154,9 +155,9 @@ function SettingsContent() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="claude-sonnet-4-20250514">Claude Sonnet 4</SelectItem>
-                  <SelectItem value="claude-opus-4-20250514">Claude Opus 4</SelectItem>
-                  <SelectItem value="claude-haiku-4-20250514">Claude Haiku 4</SelectItem>
+                  <SelectItem value="claude-opus-4-20250514">Opus — most capable, best for complex tasks</SelectItem>
+                  <SelectItem value="claude-sonnet-4-20250514">Sonnet — balanced speed and quality (recommended)</SelectItem>
+                  <SelectItem value="claude-haiku-4-20250514">Haiku — fastest, good for simple tasks</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -223,13 +224,21 @@ function SettingsContent() {
           </div>
           <div className="max-w-xs">
             <Label>Default Effort Level</Label>
-            <Input
-              type="number"
-              value={defaults.maxTurns ?? 25}
-              onChange={(e) => setDefaults({ ...defaults, maxTurns: Number(e.target.value) })}
-              className="mt-1"
-            />
-            <p className="text-xs text-warm-text-secondary mt-1">How thorough agents are: 10 = Quick, 25 = Standard, 50 = Thorough, 100 = Maximum</p>
+            <Select
+              value={String(defaults.maxTurns ?? 25)}
+              onValueChange={(v) => setDefaults({ ...defaults, maxTurns: Number(v) })}
+            >
+              <SelectTrigger className="mt-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="10">Quick — fast responses, minimal tool use</SelectItem>
+                <SelectItem value="25">Standard — balanced (recommended)</SelectItem>
+                <SelectItem value="50">Thorough — deeper analysis, more tool calls</SelectItem>
+                <SelectItem value="100">Maximum — exhaustive, no shortcuts</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-warm-text-secondary mt-1">How thorough agents are when responding to messages</p>
           </div>
           <div className="flex items-center gap-3">
             <Switch
@@ -256,7 +265,17 @@ function SettingsContent() {
         <CardContent className="space-y-4">
           <div className="grid grid-cols-3 gap-4">
             <div>
-              <Label>Tokens per Minute (TPM)</Label>
+              <div className="flex items-center gap-1.5">
+                <Label>Tokens per Minute</Label>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <HelpCircle className="h-3.5 w-3.5 text-warm-text-secondary cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="max-w-[220px] text-xs">Tokens are units of text processed by the AI. This limits how much text all agents can process each minute combined.</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
               <Input
                 type="number"
                 value={rateLimits.tpmLimit ?? 100000}
@@ -266,7 +285,17 @@ function SettingsContent() {
               <p className="text-xs text-warm-text-secondary mt-1">Max tokens processed per minute</p>
             </div>
             <div>
-              <Label>Requests per Minute (RPM)</Label>
+              <div className="flex items-center gap-1.5">
+                <Label>Requests per Minute</Label>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <HelpCircle className="h-3.5 w-3.5 text-warm-text-secondary cursor-help" />
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p className="max-w-[220px] text-xs">Each time an agent calls the AI counts as one request. This limits how many calls all agents can make per minute.</p>
+                  </TooltipContent>
+                </Tooltip>
+              </div>
               <Input
                 type="number"
                 value={rateLimits.rpmLimit ?? 60}

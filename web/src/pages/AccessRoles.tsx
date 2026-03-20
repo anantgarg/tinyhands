@@ -118,7 +118,7 @@ function AccessRolesContent() {
           <CardTitle className="text-base">Role Descriptions</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <Badge variant="danger">Superadmin</Badge>
@@ -140,15 +140,7 @@ function AccessRolesContent() {
                 <Badge variant="default">Member</Badge>
               </div>
               <p className="text-sm text-warm-text-secondary">
-                Full agent access. Agents can perform all actions including write operations. Can create agents and manage personal connections.
-              </p>
-            </div>
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <Badge variant="secondary">Viewer</Badge>
-              </div>
-              <p className="text-sm text-warm-text-secondary">
-                Can interact with agents but agent actions are limited (read-only tools only). Good for team members who need to ask questions.
+                Default role for all workspace members. Can create and use agents, manage personal connections, and request access to restricted agents.
               </p>
             </div>
           </div>
@@ -263,13 +255,29 @@ function AccessRolesContent() {
         <CardHeader>
           <CardTitle className="text-base">All Team Members</CardTitle>
           <p className="text-xs text-warm-text-secondary mt-1">
-            All Slack workspace members automatically have basic access. Only users with elevated roles are shown above.
+            All Slack workspace members automatically have Member access.
           </p>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-warm-text-secondary">
-            {slackUsers.length} team members in your workspace
-          </p>
+          <div className="flex items-center">
+            <div className="flex -space-x-2">
+              {slackUsers.slice(0, 12).map((user) => (
+                <img
+                  key={user.id}
+                  src={user.avatarUrl}
+                  alt={user.realName || user.displayName}
+                  title={user.realName || user.displayName}
+                  className="h-8 w-8 rounded-full border-2 border-white"
+                />
+              ))}
+              {slackUsers.length > 12 && (
+                <div className="flex h-8 w-8 items-center justify-center rounded-full border-2 border-white bg-warm-bg text-xs font-semibold text-warm-text-secondary">
+                  +{slackUsers.length - 12}
+                </div>
+              )}
+            </div>
+            <span className="ml-3 text-sm text-warm-text-secondary">{slackUsers.length} members</span>
+          </div>
         </CardContent>
       </Card>
 
