@@ -1,10 +1,10 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Pause, Play, MoreVertical, Trash2, Plus, X,
   Info, Pencil, Check, Loader2, RotateCcw, Eye,
   Webhook, Clock, MessageSquare, Zap,
-  Bold, Italic, Heading, List, ListOrdered, Link2, Search,
+  Search,
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -330,165 +330,6 @@ function simpleMarkdownToHtml(md: string): string {
     .replace(/\n/g, '<br/>');
 }
 
-function insertMarkdown(textarea: HTMLTextAreaElement, before: string, after: string = '') {
-  const start = textarea.selectionStart;
-  const end = textarea.selectionEnd;
-  const text = textarea.value;
-  const selected = text.substring(start, end);
-  const replacement = `${before}${selected || 'text'}${after}`;
-  const newValue = text.substring(0, start) + replacement + text.substring(end);
-  return { newValue, cursorPos: start + before.length + (selected || 'text').length };
-}
-
-function MarkdownEditor({ value, onChange, onSave, onCancel, saving }: {
-  value: string;
-  onChange: (v: string) => void;
-  onSave: () => void;
-  onCancel: () => void;
-  saving: boolean;
-}) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const { data: slackUsersData } = useSlackUsers();
-  const slackUsers = slackUsersData?.users ?? [];
-  const [mentionQuery, setMentionQuery] = useState('');
-  const [mentionPos, setMentionPos] = useState<{ top: number; left: number } | null>(null);
-  const [mentionStart, setMentionStart] = useState(-1);
-
-  const handleToolbar = (before: string, after: string = '') => {
-    const ta = textareaRef.current;
-    if (!ta) return;
-    const { newValue, cursorPos } = insertMarkdown(ta, before, after);
-    onChange(newValue);
-    setTimeout(() => {
-      ta.focus();
-      ta.setSelectionRange(cursorPos, cursorPos);
-    }, 0);
-  };
-
-  const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newVal = e.target.value;
-    onChange(newVal);
-
-    const ta = e.target;
-    const cursor = ta.selectionStart;
-    const textBefore = newVal.slice(0, cursor);
-    const atMatch = textBefore.match(/@(\w*)$/);
-
-    if (atMatch) {
-      setMentionQuery(atMatch[1].toLowerCase());
-      setMentionStart(cursor - atMatch[0].length);
-      // Position the dropdown near the textarea
-      const lineNum = textBefore.split('\n').length;
-      const lineHeight = 20;
-      setMentionPos({ top: Math.min(lineNum * lineHeight + 8, 300), left: 16 });
-    } else {
-      setMentionPos(null);
-      setMentionQuery('');
-      setMentionStart(-1);
-    }
-  };
-
-  const insertMention = (userId: string, _displayName: string) => {
-    const ta = textareaRef.current;
-    if (!ta || mentionStart < 0) return;
-    const cursor = ta.selectionStart;
-    const before = value.slice(0, mentionStart);
-    const after = value.slice(cursor);
-    const mention = `<@${userId}>`;
-    const newValue = before + mention + ' ' + after;
-    onChange(newValue);
-    setMentionPos(null);
-    setMentionQuery('');
-    setMentionStart(-1);
-    setTimeout(() => {
-      ta.focus();
-      const newCursor = mentionStart + mention.length + 1;
-      ta.setSelectionRange(newCursor, newCursor);
-    }, 0);
-  };
-
-  const filteredMentionUsers = mentionQuery.length >= 0 && mentionPos
-    ? slackUsers.filter(u =>
-        (u.realName?.toLowerCase().includes(mentionQuery) ||
-         u.displayName?.toLowerCase().includes(mentionQuery) ||
-         u.name?.toLowerCase().includes(mentionQuery))
-      ).slice(0, 6)
-    : [];
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (mentionPos && e.key === 'Escape') {
-      setMentionPos(null);
-    }
-  };
-
-  return (
-    <div className="space-y-2">
-      {/* Toolbar */}
-      <div className="flex items-center gap-0.5 border-b border-warm-border pb-2">
-        <button onClick={() => handleToolbar('**', '**')} className="p-1.5 rounded hover:bg-warm-bg text-warm-text-secondary" title="Bold">
-          <Bold className="h-3.5 w-3.5" />
-        </button>
-        <button onClick={() => handleToolbar('*', '*')} className="p-1.5 rounded hover:bg-warm-bg text-warm-text-secondary" title="Italic">
-          <Italic className="h-3.5 w-3.5" />
-        </button>
-        <button onClick={() => handleToolbar('## ')} className="p-1.5 rounded hover:bg-warm-bg text-warm-text-secondary" title="Heading">
-          <Heading className="h-3.5 w-3.5" />
-        </button>
-        <button onClick={() => handleToolbar('- ')} className="p-1.5 rounded hover:bg-warm-bg text-warm-text-secondary" title="Bullet List">
-          <List className="h-3.5 w-3.5" />
-        </button>
-        <button onClick={() => handleToolbar('1. ')} className="p-1.5 rounded hover:bg-warm-bg text-warm-text-secondary" title="Numbered List">
-          <ListOrdered className="h-3.5 w-3.5" />
-        </button>
-        <button onClick={() => handleToolbar('[', '](url)')} className="p-1.5 rounded hover:bg-warm-bg text-warm-text-secondary" title="Link">
-          <Link2 className="h-3.5 w-3.5" />
-        </button>
-        <span className="ml-2 text-[10px] text-warm-text-secondary/50">Type @ to mention a user</span>
-      </div>
-
-      {/* Editor with mention dropdown */}
-      <div className="relative">
-        <Textarea
-          ref={textareaRef}
-          value={value}
-          onChange={handleInput}
-          onKeyDown={handleKeyDown}
-          rows={16}
-          className="text-sm w-full min-h-[200px]"
-          placeholder="Write your agent instructions here..."
-        />
-        {mentionPos && filteredMentionUsers.length > 0 && (
-          <div
-            className="absolute z-20 w-56 rounded-lg border border-warm-border bg-white shadow-lg overflow-hidden"
-            style={{ top: mentionPos.top, left: mentionPos.left }}
-          >
-            {filteredMentionUsers.map((u) => (
-              <button
-                key={u.id}
-                onMouseDown={(e) => { e.preventDefault(); insertMention(u.id, u.realName || u.displayName || u.name); }}
-                className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-warm-bg transition-colors"
-              >
-                <Avatar className="h-5 w-5">
-                  <AvatarImage src={u.avatarUrl} />
-                  <AvatarFallback className="text-[9px]">{(u.realName || u.displayName || '?').charAt(0)}</AvatarFallback>
-                </Avatar>
-                <span className="text-xs font-medium truncate">{u.realName || u.displayName || u.name}</span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Actions */}
-      <div className="flex justify-end gap-2">
-        <Button variant="outline" size="sm" onClick={onCancel}>Cancel</Button>
-        <Button size="sm" onClick={onSave} disabled={saving}>
-          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Check className="mr-1.5 h-3.5 w-3.5" /> Save</>}
-        </Button>
-      </div>
-    </div>
-  );
-}
 
 // ---- Overview Tab ----
 
