@@ -65,6 +65,29 @@ const SOURCE_CONFIG_FIELDS: Record<string, { key: string; label: string; placeho
   ],
 };
 
+function getSourceTypeName(type: string | null): string {
+  const names: Record<string, string> = {
+    github: 'GitHub',
+    google_drive: 'Google Drive',
+    zendesk: 'Zendesk',
+    web_crawl: 'Website',
+    notion: 'Notion',
+  };
+  return type ? names[type] ?? type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Unknown';
+}
+
+function getStatusLabel(status: string | null): string {
+  const labels: Record<string, string> = {
+    active: 'Active',
+    syncing: 'Syncing',
+    needs_setup: 'Setup Required',
+    error: 'Error',
+    pending: 'Pending',
+    disabled: 'Disabled',
+  };
+  return status ? labels[status] ?? status.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Unknown';
+}
+
 export function KBSources() {
   const { data: sources, isLoading: sourcesLoading, isError: sourcesError } = useKBSources();
   const { data: apiKeys, isLoading: keysLoading, isError: keysError } = useKBApiKeys();
@@ -270,11 +293,11 @@ export function KBSources() {
                   <TableRow key={source.id}>
                     <TableCell className="font-medium">{source.name ?? 'Unnamed Source'}</TableCell>
                     <TableCell>
-                      <Badge variant="secondary">{source.type ?? 'unknown'}</Badge>
+                      <Badge variant="secondary">{getSourceTypeName(source.type)}</Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge variant={source.status === 'active' ? 'success' : source.status === 'syncing' ? 'warning' : 'secondary'}>
-                        {source.status ?? 'unknown'}
+                      <Badge variant={source.status === 'active' ? 'success' : source.status === 'syncing' ? 'warning' : source.status === 'error' ? 'danger' : 'secondary'}>
+                        {getStatusLabel(source.status)}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm">{source.entriesCount ?? 0}</TableCell>

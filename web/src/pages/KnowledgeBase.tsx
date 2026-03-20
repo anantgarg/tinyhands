@@ -47,6 +47,13 @@ function fmtUserId(createdBy: unknown): string {
   return createdBy;
 }
 
+function titleCase(str: string): string {
+  return str
+    .split(/[-_\s]+/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
+
 export function KnowledgeBase() {
   const isAdmin = useAuthStore((s) => s.user?.platformRole === 'superadmin' || s.user?.platformRole === 'admin');
   const [search, setSearch] = useState('');
@@ -170,7 +177,7 @@ export function KnowledgeBase() {
           <SelectContent>
             <SelectItem value="all">All Categories</SelectItem>
             {(categories ?? []).map((cat) => (
-              <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+              <SelectItem key={cat} value={cat}>{titleCase(cat)}</SelectItem>
             ))}
           </SelectContent>
         </Select>
@@ -179,8 +186,8 @@ export function KnowledgeBase() {
       {/* Tabs */}
       <Tabs value={tab} onValueChange={(v) => { setTab(v); setPage(1); }}>
         <TabsList>
-          <TabsTrigger value="approved">Approved</TabsTrigger>
-          {isAdmin && <TabsTrigger value="pending">Pending</TabsTrigger>}
+          <TabsTrigger value="approved">Published</TabsTrigger>
+          {isAdmin && <TabsTrigger value="pending">Pending Review</TabsTrigger>}
         </TabsList>
 
         <TabsContent value={tab}>
@@ -237,7 +244,7 @@ export function KnowledgeBase() {
                         </TableCell>
                         <TableCell>
                           {entry.category ? (
-                            <Badge variant="secondary">{entry.category}</Badge>
+                            <Badge variant="secondary">{titleCase(entry.category)}</Badge>
                           ) : (
                             <span className="text-warm-text-secondary text-xs">Uncategorized</span>
                           )}
