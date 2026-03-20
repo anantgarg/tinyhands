@@ -49,7 +49,7 @@ export function AgentCreate() {
   const { data: availableTools } = useAvailableTools();
 
   const [step, setStep] = useState(1);
-  const [analyzed, setAnalyzed] = useState(false);
+  const [, setAnalyzed] = useState(false);
   const [goal, setGoal] = useState('');
   const [name, setName] = useState('');
   const [avatarEmoji, setAvatarEmoji] = useState('');
