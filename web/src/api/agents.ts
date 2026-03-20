@@ -37,6 +37,7 @@ export interface Agent {
   createdByDisplayName?: string;
   createdAt: string;
   updatedAt: string;
+  userRole?: string;
 }
 
 interface CreateAgentPayload {

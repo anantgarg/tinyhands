@@ -185,6 +185,8 @@ export function AgentDetail() {
     );
   }
 
+  const canEdit = agent.userRole === 'owner' || useAuthStore.getState().user?.platformRole === 'superadmin' || useAuthStore.getState().user?.platformRole === 'admin';
+
   const handleToggleStatus = () => {
     const newStatus = agent.status === 'active' ? 'paused' : 'active';
     updateAgent.mutate(
@@ -239,7 +241,7 @@ export function AgentDetail() {
                   className="text-2xl font-extrabold bg-transparent border-b-2 border-brand outline-none px-0 py-0 w-auto min-w-[100px]"
                   style={{ width: `${Math.max(nameDraft.length, 5)}ch` }}
                 />
-              ) : (
+              ) : canEdit ? (
                 <h1
                   className="text-2xl font-extrabold cursor-pointer hover:text-brand transition-colors"
                   onClick={() => { setNameDraft(agent.name); setEditingName(true); }}
@@ -247,6 +249,8 @@ export function AgentDetail() {
                 >
                   {agent.name}
                 </h1>
+              ) : (
+                <h1 className="text-2xl font-extrabold">{agent.name}</h1>
               )}
               <Badge variant={agent.status === 'active' ? 'success' : 'secondary'}>
                 {agent.status}
@@ -255,6 +259,7 @@ export function AgentDetail() {
             </div>
           </div>
         </div>
+        {canEdit && (
         <div className="flex items-center gap-2">
           <Button variant="outline" onClick={handleToggleStatus}>
             {agent.status === 'active' ? (
@@ -277,6 +282,7 @@ export function AgentDetail() {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+        )}
       </div>
 
       {/* Tabs */}

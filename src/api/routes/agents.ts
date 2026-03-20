@@ -133,7 +133,10 @@ router.get('/:id', async (req: Request, res: Response) => {
       }
     } catch { /* Slack not available */ }
 
-    res.json({ ...(agent as any), channel_names: channelNames });
+    // Get current user's role for this agent
+    const userAgentRole = await getAgentRole(workspaceId, id, userId);
+
+    res.json({ ...(agent as any), channel_names: channelNames, user_role: userAgentRole });
   } catch (err: any) {
     logger.error('Get agent error', { error: err.message });
     res.status(500).json({ error: 'Failed to get agent' });
