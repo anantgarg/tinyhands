@@ -285,13 +285,6 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
   const [editingPrompt, setEditingPrompt] = useState(false);
   const [promptDraft, setPromptDraft] = useState('');
 
-  // Configuration editing
-  const [configDirty, setConfigDirty] = useState(false);
-  const [configDraft, setConfigDraft] = useState({
-    model: normalizeModelValue(agent.model),
-    maxTurns: agent.maxTurns,
-  });
-
   // Version preview dialog
   const [previewVersion, setPreviewVersion] = useState<AgentVersion | null>(null);
 
@@ -312,20 +305,11 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
     );
   };
 
-  const updateConfig = (partial: Partial<typeof configDraft>) => {
-    setConfigDraft((d) => ({ ...d, ...partial }));
-    setConfigDirty(true);
-  };
-
-  const saveConfig = () => {
+  // Auto-save config changes immediately
+  const autoSaveConfig = (field: string, value: unknown) => {
     updateAgent.mutate(
-      { id: agentId, ...configDraft },
-      {
-        onSuccess: () => {
-          setConfigDirty(false);
-          toast({ title: 'Configuration updated', variant: 'success' });
-        },
-      },
+      { id: agentId, [field]: value } as any,
+      { onSuccess: () => toast({ title: 'Updated', variant: 'success' }) },
     );
   };
 
@@ -376,21 +360,16 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
 
       {/* Section 2: Configuration — Model + Effort */}
       <Card>
-        <CardHeader className="flex-row items-center justify-between">
+        <CardHeader>
           <CardTitle className="text-base">Configuration</CardTitle>
-          {configDirty && (
-            <Button size="sm" onClick={saveConfig} disabled={updateAgent.isPending}>
-              {updateAgent.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Check className="mr-1.5 h-3.5 w-3.5" /> Save Changes</>}
-            </Button>
-          )}
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-5">
             {/* Model */}
             <div>
               <Label className="text-warm-text-secondary text-xs">Model</Label>
-              <Select value={configDraft.model} onValueChange={(v) => updateConfig({ model: v })}>
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <Select value={normalizeModelValue(agent.model)} onValueChange={(v) => autoSaveConfig('model', v)}>
+                <SelectTrigger className="mt-1"><SelectValue placeholder="Select model" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="claude-sonnet-4-20250514">Sonnet</SelectItem>
                   <SelectItem value="claude-opus-4-20250514">Opus</SelectItem>
@@ -403,8 +382,8 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
             <div>
               <Label className="text-warm-text-secondary text-xs">Effort</Label>
               <Select
-                value={String(configDraft.maxTurns)}
-                onValueChange={(v) => updateConfig({ maxTurns: Number(v) })}
+                value={String(agent.maxTurns)}
+                onValueChange={(v) => autoSaveConfig('maxTurns', Number(v))}
               >
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
@@ -575,9 +554,14 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex items-end gap-3">
-            <div className="flex-1 max-w-xs">
-              <Select value={writePolicy} onValueChange={setWritePolicy}>
+          <div className="max-w-xs">
+              <Select value={writePolicy} onValueChange={(v) => {
+                setWritePolicy(v);
+                updateAgent.mutate(
+                  { id: agentId, writePolicy: v },
+                  { onSuccess: () => toast({ title: 'Updated', variant: 'success' }) },
+                );
+              }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="auto">Automatic</SelectItem>
@@ -585,15 +569,6 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                   <SelectItem value="admin_confirm">Ask Owner/Admins</SelectItem>
                 </SelectContent>
               </Select>
-            </div>
-            <Button size="sm" onClick={() => {
-              updateAgent.mutate(
-                { id: agentId, writePolicy },
-                { onSuccess: () => toast({ title: 'Action approval updated', variant: 'success' }) },
-              );
-            }} disabled={updateAgent.isPending}>
-              Save
-            </Button>
           </div>
         </CardContent>
       </Card>
@@ -1482,8 +1457,14 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
         </CardHeader>
         <CardContent>
           <div className="flex items-end gap-3">
-            <div className="flex-1 max-w-xs">
-              <Select value={defaultAccess} onValueChange={setDefaultAccess}>
+            <div className="max-w-md">
+              <Select value={defaultAccess} onValueChange={(v) => {
+                setDefaultAccess(v);
+                updateAccess.mutate(
+                  { agentId, defaultAccess: v },
+                  { onSuccess: () => toast({ title: 'Updated', variant: 'success' }) },
+                );
+              }}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="member">Full Access — everyone can use, agent performs all actions</SelectItem>
@@ -1492,10 +1473,6 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                 </SelectContent>
               </Select>
             </div>
-            <Button size="sm" onClick={handleSaveAccess} disabled={updateAccess.isPending}>
-              Save
-            </Button>
-          </div>
         </CardContent>
       </Card>
 
