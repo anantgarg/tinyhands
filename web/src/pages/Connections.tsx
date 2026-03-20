@@ -191,7 +191,7 @@ function ConnectionsContent() {
           <div className="flex items-start gap-3">
             <Info className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
             <p className="text-sm text-blue-900">
-              When an agent uses a tool, it first checks if you have a personal connection. If not, it uses the team connection.
+              Each agent's tools are configured to use either team credentials, a specific user's credentials, or a combination. You can manage which credentials an agent uses in the agent's Tools tab.
             </p>
           </div>
         </CardContent>
