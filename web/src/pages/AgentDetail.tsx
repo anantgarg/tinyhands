@@ -47,6 +47,8 @@ import {
   useAddAgentTool,
   useAgentTriggers,
   useAddAgentTrigger,
+  useAgentToolRequests,
+  useCreateToolRequest,
 } from '@/api/agents';
 import type { Agent as AgentData, AgentVersion } from '@/api/agents';
 import { useAvailableTools } from '@/api/tools';
@@ -497,6 +499,14 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
 
 // ---- Tools Tab ----
 
+function formatAccessLevel(level: string): string {
+  switch (level) {
+    case 'read-write': return 'Can view & make changes';
+    case 'read-only': return 'Can view data';
+    default: return level;
+  }
+}
+
 function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
   const updateAgent = useUpdateAgent();
   const { data: availableTools } = useAvailableTools();
@@ -504,9 +514,13 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
   const addAgentTool = useAddAgentTool();
   const { data: toolConnections } = useAgentToolConnections(agentId);
   const setToolConnection = useSetAgentToolConnection();
+  const { data: toolRequests } = useAgentToolRequests(agentId);
+  const createToolRequest = useCreateToolRequest();
   const [showAddTool, setShowAddTool] = useState(false);
   const [selectedToolsToAdd, setSelectedToolsToAdd] = useState<Set<string>>(new Set());
   const [writePolicy, setWritePolicy] = useState(agent.writePolicy ?? 'auto');
+
+  const pendingToolRequests = (toolRequests ?? []).filter((r) => r.status === 'pending');
 
   const currentTools = agent.tools ?? [];
   const toolsNotAdded = (availableTools ?? []).filter((t) => !currentTools.includes(t.name));
@@ -655,6 +669,54 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
         </CardContent>
       </Card>
 
+      {/* Pending Tool Requests */}
+      {pendingToolRequests.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">
+              Pending Tool Requests ({pendingToolRequests.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-card border border-warm-border overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Tool</TableHead>
+                    <TableHead>Access</TableHead>
+                    <TableHead>Requested By</TableHead>
+                    <TableHead>When</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {pendingToolRequests.map((req) => (
+                    <TableRow key={req.id}>
+                      <TableCell className="font-medium">
+                        {getToolDisplayName(req.toolName, availableTools)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={req.accessLevel === 'read-write' ? 'warning' : 'default'} className="text-xs">
+                          {formatAccessLevel(req.accessLevel)}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-sm text-warm-text-secondary">
+                        {req.requestedByName || '\u2014'}
+                      </TableCell>
+                      <TableCell className="text-sm text-warm-text-secondary">
+                        {formatDistanceToNow(new Date(req.createdAt), { addSuffix: true })}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <p className="text-xs text-warm-text-secondary mt-3">
+              Approve or deny these requests in <Link to="/requests" className="text-brand hover:underline">Requests</Link>.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Add Tool Dialog */}
       <Dialog open={showAddTool} onOpenChange={setShowAddTool}>
         <DialogContent className="max-w-lg">
@@ -672,6 +734,7 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                   <div className="space-y-1">
                     {tools.map((tool) => {
                       const isSelected = selectedToolsToAdd.has(tool.name);
+                      const accessLevel = (tool as any).accessLevel;
                       return (
                         <label
                           key={tool.name}
@@ -696,7 +759,17 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                             className="h-4 w-4 rounded border-warm-border text-brand focus:ring-brand"
                           />
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium">{tool.displayName}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-medium">{tool.displayName}</p>
+                              {accessLevel && (
+                                <Badge
+                                  variant={accessLevel === 'read-write' ? 'warning' : 'default'}
+                                  className="text-[10px] shrink-0"
+                                >
+                                  {formatAccessLevel(accessLevel)}
+                                </Badge>
+                              )}
+                            </div>
                             <p className="text-xs text-warm-text-secondary line-clamp-1">{tool.description}</p>
                           </div>
                         </label>

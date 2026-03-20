@@ -52,6 +52,7 @@ interface AvailableTool {
   description: string;
   category: string;
   source: 'builtin' | 'custom' | 'integration';
+  accessLevel?: string;
 }
 
 export function useBuiltinTools() {

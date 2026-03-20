@@ -363,3 +363,72 @@ export async function getPendingUpgradeRequest(workspaceId: string, agentId: str
   );
   return result || null;
 }
+
+// ── Tool Access Requests ──
+
+export interface ToolRequest {
+  id: string;
+  workspace_id: string;
+  agent_id: string;
+  tool_name: string;
+  access_level: string;
+  reason: string | null;
+  status: string;
+  requested_by: string;
+  resolved_by: string | null;
+  created_at: string;
+  resolved_at: string | null;
+}
+
+export async function createToolRequest(
+  workspaceId: string, agentId: string, toolName: string,
+  accessLevel: string, userId: string, reason?: string,
+): Promise<string> {
+  const id = uuid();
+  await execute(
+    `INSERT INTO tool_requests (id, workspace_id, agent_id, tool_name, access_level, reason, status, requested_by, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, 'pending', $7, NOW())`,
+    [id, workspaceId, agentId, toolName, accessLevel, reason || null, userId]
+  );
+  logger.info('Tool request created', { id, workspaceId, agentId, toolName });
+  return id;
+}
+
+export async function listToolRequests(workspaceId: string, status?: string): Promise<ToolRequest[]> {
+  if (status) {
+    return query('SELECT * FROM tool_requests WHERE workspace_id = $1 AND status = $2 ORDER BY created_at DESC', [workspaceId, status]);
+  }
+  return query('SELECT * FROM tool_requests WHERE workspace_id = $1 ORDER BY created_at DESC', [workspaceId]);
+}
+
+export async function listAgentToolRequests(workspaceId: string, agentId: string): Promise<ToolRequest[]> {
+  return query('SELECT * FROM tool_requests WHERE workspace_id = $1 AND agent_id = $2 ORDER BY created_at DESC', [workspaceId, agentId]);
+}
+
+export async function approveToolRequest(workspaceId: string, requestId: string, approvedBy: string): Promise<ToolRequest | null> {
+  const req = await queryOne<ToolRequest>(
+    "SELECT * FROM tool_requests WHERE id = $1 AND workspace_id = $2 AND status = 'pending'",
+    [requestId, workspaceId]
+  );
+  if (!req) return null;
+
+  await execute(
+    'UPDATE tool_requests SET status = $1, resolved_by = $2, resolved_at = NOW() WHERE id = $3',
+    ['approved', approvedBy, requestId]
+  );
+
+  // Add the tool to the agent
+  const { addToolToAgent } = await import('../tools');
+  await addToolToAgent(workspaceId, req.agent_id, req.tool_name, approvedBy);
+
+  logger.info('Tool request approved', { requestId, toolName: req.tool_name, agentId: req.agent_id });
+  return { ...req, status: 'approved', resolved_by: approvedBy };
+}
+
+export async function denyToolRequest(workspaceId: string, requestId: string, deniedBy: string): Promise<void> {
+  await execute(
+    "UPDATE tool_requests SET status = 'denied', resolved_by = $1, resolved_at = NOW() WHERE id = $2 AND workspace_id = $3 AND status = 'pending'",
+    [deniedBy, requestId, workspaceId]
+  );
+  logger.info('Tool request denied', { requestId });
+}

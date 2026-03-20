@@ -8,6 +8,8 @@ import {
   canModifyAgent, canView,
   getAgentRole, setAgentRole, removeAgentRole, getAgentRoles,
   requestUpgrade, approveUpgrade, denyUpgrade,
+  createToolRequest, listToolRequests, listAgentToolRequests,
+  approveToolRequest, denyToolRequest,
 } from '../../modules/access-control';
 import { getRunsByAgent as _getRunsByAgent } from '../../modules/execution';
 import { addToolToAgent, removeToolFromAgent, getAgentToolSummary } from '../../modules/tools';
@@ -51,6 +53,31 @@ router.post('/', async (req: Request, res: Response) => {
   } catch (err: any) {
     logger.error('Create agent error', { error: err.message });
     res.status(400).json({ error: err.message });
+  }
+});
+
+// GET /agents/tool-requests — List all tool requests (workspace-wide, must be before /:id)
+router.get('/tool-requests', async (req: Request, res: Response) => {
+  try {
+    const { workspaceId } = getSessionUser(req);
+    const status = req.query.status as string | undefined;
+    const requests = await listToolRequests(workspaceId, status);
+    const userIds = (requests as any[]).map((r: any) => r.requested_by).filter(Boolean);
+    const names = await resolveUserNames(userIds);
+    const agentIds = (requests as any[]).map((r: any) => r.agent_id).filter(Boolean);
+    const agentRows = agentIds.length > 0
+      ? await query('SELECT id, name FROM agents WHERE id = ANY($1)', [agentIds])
+      : [];
+    const agentMap: Record<string, string> = {};
+    for (const a of agentRows as any[]) { agentMap[a.id] = a.name; }
+    res.json((requests as any[]).map((r: any) => ({
+      ...r,
+      requestedByName: names[r.requested_by] || r.requested_by,
+      agentName: agentMap[r.agent_id] || r.agent_id,
+    })));
+  } catch (err: any) {
+    logger.error('List tool requests error', { error: err.message });
+    res.status(500).json({ error: 'Failed to list tool requests' });
   }
 });
 
@@ -465,6 +492,82 @@ router.get('/:id/triggers', async (req: Request, res: Response) => {
   } catch (err: any) {
     logger.error('Get agent triggers error', { error: err.message });
     res.status(500).json({ error: 'Failed to get triggers' });
+  }
+});
+
+// ── Tool Requests ──
+
+// GET /agents/:id/tool-requests — List tool requests for agent
+router.get('/:id/tool-requests', async (req: Request, res: Response) => {
+  try {
+    const { workspaceId, userId } = getSessionUser(req);
+    const id = req.params.id as string;
+    if (!(await canView(workspaceId, id, userId))) {
+      res.status(403).json({ error: 'Insufficient permissions' });
+      return;
+    }
+    const requests = await listAgentToolRequests(workspaceId, id);
+    const userIds = (requests as any[]).map((r: any) => r.requested_by).filter(Boolean);
+    const names = await resolveUserNames(userIds);
+    res.json((requests as any[]).map((r: any) => ({
+      ...r,
+      requestedByName: names[r.requested_by] || r.requested_by,
+    })));
+  } catch (err: any) {
+    logger.error('List agent tool requests error', { error: err.message });
+    res.status(500).json({ error: 'Failed to list tool requests' });
+  }
+});
+
+// POST /agents/:id/tool-requests — Create tool request
+router.post('/:id/tool-requests', async (req: Request, res: Response) => {
+  try {
+    const { workspaceId, userId } = getSessionUser(req);
+    const agentId = req.params.id as string;
+    const { toolName, accessLevel, reason } = req.body;
+    if (!toolName) {
+      res.status(400).json({ error: 'toolName is required' });
+      return;
+    }
+    const id = await createToolRequest(workspaceId, agentId, toolName, accessLevel || 'read-only', userId, reason);
+    res.status(201).json({ id });
+  } catch (err: any) {
+    logger.error('Create tool request error', { error: err.message });
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /agents/:id/tool-requests/:requestId/approve — Approve tool request
+router.post('/:id/tool-requests/:requestId/approve', async (req: Request, res: Response) => {
+  try {
+    const { workspaceId, userId } = getSessionUser(req);
+    const id = req.params.id as string;
+    if (!(await canModifyAgent(workspaceId, id, userId))) {
+      res.status(403).json({ error: 'Insufficient permissions' });
+      return;
+    }
+    const result = await approveToolRequest(workspaceId, req.params.requestId as string, userId);
+    res.json(result);
+  } catch (err: any) {
+    logger.error('Approve tool request error', { error: err.message });
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /agents/:id/tool-requests/:requestId/deny — Deny tool request
+router.post('/:id/tool-requests/:requestId/deny', async (req: Request, res: Response) => {
+  try {
+    const { workspaceId, userId } = getSessionUser(req);
+    const id = req.params.id as string;
+    if (!(await canModifyAgent(workspaceId, id, userId))) {
+      res.status(403).json({ error: 'Insufficient permissions' });
+      return;
+    }
+    await denyToolRequest(workspaceId, req.params.requestId as string, userId);
+    res.json({ ok: true });
+  } catch (err: any) {
+    logger.error('Deny tool request error', { error: err.message });
+    res.status(400).json({ error: err.message });
   }
 });
 

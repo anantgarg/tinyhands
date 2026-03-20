@@ -218,6 +218,7 @@ router.get('/available', async (req: Request, res: Response) => {
             description: tool.description || '',
             category: 'integration',
             source: 'integration' as const,
+            accessLevel: tool.accessLevel || 'read-only',
           });
         }
       }

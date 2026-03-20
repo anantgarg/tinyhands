@@ -422,3 +422,75 @@ export function useAddAgentTrigger() {
     },
   });
 }
+
+// ── Tool Requests ──
+
+export interface ToolRequest {
+  id: string;
+  workspaceId: string;
+  agentId: string;
+  agentName?: string;
+  toolName: string;
+  accessLevel: string;
+  reason: string | null;
+  status: string;
+  requestedBy: string;
+  requestedByName?: string;
+  resolvedBy: string | null;
+  createdAt: string;
+  resolvedAt: string | null;
+}
+
+export function useToolRequests(status?: string) {
+  const qs = status ? `?status=${status}` : '';
+  return useQuery<ToolRequest[]>({
+    queryKey: ['tool-requests', status],
+    queryFn: () => api.get(`/agents/tool-requests${qs}`),
+  });
+}
+
+export function useAgentToolRequests(agentId: string) {
+  return useQuery<ToolRequest[]>({
+    queryKey: ['agents', agentId, 'tool-requests'],
+    queryFn: () => api.get(`/agents/${agentId}/tool-requests`),
+    enabled: !!agentId,
+  });
+}
+
+export function useCreateToolRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ agentId, toolName, accessLevel, reason }: {
+      agentId: string; toolName: string; accessLevel: string; reason?: string;
+    }) => api.post(`/agents/${agentId}/tool-requests`, { toolName, accessLevel, reason }),
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: ['agents', variables.agentId, 'tool-requests'] });
+      qc.invalidateQueries({ queryKey: ['tool-requests'] });
+    },
+  });
+}
+
+export function useApproveToolRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ agentId, requestId }: { agentId: string; requestId: string }) =>
+      api.post(`/agents/${agentId}/tool-requests/${requestId}/approve`),
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: ['agents', variables.agentId, 'tool-requests'] });
+      qc.invalidateQueries({ queryKey: ['agents', variables.agentId] });
+      qc.invalidateQueries({ queryKey: ['tool-requests'] });
+    },
+  });
+}
+
+export function useDenyToolRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ agentId, requestId }: { agentId: string; requestId: string }) =>
+      api.post(`/agents/${agentId}/tool-requests/${requestId}/deny`),
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: ['agents', variables.agentId, 'tool-requests'] });
+      qc.invalidateQueries({ queryKey: ['tool-requests'] });
+    },
+  });
+}

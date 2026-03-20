@@ -11,7 +11,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useUpgradeRequests, useApproveUpgrade, useDenyUpgrade, useAgents } from '@/api/agents';
+import {
+  useUpgradeRequests, useApproveUpgrade, useDenyUpgrade, useAgents,
+  useToolRequests, useApproveToolRequest, useDenyToolRequest,
+} from '@/api/agents';
+import type { ToolRequest } from '@/api/agents';
 import { useEvolutionProposals, useApproveProposal, useRejectProposal } from '@/api/evolution';
 import { toast } from '@/components/ui/use-toast';
 
@@ -292,12 +296,123 @@ function EvolutionProposalsTab() {
   );
 }
 
+function formatAccessLevel(level: string): string {
+  switch (level) {
+    case 'read-write': return 'Can view & make changes';
+    case 'read-only': return 'Can view data';
+    default: return level;
+  }
+}
+
 function ToolRequestsTab() {
+  const { data: agents } = useAgents();
+  const { data: requests, isLoading } = useToolRequests('pending');
+  const approveRequest = useApproveToolRequest();
+  const denyRequest = useDenyToolRequest();
+  const [agentFilter, setAgentFilter] = useState('all');
+
+  if (isLoading) return <Skeleton className="h-[300px]" />;
+
+  const pendingRequests = (requests ?? []) as ToolRequest[];
+  const filteredRequests = agentFilter === 'all'
+    ? pendingRequests
+    : pendingRequests.filter((r) => r.agentId === agentFilter);
+
+  if (pendingRequests.length === 0) {
+    return (
+      <EmptyState
+        icon={Wrench}
+        title="No pending tool requests"
+        description="When users request tool access for agents, their requests will appear here for review."
+      />
+    );
+  }
+
   return (
-    <EmptyState
-      icon={Wrench}
-      title="No tool requests"
-      description="Tool access requests from agents will appear here."
-    />
+    <div className="space-y-4">
+      <div className="flex justify-end">
+        <Select value={agentFilter} onValueChange={setAgentFilter}>
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="Filter by agent" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Agents</SelectItem>
+            {(agents ?? []).map((a) => (
+              <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="rounded-card border border-warm-border bg-white overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Requested By</TableHead>
+              <TableHead>Agent</TableHead>
+              <TableHead>Tool</TableHead>
+              <TableHead>Access</TableHead>
+              <TableHead>Reason</TableHead>
+              <TableHead>Requested</TableHead>
+              <TableHead className="w-40"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {filteredRequests.map((req) => (
+              <TableRow key={req.id}>
+                <TableCell className="font-medium">{req.requestedByName || '\u2014'}</TableCell>
+                <TableCell>
+                  <Link to={`/agents/${req.agentId}`} className="text-brand hover:underline">
+                    {req.agentName || req.agentId}
+                  </Link>
+                </TableCell>
+                <TableCell className="text-sm">
+                  {req.toolName.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase())}
+                </TableCell>
+                <TableCell>
+                  <Badge variant={req.accessLevel === 'read-write' ? 'warning' : 'default'} className="text-xs">
+                    {formatAccessLevel(req.accessLevel)}
+                  </Badge>
+                </TableCell>
+                <TableCell className="max-w-[200px] truncate text-warm-text-secondary text-sm">
+                  {req.reason || '\u2014'}
+                </TableCell>
+                <TableCell className="text-warm-text-secondary text-sm">
+                  {formatDistanceToNow(new Date(req.createdAt), { addSuffix: true })}
+                </TableCell>
+                <TableCell>
+                  <div className="flex gap-1">
+                    <Button
+                      size="sm"
+                      onClick={() => approveRequest.mutate({ agentId: req.agentId, requestId: req.id })}
+                      disabled={approveRequest.isPending}
+                    >
+                      <CheckCircle className="mr-1.5 h-3.5 w-3.5" />
+                      Approve
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => denyRequest.mutate({ agentId: req.agentId, requestId: req.id })}
+                      disabled={denyRequest.isPending}
+                    >
+                      <XCircle className="mr-1.5 h-3.5 w-3.5" />
+                      Deny
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+            {filteredRequests.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={7} className="text-center text-warm-text-secondary">
+                  No matching requests
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
   );
 }
