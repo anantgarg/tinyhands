@@ -378,9 +378,9 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
               <Select value={configDraft.model} onValueChange={(v) => updateConfig({ model: v })}>
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="claude-sonnet-4-20250514">Claude Sonnet 4</SelectItem>
-                  <SelectItem value="claude-opus-4-20250514">Claude Opus 4</SelectItem>
-                  <SelectItem value="claude-haiku-4-20250514">Claude Haiku 4</SelectItem>
+                  <SelectItem value="claude-sonnet-4-20250514">Sonnet</SelectItem>
+                  <SelectItem value="claude-opus-4-20250514">Opus</SelectItem>
+                  <SelectItem value="claude-haiku-4-20250514">Haiku</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -434,7 +434,7 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
             <div>
               <Label className="text-warm-text-secondary text-xs">
                 Access
-                <InfoTooltip text="Everyone = all workspace members can use. Members Only = only users with explicit roles. Hidden = agent is invisible." />
+                <InfoTooltip text="Full Access = everyone can use, agent performs all actions. Limited Access = everyone can interact, but agent can only read (no writes). Invite Only = only people with assigned roles can use this agent." />
               </Label>
               <Select
                 value={configDraft.defaultAccess}
@@ -442,9 +442,9 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
               >
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="member">Everyone</SelectItem>
-                  <SelectItem value="viewer">Members Only</SelectItem>
-                  <SelectItem value="none">Hidden</SelectItem>
+                  <SelectItem value="member">Full Access</SelectItem>
+                  <SelectItem value="viewer">Limited Access</SelectItem>
+                  <SelectItem value="none">Invite Only</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1199,7 +1199,7 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
         <CardHeader>
           <CardTitle className="text-base">
             Default Access
-            <InfoTooltip text="viewer = can see the agent but not send tasks. member = can use the agent. none = agent is hidden." />
+            <InfoTooltip text="Controls what everyone in the workspace can do with this agent by default. Individual roles below can override this." />
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -1208,9 +1208,9 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
               <Select value={defaultAccess} onValueChange={setDefaultAccess}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="viewer">Viewer</SelectItem>
-                  <SelectItem value="member">Member</SelectItem>
-                  <SelectItem value="none">None</SelectItem>
+                  <SelectItem value="member">Full Access — everyone can use, agent performs all actions</SelectItem>
+                  <SelectItem value="viewer">Limited Access — everyone can interact, agent read-only</SelectItem>
+                  <SelectItem value="none">Invite Only — only people with assigned roles</SelectItem>
                 </SelectContent>
               </Select>
             </div>
