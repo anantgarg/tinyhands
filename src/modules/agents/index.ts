@@ -32,11 +32,11 @@ export async function createAgent(workspaceId: string, params: CreateAgentParams
     throw new Error(`Agent with name "${params.name}" already exists`);
   }
 
-  const channelIds = params.channelIds || [params.channelId];
+  const channelIds = params.channelIds?.length ? params.channelIds : params.channelId ? [params.channelId] : [];
   const agent: Agent = {
     id,
     name: params.name,
-    channel_id: channelIds[0],
+    channel_id: channelIds[0] || '',
     channel_ids: channelIds,
     system_prompt: params.systemPrompt,
     tools: (params.tools || []).filter(t => !['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash', 'WebSearch', 'WebFetch', 'NotebookEdit', 'TodoWrite', 'Agent', 'Mcp'].includes(t)),
