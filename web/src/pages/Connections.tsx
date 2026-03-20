@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link as LinkIcon, Trash2, ExternalLink, AlertCircle, Shield, Info, Plus } from 'lucide-react';
+import { Link as LinkIcon, Trash2, ExternalLink, AlertCircle, Info, Plus } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
@@ -22,23 +22,22 @@ import {
 import { useAuthStore } from '@/store/auth';
 import { toast } from '@/components/ui/use-toast';
 
+function titleCaseStatus(status: string | null): string {
+  const labels: Record<string, string> = {
+    active: 'Active',
+    expired: 'Expired',
+    revoked: 'Revoked',
+    unknown: 'Unknown',
+  };
+  return status ? labels[status] ?? status.charAt(0).toUpperCase() + status.slice(1) : 'Unknown';
+}
+
 export function Connections() {
-  const isAdmin = useAuthStore((s) => s.user?.platformRole === 'superadmin' || s.user?.platformRole === 'admin');
-
-  if (!isAdmin) {
-    return (
-      <div className="flex flex-col items-center justify-center py-20">
-        <Shield className="h-12 w-12 text-warm-text-secondary mb-4" />
-        <h2 className="text-lg font-bold">Admin Access Required</h2>
-        <p className="text-warm-text-secondary mt-2">You need admin permissions to access this page.</p>
-      </div>
-    );
-  }
-
   return <ConnectionsContent />;
 }
 
 function ConnectionsContent() {
+  const isAdmin = useAuthStore((s) => s.user?.platformRole === 'superadmin' || s.user?.platformRole === 'admin');
   const { data: teamConns, isLoading: teamLoading, isError: teamError } = useTeamConnections();
   const { data: personalConns, isLoading: personalLoading, isError: personalError } = usePersonalConnections();
   const { data: oauthIntegrations } = useOAuthIntegrations();
@@ -101,7 +100,7 @@ function ConnectionsContent() {
                 <TableCell className="font-medium">{conn.integrationName ?? '\u2014'}</TableCell>
                 <TableCell>
                   <Badge variant={conn.status === 'active' ? 'success' : conn.status === 'expired' ? 'warning' : 'danger'}>
-                    {conn.status ?? 'unknown'}
+                    {titleCaseStatus(conn.status)}
                   </Badge>
                 </TableCell>
                 <TableCell className="text-warm-text-secondary text-xs">
@@ -149,7 +148,6 @@ function ConnectionsContent() {
       );
     }
     return (
-      <>
         <div className="rounded-card border border-warm-border bg-white overflow-x-auto">
           <Table>
             <TableHeader>
@@ -165,7 +163,7 @@ function ConnectionsContent() {
                   <TableCell className="font-medium">{conn.integrationName ?? '\u2014'}</TableCell>
                   <TableCell>
                     <Badge variant={conn.status === 'active' ? 'success' : conn.status === 'expired' ? 'warning' : 'danger'}>
-                      {conn.status ?? 'unknown'}
+                      {titleCaseStatus(conn.status)}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-warm-text-secondary text-xs">
@@ -178,10 +176,6 @@ function ConnectionsContent() {
             </TableBody>
           </Table>
         </div>
-        <p className="text-xs text-warm-text-secondary mt-3">
-          Team connections are managed by admins in Tools & Integrations.
-        </p>
-      </>
     );
   };
 
@@ -221,6 +215,13 @@ function ConnectionsContent() {
 
         <TabsContent value="team">
           {renderTeamConnectionsTable(teamConns, teamLoading, teamError)}
+          {!teamLoading && !teamError && (teamConns ?? []).length > 0 && (
+            <p className="text-xs text-warm-text-secondary mt-3">
+              {isAdmin
+                ? <>Manage team connections in <a href="/tools" className="text-brand hover:underline">Tools & Integrations</a>.</>
+                : 'Team connections are managed by workspace admins.'}
+            </p>
+          )}
         </TabsContent>
 
         {hasToolModes && (
