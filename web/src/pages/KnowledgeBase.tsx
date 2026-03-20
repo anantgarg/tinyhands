@@ -42,12 +42,6 @@ import {
 import { useAuthStore } from '@/store/auth';
 import { toast } from '@/components/ui/use-toast';
 
-function fmtUserId(createdBy: unknown): string {
-  if (!createdBy || typeof createdBy !== 'string') return '\u2014';
-  if (createdBy.startsWith('U')) return '\u2014';
-  return createdBy;
-}
-
 function titleCase(str: string): string {
   return str
     .split(/[-_\s]+/)
@@ -294,11 +288,14 @@ export function KnowledgeBase() {
                               <DropdownMenuItem
                                 onClick={() =>
                                   setDetailEntry({
+                                    id: entry.id,
                                     title: entry.title || 'Untitled',
                                     content: entry.content || '',
                                     category: entry.category || 'Uncategorized',
                                     createdBy: entry.createdBy || '',
                                     updatedAt: entry.updatedAt || '',
+                                    kbSourceId: (entry as any).kbSourceId || null,
+                                    sourceName: (entry as any).sourceName || null,
                                   })
                                 }
                               >

@@ -9,3 +9,5 @@ logs/
 coverage/
 .DS_Store
 .claude/
+feedback/
+.claude/feedback-server/node_modules/

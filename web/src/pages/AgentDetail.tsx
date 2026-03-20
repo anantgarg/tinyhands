@@ -818,7 +818,7 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                               <SelectContent>
                                 <SelectItem value="team">Team credentials</SelectItem>
                                 <SelectItem value="personal">Requesting user's credentials</SelectItem>
-                                <SelectItem value="hybrid">User's if available, otherwise team</SelectItem>
+                                <SelectItem value="creator">Agent creator's credentials</SelectItem>
                               </SelectContent>
                             </Select>
                           ) : (

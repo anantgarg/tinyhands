@@ -146,7 +146,12 @@ router.get('/agent/:agentId', async (req: Request, res: Response) => {
     const { workspaceId } = getSessionUser(req);
     const agentId = req.params.agentId as string;
     const connections = await listAgentToolConnections(workspaceId, agentId);
-    res.json(connections);
+    // Map backend modes to frontend labels
+    const REVERSE_MAP: Record<string, string> = { team: 'team', runtime: 'personal', delegated: 'creator' };
+    res.json((connections as any[]).map((c: any) => ({
+      ...c,
+      connection_mode: REVERSE_MAP[c.connection_mode] || c.connection_mode,
+    })));
   } catch (err: any) {
     logger.error('List agent tool connections error', { error: err.message });
     res.status(500).json({ error: 'Failed to list agent tool connections' });
@@ -164,9 +169,12 @@ router.put('/agent/:agentId/:toolName', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'mode is required' });
       return;
     }
+    // Map frontend labels to backend connection modes
+    const MODE_MAP: Record<string, string> = { team: 'team', personal: 'runtime', creator: 'delegated', runtime: 'runtime', delegated: 'delegated' };
+    const resolvedMode = MODE_MAP[mode] || mode;
     const result = await setAgentToolConnection(
       workspaceId, agentId, toolName,
-      mode, connectionId || null, userId,
+      resolvedMode, connectionId || null, userId,
     );
     res.json(result);
   } catch (err: any) {
@@ -211,7 +219,7 @@ router.get('/agent-tool-modes', requireAdmin, async (req: Request, res: Response
       agentId: r.agent_id,
       agentName: r.agent_name,
       toolName: r.tool_name,
-      mode: r.mode || 'team',
+      mode: ({ team: 'team', runtime: 'personal', delegated: 'creator' } as Record<string, string>)[r.connection_mode || r.mode] || r.connection_mode || r.mode || 'team',
     })));
   } catch (err: any) {
     logger.error('List agent tool modes error', { error: err.message });
