@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  ArrowLeft, RefreshCw, Trash2, Plus, Key, Copy, AlertCircle,
-  Github, Globe, FileText, Database, BookOpen,
+  ArrowLeft, RefreshCw, Trash2, Plus, Key, Copy, AlertCircle, Pencil,
+  Github, Globe, FileText, Database, BookOpen, ChevronRight, Folder, Loader2,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -27,10 +27,12 @@ import {
   useKBSources,
   useSyncKBSource,
   useDeleteKBSource,
+  useUpdateKBSource,
   useKBApiKeys,
   useSetKBApiKey,
   useDeleteKBApiKey,
   useCreateKBSource,
+  useDriveFolders,
 } from '@/api/kb';
 import { toast } from '@/components/ui/use-toast';
 
@@ -42,28 +44,134 @@ const SOURCE_TYPES = [
   { id: 'notion', name: 'Notion', description: 'Sync pages from a Notion workspace', icon: Database },
 ];
 
-const SOURCE_CONFIG_FIELDS: Record<string, { key: string; label: string; placeholder: string; required: boolean }[]> = {
+const SOURCE_CONFIG_FIELDS: Record<string, { key: string; label: string; placeholder: string; required: boolean; help?: string }[]> = {
   github: [
-    { key: 'repo', label: 'Repository (owner/name)', placeholder: 'myorg/docs', required: true },
-    { key: 'branch', label: 'Branch', placeholder: 'main', required: false },
-    { key: 'path', label: 'Path filter', placeholder: 'docs/', required: false },
+    { key: 'repo', label: 'Repository (owner/name)', placeholder: 'myorg/docs', required: true, help: 'The GitHub repository to sync, e.g. "acme/knowledge-base"' },
+    { key: 'branch', label: 'Branch', placeholder: 'main', required: false, help: 'Branch to sync from. Defaults to the repo\'s default branch.' },
+    { key: 'path', label: 'Path filter', placeholder: 'docs/', required: false, help: 'Only sync files under this path. Leave blank to sync all markdown files.' },
   ],
   google_drive: [
-    { key: 'folderId', label: 'Folder ID', placeholder: 'The Google Drive folder ID', required: true },
+    { key: 'folderId', label: 'Folder ID', placeholder: 'The Google Drive folder ID', required: true, help: 'Find this in the folder\'s URL: drive.google.com/drive/folders/[THIS_PART]' },
   ],
   zendesk: [
-    { key: 'subdomain', label: 'Subdomain', placeholder: 'yourcompany', required: true },
-    { key: 'categoryId', label: 'Category ID (optional)', placeholder: '', required: false },
+    { key: 'subdomain', label: 'Subdomain', placeholder: 'yourcompany', required: true, help: 'Your Zendesk subdomain, e.g. "acme" from acme.zendesk.com' },
+    { key: 'categoryId', label: 'Category ID (optional)', placeholder: '', required: false, help: 'Only sync articles from this Help Center category. Leave blank for all.' },
   ],
   web_crawl: [
-    { key: 'url', label: 'Start URL', placeholder: 'https://docs.example.com', required: true },
-    { key: 'maxPages', label: 'Max pages', placeholder: '50', required: false },
-    { key: 'urlPattern', label: 'URL pattern (regex)', placeholder: '/docs/.*', required: false },
+    { key: 'url', label: 'Start URL', placeholder: 'https://docs.example.com', required: true, help: 'The starting page to crawl. The crawler will follow links from here.' },
+    { key: 'maxPages', label: 'Max pages', placeholder: '50', required: false, help: 'Maximum number of pages to crawl. Defaults to 50.' },
+    { key: 'urlPattern', label: 'URL pattern (regex)', placeholder: '/docs/.*', required: false, help: 'Only crawl URLs matching this pattern. Leave blank to follow all links.' },
   ],
   notion: [
-    { key: 'rootPageId', label: 'Root Page ID', placeholder: 'Notion page ID', required: true },
+    { key: 'rootPageId', label: 'Root Page ID', placeholder: 'Notion page ID', required: true, help: 'The ID of the top-level page to sync. Found in the page\'s URL after the workspace name.' },
   ],
 };
+
+function DriveFolderPicker({ value, onChange }: { value: string; onChange: (id: string, name: string) => void }) {
+  const [browsing, setBrowsing] = useState(false);
+  const [currentParent, setCurrentParent] = useState('root');
+  const [breadcrumbs, setBreadcrumbs] = useState<{ id: string; name: string }[]>([{ id: 'root', name: 'My Drive' }]);
+  const { data, isLoading, isError } = useDriveFolders(browsing ? currentParent : null);
+
+  const navigateInto = (folderId: string, folderName: string) => {
+    setCurrentParent(folderId);
+    setBreadcrumbs((prev) => [...prev, { id: folderId, name: folderName }]);
+  };
+
+  const navigateTo = (idx: number) => {
+    const target = breadcrumbs[idx];
+    setCurrentParent(target.id);
+    setBreadcrumbs((prev) => prev.slice(0, idx + 1));
+  };
+
+  if (!browsing) {
+    return (
+      <div>
+        <div className="flex items-center gap-2">
+          <Input value={value} onChange={(e) => onChange(e.target.value, '')} placeholder="Folder ID" className="flex-1" />
+          <Button type="button" variant="outline" size="sm" onClick={() => setBrowsing(true)}>
+            <Folder className="mr-1.5 h-3.5 w-3.5" /> Browse
+          </Button>
+        </div>
+        <p className="text-xs text-warm-text-secondary mt-1">Paste a folder ID or click Browse to pick a folder from your Google Drive.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-lg border border-warm-border">
+      {/* Breadcrumbs */}
+      <div className="flex items-center gap-1 px-3 py-2 border-b border-warm-border text-xs text-warm-text-secondary overflow-x-auto">
+        {breadcrumbs.map((crumb, i) => (
+          <span key={crumb.id} className="flex items-center gap-1 shrink-0">
+            {i > 0 && <ChevronRight className="h-3 w-3" />}
+            <button className="hover:text-warm-text underline-offset-2 hover:underline" onClick={() => navigateTo(i)}>
+              {crumb.name}
+            </button>
+          </span>
+        ))}
+      </div>
+
+      {/* Folder list */}
+      <div className="max-h-[200px] overflow-y-auto">
+        {isLoading ? (
+          <div className="flex items-center justify-center py-6 text-warm-text-secondary">
+            <Loader2 className="h-4 w-4 animate-spin mr-2" /> Loading folders...
+          </div>
+        ) : isError ? (
+          <p className="text-sm text-red-500 text-center py-4">Failed to load folders. Is your Google account connected?</p>
+        ) : (data?.folders ?? []).length === 0 ? (
+          <p className="text-sm text-warm-text-secondary text-center py-4">No subfolders here</p>
+        ) : (
+          (data?.folders ?? []).map((folder) => (
+            <div
+              key={folder.id}
+              className="flex items-center justify-between px-3 py-2 hover:bg-warm-bg cursor-pointer group"
+            >
+              <button
+                className="flex items-center gap-2 text-sm flex-1 text-left"
+                onClick={() => navigateInto(folder.id, folder.name)}
+              >
+                <Folder className="h-4 w-4 text-blue-500 shrink-0" />
+                <span className="truncate">{folder.name}</span>
+              </button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs opacity-0 group-hover:opacity-100 shrink-0"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onChange(folder.id, folder.name);
+                  setBrowsing(false);
+                }}
+              >
+                Select
+              </Button>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Select current folder / cancel */}
+      <div className="flex items-center justify-between px-3 py-2 border-t border-warm-border">
+        <Button variant="ghost" size="sm" className="text-xs" onClick={() => setBrowsing(false)}>Cancel</Button>
+        {currentParent !== 'root' && (
+          <Button
+            size="sm"
+            className="text-xs"
+            onClick={() => {
+              const current = breadcrumbs[breadcrumbs.length - 1];
+              onChange(current.id, current.name);
+              setBrowsing(false);
+            }}
+          >
+            Use this folder
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function getSourceTypeName(type: string | null): string {
   const names: Record<string, string> = {
@@ -97,9 +205,16 @@ export function KBSources() {
   const deleteApiKey = useDeleteKBApiKey();
   const createSource = useCreateKBSource();
 
+  const updateSource = useUpdateKBSource();
+
   const [showNewKey, setShowNewKey] = useState(false);
   const [keyName, setKeyName] = useState('');
   const [generatedKey, setGeneratedKey] = useState('');
+
+  // Edit source state
+  const [editSource, setEditSource] = useState<{ id: string; name: string; type: string; config: Record<string, unknown> } | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editConfig, setEditConfig] = useState<Record<string, string>>({});
 
   // Wizard state
   const [showWizard, setShowWizard] = useState(false);
@@ -308,12 +423,30 @@ export function KBSources() {
                     </TableCell>
                     <TableCell>
                       <div className="flex gap-1">
-                        <Button size="sm" variant="ghost" onClick={() => handleSync(source.id)} disabled={syncSource.isPending}>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          title="Edit"
+                          onClick={() => {
+                            const cfg = source.config ?? {};
+                            const stringCfg: Record<string, string> = {};
+                            for (const [k, v] of Object.entries(cfg)) {
+                              if (typeof v === 'string') stringCfg[k] = v;
+                            }
+                            setEditSource({ id: source.id, name: source.name, type: source.type, config: cfg });
+                            setEditName(source.name ?? '');
+                            setEditConfig(stringCfg);
+                          }}
+                        >
+                          <Pencil className="h-3 w-3" />
+                        </Button>
+                        <Button size="sm" variant="ghost" title="Sync now" onClick={() => handleSync(source.id)} disabled={syncSource.isPending}>
                           <RefreshCw className="h-3 w-3" />
                         </Button>
                         <Button
                           size="sm"
                           variant="ghost"
+                          title="Delete"
                           className="text-red-500"
                           onClick={() => handleDeleteSource(source.id, source.name ?? 'source')}
                         >
@@ -378,6 +511,55 @@ export function KBSources() {
         </DialogContent>
       </Dialog>
 
+      {/* Edit Source Dialog */}
+      <Dialog open={!!editSource} onOpenChange={() => setEditSource(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Source</DialogTitle>
+            <DialogDescription>Update the name or configuration for this source.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Source Name</Label>
+              <Input value={editName} onChange={(e) => setEditName(e.target.value)} className="mt-1" />
+            </div>
+            {(SOURCE_CONFIG_FIELDS[editSource?.type ?? ''] ?? []).map((field) => (
+              <div key={field.key}>
+                <Label>{field.label}</Label>
+                <Input
+                  value={editConfig[field.key] ?? ''}
+                  onChange={(e) => setEditConfig((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                  placeholder={field.placeholder}
+                  className="mt-1"
+                />
+                {field.help && <p className="text-xs text-warm-text-secondary mt-1">{field.help}</p>}
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditSource(null)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (!editSource) return;
+                updateSource.mutate(
+                  { id: editSource.id, name: editName, config: { ...editSource.config, ...editConfig } },
+                  {
+                    onSuccess: () => {
+                      toast({ title: 'Source updated', variant: 'success' });
+                      setEditSource(null);
+                    },
+                    onError: (err) => toast({ title: 'Update failed', description: err.message, variant: 'error' }),
+                  },
+                );
+              }}
+              disabled={updateSource.isPending}
+            >
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Add Source Wizard Dialog */}
       <Dialog open={showWizard} onOpenChange={setShowWizard}>
         <DialogContent className="max-w-lg">
@@ -437,12 +619,27 @@ export function KBSources() {
                     {field.label}
                     {field.required && <span className="text-red-500 ml-1">*</span>}
                   </Label>
-                  <Input
-                    value={wizardConfig[field.key] ?? ''}
-                    onChange={(e) => setWizardConfig((prev) => ({ ...prev, [field.key]: e.target.value }))}
-                    placeholder={field.placeholder}
-                    className="mt-1"
-                  />
+                  {wizardType === 'google_drive' && field.key === 'folderId' ? (
+                    <div className="mt-1">
+                      <DriveFolderPicker
+                        value={wizardConfig.folderId ?? ''}
+                        onChange={(id, name) => {
+                          setWizardConfig((prev) => ({ ...prev, folderId: id }));
+                          if (name && !wizardName) setWizardName(name);
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <>
+                      <Input
+                        value={wizardConfig[field.key] ?? ''}
+                        onChange={(e) => setWizardConfig((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                        placeholder={field.placeholder}
+                        className="mt-1"
+                      />
+                      {field.help && <p className="text-xs text-warm-text-secondary mt-1">{field.help}</p>}
+                    </>
+                  )}
                 </div>
               ))}
             </div>

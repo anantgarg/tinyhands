@@ -540,8 +540,31 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
               {previewVersion?.createdAt && format(new Date(previewVersion.createdAt), 'MMM d, yyyy HH:mm')}
             </DialogDescription>
           </DialogHeader>
-          <div className="max-h-[400px] overflow-y-auto whitespace-pre-wrap text-sm bg-warm-bg rounded-lg p-4 font-mono">
-            {previewVersion?.systemPrompt || 'No instructions in this version.'}
+          <div className="max-h-[400px] overflow-y-auto space-y-3">
+            {/* Config snapshot */}
+            {(previewVersion?.model || previewVersion?.maxTurns || previewVersion?.tools) && (
+              <div className="grid grid-cols-2 gap-2 text-sm rounded-lg border border-warm-border p-3">
+                {previewVersion?.model && (
+                  <div><span className="text-warm-text-secondary">Model:</span> <span className="font-medium">{previewVersion.model.includes('sonnet') ? 'Sonnet' : previewVersion.model.includes('opus') ? 'Opus' : previewVersion.model.includes('haiku') ? 'Haiku' : previewVersion.model}</span></div>
+                )}
+                {previewVersion?.maxTurns && (
+                  <div><span className="text-warm-text-secondary">Effort:</span> <span className="font-medium">{previewVersion.maxTurns <= 10 ? 'Quick' : previewVersion.maxTurns <= 25 ? 'Standard' : previewVersion.maxTurns <= 50 ? 'Thorough' : 'Maximum'}</span></div>
+                )}
+                {previewVersion?.memoryEnabled !== undefined && (
+                  <div><span className="text-warm-text-secondary">Memory:</span> <span className="font-medium">{previewVersion.memoryEnabled ? 'On' : 'Off'}</span></div>
+                )}
+                {previewVersion?.defaultAccess && (
+                  <div><span className="text-warm-text-secondary">Access:</span> <span className="font-medium">{previewVersion.defaultAccess === 'member' ? 'Full' : previewVersion.defaultAccess === 'viewer' ? 'Limited' : 'Invite Only'}</span></div>
+                )}
+                {previewVersion?.tools && previewVersion.tools.length > 0 && (
+                  <div className="col-span-2"><span className="text-warm-text-secondary">Tools:</span> <span className="font-medium">{previewVersion.tools.join(', ')}</span></div>
+                )}
+              </div>
+            )}
+            {/* Instructions */}
+            <div className="whitespace-pre-wrap text-sm bg-warm-bg rounded-lg p-4 font-mono">
+              {previewVersion?.systemPrompt || 'No instructions in this version.'}
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setPreviewVersion(null)}>Close</Button>

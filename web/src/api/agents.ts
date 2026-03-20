@@ -71,6 +71,14 @@ export interface AgentVersion {
   changeNote: string;
   changedBy: string;
   createdAt: string;
+  model?: string;
+  tools?: string[];
+  maxTurns?: number;
+  memoryEnabled?: boolean;
+  mentionsOnly?: boolean;
+  respondToAll?: boolean;
+  defaultAccess?: string;
+  writePolicy?: string;
 }
 
 export interface Run {

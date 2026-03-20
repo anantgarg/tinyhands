@@ -189,26 +189,27 @@ function ToolsContent() {
                       ) : (
                         <span className="text-xs text-warm-text-secondary">{integration.toolsCount ?? 0} tools</span>
                       )}
-                      {(integration.configKeys ?? []).length > 0 && (
                       <div className="flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 text-xs"
-                          onClick={() => {
-                            setRegisterDialog({
-                              id: integration.id,
-                              name: integration.displayName ?? integration.name ?? 'Integration',
-                              isEdit: true,
-                              configKeys: integration.configKeys ?? [],
-                              setupGuide: integration.setupGuide ?? null,
-                            });
-                            setConfigValues({});
-                          }}
-                        >
-                          <Pencil className="mr-1 h-3 w-3" />
-                          Edit
-                        </Button>
+                        {integration.connectionModel !== 'personal' && (integration.configKeys ?? []).length > 0 && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() => {
+                              setRegisterDialog({
+                                id: integration.id,
+                                name: integration.displayName ?? integration.name ?? 'Integration',
+                                isEdit: true,
+                                configKeys: integration.configKeys ?? [],
+                                setupGuide: integration.setupGuide ?? null,
+                              });
+                              setConfigValues({});
+                            }}
+                          >
+                            <Pencil className="mr-1 h-3 w-3" />
+                            Edit
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="sm"
@@ -226,7 +227,6 @@ function ToolsContent() {
                           Disconnect
                         </Button>
                       </div>
-                      )}
                     </div>
                   </CardContent>
                 </Card>
@@ -254,23 +254,34 @@ function ToolsContent() {
                 <CardContent className="p-5">
                   <h3 className="font-semibold mb-1">{integration.displayName ?? integration.name ?? 'Unknown'}</h3>
                   <p className="text-xs text-warm-text-secondary mb-3">{integration.description || 'Available for connection'}</p>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => {
-                      setRegisterDialog({
-                        id: integration.id,
-                        name: integration.displayName ?? integration.name ?? 'Integration',
-                        isEdit: false,
-                        configKeys: integration.configKeys ?? [],
-                        setupGuide: integration.setupGuide ?? null,
-                      });
-                      setConfigValues({});
-                    }}
-                  >
-                    Connect
-                    <Check className="ml-1 h-3 w-3" />
-                  </Button>
+                  {integration.connectionModel === 'personal' ? (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => window.open(`/api/v1/connections/oauth/${integration.id}/start`, '_blank')}
+                    >
+                      Connect with Google
+                      <Check className="ml-1 h-3 w-3" />
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        setRegisterDialog({
+                          id: integration.id,
+                          name: integration.displayName ?? integration.name ?? 'Integration',
+                          isEdit: false,
+                          configKeys: integration.configKeys ?? [],
+                          setupGuide: integration.setupGuide ?? null,
+                        });
+                        setConfigValues({});
+                      }}
+                    >
+                      Connect
+                      <Check className="ml-1 h-3 w-3" />
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
             ))}

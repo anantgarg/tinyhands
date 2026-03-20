@@ -80,12 +80,27 @@ export async function listDriveFolder(
   accessToken: string
 ): Promise<Array<{ id: string; name: string; mimeType: string }>> {
   const res = await fetch(
-    `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents&fields=files(id,name,mimeType)`,
+    `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents+and+trashed+=+false&fields=files(id,name,mimeType)&orderBy=name&pageSize=100`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
 
   if (!res.ok) throw new Error(`Failed to list Drive folder: ${res.status}`);
   const data = await res.json() as { files: Array<{ id: string; name: string; mimeType: string }> };
+  return data.files;
+}
+
+export async function listDriveFolders(
+  parentId: string,
+  accessToken: string
+): Promise<Array<{ id: string; name: string }>> {
+  const q = encodeURIComponent(`'${parentId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`);
+  const res = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=${q}&pageSize=100&fields=files(id,name)&orderBy=name`,
+    { headers: { Authorization: `Bearer ${accessToken}` } }
+  );
+
+  if (!res.ok) throw new Error(`Failed to list Drive folders: ${res.status}`);
+  const data = await res.json() as { files: Array<{ id: string; name: string }> };
   return data.files;
 }
 

@@ -190,8 +190,22 @@ router.get('/:id/versions', async (req: Request, res: Response) => {
     const userIds = (versions as any[]).map((v: any) => v.changed_by).filter(Boolean);
     const names = await resolveUserNames(userIds);
     res.json((versions as any[]).map((v: any) => ({
-      ...v,
+      id: v.id,
+      agentId: v.agent_id,
+      version: v.version,
+      systemPrompt: v.system_prompt,
+      changeNote: v.change_note,
+      changedBy: v.changed_by,
       changedByName: names[v.changed_by] || v.changed_by,
+      createdAt: v.created_at,
+      model: v.model || null,
+      tools: v.tools ? (typeof v.tools === 'string' ? JSON.parse(v.tools) : v.tools) : null,
+      maxTurns: v.max_turns ?? null,
+      memoryEnabled: v.memory_enabled ?? null,
+      mentionsOnly: v.mentions_only ?? null,
+      respondToAll: v.respond_to_all ?? null,
+      defaultAccess: v.default_access || null,
+      writePolicy: v.write_policy || null,
     })));
   } catch (err: any) {
     logger.error('Get agent versions error', { error: err.message });

@@ -202,3 +202,16 @@ export function useDeleteKBApiKey() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['kb', 'api-keys'] }),
   });
 }
+
+interface DriveFolder {
+  id: string;
+  name: string;
+}
+
+export function useDriveFolders(parentId: string | null) {
+  return useQuery<{ parentId: string; folders: DriveFolder[] }>({
+    queryKey: ['kb', 'drive-folders', parentId],
+    queryFn: () => api.get(`/kb/drive-folders?parentId=${encodeURIComponent(parentId || 'root')}`),
+    enabled: parentId !== null,
+  });
+}

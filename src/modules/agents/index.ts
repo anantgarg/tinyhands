@@ -253,15 +253,40 @@ export async function updateAgent(workspaceId: string, id: string, updates: Part
   await withTransaction(async (client) => {
     await client.query(`UPDATE agents SET ${fields.join(', ')} WHERE workspace_id = $1 AND id = $${paramIdx}`, values);
 
-    if (updates.system_prompt !== undefined && updates.system_prompt !== existing.system_prompt) {
+    // Track all meaningful config changes in version history
+    const changes: string[] = [];
+    if (updates.system_prompt !== undefined && updates.system_prompt !== existing.system_prompt) changes.push('Instructions');
+    if (updates.model !== undefined && updates.model !== existing.model) changes.push('Model');
+    if (updates.tools !== undefined && JSON.stringify(updates.tools) !== JSON.stringify(existing.tools)) changes.push('Tools');
+    if (updates.max_turns !== undefined && updates.max_turns !== existing.max_turns) changes.push('Effort');
+    if (updates.memory_enabled !== undefined && updates.memory_enabled !== existing.memory_enabled) changes.push('Memory');
+    if (updates.mentions_only !== undefined && updates.mentions_only !== existing.mentions_only) changes.push('Activation');
+    if (updates.respond_to_all_messages !== undefined && updates.respond_to_all_messages !== existing.respond_to_all_messages) changes.push('Activation');
+    if (updates.default_access !== undefined && updates.default_access !== existing.default_access) changes.push('Access');
+    if (updates.write_policy !== undefined && updates.write_policy !== existing.write_policy) changes.push('Action approval');
+
+    if (changes.length > 0) {
       const latestVersion = await client.query(
         'SELECT MAX(version) as max_version FROM agent_versions WHERE agent_id = $1', [id]
       );
       const nextVersion = (latestVersion.rows[0]?.max_version || 0) + 1;
+      const changeNote = changes.join(', ') + ' updated';
+
+      // Snapshot current state (after update)
+      const newPrompt = updates.system_prompt ?? existing.system_prompt;
+      const newModel = updates.model ?? existing.model;
+      const newTools = updates.tools ?? existing.tools;
+      const newMaxTurns = updates.max_turns ?? existing.max_turns;
+      const newMemory = updates.memory_enabled ?? existing.memory_enabled;
+      const newMentions = updates.mentions_only ?? existing.mentions_only;
+      const newRespondAll = updates.respond_to_all_messages ?? existing.respond_to_all_messages;
+      const newAccess = updates.default_access ?? existing.default_access;
+      const newWritePolicy = updates.write_policy ?? existing.write_policy;
 
       await client.query(
-        'INSERT INTO agent_versions (id, agent_id, version, system_prompt, change_note, changed_by) VALUES ($1, $2, $3, $4, $5, $6)',
-        [uuid(), id, nextVersion, updates.system_prompt, 'Prompt updated', changedBy]
+        `INSERT INTO agent_versions (id, agent_id, version, system_prompt, change_note, changed_by, model, tools, max_turns, memory_enabled, mentions_only, respond_to_all, default_access, write_policy)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
+        [uuid(), id, nextVersion, newPrompt, changeNote, changedBy, newModel, JSON.stringify(newTools), newMaxTurns, newMemory, newMentions, newRespondAll, newAccess, newWritePolicy]
       );
     }
   });

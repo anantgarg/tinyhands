@@ -203,13 +203,15 @@ router.get('/oauth-integrations', async (_req: Request, res: Response) => {
     let result: any[] = [];
     try {
       const integrations = getIntegrations();
-      result = (integrations as any[]).map((int: any) => ({
-        id: int.id,
-        name: int.id,
-        displayName: int.label || int.id,
-        description: int.description || '',
-        oauthSupported: !!(int as any).oauthConfig || int.connectionModel === 'personal',
-      }));
+      result = (integrations as any[])
+        .filter((int: any) => int.id !== 'google') // Hide legacy Google Workspace
+        .map((int: any) => ({
+          id: int.id,
+          name: int.id,
+          displayName: int.label || int.id,
+          description: int.description || '',
+          oauthSupported: !!(int as any).oauthConfig || int.connectionModel === 'personal',
+        }));
     } catch { /* ignore */ }
     res.json(result);
   } catch (err: any) {

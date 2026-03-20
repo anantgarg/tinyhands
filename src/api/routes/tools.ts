@@ -201,9 +201,11 @@ router.get('/available', async (req: Request, res: Response) => {
     }
 
     // Custom tools (agent-created, not integration-based)
+    // Also exclude legacy google-read/google-write (replaced by google-drive, google-sheets, google-docs, gmail)
+    const legacyGoogleTools = new Set(['google-read', 'google-write']);
     const customTools = await listCustomTools(workspaceId);
     const customMapped = (customTools as any[])
-      .filter(t => !integrationToolNames.has(t.name)) // Exclude integration tools registered as custom
+      .filter(t => !integrationToolNames.has(t.name) && !legacyGoogleTools.has(t.name))
       .map(t => ({
         name: t.name,
         displayName: t.display_name || t.name,
@@ -237,7 +239,8 @@ router.get('/integrations', requireAdmin, async (req: Request, res: Response) =>
       }
     } catch { /* ignore */ }
 
-    res.json(integrations.map((int: any) => ({
+    // Hide legacy Google Workspace (replaced by google-drive, google-sheets, google-docs, gmail)
+    res.json(integrations.filter((int: any) => int.id !== 'google').map((int: any) => ({
       id: int.id,
       name: int.id,
       displayName: int.label || int.id,

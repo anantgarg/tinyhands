@@ -177,6 +177,8 @@ describe('Agent Routes', () => {
       for (const id of ids) result[id] = id;
       return result;
     });
+    // Default: canView returns true (tests that need false must override)
+    mockCanView.mockResolvedValue(true);
     app = createApp();
   });
 
@@ -375,13 +377,15 @@ describe('Agent Routes', () => {
   describe('GET /agents/:id/versions', () => {
     it('returns versions when user can view', async () => {
       mockCanView.mockResolvedValueOnce(true);
-      const versions = [{ version: 1 }, { version: 2 }];
+      const versions = [{ version: 1, changed_by: 'U1' }, { version: 2, changed_by: 'U2' }];
       mockGetAgentVersions.mockResolvedValueOnce(versions);
 
       const res = await makeRequest(app, 'GET', '/agents/a1/versions');
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual(versions);
+      expect(res.body).toHaveLength(2);
+      expect(res.body[0].version).toBe(1);
+      expect(res.body[1].version).toBe(2);
     });
 
     it('returns 403 when user cannot view', async () => {

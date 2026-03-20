@@ -9,7 +9,11 @@ import type { ToolManifest } from './manifest';
 // ── Static imports — one line per integration ──
 // To add a new integration, add one import line here.
 import { manifest as chargebee } from './chargebee';
+import { manifest as gmail } from './gmail';
 import { manifest as google } from './google';
+import { manifest as googleDocs } from './google-docs';
+import { manifest as googleDrive } from './google-drive';
+import { manifest as googleSheets } from './google-sheets';
 import { manifest as hubspot } from './hubspot';
 import { manifest as kb } from './kb';
 import { manifest as linear } from './linear';
@@ -20,7 +24,11 @@ import { manifest as zendesk } from './zendesk';
 /** All registered integration manifests, keyed by id. */
 const ALL_MANIFESTS: ToolManifest[] = [
   chargebee,
+  gmail,
   google,
+  googleDocs,
+  googleDrive,
+  googleSheets,
   hubspot,
   kb,
   linear,

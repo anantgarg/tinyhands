@@ -26,6 +26,7 @@ import { toast } from '@/components/ui/use-toast';
 export function Agents() {
   const navigate = useNavigate();
   const currentUserId = useAuthStore((s) => s.user?.userId);
+  const isAdmin = useAuthStore((s) => s.user?.platformRole === 'superadmin' || s.user?.platformRole === 'admin');
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [modelFilter, setModelFilter] = useState<string>('all');
@@ -132,38 +133,40 @@ export function Agents() {
                     : '\u2014'}
                 </TableCell>
                 <TableCell onClick={(e) => e.stopPropagation()}>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="h-8 w-8">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => navigate(`/agents/${agent.id}`)}>
-                        <Eye className="mr-2 h-4 w-4" />
-                        View Details
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={() => navigate(`/agents/${agent.id}`)}>
-                        <Settings className="mr-2 h-4 w-4" />
-                        Edit
-                      </DropdownMenuItem>
-                      <DropdownMenuItem onClick={(e) => handleToggleStatus(agent, e)}>
-                        {agent.status === 'active' ? (
-                          <><Pause className="mr-2 h-4 w-4" /> Pause</>
-                        ) : (
-                          <><Play className="mr-2 h-4 w-4" /> Resume</>
-                        )}
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        className="text-red-600"
-                        onClick={(e) => handleDelete(agent.id, agent.name, e)}
-                      >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  {(isAdmin || agent.createdBy === currentUserId) ? (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => navigate(`/agents/${agent.id}`)}>
+                          <Eye className="mr-2 h-4 w-4" />
+                          View Details
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => navigate(`/agents/${agent.id}`)}>
+                          <Settings className="mr-2 h-4 w-4" />
+                          Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={(e) => handleToggleStatus(agent, e)}>
+                          {agent.status === 'active' ? (
+                            <><Pause className="mr-2 h-4 w-4" /> Pause</>
+                          ) : (
+                            <><Play className="mr-2 h-4 w-4" /> Resume</>
+                          )}
+                        </DropdownMenuItem>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem
+                          className="text-red-600"
+                          onClick={(e) => handleDelete(agent.id, agent.name, e)}
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : null}
                 </TableCell>
               </TableRow>
             ))}
@@ -183,15 +186,19 @@ export function Agents() {
   return (
     <div>
       <PageHeader title="Agents" description={`${agents?.length ?? 0} agents`}>
-        <Button variant="outline" asChild>
-          <Link to="/agents/templates">Templates</Link>
-        </Button>
-        <Button asChild>
-          <Link to="/agents/new">
-            <Plus className="mr-2 h-4 w-4" />
-            New Agent
-          </Link>
-        </Button>
+        {isAdmin && (
+          <>
+            <Button variant="outline" asChild>
+              <Link to="/agents/templates">Templates</Link>
+            </Button>
+            <Button asChild>
+              <Link to="/agents/new">
+                <Plus className="mr-2 h-4 w-4" />
+                New Agent
+              </Link>
+            </Button>
+          </>
+        )}
       </PageHeader>
 
       {/* Filters */}
@@ -240,7 +247,7 @@ export function Agents() {
           icon={Bot}
           title="No agents found"
           description={search || statusFilter !== 'all' || modelFilter !== 'all' ? 'Try adjusting your filters' : 'Create your first agent to get started'}
-          action={!search && statusFilter === 'all' && modelFilter === 'all' ? { label: 'Create Agent', onClick: () => navigate('/agents/new') } : undefined}
+          action={isAdmin && !search && statusFilter === 'all' && modelFilter === 'all' ? { label: 'Create Agent', onClick: () => navigate('/agents/new') } : undefined}
         />
       ) : (
         <div className="space-y-8">

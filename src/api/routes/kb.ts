@@ -255,7 +255,10 @@ router.patch('/sources/:id', requireAdmin, async (req: Request, res: Response) =
   try {
     const { workspaceId } = getSessionUser(req);
     const id = req.params.id as string;
-    await updateSource(workspaceId, id, req.body);
+    const { config, ...rest } = req.body;
+    const updates: any = { ...rest };
+    if (config) updates.config_json = JSON.stringify(config);
+    await updateSource(workspaceId, id, updates);
     res.json({ ok: true });
   } catch (err: any) {
     logger.error('Update KB source error', { error: err.message });
@@ -344,6 +347,42 @@ router.delete('/api-keys/:provider', requireAdmin, async (req: Request, res: Res
   } catch (err: any) {
     logger.error('Delete API key error', { error: err.message });
     res.status(400).json({ error: err.message });
+  }
+});
+
+// ── Google Drive Folder Browser ──
+
+// GET /kb/drive-folders — List Google Drive folders for the current user
+router.get('/drive-folders', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { workspaceId, userId } = getSessionUser(req);
+    const parentId = (req.query.parentId as string) || 'root';
+
+    // Get user's Google OAuth token
+    const { getPersonalConnection } = await import('../../modules/connections');
+    let conn = await getPersonalConnection(workspaceId, 'google-drive', userId);
+    if (!conn) conn = await getPersonalConnection(workspaceId, 'google', userId);
+    if (!conn) conn = await getPersonalConnection(workspaceId, 'google_drive', userId);
+
+    if (!conn) {
+      res.status(400).json({ error: 'Google account not connected. Connect via Connections page first.' });
+      return;
+    }
+
+    const { decryptCredentials } = await import('../../modules/connections');
+    const connConfig = decryptCredentials(conn);
+    const token = connConfig?.access_token;
+    if (!token) {
+      res.status(400).json({ error: 'Google access token not found' });
+      return;
+    }
+
+    const { listDriveFolders } = await import('../../modules/sources/google-drive');
+    const folders = await listDriveFolders(parentId, token);
+    res.json({ parentId, folders });
+  } catch (err: any) {
+    logger.error('Drive folders error', { error: err.message });
+    res.status(500).json({ error: err.message });
   }
 });
 

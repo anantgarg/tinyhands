@@ -390,7 +390,12 @@ describe('Agent Management', () => {
   });
 
   describe('updateAgent - all field branches', () => {
-    function setupUpdateMocks(existingOverrides: Record<string, any> = {}) {
+    function setupUpdateMocks(existingOverrides: Record<string, any> = {}, skipTransaction = false) {
+      if (!skipTransaction) {
+        const fakeClient = { query: vi.fn().mockResolvedValue({ rows: [{ max_version: 0 }] }) };
+        mockWithTransaction.mockImplementation(async (fn: any) => fn(fakeClient));
+      }
+
       mockQueryOne.mockResolvedValueOnce({
         id: 'a1', name: 'agent', channel_id: 'C1', channel_ids: ['C1'],
         system_prompt: 'old prompt',
@@ -428,7 +433,7 @@ describe('Agent Management', () => {
       };
       mockWithTransaction.mockImplementation(async (fn: any) => fn(fakeClient));
 
-      setupUpdateMocks({ system_prompt: 'old prompt' });
+      setupUpdateMocks({ system_prompt: 'old prompt' }, true);
       mockQueryOne.mockResolvedValueOnce({
         id: 'a1', name: 'agent', channel_id: 'C1',
         system_prompt: 'new prompt',
@@ -444,7 +449,7 @@ describe('Agent Management', () => {
       const fakeClient = { query: vi.fn() };
       mockWithTransaction.mockImplementation(async (fn: any) => fn(fakeClient));
 
-      setupUpdateMocks({ system_prompt: 'same prompt' });
+      setupUpdateMocks({ system_prompt: 'same prompt' }, true);
       mockQueryOne.mockResolvedValueOnce({
         id: 'a1', name: 'agent', channel_id: 'C1',
         system_prompt: 'same prompt',
@@ -472,7 +477,7 @@ describe('Agent Management', () => {
       };
       mockWithTransaction.mockImplementation(async (fn: any) => fn(fakeClient));
 
-      setupUpdateMocks({ system_prompt: 'old' });
+      setupUpdateMocks({ system_prompt: 'old' }, true);
       mockQueryOne.mockResolvedValueOnce({
         id: 'a1', name: 'agent', channel_id: 'C1',
         system_prompt: 'new',

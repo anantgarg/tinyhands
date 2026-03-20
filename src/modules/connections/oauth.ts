@@ -17,34 +17,27 @@ interface OAuthIntegrationConfig {
   clientSecret: () => string;
 }
 
+// Shared Google OAuth config — all Google integrations use the same credentials & scopes
+const GOOGLE_OAUTH: Omit<OAuthIntegrationConfig, 'id'> = {
+  authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+  tokenUrl: 'https://oauth2.googleapis.com/token',
+  scopes: [
+    'https://www.googleapis.com/auth/drive',
+    'https://www.googleapis.com/auth/spreadsheets',
+    'https://www.googleapis.com/auth/documents',
+    'https://mail.google.com/',
+  ],
+  clientId: () => config.oauth.googleClientId,
+  clientSecret: () => config.oauth.googleClientSecret,
+};
+
 const OAUTH_INTEGRATIONS: Record<string, OAuthIntegrationConfig> = {
-  google: {
-    id: 'google',
-    authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
-    tokenUrl: 'https://oauth2.googleapis.com/token',
-    scopes: [
-      'https://www.googleapis.com/auth/drive',
-      'https://www.googleapis.com/auth/spreadsheets',
-      'https://www.googleapis.com/auth/documents',
-      'https://mail.google.com/',
-    ],
-    clientId: () => config.oauth.googleClientId,
-    clientSecret: () => config.oauth.googleClientSecret,
-  },
-  // Keep google_drive as alias for backward compat with existing connections
-  google_drive: {
-    id: 'google_drive',
-    authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
-    tokenUrl: 'https://oauth2.googleapis.com/token',
-    scopes: [
-      'https://www.googleapis.com/auth/drive',
-      'https://www.googleapis.com/auth/spreadsheets',
-      'https://www.googleapis.com/auth/documents',
-      'https://mail.google.com/',
-    ],
-    clientId: () => config.oauth.googleClientId,
-    clientSecret: () => config.oauth.googleClientSecret,
-  },
+  google:          { id: 'google', ...GOOGLE_OAUTH },
+  google_drive:    { id: 'google_drive', ...GOOGLE_OAUTH },
+  'google-drive':  { id: 'google-drive', ...GOOGLE_OAUTH },
+  'google-sheets': { id: 'google-sheets', ...GOOGLE_OAUTH },
+  'google-docs':   { id: 'google-docs', ...GOOGLE_OAUTH },
+  gmail:           { id: 'gmail', ...GOOGLE_OAUTH },
   notion: {
     id: 'notion',
     authUrl: 'https://api.notion.com/v1/oauth/authorize',

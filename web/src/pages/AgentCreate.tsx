@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Sparkles, Loader2 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -12,6 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { useCreateAgent, useAnalyzeGoal } from '@/api/agents';
 import { useAvailableTools } from '@/api/tools';
 import { toast } from '@/components/ui/use-toast';
+import { useAuthStore } from '@/store/auth';
 import { cn } from '@/lib/utils';
 
 const BUILTIN_FRIENDLY_NAMES: Record<string, string> = {
@@ -38,15 +39,28 @@ const BUILTIN_FRIENDLY_NAMES: Record<string, string> = {
   'zendesk-read': 'Zendesk (Read)',
   'zendesk-write': 'Zendesk (Write)',
   'posthog-read': 'PostHog (Read)',
+  'google-drive-read': 'Google Drive (Read)',
+  'google-drive-write': 'Google Drive (Write)',
+  'google-sheets-read': 'Google Sheets (Read)',
+  'google-sheets-write': 'Google Sheets (Write)',
+  'google-docs-read': 'Google Docs (Read)',
+  'google-docs-write': 'Google Docs (Write)',
+  'gmail-read': 'Gmail (Read)',
+  'gmail-write': 'Gmail (Send)',
 };
 
 const steps = ['Describe', 'Identity', 'Settings', 'Tools'];
 
 export function AgentCreate() {
   const navigate = useNavigate();
+  const isAdmin = useAuthStore((s) => s.user?.platformRole === 'superadmin' || s.user?.platformRole === 'admin');
   const createAgent = useCreateAgent();
   const analyzeGoal = useAnalyzeGoal();
   const { data: availableTools } = useAvailableTools();
+
+  useEffect(() => {
+    if (!isAdmin) navigate('/agents', { replace: true });
+  }, [isAdmin, navigate]);
 
   const [step, setStep] = useState(1);
   const [, setAnalyzed] = useState(false);
@@ -72,7 +86,7 @@ export function AgentCreate() {
         setSystemPrompt(result.systemPrompt || result.system_prompt || '');
         const modelMap: Record<string, string> = { opus: 'claude-opus-4-20250514', haiku: 'claude-haiku-4-20250514', sonnet: 'claude-sonnet-4-20250514' };
         setModel(modelMap[result.model] || result.model || 'claude-sonnet-4-20250514');
-        setSelectedTools(result.tools || []);
+        setSelectedTools([...(result.tools || []), ...(result.custom_tools || []), ...(result.customTools || [])]);
         setMentionsOnly(result.mentionsOnly ?? result.mentions_only ?? false);
         setMemoryEnabled(result.memoryEnabled ?? result.memory_enabled ?? false);
         setAnalyzed(true);
@@ -116,33 +130,40 @@ export function AgentCreate() {
     );
   };
 
-  const toggleTool = (toolName: string) => {
-    setSelectedTools((prev) =>
-      prev.includes(toolName) ? prev.filter((t) => t !== toolName) : [...prev, toolName],
-    );
-  };
-
-  const getToolDisplayName = (toolName: string): string => {
-    const meta = (availableTools ?? []).find((t) => t.name === toolName);
-    if (meta?.displayName) return meta.displayName;
-    if (BUILTIN_FRIENDLY_NAMES[toolName]) return BUILTIN_FRIENDLY_NAMES[toolName];
-    const parts = toolName.split('-');
-    if (parts.length >= 2) {
-      const last = parts[parts.length - 1];
-      const base = parts.slice(0, -1).map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
-      if (['read', 'write', 'search'].includes(last)) {
-        return `${base} (${last.charAt(0).toUpperCase() + last.slice(1)})`;
+  const toggleTool = (toolName: string, addAlso?: string) => {
+    setSelectedTools((prev) => {
+      if (prev.includes(toolName)) {
+        return prev.filter((t) => t !== toolName);
       }
-    }
-    return toolName.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+      const next = [...prev, toolName];
+      if (addAlso && !prev.includes(addAlso)) next.push(addAlso);
+      return next;
+    });
   };
 
-  const groupedTools = (availableTools ?? []).reduce<Record<string, typeof availableTools>>((acc, tool) => {
-    const group = tool.source === 'integration' ? 'Connected Services' : tool.source === 'custom' ? 'Custom Tools' : 'Core Tools';
-    if (!acc[group]) acc[group] = [];
-    acc[group]!.push(tool);
-    return acc;
-  }, {});
+  const removeTool = (toolName: string) => {
+    setSelectedTools((prev) => prev.filter((t) => t !== toolName));
+  };
+
+  // Group integration tools by base name (e.g. hubspot-read + hubspot-write = HubSpot)
+  const integrationGroups = (() => {
+    const groups: Record<string, { base: string; displayName: string; description: string; readTool?: string; writeTool?: string }> = {};
+    for (const tool of (availableTools ?? [])) {
+      if (tool.source !== 'integration') continue;
+      const readMatch = tool.name.match(/^(.+)-(read|search)$/);
+      const writeMatch = tool.name.match(/^(.+)-write$/);
+      const base = readMatch?.[1] || writeMatch?.[1];
+      if (!base) continue;
+      if (!groups[base]) {
+        const friendly = BUILTIN_FRIENDLY_NAMES[`${base}-read`] || BUILTIN_FRIENDLY_NAMES[`${base}-search`];
+        const baseName = friendly ? friendly.replace(/ \(.*\)$/, '') : base.charAt(0).toUpperCase() + base.slice(1).replace(/[-_]/g, ' ');
+        groups[base] = { base, displayName: baseName, description: tool.description };
+      }
+      if (readMatch) groups[base].readTool = tool.name;
+      if (writeMatch) groups[base].writeTool = tool.name;
+    }
+    return Object.values(groups);
+  })();
 
   return (
     <div>
@@ -241,8 +262,9 @@ export function AgentCreate() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div>
                 <Label>Model</Label>
+                <p className="text-xs text-warm-text-secondary mt-0.5 mb-1">The AI model that powers this agent. Sonnet is best for most tasks.</p>
                 <Select value={model} onValueChange={setModel}>
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="claude-sonnet-4-20250514">Sonnet &mdash; balanced (recommended)</SelectItem>
                     <SelectItem value="claude-opus-4-20250514">Opus &mdash; most capable</SelectItem>
@@ -252,8 +274,9 @@ export function AgentCreate() {
               </div>
               <div>
                 <Label>Effort</Label>
+                <p className="text-xs text-warm-text-secondary mt-0.5 mb-1">How much work the agent puts into each response. Higher effort = more thorough but slower.</p>
                 <Select value={maxTurns} onValueChange={setMaxTurns}>
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="10">Quick</SelectItem>
                     <SelectItem value="25">Standard (recommended)</SelectItem>
@@ -264,6 +287,7 @@ export function AgentCreate() {
               </div>
               <div>
                 <Label>Slack Activation</Label>
+                <p className="text-xs text-warm-text-secondary mt-0.5 mb-1">When the agent responds in Slack channels it's added to.</p>
                 <Select
                   value={mentionsOnly ? 'mentions' : respondToAll ? 'all' : 'relevant'}
                   onValueChange={(v) => {
@@ -279,7 +303,7 @@ export function AgentCreate() {
                     }
                   }}
                 >
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="mentions">Only when @mentioned</SelectItem>
                     <SelectItem value="relevant">Relevant messages (recommended)</SelectItem>
@@ -289,23 +313,25 @@ export function AgentCreate() {
               </div>
               <div>
                 <Label>Access</Label>
+                <p className="text-xs text-warm-text-secondary mt-0.5 mb-1">Who can interact with and configure this agent by default.</p>
                 <Select value={defaultAccess} onValueChange={setDefaultAccess}>
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="member">Full Access</SelectItem>
-                    <SelectItem value="viewer">Limited Access</SelectItem>
-                    <SelectItem value="none">Invite Only</SelectItem>
+                    <SelectItem value="member">Full Access &mdash; everyone can use and configure</SelectItem>
+                    <SelectItem value="viewer">Limited Access &mdash; everyone can use, only owners configure</SelectItem>
+                    <SelectItem value="none">Invite Only &mdash; must be explicitly invited</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
               <div>
                 <Label>Action Approval</Label>
+                <p className="text-xs text-warm-text-secondary mt-0.5 mb-1">Whether the agent needs permission before making changes (e.g. creating tickets, sending emails).</p>
                 <Select value={writePolicy} onValueChange={setWritePolicy}>
-                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="auto">Automatic</SelectItem>
-                    <SelectItem value="confirm">Ask User First</SelectItem>
-                    <SelectItem value="admin_confirm">Ask Owner/Admins</SelectItem>
+                    <SelectItem value="auto">Automatic &mdash; agent acts without asking</SelectItem>
+                    <SelectItem value="confirm">Ask User First &mdash; asks the person who triggered it</SelectItem>
+                    <SelectItem value="admin_confirm">Ask Owner/Admins &mdash; asks the agent's owner or admins</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -313,7 +339,7 @@ export function AgentCreate() {
                 <Switch checked={memoryEnabled} onCheckedChange={setMemoryEnabled} />
                 <div>
                   <Label>Memory</Label>
-                  <p className="text-xs text-warm-text-secondary">Remember facts across conversations</p>
+                  <p className="text-xs text-warm-text-secondary">Let the agent remember facts, preferences, and context across conversations.</p>
                 </div>
               </div>
             </div>
@@ -329,36 +355,74 @@ export function AgentCreate() {
       {step === 4 && (
         <Card>
           <CardContent className="p-8">
-            <h3 className="font-semibold mb-1">Select Tools</h3>
-            <p className="text-sm text-warm-text-secondary mb-6">Choose what capabilities this agent should have.</p>
+            <h3 className="font-semibold mb-1">Connected Services</h3>
+            <p className="text-sm text-warm-text-secondary mb-6">Choose which services this agent can access. Core tools (file access, web search, etc.) are always available.</p>
 
-            {Object.entries(groupedTools).map(([group, tools]) => (
-              <div key={group} className="mb-6">
-                <p className="text-xs font-semibold text-warm-text-secondary uppercase tracking-wider mb-3">{group}</p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {(tools ?? []).map((tool) => (
-                    <label
-                      key={tool.name}
+            {integrationGroups.length === 0 ? (
+              <p className="text-sm text-warm-text-secondary text-center py-8">No connected services available. Set up integrations in Connections first.</p>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {integrationGroups.map((integ) => {
+                  const hasRead = selectedTools.includes(integ.readTool || '');
+                  const hasWrite = selectedTools.includes(integ.writeTool || '');
+                  const isActive = hasRead || hasWrite;
+                  return (
+                    <div
+                      key={integ.base}
                       className={cn(
-                        "flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors",
-                        selectedTools.includes(tool.name) ? "border-brand bg-brand-light/20" : "border-warm-border hover:bg-warm-bg"
+                        "rounded-lg border p-4 transition-colors",
+                        isActive ? "border-brand bg-brand-light/20" : "border-warm-border"
                       )}
                     >
-                      <input
-                        type="checkbox"
-                        checked={selectedTools.includes(tool.name)}
-                        onChange={() => toggleTool(tool.name)}
-                        className="h-4 w-4 rounded accent-brand"
-                      />
-                      <div>
-                        <p className="text-sm font-medium">{getToolDisplayName(tool.name)}</p>
-                        <p className="text-xs text-warm-text-secondary line-clamp-1">{tool.description}</p>
+                      <p className="text-sm font-medium mb-1">{integ.displayName}</p>
+                      <p className="text-xs text-warm-text-secondary mb-3 line-clamp-1">{integ.description}</p>
+                      <div className="flex gap-2">
+                        {integ.readTool && (
+                          <label className={cn(
+                            "flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs transition-colors",
+                            hasRead || hasWrite ? "bg-blue-100 text-blue-700" : "bg-warm-bg text-warm-text-secondary hover:bg-warm-bg/80 cursor-pointer",
+                            hasWrite ? "opacity-70" : "cursor-pointer"
+                          )}>
+                            <input
+                              type="checkbox"
+                              checked={hasRead || hasWrite}
+                              disabled={hasWrite}
+                              onChange={() => {
+                                if (hasWrite) return;
+                                if (hasRead) removeTool(integ.readTool!);
+                                else toggleTool(integ.readTool!);
+                              }}
+                              className="h-3 w-3"
+                            />
+                            Can view data
+                          </label>
+                        )}
+                        {integ.writeTool && (
+                          <label className={cn(
+                            "flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs cursor-pointer transition-colors",
+                            hasWrite ? "bg-amber-100 text-amber-700" : "bg-warm-bg text-warm-text-secondary hover:bg-warm-bg/80"
+                          )}>
+                            <input
+                              type="checkbox"
+                              checked={hasWrite}
+                              onChange={() => {
+                                if (hasWrite) {
+                                  removeTool(integ.writeTool!);
+                                } else {
+                                  toggleTool(integ.writeTool!, integ.readTool);
+                                }
+                              }}
+                              className="h-3 w-3"
+                            />
+                            Can make changes
+                          </label>
+                        )}
                       </div>
-                    </label>
-                  ))}
-                </div>
+                    </div>
+                  );
+                })}
               </div>
-            ))}
+            )}
 
             <div className="flex justify-between pt-6">
               <Button variant="outline" onClick={() => setStep(3)}>Back</Button>

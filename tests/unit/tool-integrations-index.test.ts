@@ -146,10 +146,14 @@ describe('Tool Integrations Index', () => {
   describe('getIntegrations', () => {
     it('should return all integration manifests', () => {
       const integrations = getIntegrations();
-      expect(integrations).toHaveLength(8);
+      expect(integrations).toHaveLength(12);
       const ids = integrations.map(m => m.id);
       expect(ids).toContain('chargebee');
+      expect(ids).toContain('gmail');
       expect(ids).toContain('google');
+      expect(ids).toContain('google-docs');
+      expect(ids).toContain('google-drive');
+      expect(ids).toContain('google-sheets');
       expect(ids).toContain('hubspot');
       expect(ids).toContain('kb');
       expect(ids).toContain('linear');
@@ -176,7 +180,7 @@ describe('Tool Integrations Index', () => {
   describe('getToolIntegrations', () => {
     it('should return an array of integration objects with correct shape', () => {
       const integrations = getToolIntegrations();
-      expect(integrations).toHaveLength(8);
+      expect(integrations).toHaveLength(12);
 
       const chargebee = integrations.find(i => i.id === 'chargebee');
       expect(chargebee).toBeDefined();
