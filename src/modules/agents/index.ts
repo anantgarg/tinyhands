@@ -39,7 +39,7 @@ export async function createAgent(workspaceId: string, params: CreateAgentParams
     channel_id: channelIds[0],
     channel_ids: channelIds,
     system_prompt: params.systemPrompt,
-    tools: params.tools || ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash', 'WebSearch', 'WebFetch'],
+    tools: (params.tools || []).filter(t => !['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash', 'WebSearch', 'WebFetch', 'NotebookEdit', 'TodoWrite', 'Agent', 'Mcp'].includes(t)),
     avatar_emoji: params.avatarEmoji || ':robot_face:',
     status: 'active',
     model: params.model || 'sonnet',

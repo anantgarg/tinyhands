@@ -89,7 +89,7 @@ describe('Agent Management', () => {
       expect(agent.respond_to_all_messages).toBe(false);
       expect(agent.default_access).toBe('viewer');
       expect(agent.write_policy).toBe('auto');
-      expect(agent.tools).toEqual(['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash', 'WebSearch', 'WebFetch']);
+      expect(agent.tools).toEqual([]); // Core tools are always available, not listed
       expect(mockWithTransaction).toHaveBeenCalled();
 
       // Flush fire-and-forget audit
@@ -127,7 +127,7 @@ describe('Agent Management', () => {
       expect(agent.relevance_keywords).toEqual(['deploy', 'release']);
       expect(agent.default_access).toBe('member');
       expect(agent.write_policy).toBe('confirm');
-      expect(agent.tools).toEqual(['Read', 'Glob']);
+      expect(agent.tools).toEqual([]); // Core tools stripped out
     });
 
     it('should insert creator into agent_roles as owner', async () => {

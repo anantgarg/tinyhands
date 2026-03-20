@@ -175,39 +175,12 @@ router.get('/available', async (req: Request, res: Response) => {
   try {
     const { workspaceId } = getSessionUser(req);
 
-    const BUILTIN_DISPLAY: Record<string, { displayName: string; description: string; category: string }> = {
-      Bash: { displayName: 'Run Commands', description: 'Execute shell commands', category: 'core' },
-      Read: { displayName: 'Read Files', description: 'Read file contents', category: 'core' },
-      Write: { displayName: 'Write Files', description: 'Create or overwrite files', category: 'core' },
-      Edit: { displayName: 'Edit Files', description: 'Make targeted edits to files', category: 'core' },
-      Glob: { displayName: 'Find Files', description: 'Search for files by pattern', category: 'core' },
-      Grep: { displayName: 'Search Code', description: 'Search file contents with regex', category: 'core' },
-      WebSearch: { displayName: 'Web Search', description: 'Search the web', category: 'web' },
-      WebFetch: { displayName: 'Fetch Web Pages', description: 'Fetch content from URLs', category: 'web' },
-      NotebookEdit: { displayName: 'Edit Notebooks', description: 'Edit Jupyter notebooks', category: 'core' },
-      TodoWrite: { displayName: 'Task Planner', description: 'Create and manage task lists', category: 'core' },
-      Agent: { displayName: 'Sub-Agent', description: 'Delegate work to a sub-agent', category: 'core' },
-      Mcp: { displayName: 'External Service', description: 'Connect to external MCP services', category: 'integration' },
-    };
+    // Core tools (Bash, Read, etc.) are always available — don't return them
+    // Only return integration tools and custom tools that agents can enable/disable
 
-    const builtinTools = getBuiltinTools().map(name => ({
-      name,
-      displayName: BUILTIN_DISPLAY[name]?.displayName ?? name,
-      description: BUILTIN_DISPLAY[name]?.description ?? '',
-      category: BUILTIN_DISPLAY[name]?.category ?? 'core',
-      source: 'builtin' as const,
-    }));
-
-    const customTools = await listCustomTools(workspaceId);
-    const customMapped = (customTools as any[]).map(t => ({
-      name: t.name,
-      displayName: t.display_name || t.name,
-      description: t.description || '',
-      category: 'custom',
-      source: 'custom' as const,
-    }));
-
+    // Integration tools from manifests
     const integrationTools: any[] = [];
+    const integrationToolNames = new Set<string>();
     try {
       const integrations = getIntegrations();
       for (const int of integrations) {
@@ -215,18 +188,31 @@ router.get('/available', async (req: Request, res: Response) => {
           integrationTools.push({
             name: tool.name,
             displayName: tool.displayName || tool.name,
-            description: tool.description || '',
+            description: int.description || tool.description || '',
             category: 'integration',
             source: 'integration' as const,
             accessLevel: tool.accessLevel || 'read-only',
           });
+          integrationToolNames.add(tool.name);
         }
       }
     } catch {
       // integrations may not be available
     }
 
-    res.json([...builtinTools, ...customMapped, ...integrationTools]);
+    // Custom tools (agent-created, not integration-based)
+    const customTools = await listCustomTools(workspaceId);
+    const customMapped = (customTools as any[])
+      .filter(t => !integrationToolNames.has(t.name)) // Exclude integration tools registered as custom
+      .map(t => ({
+        name: t.name,
+        displayName: t.display_name || t.name,
+        description: t.description || '',
+        category: 'custom',
+        source: 'custom' as const,
+      }));
+
+    res.json([...integrationTools, ...customMapped]);
   } catch (err: any) {
     logger.error('List available tools error', { error: err.message });
     res.status(500).json({ error: 'Failed to list available tools' });

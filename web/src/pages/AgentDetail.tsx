@@ -1072,34 +1072,6 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                         </div>
                       </div>
                     )}
-                    {coreTools.length > 0 && (
-                      <div>
-                        <p className="text-xs font-semibold text-warm-text-secondary uppercase tracking-wider mb-2">Core Tools</p>
-                        <div className="space-y-1">
-                          {coreTools.map((tool) => {
-                            const isSelected = selectedToolsToAdd.has(tool.name);
-                            return (
-                              <label
-                                key={tool.name}
-                                className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${isSelected ? 'border-brand bg-brand-light/20' : 'border-warm-border hover:bg-warm-bg'}`}
-                              >
-                                <input type="checkbox" checked={isSelected} onChange={() => {
-                                  setSelectedToolsToAdd(prev => {
-                                    const next = new Set(prev);
-                                    if (next.has(tool.name)) next.delete(tool.name); else next.add(tool.name);
-                                    return next;
-                                  });
-                                }} className="h-4 w-4 rounded border-warm-border text-brand focus:ring-brand" />
-                                <div className="flex-1 min-w-0">
-                                  <p className="text-sm font-medium">{tool.displayName}</p>
-                                  <p className="text-xs text-warm-text-secondary line-clamp-1">{tool.description}</p>
-                                </div>
-                              </label>
-                            );
-                          })}
-                        </div>
-                      </div>
-                    )}
                   </>
                 );
               })()

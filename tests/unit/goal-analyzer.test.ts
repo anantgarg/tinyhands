@@ -17,6 +17,7 @@ vi.mock('../../src/modules/tools', () => ({
   getBuiltinTools: (...args: any[]) => mockGetBuiltinTools(...args),
   listUserAvailableTools: (...args: any[]) => mockListUserAvailableTools(...args),
   listWriteTools: (...args: any[]) => mockListWriteTools(...args),
+  isCoreAlwaysOnTool: (name: string) => ['Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep', 'WebSearch', 'WebFetch'].includes(name),
 }));
 
 // ── Mock skills module ──
@@ -45,7 +46,7 @@ function makeGoalAnalysisJson(overrides: Partial<GoalAnalysis> = {}): GoalAnalys
   return {
     agent_name: 'test-agent',
     system_prompt: 'You are a test agent.',
-    tools: ['Read', 'Glob', 'Grep'],
+    tools: ['chargebee-read', 'linear-read'],
     custom_tools: [],
     skills: [],
     model: 'sonnet',
@@ -93,7 +94,7 @@ describe('Goal Analyzer', () => {
 
       expect(result.agent_name).toBe('test-agent');
       expect(result.system_prompt).toBe('You are a test agent.');
-      expect(result.tools).toEqual(['Read', 'Glob', 'Grep']);
+      expect(result.tools).toEqual(['chargebee-read', 'linear-read']);
       expect(result.model).toBe('sonnet');
       expect(result.feasible).toBe(true);
       expect(result.blockers).toEqual([]);
@@ -115,24 +116,24 @@ describe('Goal Analyzer', () => {
 
     it('should validate tools against builtins and filter out invalid ones', async () => {
       mockAnthropicJsonResponse({
-        tools: ['Read', 'Glob', 'FakeToolThatDoesNotExist', 'AnotherFake'],
+        tools: ['chargebee-read', 'FakeToolThatDoesNotExist', 'AnotherFake'],
       });
 
       const result = await analyzeGoal(TEST_WORKSPACE_ID, 'Build a bot');
 
-      expect(result.tools).toEqual(['Read', 'Glob']);
-      expect(result.tools).not.toContain('FakeToolThatDoesNotExist');
-      expect(result.tools).not.toContain('AnotherFake');
+      // Core tools are stripped, non-core pass through (validated at add time, not here)
+      expect(result.tools).toContain('chargebee-read');
+      expect(result.tools).toContain('FakeToolThatDoesNotExist'); // Non-core passes through
     });
 
     it('should keep all tools when they are all valid builtins', async () => {
       mockAnthropicJsonResponse({
-        tools: ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash'],
+        tools: ['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash'], // All core — will be filtered
       });
 
       const result = await analyzeGoal(TEST_WORKSPACE_ID, 'Build a bot');
 
-      expect(result.tools).toEqual(['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash']);
+      expect(result.tools).toEqual([]); // All core tools stripped
     });
 
     // ── Admin vs Non-Admin ──

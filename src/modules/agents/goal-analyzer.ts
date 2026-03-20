@@ -79,7 +79,8 @@ export async function analyzeGoal(workspaceId: string, goal: string, existingPro
     max_tokens: 4096,
     system: `You are an expert agent architect. Given an agent's goal, you deeply analyze what's needed and produce a complete agent configuration. Think step by step about what the agent needs to accomplish its goal.
 
-Available built-in tools: ${builtinTools.join(', ')}
+Core tools (Bash, Read, Write, Edit, Glob, Grep, WebSearch, WebFetch) are always available to every agent.
+Additional integration tools that can be enabled: ${customToolsSection ? 'see below' : 'none'}
 ${customToolsSection}
 Available MCP/prompt skills:
 ${skillList.join('\n')}
@@ -161,8 +162,9 @@ IMPORTANT guidelines:
 
   const analysis = JSON.parse(jsonMatch[0]) as GoalAnalysis;
 
-  // Validate tools are real builtin tools
-  analysis.tools = analysis.tools.filter(t => builtinTools.includes(t));
+  // Filter out core tools (always available) and validate remaining
+  const { isCoreAlwaysOnTool } = await import('../tools');
+  analysis.tools = (analysis.tools || []).filter(t => !isCoreAlwaysOnTool(t));
 
   // Validate custom_tools exist
   if (!analysis.custom_tools) analysis.custom_tools = [];

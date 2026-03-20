@@ -6,18 +6,27 @@ import type { CustomTool, ToolType, ToolAccessLevel } from '../../types';
 import { logger } from '../../utils/logger';
 
 // ── Built-in Tools ──
-
-const BUILTIN_TOOLS = [
-  'Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep',
-  'WebSearch', 'WebFetch', 'NotebookEdit', 'TodoWrite', 'Agent', 'Mcp',
+// Core tools are always available to every agent — they don't need to be
+// added/removed. They're part of the Docker image and Claude SDK.
+const CORE_TOOLS = [
+  'Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep', 'WebSearch', 'WebFetch',
 ];
 
+// Legacy builtin names for backward compatibility checks
+const LEGACY_BUILTIN_NAMES = new Set([
+  ...CORE_TOOLS, 'NotebookEdit', 'TodoWrite', 'Agent', 'Mcp',
+]);
+
 export function isBuiltinTool(name: string): boolean {
-  return BUILTIN_TOOLS.includes(name);
+  return LEGACY_BUILTIN_NAMES.has(name);
+}
+
+export function isCoreAlwaysOnTool(name: string): boolean {
+  return CORE_TOOLS.includes(name);
 }
 
 export function getBuiltinTools(): string[] {
-  return [...BUILTIN_TOOLS];
+  return [...CORE_TOOLS];
 }
 
 // ── Tool Management ──
@@ -40,7 +49,12 @@ export async function addToolToAgent(
     return tools; // Already has this tool
   }
 
-  // Verify tool exists
+  // Core tools are always available — don't add them to the array
+  if (isCoreAlwaysOnTool(toolName)) {
+    return tools;
+  }
+
+  // Verify tool exists (check custom tools DB)
   if (!isBuiltinTool(toolName)) {
     const custom = await getCustomTool(workspaceId, toolName);
     if (!custom) throw new Error(`Tool "${toolName}" not found`);

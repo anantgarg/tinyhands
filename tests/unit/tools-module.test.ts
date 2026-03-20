@@ -126,11 +126,11 @@ describe('Tools Module', () => {
   // getBuiltinTools
   // ────────────────────────────────────────────────
   describe('getBuiltinTools', () => {
-    it('returns all 12 builtin tools', () => {
+    it('returns all 8 core tools', () => {
       const tools = getBuiltinTools();
-      expect(tools).toHaveLength(12);
+      expect(tools).toHaveLength(8);
       expect(tools).toContain('Bash');
-      expect(tools).toContain('Mcp');
+      expect(tools).toContain('WebFetch');
     });
 
     it('returns a copy (mutating it does not affect subsequent calls)', () => {
@@ -138,7 +138,7 @@ describe('Tools Module', () => {
       first.push('HackedTool');
       const second = getBuiltinTools();
       expect(second).not.toContain('HackedTool');
-      expect(second).toHaveLength(12);
+      expect(second).toHaveLength(8);
     });
   });
 
@@ -146,17 +146,14 @@ describe('Tools Module', () => {
   // addToolToAgent (now includes workspaceId)
   // ────────────────────────────────────────────────
   describe('addToolToAgent', () => {
-    it('adds a builtin tool to the agent', async () => {
+    it('silently ignores core tools (they are always available)', async () => {
       mockCanModifyAgent.mockResolvedValue(true);
-      mockGetAgent.mockResolvedValue(makeFakeAgent({ tools: ['Read'] }));
-      mockUpdateAgent.mockResolvedValue(undefined);
+      mockGetAgent.mockResolvedValue(makeFakeAgent({ tools: [] }));
 
       const result = await addToolToAgent(TEST_WORKSPACE_ID, 'agent-1', 'Bash', 'user-1');
 
-      expect(result).toEqual(['Read', 'Bash']);
-      expect(mockCanModifyAgent).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 'agent-1', 'user-1');
-      expect(mockGetAgent).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 'agent-1');
-      expect(mockUpdateAgent).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 'agent-1', { tools: ['Read', 'Bash'] }, 'user-1');
+      expect(result).toEqual([]); // Core tool not added to array
+      expect(mockUpdateAgent).not.toHaveBeenCalled(); // No DB update needed
     });
 
     it('adds a custom tool to the agent after verifying it exists', async () => {
