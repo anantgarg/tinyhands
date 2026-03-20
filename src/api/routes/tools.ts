@@ -263,9 +263,11 @@ router.get('/integrations', requireAdmin, async (req: Request, res: Response) =>
       configKeys: (int.configKeys ?? []).map((k: string) => ({
         key: k,
         label: k.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()),
+        placeholder: int.configPlaceholders?.[k] || '',
         required: true,
         secret: k.includes('key') || k.includes('token') || k.includes('secret'),
       })),
+      setupGuide: int.setupGuide || null,
     })));
   } catch (err: any) {
     logger.error('List integrations error', { error: err.message });

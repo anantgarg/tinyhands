@@ -18,7 +18,8 @@ interface Integration {
   connectionId: string | null;
   toolsCount: number;
   connectionModel: 'team' | 'personal' | 'hybrid';
-  configKeys: { key: string; label: string; required: boolean; secret: boolean }[];
+  configKeys: { key: string; label: string; placeholder: string; required: boolean; secret: boolean }[];
+  setupGuide: string | null;
 }
 
 interface IntegrationConfig {

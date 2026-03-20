@@ -263,8 +263,9 @@ export const manifest: ToolManifest = {
   icon: ':pencil2:',
   description: 'Search issues, manage projects/teams/cycles, create and update issues.',
   configKeys: ['api_key'],
+  setupGuide: 'How to get your API key:\n1. Open Linear and go to Settings > API\n2. Click "Create Key" under Personal API Keys\n3. Give it a label and click "Create"\n4. Copy the key (starts with lin_api_)',
   configPlaceholders: {
-    api_key: 'lin_api_xxxx (Personal API key: Settings > API)',
+    api_key: 'lin_api_xxxx',
   },
   connectionModel: 'team',
   tools: [

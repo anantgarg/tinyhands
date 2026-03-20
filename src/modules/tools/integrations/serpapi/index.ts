@@ -141,8 +141,9 @@ export const manifest: ToolManifest = {
   icon: ':mag:',
   description: 'SERP rankings across Google, Bing, Yahoo.',
   configKeys: ['api_key'],
+  setupGuide: 'How to get your API key:\n1. Sign up or log in at serpapi.com\n2. Go to serpapi.com/manage-api-key\n3. Copy your API key',
   configPlaceholders: {
-    api_key: 'API key from serpapi.com/manage-api-key',
+    api_key: 'Your SerpAPI key',
   },
   connectionModel: 'team',
   tools: [

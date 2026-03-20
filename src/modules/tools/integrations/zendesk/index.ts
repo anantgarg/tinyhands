@@ -273,10 +273,11 @@ export const manifest: ToolManifest = {
   icon: ':ticket:',
   description: 'Search tickets, get details, create tickets, add comments, manage tags/priority.',
   configKeys: ['subdomain', 'email', 'api_token'],
+  setupGuide: 'How to get your credentials:\n1. Your subdomain is the first part of your-company.zendesk.com\n2. Use the email address of a Zendesk admin account\n3. For the API token: go to Admin Center > Apps and integrations > APIs > Zendesk API\n4. Click "Add API token", give it a description, and copy the token',
   configPlaceholders: {
-    subdomain: 'your-company (from your-company.zendesk.com)',
+    subdomain: 'your-company',
     email: 'admin@company.com',
-    api_token: 'Zendesk API token from Admin > Channels > API',
+    api_token: 'API token from Admin Center',
   },
   connectionModel: 'team',
   tools: [

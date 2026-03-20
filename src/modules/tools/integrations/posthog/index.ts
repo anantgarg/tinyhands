@@ -136,9 +136,10 @@ export const manifest: ToolManifest = {
   icon: ':bar_chart:',
   description: 'Query events, get person details, list feature flags, view insights and cohorts.',
   configKeys: ['api_key', 'project_id'],
+  setupGuide: 'How to get your credentials:\n1. Go to PostHog > Settings > Personal API Keys\n2. Click "Create personal API key" and copy it\n3. For the Project ID: go to Settings > Project and copy the numeric ID from the URL',
   configPlaceholders: {
-    api_key: 'phx_xxxxxxxxxxxxxxxx (Personal API key)',
-    project_id: 'Numeric project ID from Settings > Project',
+    api_key: 'phx_xxxxxxxxxxxxxxxx',
+    project_id: 'Numeric project ID',
   },
   connectionModel: 'team',
   tools: [

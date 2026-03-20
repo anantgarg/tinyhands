@@ -94,7 +94,8 @@ function ToolsContent() {
     id: string;
     name: string;
     isEdit: boolean;
-    configKeys: { key: string; label: string; required: boolean; secret: boolean }[];
+    configKeys: { key: string; label: string; placeholder: string; required: boolean; secret: boolean }[];
+    setupGuide: string | null;
   } | null>(null);
   const [configValues, setConfigValues] = useState<Record<string, string>>({});
 
@@ -199,6 +200,7 @@ function ToolsContent() {
                               name: integration.displayName ?? integration.name ?? 'Integration',
                               isEdit: true,
                               configKeys: integration.configKeys ?? [],
+                              setupGuide: integration.setupGuide ?? null,
                             });
                             setConfigValues({});
                           }}
@@ -259,6 +261,7 @@ function ToolsContent() {
                         name: integration.displayName ?? integration.name ?? 'Integration',
                         isEdit: false,
                         configKeys: integration.configKeys ?? [],
+                        setupGuide: integration.setupGuide ?? null,
                       });
                       setConfigValues({});
                     }}
@@ -385,6 +388,14 @@ function ToolsContent() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
+            {registerDialog?.setupGuide && !registerDialog.isEdit && (
+              <div className="rounded-lg border border-blue-200 bg-blue-50/50 p-3">
+                <p className="text-xs font-semibold text-blue-800 mb-1.5">Where to find your credentials</p>
+                <div className="text-xs text-blue-900 whitespace-pre-line leading-relaxed">
+                  {registerDialog.setupGuide.replace(/\*/g, '')}
+                </div>
+              </div>
+            )}
             {(registerDialog?.configKeys ?? []).map((key) => (
               <div key={key.key}>
                 <Label>
@@ -395,7 +406,7 @@ function ToolsContent() {
                   type={key.secret ? 'password' : 'text'}
                   value={configValues[key.key] ?? ''}
                   onChange={(e) => setConfigValues((prev) => ({ ...prev, [key.key]: e.target.value }))}
-                  placeholder={registerDialog?.isEdit && key.secret ? 'Leave blank to keep current' : ''}
+                  placeholder={registerDialog?.isEdit && key.secret ? 'Leave blank to keep current' : (key.placeholder || '')}
                   className="mt-1"
                 />
               </div>

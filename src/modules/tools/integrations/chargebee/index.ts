@@ -416,6 +416,7 @@ export const manifest: ToolManifest = {
   icon: ':credit_card:',
   description: 'Search customers, subscriptions, invoices; manage billing, apply coupons.',
   configKeys: ['api_key', 'site'],
+  setupGuide: 'How to get your credentials:\n1. Log in to Chargebee and go to Settings > API Keys\n2. Click "Add API Key" and create a Full Access key\n3. Copy the API key\n4. Your site name is the subdomain from your-subdomain.chargebee.com',
   configPlaceholders: {
     api_key: 'live_xxxxxxxxxxxxxxxx',
     site: 'your-subdomain (from your-subdomain.chargebee.com)',
