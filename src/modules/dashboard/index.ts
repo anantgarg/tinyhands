@@ -8,62 +8,40 @@ import { version } from '../../../package.json';
 
 // ── Slack Home Tab Dashboard ──
 
-export async function buildDashboardBlocks(workspaceId: string): Promise<Record<string, any>[]> {
-  const blocks: Record<string, any>[] = [];
-
-  // Header
-  blocks.push({
-    type: 'header',
-    text: { type: 'plain_text', text: `✋ TinyHands Dashboard  v${version}` },
-  });
-
-  // Web dashboard link
+export async function buildDashboardBlocks(_workspaceId: string): Promise<Record<string, any>[]> {
   const dashboardUrl = config.server.webDashboardUrl || config.oauth.redirectBaseUrl || `http://localhost:${config.server.port}`;
-  blocks.push({
-    type: 'context',
-    elements: [{
-      type: 'mrkdwn',
-      text: `<${dashboardUrl}|Open web dashboard>`,
-    }],
-  });
 
-  blocks.push({ type: 'divider' });
-
-  // Usage Snapshot (30 days)
-  blocks.push(...(await buildUsageSnapshotSection(workspaceId)));
-  blocks.push({ type: 'divider' });
-
-  // Top Power Users
-  blocks.push(...(await buildTopPowerUsersSection(workspaceId)));
-  blocks.push({ type: 'divider' });
-
-  // Top Agent Creators
-  blocks.push(...(await buildTopAgentCreatorsSection(workspaceId)));
-  blocks.push({ type: 'divider' });
-
-  // Most Popular Agents
-  blocks.push(...(await buildMostPopularAgentsSection(workspaceId)));
-  blocks.push({ type: 'divider' });
-
-  // Agent Fleet
-  blocks.push(...(await buildAgentFleetSection(workspaceId)));
-  blocks.push({ type: 'divider' });
-
-  // Recent Runs
-  blocks.push(...(await buildRecentRunsSection(workspaceId)));
-
-  // Recent Activity (from audit log)
-  blocks.push({ type: 'divider' });
-  blocks.push(...(await buildRecentActivitySection(workspaceId)));
-
-  // Ensure under 50KB Block Kit limit
-  const json = JSON.stringify(blocks);
-  if (json.length > 48000) {
-    logger.warn('Dashboard exceeds 48KB, truncating', { size: json.length });
-    return blocks.slice(0, 20); // Truncate to fit
-  }
-
-  return blocks;
+  return [
+    {
+      type: 'header',
+      text: { type: 'plain_text', text: `✋ TinyHands` },
+    },
+    {
+      type: 'section',
+      text: {
+        type: 'mrkdwn',
+        text: 'Manage your AI agents, tools, knowledge base, and more from the web dashboard.',
+      },
+    },
+    {
+      type: 'actions',
+      elements: [
+        {
+          type: 'button',
+          text: { type: 'plain_text', text: 'Open Dashboard' },
+          url: dashboardUrl,
+          style: 'primary',
+        },
+      ],
+    },
+    {
+      type: 'context',
+      elements: [{
+        type: 'mrkdwn',
+        text: `v${version} • Send a DM to interact with your agents`,
+      }],
+    },
+  ];
 }
 
 async function buildUsageSnapshotSection(workspaceId: string): Promise<Record<string, any>[]> {

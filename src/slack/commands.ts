@@ -1,4 +1,5 @@
 import type { App } from '@slack/bolt';
+import { config } from '../config';
 import { v4 as uuid } from 'uuid';
 import { createAgent, listAgents, getAgent, getAgentByName, updateAgent, getAccessibleAgents, addAgentMembers, getAgentMembers, addAgentMember, removeAgentMember } from '../modules/agents';
 import { initSuperadmin, canModifyAgent, listPlatformAdmins, getAgentRole, getAgentRoles, isPlatformAdmin } from '../modules/access-control';
@@ -159,10 +160,16 @@ export function registerCommands(app: App): void {
     return true;
   };
 
-  // /agents — Consolidated interactive agent management
+  // /agents — Redirect to web dashboard
   app.command('/agents', async ({ command, ack, respond }) => {
-    if (!(await requireDM(command, ack, respond))) return;
     await ack();
+    const dashboardUrl = config.server.webDashboardUrl || config.oauth.redirectBaseUrl || `http://localhost:${config.server.port}`;
+    await respond({
+      response_type: 'ephemeral',
+      text: `:robot_face: Agent management has moved to the web dashboard.\n<${dashboardUrl}/agents|Open Agents Dashboard>`,
+    });
+    return;
+    // Legacy code below — kept for reference but unreachable
     const workspaceId = command.team_id || getDefaultWorkspaceId();
     await initSuperadmin(workspaceId, command.user_id);
     const userId = command.user_id;

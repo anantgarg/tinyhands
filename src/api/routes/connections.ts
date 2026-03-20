@@ -194,7 +194,7 @@ router.get('/oauth-integrations', async (_req: Request, res: Response) => {
         name: int.id,
         displayName: int.label || int.id,
         description: int.description || '',
-        oauthSupported: !!(int as any).oauthConfig,
+        oauthSupported: !!(int as any).oauthConfig || int.connectionModel === 'personal',
       }));
     } catch { /* ignore */ }
     res.json(result);

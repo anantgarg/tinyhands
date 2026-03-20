@@ -290,9 +290,11 @@ export const manifest: ToolManifest = {
   label: 'Google Workspace',
   icon: ':file_folder:',
   description: 'Search Drive, read/write Sheets, read/create Docs, manage folders.',
-  configKeys: [],
-  setupGuide: 'Connect via OAuth:\nGo to Connections > Add Connection and connect your Google account. This grants access to Drive, Sheets, and Docs.',
-  configPlaceholders: {},
+  configKeys: ['access_token'],
+  setupGuide: 'How to connect:\n1. For personal use: Go to Connections > Add Connection and connect via OAuth\n2. For team use: Create a Google service account, enable Drive/Sheets APIs, and paste the access token here\n3. Or use an OAuth refresh token from your Google Cloud Console',
+  configPlaceholders: {
+    access_token: 'OAuth token or service account token',
+  },
   connectionModel: 'personal',
   tools: [
     { name: 'google-read', schema: READ_SCHEMA, code: READ_CODE, accessLevel: 'read-only', displayName: 'Checking Google Workspace' },
