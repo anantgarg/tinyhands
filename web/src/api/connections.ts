@@ -102,3 +102,23 @@ export function useSetAgentToolMode() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['connections', 'agent-tool-modes'] }),
   });
 }
+
+export function useAgentToolConnections(agentId: string) {
+  return useQuery<AgentToolMode[]>({
+    queryKey: ['connections', 'agent', agentId],
+    queryFn: () => api.get(`/connections/agent/${agentId}`),
+    enabled: !!agentId,
+  });
+}
+
+export function useSetAgentToolConnection() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ agentId, toolName, mode }: { agentId: string; toolName: string; mode: string }) =>
+      api.put(`/connections/agent/${agentId}/${toolName}`, { mode }),
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: ['connections', 'agent', variables.agentId] });
+      qc.invalidateQueries({ queryKey: ['connections', 'agent-tool-modes'] });
+    },
+  });
+}

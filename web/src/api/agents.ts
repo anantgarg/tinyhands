@@ -1,6 +1,18 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from './client';
 
+function camelToSnake(str: string): string {
+  return str.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
+}
+
+function toSnakeKeys(obj: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    result[camelToSnake(key)] = value;
+  }
+  return result;
+}
+
 export interface Agent {
   id: string;
   name: string;
@@ -142,7 +154,7 @@ export function useAgent(id: string) {
 export function useCreateAgent() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: CreateAgentPayload) => api.post<Agent>('/agents', data),
+    mutationFn: (data: CreateAgentPayload) => api.post<Agent>('/agents', toSnakeKeys(data as unknown as Record<string, unknown>)),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['agents'] }),
   });
 }
@@ -150,7 +162,7 @@ export function useCreateAgent() {
 export function useUpdateAgent() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...data }: UpdateAgentPayload) => api.patch<Agent>(`/agents/${id}`, data),
+    mutationFn: ({ id, ...data }: UpdateAgentPayload) => api.patch<Agent>(`/agents/${id}`, toSnakeKeys(data as Record<string, unknown>)),
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: ['agents'] });
       qc.invalidateQueries({ queryKey: ['agents', variables.id] });

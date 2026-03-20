@@ -51,6 +51,8 @@ import {
 import type { Agent as AgentData, AgentVersion } from '@/api/agents';
 import { useAvailableTools } from '@/api/tools';
 import { useUpdateTrigger, useDeleteTrigger } from '@/api/triggers';
+import { useAgentToolConnections, useSetAgentToolConnection } from '@/api/connections';
+import { useSlackChannels } from '@/api/slack';
 import { renderEmoji } from '@/lib/emoji';
 import { toast } from '@/components/ui/use-toast';
 
@@ -500,6 +502,8 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
   const { data: availableTools } = useAvailableTools();
   const removeAgentTool = useRemoveAgentTool();
   const addAgentTool = useAddAgentTool();
+  const { data: toolConnections } = useAgentToolConnections(agentId);
+  const setToolConnection = useSetAgentToolConnection();
   const [showAddTool, setShowAddTool] = useState(false);
   const [selectedToolsToAdd, setSelectedToolsToAdd] = useState<Set<string>>(new Set());
   const [writePolicy, setWritePolicy] = useState(agent.writePolicy ?? 'auto');
@@ -514,6 +518,12 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
     acc[group].push(tool);
     return acc;
   }, {});
+
+  // Build a map of tool name -> current mode
+  const toolModeMap: Record<string, string> = {};
+  for (const tc of toolConnections ?? []) {
+    toolModeMap[tc.toolName] = tc.mode;
+  }
 
   const handleRemoveTool = (tool: string) => {
     removeAgentTool.mutate(
@@ -541,6 +551,11 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
         },
       );
     }
+  };
+
+  const isIntegrationTool = (toolName: string) => {
+    const meta = (availableTools ?? []).find((t) => t.name === toolName);
+    return meta?.source === 'integration' || (toolName.includes('-') && !['sub-agent'].includes(toolName));
   };
 
   return (
@@ -596,13 +611,31 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                 </TableHeader>
                 <TableBody>
                   {currentTools.map((tool) => {
-                    const isIntegration = tool.includes('-') && !['sub-agent'].includes(tool);
+                    const isInteg = isIntegrationTool(tool);
+                    const currentMode = toolModeMap[tool] ?? 'team';
                     return (
                       <TableRow key={tool}>
                         <TableCell className="font-medium">{getToolDisplayName(tool, availableTools)}</TableCell>
                         <TableCell>
-                          {isIntegration ? (
-                            <Badge variant="secondary" className="text-xs">Team</Badge>
+                          {isInteg ? (
+                            <Select
+                              value={currentMode}
+                              onValueChange={(v) => {
+                                setToolConnection.mutate(
+                                  { agentId, toolName: tool, mode: v },
+                                  { onSuccess: () => toast({ title: 'Credentials updated', variant: 'success' }) },
+                                );
+                              }}
+                            >
+                              <SelectTrigger className="w-[160px] h-8 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="team">Team credentials</SelectItem>
+                                <SelectItem value="personal">Personal credentials</SelectItem>
+                                <SelectItem value="hybrid">Personal, fallback to team</SelectItem>
+                              </SelectContent>
+                            </Select>
                           ) : (
                             <span className="text-xs text-warm-text-secondary">&mdash;</span>
                           )}
@@ -619,9 +652,6 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
               </Table>
             </div>
           )}
-          <p className="text-xs text-warm-text-secondary mt-4">
-            Tools use team credentials by default. Configure per-tool credentials in <Link to="/connections" className="text-brand hover:underline">Connections</Link>.
-          </p>
         </CardContent>
       </Card>
 
@@ -1000,11 +1030,14 @@ function MemoryTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
 
 function TriggersTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
   const { data: triggers, isLoading } = useAgentTriggers(agentId);
+  const { data: slackChannelsData } = useSlackChannels();
   const updateTrigger = useUpdateTrigger();
   const deleteTrigger = useDeleteTrigger();
   const addTrigger = useAddAgentTrigger();
   const updateAgent = useUpdateAgent();
   const [showAddTrigger, setShowAddTrigger] = useState(false);
+  const [showAddChannel, setShowAddChannel] = useState(false);
+  const [channelSearch, setChannelSearch] = useState('');
   const [newTriggerType, setNewTriggerType] = useState('schedule');
 
   // Schedule-specific state
@@ -1014,22 +1047,47 @@ function TriggersTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
 
   if (isLoading) return <Skeleton className="h-[200px]" />;
 
-  const getTriggerIcon = (type: string) => {
-    switch (type) {
-      case 'slack_channel': return <MessageSquare className="h-4 w-4" />;
-      case 'schedule': return <Clock className="h-4 w-4" />;
-      case 'webhook': return <Webhook className="h-4 w-4" />;
-      default: return <Zap className="h-4 w-4" />;
+  const currentChannelIds = agent.channelIds ?? [];
+  const allChannels = slackChannelsData?.channels ?? [];
+  const channelMap: Record<string, string> = {};
+  for (const ch of allChannels) {
+    channelMap[ch.id] = ch.name;
+  }
+
+  const availableChannels = allChannels
+    .filter((ch) => !currentChannelIds.includes(ch.id))
+    .filter((ch) => !channelSearch || ch.name.toLowerCase().includes(channelSearch.toLowerCase()));
+
+  const handleAddChannel = (channelId: string) => {
+    const newIds = [...currentChannelIds, channelId];
+    updateAgent.mutate(
+      { id: agentId, channelIds: newIds } as any,
+      {
+        onSuccess: () => {
+          toast({ title: `Added #${channelMap[channelId] || channelId}`, variant: 'success' });
+          setShowAddChannel(false);
+          setChannelSearch('');
+        },
+      },
+    );
+  };
+
+  const handleRemoveChannel = (channelId: string) => {
+    if (currentChannelIds.length <= 1) {
+      toast({ title: 'Cannot remove the last channel', variant: 'error' });
+      return;
     }
+    const newIds = currentChannelIds.filter((id) => id !== channelId);
+    updateAgent.mutate(
+      { id: agentId, channelIds: newIds } as any,
+      {
+        onSuccess: () => toast({ title: `Removed #${channelMap[channelId] || channelId}`, variant: 'success' }),
+      },
+    );
   };
 
   const getTriggerDescription = (trigger: { type: string; config: Record<string, unknown> }) => {
     switch (trigger.type) {
-      case 'slack_channel': {
-        const channel = trigger.config.channelId ?? trigger.config.channel ?? 'unknown';
-        const mode = trigger.config.mentionsOnly ? 'mentions only' : 'all messages';
-        return `Channel ${channel} (${mode})`;
-      }
       case 'schedule': {
         const cron = String(trigger.config.cron ?? trigger.config.expression ?? '');
         const tz = trigger.config.timezone ? ` (${trigger.config.timezone})` : '';
@@ -1048,7 +1106,6 @@ function TriggersTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
 
   const getTriggerTypeName = (type: string) => {
     switch (type) {
-      case 'slack_channel': return 'Slack Channel';
       case 'schedule': return 'Schedule';
       case 'webhook': return 'Webhook';
       case 'linear': return 'Linear';
@@ -1105,17 +1162,53 @@ function TriggersTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
     setShowAddTrigger(true);
   };
 
+  const nonScheduleTriggers = (triggers ?? []).filter((t) => t.type !== 'schedule' && t.type !== 'slack_channel');
+
   return (
-    <div className="space-y-4">
-      {/* Slack Activation */}
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle className="text-base">Slack Activation</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-warm-text-secondary mb-3">
-            How this agent responds to messages in its Slack channels.
-          </p>
+    <div className="space-y-6">
+      {/* Slack Channels */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h3 className="text-base font-semibold">Slack Channels</h3>
+            <p className="text-xs text-warm-text-secondary mt-1">
+              Channels this agent listens and responds in.
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => { setShowAddChannel(true); setChannelSearch(''); }}>
+            <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Channel
+          </Button>
+        </div>
+
+        {currentChannelIds.length === 0 ? (
+          <div className="rounded-lg border border-warm-border bg-warm-bg p-4 text-center">
+            <p className="text-sm text-warm-text-secondary">No channels assigned. Add a channel to get started.</p>
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-2 mb-4">
+            {currentChannelIds.map((chId) => (
+              <div
+                key={chId}
+                className="flex items-center gap-2 rounded-lg border border-warm-border bg-white px-3 py-2"
+              >
+                <MessageSquare className="h-3.5 w-3.5 text-warm-text-secondary" />
+                <span className="text-sm font-medium">#{channelMap[chId] || chId}</span>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-5 w-5 text-warm-text-secondary hover:text-red-500"
+                  onClick={() => handleRemoveChannel(chId)}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Response Mode */}
+        <div className="mt-4">
+          <Label className="text-warm-text-secondary text-xs">Response Mode</Label>
           <Select
             value={agent.mentionsOnly ? 'mentions' : agent.respondToAllMessages ? 'all' : 'relevant'}
             onValueChange={(v) => {
@@ -1131,99 +1224,143 @@ function TriggersTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
                 update.respondToAllMessages = false;
               }
               updateAgent.mutate(update as any, {
-                onSuccess: () => toast({ title: 'Slack activation updated', variant: 'success' }),
+                onSuccess: () => toast({ title: 'Updated', variant: 'success' }),
               });
             }}
           >
-            <SelectTrigger className="max-w-md"><SelectValue /></SelectTrigger>
+            <SelectTrigger className="max-w-md mt-1"><SelectValue /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="mentions">Only when @mentioned — responds only when someone tags the agent directly</SelectItem>
-              <SelectItem value="relevant">Relevant messages — automatically decides which messages need a response</SelectItem>
-              <SelectItem value="all">Every message — responds to all messages in its channels</SelectItem>
+              <SelectItem value="mentions">Only when @mentioned</SelectItem>
+              <SelectItem value="relevant">Relevant messages</SelectItem>
+              <SelectItem value="all">Every message</SelectItem>
             </SelectContent>
           </Select>
-        </CardContent>
-      </Card>
-
-      {/* Scheduled Triggers */}
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-base font-semibold">Scheduled Triggers</h3>
-        <Button variant="outline" size="sm" onClick={openAddDialog}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Trigger
-        </Button>
+        </div>
       </div>
 
-      <div className="rounded-card border border-warm-border bg-white overflow-x-auto mb-6">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Type</TableHead>
-              <TableHead>Description</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Last Fired</TableHead>
-              <TableHead className="w-24"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {(triggers ?? []).filter((t) => t.type === 'schedule').map((trigger) => (
-              <TableRow key={trigger.id}>
-                <TableCell>
-                  <div className="flex items-center gap-2">
-                    {getTriggerIcon(trigger.type)}
-                    <Badge variant="default">{getTriggerTypeName(trigger.type)}</Badge>
+      {/* Add Channel Dialog */}
+      <Dialog open={showAddChannel} onOpenChange={setShowAddChannel}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Slack Channel</DialogTitle>
+            <DialogDescription>Select a channel for this agent to listen in.</DialogDescription>
+          </DialogHeader>
+          <Input
+            placeholder="Search channels..."
+            value={channelSearch}
+            onChange={(e) => setChannelSearch(e.target.value)}
+            className="mb-2"
+          />
+          <div className="max-h-[300px] overflow-y-auto space-y-1">
+            {availableChannels.length === 0 ? (
+              <p className="text-sm text-warm-text-secondary text-center py-4">
+                {channelSearch ? 'No matching channels' : 'No available channels'}
+              </p>
+            ) : (
+              availableChannels.map((ch) => (
+                <button
+                  key={ch.id}
+                  className="w-full flex items-center gap-3 rounded-lg border border-warm-border p-3 text-left hover:bg-warm-bg transition-colors"
+                  onClick={() => handleAddChannel(ch.id)}
+                >
+                  <MessageSquare className="h-4 w-4 text-warm-text-secondary shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium">#{ch.name}</p>
+                    {ch.purpose && (
+                      <p className="text-xs text-warm-text-secondary line-clamp-1">{ch.purpose}</p>
+                    )}
                   </div>
-                </TableCell>
-                <TableCell className="text-sm text-warm-text-secondary max-w-[300px] truncate">
-                  {getTriggerDescription(trigger)}
-                </TableCell>
-                <TableCell>
-                  <Badge variant={trigger.enabled ? 'success' : 'secondary'}>
-                    {trigger.enabled ? 'Active' : 'Paused'}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-warm-text-secondary text-sm">
-                  {trigger.lastTriggeredAt
-                    ? formatDistanceToNow(new Date(trigger.lastTriggeredAt), { addSuffix: true })
-                    : 'Never'}
-                </TableCell>
-                <TableCell>
-                  <div className="flex gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => handleToggle(trigger.id, trigger.enabled)}
-                      title={trigger.enabled ? 'Pause' : 'Resume'}
-                    >
-                      {trigger.enabled ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-red-600"
-                      onClick={() => handleDeleteTrigger(trigger.id)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-            {(triggers ?? []).filter((t) => t.type === 'schedule').length === 0 && (
-              <TableRow>
-                <TableCell colSpan={5} className="text-center text-warm-text-secondary">
-                  No scheduled triggers
-                </TableCell>
-              </TableRow>
+                  {ch.isPrivate && (
+                    <Badge variant="secondary" className="text-[10px] shrink-0">Private</Badge>
+                  )}
+                </button>
+              ))
             )}
-          </TableBody>
-        </Table>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Scheduled Triggers */}
+      <div>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-base font-semibold">Scheduled Triggers</h3>
+          <Button variant="outline" size="sm" onClick={openAddDialog}>
+            <Plus className="mr-1.5 h-3.5 w-3.5" />
+            Add Trigger
+          </Button>
+        </div>
+
+        <div className="rounded-card border border-warm-border bg-white overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Type</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Last Fired</TableHead>
+                <TableHead className="w-24"></TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {(triggers ?? []).filter((t) => t.type === 'schedule').map((trigger) => (
+                <TableRow key={trigger.id}>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <Clock className="h-4 w-4" />
+                      <Badge variant="default">Schedule</Badge>
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-sm text-warm-text-secondary max-w-[300px] truncate">
+                    {getTriggerDescription(trigger)}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={trigger.enabled ? 'success' : 'secondary'}>
+                      {trigger.enabled ? 'Active' : 'Paused'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-warm-text-secondary text-sm">
+                    {trigger.lastTriggeredAt
+                      ? formatDistanceToNow(new Date(trigger.lastTriggeredAt), { addSuffix: true })
+                      : 'Never'}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex gap-1">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => handleToggle(trigger.id, trigger.enabled)}
+                        title={trigger.enabled ? 'Pause' : 'Resume'}
+                      >
+                        {trigger.enabled ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-red-600"
+                        onClick={() => handleDeleteTrigger(trigger.id)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {(triggers ?? []).filter((t) => t.type === 'schedule').length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-warm-text-secondary">
+                    No scheduled triggers
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </div>
 
       {/* Other Triggers */}
-      {(triggers ?? []).filter((t) => t.type !== 'schedule').length > 0 && (
-        <>
+      {nonScheduleTriggers.length > 0 && (
+        <div>
           <h3 className="text-base font-semibold mb-4">Other Triggers</h3>
           <div className="rounded-card border border-warm-border bg-white overflow-x-auto">
             <Table>
@@ -1237,11 +1374,11 @@ function TriggersTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {(triggers ?? []).filter((t) => t.type !== 'schedule').map((trigger) => (
+                {nonScheduleTriggers.map((trigger) => (
                   <TableRow key={trigger.id}>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        {getTriggerIcon(trigger.type)}
+                        {trigger.type === 'webhook' ? <Webhook className="h-4 w-4" /> : <Zap className="h-4 w-4" />}
                         <Badge variant="default">{getTriggerTypeName(trigger.type)}</Badge>
                       </div>
                     </TableCell>
@@ -1284,7 +1421,7 @@ function TriggersTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
               </TableBody>
             </Table>
           </div>
-        </>
+        </div>
       )}
 
       {/* Add Trigger Dialog */}
@@ -1302,7 +1439,6 @@ function TriggersTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
                 <SelectContent>
                   <SelectItem value="schedule">Schedule</SelectItem>
                   <SelectItem value="webhook">Webhook</SelectItem>
-                  <SelectItem value="slack_channel">Slack Channel</SelectItem>
                   <SelectItem value="linear">Linear</SelectItem>
                   <SelectItem value="zendesk">Zendesk</SelectItem>
                   <SelectItem value="intercom">Intercom</SelectItem>
@@ -1361,15 +1497,6 @@ function TriggersTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
               </div>
             )}
 
-            {/* Slack Channel info */}
-            {newTriggerType === 'slack_channel' && (
-              <div className="rounded-lg border border-warm-border bg-warm-bg p-4">
-                <p className="text-sm text-warm-text-secondary">
-                  Slack channel activation is managed in the agent's channel settings. Invite the agent to a channel and it will automatically start listening.
-                </p>
-              </div>
-            )}
-
             {/* Linear/Zendesk/Intercom info */}
             {['linear', 'zendesk', 'intercom'].includes(newTriggerType) && (
               <div className="rounded-lg border border-warm-border bg-warm-bg p-4">
@@ -1383,7 +1510,7 @@ function TriggersTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
             <Button variant="outline" onClick={() => setShowAddTrigger(false)}>Cancel</Button>
             <Button
               onClick={handleCreateTrigger}
-              disabled={addTrigger.isPending || ['slack_channel'].includes(newTriggerType)}
+              disabled={addTrigger.isPending}
             >
               Create Trigger
             </Button>

@@ -16,10 +16,33 @@ interface SlackUsersResponse {
   nextCursor: string | null;
 }
 
+export interface SlackChannel {
+  id: string;
+  name: string;
+  isPrivate: boolean;
+  isMember: boolean;
+  numMembers: number;
+  topic: string;
+  purpose: string;
+}
+
+interface SlackChannelsResponse {
+  channels: SlackChannel[];
+  nextCursor: string | null;
+}
+
 export function useSlackUsers() {
   return useQuery<SlackUsersResponse>({
     queryKey: ['slack-users'],
     queryFn: () => api.get('/slack/users'),
-    staleTime: 5 * 60 * 1000, // Cache for 5 minutes
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+export function useSlackChannels() {
+  return useQuery<SlackChannelsResponse>({
+    queryKey: ['slack-channels'],
+    queryFn: () => api.get('/slack/channels'),
+    staleTime: 5 * 60 * 1000,
   });
 }
