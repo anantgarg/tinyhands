@@ -49,7 +49,6 @@ import {
   useAgentTriggers,
   useAddAgentTrigger,
   useAgentToolRequests,
-  useCreateToolRequest,
 } from '@/api/agents';
 import type { Agent as AgentData, AgentVersion } from '@/api/agents';
 import { useAvailableTools } from '@/api/tools';
@@ -628,7 +627,6 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
   const { data: toolConnections } = useAgentToolConnections(agentId);
   const setToolConnection = useSetAgentToolConnection();
   const { data: toolRequests } = useAgentToolRequests(agentId);
-  const createToolRequest = useCreateToolRequest();
   const [showAddTool, setShowAddTool] = useState(false);
   const [selectedToolsToAdd, setSelectedToolsToAdd] = useState<Set<string>>(new Set());
   const [writePolicy, setWritePolicy] = useState(agent.writePolicy ?? 'auto');
