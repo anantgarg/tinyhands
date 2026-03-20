@@ -1802,7 +1802,7 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
           <div>
             <CardTitle className="text-base">Roles</CardTitle>
             <p className="text-xs text-warm-text-secondary mt-1">
-              Individual roles override the default access level. Owner = full control. Member = agent can perform all actions. Viewer = can interact but agent actions are limited to read-only.
+              Individual roles override the default access level set above.
             </p>
           </div>
           <Button variant="ghost" size="sm" onClick={() => setShowAddUser(true)}>
@@ -1835,13 +1835,13 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                           setRole.mutate({ agentId, userId: role.userId, role: newRole })
                         }
                       >
-                        <SelectTrigger className="w-[120px]">
+                        <SelectTrigger className="w-[200px]">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="owner">Owner</SelectItem>
-                          <SelectItem value="member">Member</SelectItem>
-                          <SelectItem value="viewer">Viewer</SelectItem>
+                          <SelectItem value="owner">Full Control — can edit agent settings</SelectItem>
+                          <SelectItem value="member">Full Access — agent performs all actions</SelectItem>
+                          <SelectItem value="viewer">Limited Access — agent read-only</SelectItem>
                         </SelectContent>
                       </Select>
                     </TableCell>
@@ -1942,9 +1942,9 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="owner">Owner</SelectItem>
-                  <SelectItem value="member">Member</SelectItem>
-                  <SelectItem value="viewer">Viewer</SelectItem>
+                  <SelectItem value="owner">Full Control — can edit agent settings</SelectItem>
+                  <SelectItem value="member">Full Access — agent performs all actions</SelectItem>
+                  <SelectItem value="viewer">Limited Access — agent read-only</SelectItem>
                 </SelectContent>
               </Select>
             </div>
