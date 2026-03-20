@@ -43,18 +43,70 @@ function humanizeCron(cron: string | undefined): string {
   if (!cron) return '\u2014';
   const parts = cron.split(' ');
   if (parts.length !== 5) return cron;
-  const [min, hour, , , dow] = parts;
-  const dayMap: Record<string, string> = { '0': 'Sun', '1': 'Mon', '2': 'Tue', '3': 'Wed', '4': 'Thu', '5': 'Fri', '6': 'Sat', '7': 'Sun' };
-  const dowStr = dow === '*'
-    ? 'every day'
-    : dow === '1-5'
-    ? 'weekdays'
-    : dow === '0,6'
-    ? 'weekends'
-    : dow.split(',').map((d) => dayMap[d] ?? d).join(', ');
+  const [min, hour, dayOfMonth, , dow] = parts;
+
+  // Every minute
   if (hour === '*' && min === '*') return 'Every minute';
+
+  // Every N minutes
+  if (hour === '*' && min.startsWith('*/')) {
+    const n = min.slice(2);
+    return `Every ${n} minutes`;
+  }
+
+  // Every hour at :MM
   if (hour === '*') return `Every hour at :${min.padStart(2, '0')}`;
-  return `${hour}:${min.padStart(2, '0')} ${dowStr}`;
+
+  // Every N hours
+  if (hour.startsWith('*/')) {
+    const n = hour.slice(2);
+    return `Every ${n} hours at :${min.padStart(2, '0')}`;
+  }
+
+  // Format time as 12-hour
+  const h = parseInt(hour, 10);
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  const timeStr = `${h12}:${min.padStart(2, '0')} ${ampm}`;
+
+  // Day of week descriptions
+  if (dow === '*' && dayOfMonth === '1') return `Monthly on the 1st at ${timeStr}`;
+  if (dow === '*') return `Daily at ${timeStr}`;
+  if (dow === '1-5') return `Weekdays at ${timeStr}`;
+  if (dow === '0,6') return `Weekends at ${timeStr}`;
+  if (dow === '1') return `Weekly on Monday at ${timeStr}`;
+
+  const dayMap: Record<string, string> = { '0': 'Sunday', '1': 'Monday', '2': 'Tuesday', '3': 'Wednesday', '4': 'Thursday', '5': 'Friday', '6': 'Saturday', '7': 'Sunday' };
+  const dayNames = dow.split(',').map((d) => dayMap[d.trim()] ?? d).join(', ');
+  return `${dayNames} at ${timeStr}`;
+}
+
+function friendlyTimezone(tz: string): string {
+  const map: Record<string, string> = {
+    'America/New_York': 'Eastern (New York)',
+    'America/Chicago': 'Central (Chicago)',
+    'America/Denver': 'Mountain (Denver)',
+    'America/Los_Angeles': 'Pacific (LA)',
+    'Europe/London': 'London',
+    'Europe/Berlin': 'Berlin',
+    'Asia/Kolkata': 'India (Kolkata)',
+    'Asia/Tokyo': 'Tokyo',
+    'UTC': 'UTC',
+  };
+  return map[tz] || tz.replace(/\//g, ' / ').replace(/_/g, ' ');
+}
+
+/** Convert friendly schedule settings to a cron expression */
+function buildCronFromSchedule(frequency: string, time: string): string {
+  const [hour, minute] = time.split(':').map(Number);
+  switch (frequency) {
+    case 'hourly': return `${minute} * * * *`;
+    case 'daily': return `${minute} ${hour} * * *`;
+    case 'weekdays': return `${minute} ${hour} * * 1-5`;
+    case 'weekly': return `${minute} ${hour} * * 1`;
+    case 'monthly': return `${minute} ${hour} 1 * *`;
+    default: return `${minute} ${hour} * * *`;
+  }
 }
 
 function triggerTypeLabel(type: string): string {
@@ -82,6 +134,11 @@ export function Triggers() {
   const [newType, setNewType] = useState('schedule');
   const [newConfig, setNewConfig] = useState('{}');
 
+  // Schedule-specific state for friendly form
+  const [scheduleFrequency, setScheduleFrequency] = useState('daily');
+  const [scheduleTime, setScheduleTime] = useState('09:00');
+  const [scheduleTimezone, setScheduleTimezone] = useState('America/New_York');
+
   const allTriggers = triggers ?? [];
   const filtered = allTriggers.filter((t) => {
     if (search && !(t.agentName ?? '').toLowerCase().includes(search.toLowerCase())) return false;
@@ -98,11 +155,16 @@ export function Triggers() {
       return;
     }
     let config: Record<string, unknown>;
-    try {
-      config = JSON.parse(newConfig);
-    } catch {
-      toast({ title: 'Invalid JSON config', variant: 'error' });
-      return;
+    if (newType === 'schedule') {
+      const cron = buildCronFromSchedule(scheduleFrequency, scheduleTime);
+      config = { cron, timezone: scheduleTimezone };
+    } else {
+      try {
+        config = JSON.parse(newConfig);
+      } catch {
+        toast({ title: 'Invalid JSON config', variant: 'error' });
+        return;
+      }
     }
     createTrigger.mutate(
       { agentId: newAgentId, type: newType, config },
@@ -112,6 +174,9 @@ export function Triggers() {
           setShowCreate(false);
           setNewAgentId('');
           setNewConfig('{}');
+          setScheduleFrequency('daily');
+          setScheduleTime('09:00');
+          setScheduleTimezone('America/New_York');
         },
       },
     );
@@ -264,7 +329,7 @@ export function Triggers() {
                     <CalendarClock className="h-5 w-5 text-brand" />
                     <div>
                       <CardTitle className="text-base">Scheduled Triggers</CardTitle>
-                      <CardDescription>Triggers that fire on a cron schedule</CardDescription>
+                      <CardDescription>Automated schedules</CardDescription>
                     </div>
                   </div>
                 </CardHeader>
@@ -288,13 +353,10 @@ export function Triggers() {
                           <TableRow key={trigger.id}>
                             <TableCell className="font-medium">{trigger.agentName ?? '\u2014'}</TableCell>
                             <TableCell>
-                              <div>
-                                <p className="text-sm">{humanizeCron(cfg.cron as string | undefined)}</p>
-                                <p className="text-xs text-warm-text-secondary font-mono">{(cfg.cron as string) ?? ''}</p>
-                              </div>
+                              <p className="text-sm">{humanizeCron(cfg.cron as string | undefined)}</p>
                             </TableCell>
                             <TableCell className="text-warm-text-secondary text-xs">
-                              {(cfg.timezone as string) ?? 'UTC'}
+                              {friendlyTimezone((cfg.timezone as string) ?? 'UTC')}
                             </TableCell>
                             <TableCell>
                               <Badge variant={trigger.enabled ? 'success' : 'secondary'}>
@@ -414,28 +476,72 @@ export function Triggers() {
               </Select>
               <p className="text-xs text-warm-text-secondary mt-1">
                 {newType === 'slack_channel' && 'Trigger when messages are posted in a Slack channel'}
-                {newType === 'schedule' && 'Trigger on a cron schedule (e.g. every weekday at 9am)'}
+                {newType === 'schedule' && 'Run the agent on a recurring schedule'}
                 {newType === 'webhook' && 'Trigger via an external webhook URL'}
                 {newType === 'linear' && 'Trigger on Linear issue events'}
                 {newType === 'zendesk' && 'Trigger on Zendesk ticket events'}
                 {newType === 'intercom' && 'Trigger on Intercom conversation events'}
               </p>
             </div>
-            <div>
-              <Label>Config (JSON)</Label>
-              <Input
-                value={newConfig}
-                onChange={(e) => setNewConfig(e.target.value)}
-                placeholder={
-                  newType === 'schedule'
-                    ? '{"cron": "0 9 * * 1-5", "timezone": "America/New_York"}'
-                    : newType === 'slack_channel'
-                    ? '{"channelId": "C...", "mentionsOnly": false}'
-                    : '{}'
-                }
-                className="mt-1 font-mono"
-              />
-            </div>
+
+            {/* Schedule fields — friendly pickers */}
+            {newType === 'schedule' && (
+              <div className="space-y-4">
+                <div>
+                  <Label>Run every</Label>
+                  <div className="flex gap-2 mt-1">
+                    <Select value={scheduleFrequency} onValueChange={setScheduleFrequency}>
+                      <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="hourly">Hour</SelectItem>
+                        <SelectItem value="daily">Day</SelectItem>
+                        <SelectItem value="weekdays">Weekday</SelectItem>
+                        <SelectItem value="weekly">Week</SelectItem>
+                        <SelectItem value="monthly">Month</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div>
+                  <Label>At time</Label>
+                  <Input type="time" value={scheduleTime} onChange={(e) => setScheduleTime(e.target.value)} className="mt-1" />
+                </div>
+                <div>
+                  <Label>Timezone</Label>
+                  <Select value={scheduleTimezone} onValueChange={setScheduleTimezone}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="America/New_York">Eastern (New York)</SelectItem>
+                      <SelectItem value="America/Chicago">Central (Chicago)</SelectItem>
+                      <SelectItem value="America/Denver">Mountain (Denver)</SelectItem>
+                      <SelectItem value="America/Los_Angeles">Pacific (Los Angeles)</SelectItem>
+                      <SelectItem value="Europe/London">London</SelectItem>
+                      <SelectItem value="Europe/Berlin">Berlin</SelectItem>
+                      <SelectItem value="Asia/Kolkata">India (Kolkata)</SelectItem>
+                      <SelectItem value="Asia/Tokyo">Tokyo</SelectItem>
+                      <SelectItem value="UTC">UTC</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+
+            {/* Non-schedule config — JSON input */}
+            {newType !== 'schedule' && (
+              <div>
+                <Label>Config (JSON)</Label>
+                <Input
+                  value={newConfig}
+                  onChange={(e) => setNewConfig(e.target.value)}
+                  placeholder={
+                    newType === 'slack_channel'
+                      ? '{"channelId": "C...", "mentionsOnly": false}'
+                      : '{}'
+                  }
+                  className="mt-1 font-mono"
+                />
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>

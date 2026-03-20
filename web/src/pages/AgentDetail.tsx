@@ -244,7 +244,7 @@ export function AgentDetail() {
           <RunsTab agentId={id!} />
         </TabsContent>
         <TabsContent value="memory">
-          <MemoryTab agentId={id!} />
+          <MemoryTab agentId={id!} agent={agent} />
         </TabsContent>
         <TabsContent value="triggers">
           <TriggersTab agentId={id!} agent={agent} />
@@ -273,8 +273,6 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
   const [configDraft, setConfigDraft] = useState({
     model: normalizeModelValue(agent.model),
     maxTurns: agent.maxTurns,
-    memoryEnabled: agent.memoryEnabled,
-    selfEvolutionMode: agent.selfEvolutionMode ?? 'off',
   });
 
   // Version preview dialog
@@ -359,7 +357,7 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
         </CardContent>
       </Card>
 
-      {/* Section 2: Configuration — Model, Effort, Memory, Self-Improvement */}
+      {/* Section 2: Configuration — Model + Effort */}
       <Card>
         <CardHeader className="flex-row items-center justify-between">
           <CardTitle className="text-base">Configuration</CardTitle>
@@ -397,37 +395,6 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
                   <SelectItem value="25">Standard</SelectItem>
                   <SelectItem value="50">Thorough</SelectItem>
                   <SelectItem value="100">Unlimited</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Memory */}
-            <div>
-              <Label className="text-warm-text-secondary text-xs">Memory</Label>
-              <div className="flex items-center gap-2 mt-1.5">
-                <Switch
-                  checked={configDraft.memoryEnabled}
-                  onCheckedChange={(v) => updateConfig({ memoryEnabled: v })}
-                />
-                <span className="text-sm">{configDraft.memoryEnabled ? 'Enabled' : 'Disabled'}</span>
-              </div>
-            </div>
-
-            {/* Self-Improvement */}
-            <div>
-              <Label className="text-warm-text-secondary text-xs">
-                Self-Improvement
-                <InfoTooltip text="When enabled, the agent can propose improvements to its own instructions based on interactions. Autonomous = applies changes automatically. Approval Required = changes need manual review first." />
-              </Label>
-              <Select
-                value={configDraft.selfEvolutionMode}
-                onValueChange={(v) => updateConfig({ selfEvolutionMode: v })}
-              >
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="autonomous">Autonomous</SelectItem>
-                  <SelectItem value="approve-first">Approval Required</SelectItem>
-                  <SelectItem value="off">Disabled</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -631,25 +598,31 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
+                    <TableHead>Credentials</TableHead>
                     <TableHead className="w-10"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {currentTools.map((tool) => (
-                    <TableRow key={tool}>
-                      <TableCell className="font-medium">{getToolDisplayName(tool, availableTools)}</TableCell>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-red-500"
-                          onClick={() => handleRemoveTool(tool)}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {currentTools.map((tool) => {
+                    const isIntegration = tool.includes('-') && !['sub-agent'].includes(tool);
+                    return (
+                      <TableRow key={tool}>
+                        <TableCell className="font-medium">{getToolDisplayName(tool, availableTools)}</TableCell>
+                        <TableCell>
+                          {isIntegration ? (
+                            <Badge variant="secondary" className="text-xs">Team</Badge>
+                          ) : (
+                            <span className="text-xs text-warm-text-secondary">&mdash;</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => handleRemoveTool(tool)}>
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             </div>
@@ -843,11 +816,12 @@ function RunsTab({ agentId }: { agentId: string }) {
 
 // ---- Memory Tab ----
 
-function MemoryTab({ agentId }: { agentId: string }) {
+function MemoryTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
   const { data: memories, isLoading } = useAgentMemories(agentId);
   const addMemory = useAddMemory();
   const deleteMemory = useDeleteMemory();
   const clearMemories = useClearMemories();
+  const updateAgent = useUpdateAgent();
   const [showAdd, setShowAdd] = useState(false);
   const [newFact, setNewFact] = useState('');
   const [newCategory, setNewCategory] = useState('general');
@@ -878,6 +852,57 @@ function MemoryTab({ agentId }: { agentId: string }) {
 
   return (
     <div className="space-y-4">
+      {/* Memory & Self-Improvement Settings */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+        <Card>
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <h3 className="font-semibold text-sm">Memory</h3>
+                <p className="text-xs text-warm-text-secondary mt-1">
+                  The agent remembers facts, preferences, and context from past conversations to give better responses over time.
+                </p>
+              </div>
+              <Switch
+                checked={agent.memoryEnabled}
+                onCheckedChange={(v) => {
+                  updateAgent.mutate(
+                    { id: agentId, memoryEnabled: v },
+                    { onSuccess: () => toast({ title: v ? 'Memory enabled' : 'Memory disabled', variant: 'success' }) },
+                  );
+                }}
+              />
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-5">
+            <div>
+              <h3 className="font-semibold text-sm">Self-Improvement</h3>
+              <p className="text-xs text-warm-text-secondary mt-1 mb-2">
+                The agent can suggest changes to its own instructions based on what it learns. This is different from Memory — Memory stores facts, Self-Improvement refines how the agent behaves.
+              </p>
+              <Select
+                value={agent.selfEvolutionMode ?? 'off'}
+                onValueChange={(v) => {
+                  updateAgent.mutate(
+                    { id: agentId, selfEvolutionMode: v },
+                    { onSuccess: () => toast({ title: 'Self-improvement updated', variant: 'success' }) },
+                  );
+                }}
+              >
+                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="autonomous">Automatic — applies improvements on its own</SelectItem>
+                  <SelectItem value="approve-first">Review First — you approve changes before they apply</SelectItem>
+                  <SelectItem value="off">Disabled</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
       <div className="flex justify-end gap-2">
         <Button variant="outline" size="sm" onClick={() => setShowAdd(true)}>
           <Plus className="mr-2 h-4 w-4" />
@@ -986,6 +1011,7 @@ function TriggersTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
   const updateTrigger = useUpdateTrigger();
   const deleteTrigger = useDeleteTrigger();
   const addTrigger = useAddAgentTrigger();
+  const updateAgent = useUpdateAgent();
   const [showAddTrigger, setShowAddTrigger] = useState(false);
   const [newTriggerType, setNewTriggerType] = useState('schedule');
 
@@ -1090,36 +1116,53 @@ function TriggersTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
   return (
     <div className="space-y-4">
       {/* Slack Activation */}
-      <Card>
+      <Card className="mb-6">
         <CardHeader>
           <CardTitle className="text-base">Slack Activation</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-warm-text-secondary mb-3">
-            How this agent responds to messages in Slack channels.
+            How this agent responds to messages in its Slack channels.
           </p>
-          <Badge variant={agent.mentionsOnly ? 'secondary' : agent.respondToAllMessages ? 'success' : 'default'}>
-            {agent.mentionsOnly ? 'Only when @mentioned' : agent.respondToAllMessages ? 'Every message' : 'Relevant messages only'}
-          </Badge>
-          <p className="text-xs text-warm-text-secondary mt-2">
-            {agent.mentionsOnly
-              ? 'The agent only responds when someone @mentions it directly.'
-              : agent.respondToAllMessages
-                ? 'The agent reads and responds to every message in its channels.'
-                : 'The agent automatically decides which messages are relevant and responds to those, plus any @mentions.'}
-          </p>
+          <Select
+            value={agent.mentionsOnly ? 'mentions' : agent.respondToAllMessages ? 'all' : 'relevant'}
+            onValueChange={(v) => {
+              const update: Record<string, unknown> = { id: agentId };
+              if (v === 'mentions') {
+                update.mentionsOnly = true;
+                update.respondToAllMessages = false;
+              } else if (v === 'all') {
+                update.mentionsOnly = false;
+                update.respondToAllMessages = true;
+              } else {
+                update.mentionsOnly = false;
+                update.respondToAllMessages = false;
+              }
+              updateAgent.mutate(update as any, {
+                onSuccess: () => toast({ title: 'Slack activation updated', variant: 'success' }),
+              });
+            }}
+          >
+            <SelectTrigger className="max-w-md"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="mentions">Only when @mentioned — responds only when someone tags the agent directly</SelectItem>
+              <SelectItem value="relevant">Relevant messages — automatically decides which messages need a response</SelectItem>
+              <SelectItem value="all">Every message — responds to all messages in its channels</SelectItem>
+            </SelectContent>
+          </Select>
         </CardContent>
       </Card>
 
-      {/* Triggers */}
-      <div className="flex justify-end">
+      {/* Scheduled Triggers */}
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-base font-semibold">Scheduled Triggers</h3>
         <Button variant="outline" size="sm" onClick={openAddDialog}>
           <Plus className="mr-2 h-4 w-4" />
           Add Trigger
         </Button>
       </div>
 
-      <div className="rounded-card border border-warm-border bg-white overflow-x-auto">
+      <div className="rounded-card border border-warm-border bg-white overflow-x-auto mb-6">
         <Table>
           <TableHeader>
             <TableRow>
@@ -1131,7 +1174,7 @@ function TriggersTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
             </TableRow>
           </TableHeader>
           <TableBody>
-            {(triggers ?? []).map((trigger) => (
+            {(triggers ?? []).filter((t) => t.type === 'schedule').map((trigger) => (
               <TableRow key={trigger.id}>
                 <TableCell>
                   <div className="flex items-center gap-2">
@@ -1175,16 +1218,82 @@ function TriggersTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
                 </TableCell>
               </TableRow>
             ))}
-            {(triggers ?? []).length === 0 && (
+            {(triggers ?? []).filter((t) => t.type === 'schedule').length === 0 && (
               <TableRow>
                 <TableCell colSpan={5} className="text-center text-warm-text-secondary">
-                  No triggers configured
+                  No scheduled triggers
                 </TableCell>
               </TableRow>
             )}
           </TableBody>
         </Table>
       </div>
+
+      {/* Other Triggers */}
+      {(triggers ?? []).filter((t) => t.type !== 'schedule').length > 0 && (
+        <>
+          <h3 className="text-base font-semibold mb-4">Other Triggers</h3>
+          <div className="rounded-card border border-warm-border bg-white overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Type</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Last Fired</TableHead>
+                  <TableHead className="w-24"></TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(triggers ?? []).filter((t) => t.type !== 'schedule').map((trigger) => (
+                  <TableRow key={trigger.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        {getTriggerIcon(trigger.type)}
+                        <Badge variant="default">{getTriggerTypeName(trigger.type)}</Badge>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-sm text-warm-text-secondary max-w-[300px] truncate">
+                      {getTriggerDescription(trigger)}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={trigger.enabled ? 'success' : 'secondary'}>
+                        {trigger.enabled ? 'Active' : 'Paused'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-warm-text-secondary text-sm">
+                      {trigger.lastTriggeredAt
+                        ? formatDistanceToNow(new Date(trigger.lastTriggeredAt), { addSuffix: true })
+                        : 'Never'}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8"
+                          onClick={() => handleToggle(trigger.id, trigger.enabled)}
+                          title={trigger.enabled ? 'Pause' : 'Resume'}
+                        >
+                          {trigger.enabled ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-red-600"
+                          onClick={() => handleDeleteTrigger(trigger.id)}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </>
+      )}
 
       {/* Add Trigger Dialog */}
       <Dialog open={showAddTrigger} onOpenChange={setShowAddTrigger}>
@@ -1379,7 +1488,7 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
           <div>
             <CardTitle className="text-base">Roles</CardTitle>
             <p className="text-xs text-warm-text-secondary mt-1">
-              Roles override the default access. Owner = full control. Member = can use the agent. Viewer = can see but not interact.
+              Individual roles override the default access level. Owner = full control. Member = agent can perform all actions. Viewer = can interact but agent actions are limited to read-only.
             </p>
           </div>
           <Button variant="ghost" size="sm" onClick={() => setShowAddUser(true)}>
