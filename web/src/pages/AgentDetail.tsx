@@ -354,7 +354,7 @@ function MarkdownEditor({ value, onChange, onSave, onCancel, saving }: {
     }
   };
 
-  const insertMention = (userId: string, displayName: string) => {
+  const insertMention = (userId: string, _displayName: string) => {
     const ta = textareaRef.current;
     if (!ta || mentionStart < 0) return;
     const cursor = ta.selectionStart;
@@ -1895,13 +1895,13 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                           setRole.mutate({ agentId, userId: role.userId, role: newRole })
                         }
                       >
-                        <SelectTrigger className="w-[200px]">
+                        <SelectTrigger className="w-[130px]">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="owner">Full Control — can edit agent settings</SelectItem>
-                          <SelectItem value="member">Full Access — agent performs all actions</SelectItem>
-                          <SelectItem value="viewer">Limited Access — agent read-only</SelectItem>
+                          <SelectItem value="owner">Full Control</SelectItem>
+                          <SelectItem value="member">Full Access</SelectItem>
+                          <SelectItem value="viewer">Limited</SelectItem>
                         </SelectContent>
                       </Select>
                     </TableCell>
