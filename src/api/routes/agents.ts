@@ -138,7 +138,17 @@ router.get('/:id', async (req: Request, res: Response) => {
     // Get current user's role for this agent
     const userAgentRole = await getAgentRole(workspaceId, id, userId);
 
-    res.json({ ...(agent as any), channel_names: channelNames, user_role: userAgentRole });
+    // Resolve Slack user mentions in system_prompt (best-effort)
+    let mentionedUsers: Record<string, string> = {};
+    try {
+      const prompt = (agent as any).system_prompt || '';
+      const mentionIds = [...prompt.matchAll(/<@([A-Z0-9]+)>/g)].map((m: RegExpMatchArray) => m[1]);
+      if (mentionIds.length > 0) {
+        mentionedUsers = await resolveUserNames([...new Set(mentionIds)]);
+      }
+    } catch { /* ignore */ }
+
+    res.json({ ...(agent as any), channel_names: channelNames, user_role: userAgentRole, mentioned_users: mentionedUsers });
   } catch (err: any) {
     logger.error('Get agent error', { error: err.message });
     res.status(500).json({ error: 'Failed to get agent' });

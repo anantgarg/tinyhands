@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link as LinkIcon, Trash2, ExternalLink, AlertCircle, Info, Plus, Key } from 'lucide-react';
+import { Link as LinkIcon, Trash2, ExternalLink, AlertCircle, Info, Plus, Key, Settings2, Folder } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
@@ -18,7 +18,9 @@ import {
   useCreatePersonalConnection,
   useDeleteConnection,
   useOAuthIntegrations,
+  useUpdateConnectionSettings,
 } from '@/api/connections';
+import { DriveFolderPicker } from '@/components/DriveFolderPicker';
 import { useIntegrations } from '@/api/tools';
 import { useAuthStore } from '@/store/auth';
 import { toast } from '@/components/ui/use-toast';
@@ -45,10 +47,12 @@ function ConnectionsContent() {
   const { data: allIntegrations } = useIntegrations();
   const deleteConnection = useDeleteConnection();
   const createPersonalConn = useCreatePersonalConnection();
+  const updateSettings = useUpdateConnectionSettings();
   const [tab, setTab] = useState('personal');
   const [showAddConnection, setShowAddConnection] = useState(false);
   const [apiKeyDialog, setApiKeyDialog] = useState<{ id: string; name: string; configKeys: { key: string; label: string; placeholder: string; secret: boolean }[] } | null>(null);
   const [apiKeyValues, setApiKeyValues] = useState<Record<string, string>>({});
+  const [folderDialog, setFolderDialog] = useState<{ connId: string; name: string; folderId: string; folderName: string } | null>(null);
 
   const handleDelete = (id: string) => {
     if (confirm('Delete this connection?')) {
@@ -97,31 +101,59 @@ function ConnectionsContent() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {connections.map((conn) => (
-              <TableRow key={conn.id}>
-                <TableCell className="font-medium">{conn.integrationName ?? '\u2014'}</TableCell>
-                <TableCell>
-                  <Badge variant={conn.status === 'active' ? 'success' : conn.status === 'expired' ? 'warning' : 'danger'}>
-                    {titleCaseStatus(conn.status)}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-warm-text-secondary text-xs">
-                  {conn.createdAt
-                    ? formatDistanceToNow(new Date(conn.createdAt), { addSuffix: true })
-                    : '\u2014'}
-                </TableCell>
-                <TableCell>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-red-500"
-                    onClick={() => handleDelete(conn.id)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </TableCell>
-              </TableRow>
-            ))}
+            {connections.map((conn) => {
+              const isGoogleDrive = conn.integrationId?.includes('google') || conn.integrationId?.includes('gmail');
+              return (
+                <TableRow key={conn.id}>
+                  <TableCell>
+                    <p className="font-medium">{conn.integrationName ?? '\u2014'}</p>
+                    {conn.rootFolderName && (
+                      <p className="text-xs text-warm-text-secondary flex items-center gap-1 mt-0.5">
+                        <Folder className="h-3 w-3" /> {conn.rootFolderName}
+                      </p>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant={conn.status === 'active' ? 'success' : conn.status === 'expired' ? 'warning' : 'danger'}>
+                      {titleCaseStatus(conn.status)}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="text-warm-text-secondary text-xs">
+                    {conn.createdAt
+                      ? formatDistanceToNow(new Date(conn.createdAt), { addSuffix: true })
+                      : '\u2014'}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex gap-1">
+                      {isGoogleDrive && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 text-xs"
+                          onClick={() => setFolderDialog({
+                            connId: conn.id,
+                            name: conn.integrationName ?? 'Google Drive',
+                            folderId: conn.rootFolderId ?? '',
+                            folderName: conn.rootFolderName ?? '',
+                          })}
+                        >
+                          <Settings2 className="mr-1 h-3.5 w-3.5" />
+                          {conn.rootFolderId ? 'Change Folder' : 'Set Folder'}
+                        </Button>
+                      )}
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-red-500"
+                        onClick={() => handleDelete(conn.id)}
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
           </TableBody>
         </Table>
       </div>
@@ -282,6 +314,49 @@ function ConnectionsContent() {
               </>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Folder Restriction Dialog */}
+      <Dialog open={!!folderDialog} onOpenChange={() => setFolderDialog(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Restrict to Folder</DialogTitle>
+            <DialogDescription>
+              Choose a folder to restrict {folderDialog?.name} access. By default, all folders are accessible.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <Label className="text-sm mb-2 block">Root Folder</Label>
+            <DriveFolderPicker
+              value={folderDialog?.folderId ?? ''}
+              valueName={folderDialog?.folderName ?? ''}
+              onChange={(id, name) => setFolderDialog((prev) => prev ? { ...prev, folderId: id, folderName: name } : null)}
+              placeholder="All folders (no restriction)"
+              helpText="Leave empty for full access. Pick a folder to restrict the agent to only that folder and its contents."
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFolderDialog(null)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (!folderDialog) return;
+                updateSettings.mutate(
+                  { id: folderDialog.connId, rootFolderId: folderDialog.folderId, rootFolderName: folderDialog.folderName },
+                  {
+                    onSuccess: () => {
+                      toast({ title: folderDialog.folderId ? 'Folder restriction saved' : 'Folder restriction removed', variant: 'success' });
+                      setFolderDialog(null);
+                    },
+                    onError: (err) => toast({ title: 'Failed', description: err.message, variant: 'error' }),
+                  },
+                );
+              }}
+              disabled={updateSettings.isPending}
+            >
+              Save
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

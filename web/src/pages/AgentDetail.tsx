@@ -322,9 +322,29 @@ export function AgentDetail() {
 
 // ---- Markdown Editor ----
 
-function simpleMarkdownToHtml(md: string): string {
+const SLACK_EMOJI_MAP: Record<string, string> = {
+  bell: '🔔', busts_in_silhouette: '👥', chart_with_upwards_trend: '📈', moneybag: '💰',
+  link: '🔗', star: '⭐', warning: '⚠️', white_check_mark: '✅', x: '❌', rocket: '🚀',
+  bulb: '💡', memo: '📝', email: '📧', phone: '📞', calendar: '📅', file_folder: '📁',
+  page_facing_up: '📄', bar_chart: '📊', speech_balloon: '💬', thumbsup: '👍', thumbsdown: '👎',
+  fire: '🔥', tada: '🎉', eyes: '👀', wave: '👋', point_right: '👉', heavy_check_mark: '✔️',
+  exclamation: '❗', question: '❓', gear: '⚙️', lock: '🔒', key: '🔑', globe_with_meridians: '🌐',
+  mag: '🔍', pencil: '✏️', hammer: '🔨', wrench: '🔧', shield: '🛡️', zap: '⚡',
+  clock: '🕐', hourglass: '⏳', chart_with_downwards_trend: '📉', money_with_wings: '💸',
+  credit_card: '💳', inbox_tray: '📥', outbox_tray: '📤', pushpin: '📌', bookmark: '🔖',
+  label: '🏷️', trophy: '🏆', target: '🎯', checkered_flag: '🏁', triangular_flag_on_post: '🚩',
+};
+
+function simpleMarkdownToHtml(md: string, mentionNames?: Record<string, string>): string {
   return md
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    // Slack mentions: <@U123ABC> → @DisplayName badge
+    .replace(/&lt;@([A-Z0-9]+)&gt;/g, (_match, userId) => {
+      const name = mentionNames?.[userId] || userId;
+      return `<span class="inline-flex items-center px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-xs font-medium">@${name}</span>`;
+    })
+    // Slack emoji codes: :bell: → 🔔
+    .replace(/:([a-z0-9_+-]+):/g, (_match, code) => SLACK_EMOJI_MAP[code] || `:${code}:`)
     .replace(/^### (.+)$/gm, '<h3 class="text-base font-semibold mt-3 mb-1">$1</h3>')
     .replace(/^## (.+)$/gm, '<h2 class="text-lg font-semibold mt-3 mb-1">$1</h2>')
     .replace(/^# (.+)$/gm, '<h1 class="text-xl font-bold mt-3 mb-1">$1</h1>')
@@ -416,7 +436,7 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
           ) : (
             <div
               className="max-h-[400px] overflow-y-auto text-sm bg-warm-bg rounded-lg p-4 prose prose-sm"
-              dangerouslySetInnerHTML={{ __html: agent.systemPrompt ? simpleMarkdownToHtml(agent.systemPrompt) : 'No instructions set.' }}
+              dangerouslySetInnerHTML={{ __html: agent.systemPrompt ? simpleMarkdownToHtml(agent.systemPrompt, agent.mentionedUsers) : 'No instructions set.' }}
             />
           )}
         </CardContent>

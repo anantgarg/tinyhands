@@ -11,6 +11,8 @@ interface Connection {
   userDisplayName: string | null;
   status: 'active' | 'expired' | 'revoked';
   createdAt: string;
+  rootFolderId?: string | null;
+  rootFolderName?: string | null;
 }
 
 interface OAuthIntegration {
@@ -68,6 +70,15 @@ export function useDeleteConnection() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.del(`/connections/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['connections'] }),
+  });
+}
+
+export function useUpdateConnectionSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, rootFolderId, rootFolderName }: { id: string; rootFolderId: string; rootFolderName: string }) =>
+      api.patch(`/connections/${id}/settings`, { rootFolderId, rootFolderName }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['connections'] }),
   });
 }

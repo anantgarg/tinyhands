@@ -38,6 +38,7 @@ export interface Agent {
   createdAt: string;
   updatedAt: string;
   userRole?: string;
+  mentionedUsers?: Record<string, string>;
 }
 
 interface CreateAgentPayload {
