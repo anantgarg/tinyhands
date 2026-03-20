@@ -111,6 +111,11 @@ function toast({ title, description, variant = 'default' }: ToastInput) {
     toast: { id, title, description, variant, open: true },
   });
 
+  // Auto-dismiss after delay
+  setTimeout(() => {
+    dispatch({ type: 'DISMISS_TOAST', toastId: id });
+  }, TOAST_REMOVE_DELAY);
+
   return {
     id,
     dismiss: () => dispatch({ type: 'DISMISS_TOAST', toastId: id }),
