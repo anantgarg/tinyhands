@@ -86,12 +86,15 @@ export function FloatingChat() {
     (a) => a.id === (selectedAgentId || pageAgentId),
   );
 
-  // Auto-set agent context when navigating to an agent page
+  // Auto-set agent context when navigating to an agent page — start fresh convo
   useEffect(() => {
     if (pageAgentId && pageAgentId !== selectedAgentId) {
       setSelectedAgentId(pageAgentId);
+      if (messages.length > 0) {
+        newConversation();
+      }
     }
-  }, [pageAgentId, selectedAgentId, setSelectedAgentId]);
+  }, [pageAgentId, selectedAgentId, setSelectedAgentId, messages.length, newConversation]);
 
   // Keyboard shortcut: Cmd+K / Ctrl+K
   useEffect(() => {
@@ -318,6 +321,7 @@ export function FloatingChat() {
                 <button
                   onClick={() => {
                     setSelectedAgentId(null);
+                    newConversation();
                     setAgentDropdownOpen(false);
                   }}
                   className={cn(
@@ -333,6 +337,9 @@ export function FloatingChat() {
                   <button
                     key={agent.id}
                     onClick={() => {
+                      if (selectedAgentId !== agent.id) {
+                        newConversation();
+                      }
                       setSelectedAgentId(agent.id);
                       setAgentDropdownOpen(false);
                     }}
@@ -392,12 +399,33 @@ export function FloatingChat() {
         )}
 
         {messages.length === 0 && !showHistory && (
-          <div className="flex items-center justify-center py-8">
+          <div className="flex flex-col items-center justify-center py-6 gap-3">
             <p className="text-xs text-warm-text-secondary/60">
               {currentAgent
                 ? `Ask questions or describe changes for "${currentAgent.name}"`
                 : 'Select an agent to update, or ask a general question'}
             </p>
+            {currentAgent && (
+              <div className="flex flex-wrap gap-1.5 justify-center max-w-[280px]">
+                {[
+                  'Change the model',
+                  'Update instructions',
+                  'Add a tool',
+                  'Respond to all messages',
+                ].map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    onClick={() => {
+                      setInputValue(suggestion);
+                      setTimeout(() => inputRef.current?.focus(), 0);
+                    }}
+                    className="rounded-full border border-[#E0DED9] px-2.5 py-1 text-[11px] text-warm-text-secondary hover:bg-warm-bg hover:text-warm-text transition-colors"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
         {messages.map((msg) => (

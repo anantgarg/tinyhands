@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Pause, Play, MoreVertical, Trash2, Plus, X,
   Info, Pencil, Check, Loader2, RotateCcw, Eye,
   Webhook, Clock, MessageSquare, Zap,
+  Bold, Italic, Heading, List, ListOrdered, Link2, Search,
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -54,7 +55,8 @@ import type { Agent as AgentData, AgentVersion } from '@/api/agents';
 import { useAvailableTools } from '@/api/tools';
 import { useUpdateTrigger, useDeleteTrigger } from '@/api/triggers';
 import { useAgentToolConnections, useSetAgentToolConnection } from '@/api/connections';
-import { useSlackChannels } from '@/api/slack';
+import { useSlackChannels, useSlackUsers } from '@/api/slack';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { renderEmoji } from '@/lib/emoji';
 import { toast } from '@/components/ui/use-toast';
 
@@ -278,6 +280,124 @@ export function AgentDetail() {
   );
 }
 
+// ---- Markdown Editor ----
+
+function simpleMarkdownToHtml(md: string): string {
+  return md
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/^### (.+)$/gm, '<h3 class="text-base font-semibold mt-3 mb-1">$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2 class="text-lg font-semibold mt-3 mb-1">$1</h2>')
+    .replace(/^# (.+)$/gm, '<h1 class="text-xl font-bold mt-3 mb-1">$1</h1>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`(.+?)`/g, '<code class="bg-warm-bg px-1 rounded text-xs">$1</code>')
+    .replace(/^\- (.+)$/gm, '<li class="ml-4 list-disc">$1</li>')
+    .replace(/^\d+\. (.+)$/gm, '<li class="ml-4 list-decimal">$1</li>')
+    .replace(/\[(.+?)\]\((.+?)\)/g, '<a href="$2" class="text-brand underline">$1</a>')
+    .replace(/\n/g, '<br/>');
+}
+
+function insertMarkdown(textarea: HTMLTextAreaElement, before: string, after: string = '') {
+  const start = textarea.selectionStart;
+  const end = textarea.selectionEnd;
+  const text = textarea.value;
+  const selected = text.substring(start, end);
+  const replacement = `${before}${selected || 'text'}${after}`;
+  const newValue = text.substring(0, start) + replacement + text.substring(end);
+  return { newValue, cursorPos: start + before.length + (selected || 'text').length };
+}
+
+function MarkdownEditor({ value, onChange, onSave, onCancel, saving }: {
+  value: string;
+  onChange: (v: string) => void;
+  onSave: () => void;
+  onCancel: () => void;
+  saving: boolean;
+}) {
+  const [previewMode, setPreviewMode] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const handleToolbar = (before: string, after: string = '') => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    const { newValue, cursorPos } = insertMarkdown(ta, before, after);
+    onChange(newValue);
+    setTimeout(() => {
+      ta.focus();
+      ta.setSelectionRange(cursorPos, cursorPos);
+    }, 0);
+  };
+
+  return (
+    <div className="space-y-2">
+      {/* Toolbar + tabs */}
+      <div className="flex items-center justify-between border-b border-warm-border pb-2">
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setPreviewMode(false)}
+            className={`px-3 py-1 text-xs rounded-md transition-colors ${!previewMode ? 'bg-warm-bg font-medium text-warm-text' : 'text-warm-text-secondary hover:text-warm-text'}`}
+          >
+            Write
+          </button>
+          <button
+            onClick={() => setPreviewMode(true)}
+            className={`px-3 py-1 text-xs rounded-md transition-colors ${previewMode ? 'bg-warm-bg font-medium text-warm-text' : 'text-warm-text-secondary hover:text-warm-text'}`}
+          >
+            Preview
+          </button>
+          {!previewMode && (
+            <div className="flex items-center gap-0.5 ml-3 border-l border-warm-border pl-3">
+              <button onClick={() => handleToolbar('**', '**')} className="p-1 rounded hover:bg-warm-bg text-warm-text-secondary" title="Bold">
+                <Bold className="h-3.5 w-3.5" />
+              </button>
+              <button onClick={() => handleToolbar('*', '*')} className="p-1 rounded hover:bg-warm-bg text-warm-text-secondary" title="Italic">
+                <Italic className="h-3.5 w-3.5" />
+              </button>
+              <button onClick={() => handleToolbar('## ')} className="p-1 rounded hover:bg-warm-bg text-warm-text-secondary" title="Heading">
+                <Heading className="h-3.5 w-3.5" />
+              </button>
+              <button onClick={() => handleToolbar('- ')} className="p-1 rounded hover:bg-warm-bg text-warm-text-secondary" title="Bullet List">
+                <List className="h-3.5 w-3.5" />
+              </button>
+              <button onClick={() => handleToolbar('1. ')} className="p-1 rounded hover:bg-warm-bg text-warm-text-secondary" title="Numbered List">
+                <ListOrdered className="h-3.5 w-3.5" />
+              </button>
+              <button onClick={() => handleToolbar('[', '](url)')} className="p-1 rounded hover:bg-warm-bg text-warm-text-secondary" title="Link">
+                <Link2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Editor / Preview */}
+      {previewMode ? (
+        <div
+          className="min-h-[200px] max-h-[400px] overflow-y-auto text-sm bg-warm-bg rounded-lg p-4 prose prose-sm"
+          dangerouslySetInnerHTML={{ __html: simpleMarkdownToHtml(value) }}
+        />
+      ) : (
+        <Textarea
+          ref={textareaRef}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          rows={16}
+          className="text-sm w-full min-h-[200px]"
+          placeholder="Write your agent instructions here. You can use **bold**, *italic*, ## headings, and - bullet lists."
+        />
+      )}
+
+      {/* Actions */}
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" size="sm" onClick={onCancel}>Cancel</Button>
+        <Button size="sm" onClick={onSave} disabled={saving}>
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Check className="mr-1.5 h-3.5 w-3.5" /> Save</>}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 // ---- Overview Tab ----
 
 function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
@@ -340,20 +460,13 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
         </CardHeader>
         <CardContent>
           {editingPrompt ? (
-            <div className="space-y-3">
-              <Textarea
-                value={promptDraft}
-                onChange={(e) => setPromptDraft(e.target.value)}
-                rows={16}
-                className="font-mono text-sm w-full min-h-[200px]"
-              />
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" size="sm" onClick={() => setEditingPrompt(false)}>Cancel</Button>
-                <Button size="sm" onClick={savePrompt} disabled={updateAgent.isPending}>
-                  {updateAgent.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Check className="mr-1.5 h-3.5 w-3.5" /> Save</>}
-                </Button>
-              </div>
-            </div>
+            <MarkdownEditor
+              value={promptDraft}
+              onChange={setPromptDraft}
+              onSave={savePrompt}
+              onCancel={() => setEditingPrompt(false)}
+              saving={updateAgent.isPending}
+            />
           ) : (
             <div className="max-h-[400px] overflow-y-auto whitespace-pre-wrap text-sm bg-warm-bg rounded-lg p-4">
               {agent.systemPrompt || 'No instructions set.'}
@@ -1599,6 +1712,8 @@ function TriggersTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
 function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
   const { data: roles, isLoading: rolesLoading } = useAgentRoles(agentId);
   const { data: upgradeRequests } = useUpgradeRequests(agentId);
+  const { data: slackUsersData } = useSlackUsers();
+  const slackUsers = slackUsersData?.users ?? [];
   const setRole = useSetAgentRole();
   const removeRole = useRemoveAgentRole();
   const updateAccess = useUpdateAgentAccess();
@@ -1609,18 +1724,28 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
 
   // Add user dialog
   const [showAddUser, setShowAddUser] = useState(false);
-  const [newUserId, setNewUserId] = useState('');
+  const [userSearch, setUserSearch] = useState('');
+  const [selectedUser, setSelectedUser] = useState<{ id: string; name: string; avatarUrl: string } | null>(null);
   const [newUserRole, setNewUserRole] = useState('member');
 
+  const filteredUsers = userSearch.length > 0
+    ? slackUsers.filter(u => {
+        const search = userSearch.toLowerCase();
+        return (u.realName?.toLowerCase().includes(search) || u.displayName?.toLowerCase().includes(search) || u.name?.toLowerCase().includes(search))
+          && !(roles ?? []).some((r) => r.userId === u.id);
+      }).slice(0, 8)
+    : [];
+
   const handleAddUser = () => {
-    if (!newUserId.trim()) return;
+    if (!selectedUser) return;
     setRole.mutate(
-      { agentId, userId: newUserId, role: newUserRole },
+      { agentId, userId: selectedUser.id, role: newUserRole },
       {
         onSuccess: () => {
           toast({ title: 'User role added', variant: 'success' });
           setShowAddUser(false);
-          setNewUserId('');
+          setSelectedUser(null);
+          setUserSearch('');
         },
       },
     );
@@ -1751,18 +1876,61 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
       <Dialog open={showAddUser} onOpenChange={setShowAddUser}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add User Role</DialogTitle>
-            <DialogDescription>Assign a role to a user for this agent.</DialogDescription>
+            <DialogTitle>Add User</DialogTitle>
+            <DialogDescription>Search for a team member and assign a role for this agent.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label>User ID</Label>
-              <Input
-                value={newUserId}
-                onChange={(e) => setNewUserId(e.target.value)}
-                placeholder="Enter Slack user ID..."
-                className="mt-1"
-              />
+              <Label>User</Label>
+              <div className="relative mt-1">
+                <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-warm-text-secondary" />
+                <Input
+                  value={userSearch}
+                  onChange={(e) => { setUserSearch(e.target.value); setSelectedUser(null); }}
+                  placeholder="Type a name..."
+                  className="pl-9"
+                />
+              </div>
+              {filteredUsers.length > 0 && !selectedUser && (
+                <div className="mt-1 rounded-lg border border-warm-border bg-white shadow-sm max-h-[200px] overflow-y-auto">
+                  {filteredUsers.map((u) => (
+                    <button
+                      key={u.id}
+                      onClick={() => {
+                        setSelectedUser({ id: u.id, name: u.realName || u.displayName || u.name, avatarUrl: u.avatarUrl });
+                        setUserSearch(u.realName || u.displayName || u.name);
+                      }}
+                      className="w-full flex items-center gap-3 px-3 py-2 hover:bg-warm-bg transition-colors text-left"
+                    >
+                      <Avatar className="h-7 w-7">
+                        <AvatarImage src={u.avatarUrl} />
+                        <AvatarFallback>{(u.realName || u.displayName || '?').charAt(0).toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      <div>
+                        <p className="text-sm font-medium">{u.realName || u.displayName || u.name}</p>
+                        {u.displayName && u.realName && u.displayName !== u.realName && (
+                          <p className="text-xs text-warm-text-secondary">@{u.displayName}</p>
+                        )}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+              {selectedUser && (
+                <div className="mt-2 flex items-center gap-2 rounded-lg border border-brand/30 bg-brand-light/10 p-2">
+                  <Avatar className="h-7 w-7">
+                    <AvatarImage src={selectedUser.avatarUrl} />
+                    <AvatarFallback>{selectedUser.name.charAt(0).toUpperCase()}</AvatarFallback>
+                  </Avatar>
+                  <span className="text-sm font-medium flex-1">{selectedUser.name}</span>
+                  <button
+                    onClick={() => { setSelectedUser(null); setUserSearch(''); }}
+                    className="text-warm-text-secondary hover:text-warm-text text-lg leading-none"
+                  >
+                    &times;
+                  </button>
+                </div>
+              )}
             </div>
             <div>
               <Label>Role</Label>
@@ -1780,7 +1948,7 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAddUser(false)}>Cancel</Button>
-            <Button onClick={handleAddUser} disabled={setRole.isPending}>Add</Button>
+            <Button onClick={handleAddUser} disabled={!selectedUser || setRole.isPending}>Add</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
