@@ -1904,9 +1904,9 @@ describe('Execution Module – Permission Context', () => {
     expect(createCall.envVars.SYSTEM_PROMPT).toContain('access level: owner');
   });
 
-  it('should include write_policy=deny note when agent has deny policy', async () => {
+  it('should include write policy in permission context', async () => {
     mockGetAgentRole.mockResolvedValue('viewer');
-    mockGetAgent.mockResolvedValue({ ...makeAgent(), write_policy: 'deny' });
+    mockGetAgent.mockResolvedValue({ ...makeAgent(), write_policy: 'auto' });
     const container = { id: 'container-1' };
     mockCreateAgentContainer.mockResolvedValue(container);
     mockFollowContainerOutput.mockResolvedValue({
@@ -1918,7 +1918,7 @@ describe('Execution Module – Permission Context', () => {
     await executeAgentRun(job);
 
     const createCall = mockCreateAgentContainer.mock.calls[0][0];
-    expect(createCall.envVars.SYSTEM_PROMPT).toContain('Write operations are disabled');
+    expect(createCall.envVars.SYSTEM_PROMPT).toContain('Write policy: auto');
   });
 
   it('should log audit event after run completes', async () => {

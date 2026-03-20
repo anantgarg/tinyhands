@@ -776,7 +776,7 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
       {/* Tools list */}
       <Card>
         <CardHeader className="flex-row items-center justify-between">
-          <CardTitle className="text-base">Connected Tools ({currentTools.length})</CardTitle>
+          <CardTitle className="text-base">Connected Tools</CardTitle>
           <Button variant="ghost" size="sm" onClick={() => { setShowAddTool(true); setSelectedToolsToAdd(new Set()); }}>
             <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Tool
           </Button>
@@ -790,49 +790,125 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Name</TableHead>
+                    <TableHead>Access</TableHead>
                     <TableHead>Credentials</TableHead>
                     <TableHead className="w-10"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {currentTools.map((tool) => {
-                    const isInteg = isIntegrationTool(tool);
-                    const currentMode = toolModeMap[tool] ?? 'team';
-                    return (
-                      <TableRow key={tool}>
-                        <TableCell className="font-medium">{getToolDisplayName(tool, availableTools)}</TableCell>
-                        <TableCell>
-                          {isInteg ? (
-                            <Select
-                              value={currentMode}
-                              onValueChange={(v) => {
-                                setToolConnection.mutate(
-                                  { agentId, toolName: tool, mode: v },
-                                  { onSuccess: () => toast({ title: 'Credentials updated', variant: 'success' }) },
-                                );
-                              }}
-                            >
-                              <SelectTrigger className="w-[160px] h-8 text-xs">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="team">Team credentials</SelectItem>
-                                <SelectItem value="personal">Requesting user's credentials</SelectItem>
-                                <SelectItem value="creator">Agent creator's credentials</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            <span className="text-xs text-warm-text-secondary">&mdash;</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => handleRemoveTool(tool)}>
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
+                  {(() => {
+                    // Group integration tools by base name (chargebee-read + chargebee-write → Chargebee)
+                    const grouped: { key: string; displayName: string; readTool: string | null; writeTool: string | null; isInteg: boolean }[] = [];
+                    const seen = new Set<string>();
+                    for (const tool of currentTools) {
+                      const readMatch = tool.match(/^(.+)-(read|search)$/);
+                      const writeMatch = tool.match(/^(.+)-write$/);
+                      const base = readMatch ? readMatch[1] : writeMatch ? writeMatch[1] : null;
+                      if (base && !seen.has(base)) {
+                        seen.add(base);
+                        const hasRead = currentTools.some(t => t === `${base}-read` || t === `${base}-search`);
+                        const hasWrite = currentTools.includes(`${base}-write`);
+                        grouped.push({
+                          key: base,
+                          displayName: base.charAt(0).toUpperCase() + base.slice(1).replace(/[-_]/g, ' '),
+                          readTool: hasRead ? (currentTools.find(t => t === `${base}-read` || t === `${base}-search`) ?? null) : null,
+                          writeTool: hasWrite ? `${base}-write` : null,
+                          isInteg: true,
+                        });
+                      } else if (!base && !seen.has(tool)) {
+                        seen.add(tool);
+                        grouped.push({ key: tool, displayName: getToolDisplayName(tool, availableTools), readTool: null, writeTool: null, isInteg: false });
+                      }
+                    }
+                    return grouped.map((group) => {
+                      const credTool = group.readTool || group.writeTool || group.key;
+                      const currentMode = toolModeMap[credTool] ?? 'team';
+                      return (
+                        <TableRow key={group.key}>
+                          <TableCell className="font-medium">{group.displayName}</TableCell>
+                          <TableCell>
+                            {group.isInteg ? (
+                              <div className="flex gap-1.5">
+                                <button
+                                  onClick={() => {
+                                    const readName = `${group.key}-read`;
+                                    const searchName = `${group.key}-search`;
+                                    if (group.readTool) {
+                                      handleRemoveTool(group.readTool);
+                                    } else {
+                                      const toolName = (availableTools ?? []).find(t => t.name === readName)?.name || (availableTools ?? []).find(t => t.name === searchName)?.name;
+                                      if (toolName) addAgentTool.mutate({ agentId, tool: toolName });
+                                    }
+                                  }}
+                                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                                    group.readTool
+                                      ? 'bg-blue-100 text-blue-700 hover:bg-blue-200'
+                                      : 'bg-warm-bg text-warm-text-secondary hover:bg-warm-bg/80'
+                                  }`}
+                                >
+                                  Can view data
+                                </button>
+                                {(availableTools ?? []).some(t => t.name === `${group.key}-write`) && (
+                                <button
+                                  onClick={() => {
+                                    const writeName = `${group.key}-write`;
+                                    if (group.writeTool) {
+                                      handleRemoveTool(group.writeTool);
+                                    } else {
+                                      addAgentTool.mutate({ agentId, tool: writeName });
+                                    }
+                                  }}
+                                  className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                                    group.writeTool
+                                      ? 'bg-amber-100 text-amber-700 hover:bg-amber-200'
+                                      : 'bg-warm-bg text-warm-text-secondary hover:bg-warm-bg/80'
+                                  }`}
+                                >
+                                  Can make changes
+                                </button>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="text-xs text-warm-text-secondary">&mdash;</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {group.isInteg ? (
+                              <Select
+                                value={currentMode}
+                                onValueChange={(v) => {
+                                  // Set mode for all tools in this group
+                                  if (group.readTool) setToolConnection.mutate({ agentId, toolName: group.readTool, mode: v });
+                                  if (group.writeTool) setToolConnection.mutate({ agentId, toolName: group.writeTool, mode: v });
+                                  toast({ title: 'Updated', variant: 'success' });
+                                }}
+                              >
+                                <SelectTrigger className="w-[160px] h-8 text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="team">Team credentials</SelectItem>
+                                  <SelectItem value="personal">Requesting user's</SelectItem>
+                                  <SelectItem value="creator">Agent creator's</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <span className="text-xs text-warm-text-secondary">&mdash;</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500" onClick={() => {
+                              if (group.readTool) handleRemoveTool(group.readTool);
+                              if (group.writeTool) handleRemoveTool(group.writeTool);
+                              if (!group.isInteg) handleRemoveTool(group.key);
+                            }}>
+                              <X className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    });
+                  })()}
                 </TableBody>
               </Table>
             </div>
@@ -899,56 +975,113 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
             {toolsNotAdded.length === 0 ? (
               <p className="text-sm text-warm-text-secondary text-center py-4">All available tools are already added</p>
             ) : (
-              Object.entries(groupedToolsNotAdded).map(([group, tools]) => (
-                <div key={group}>
-                  <p className="text-xs font-semibold text-warm-text-secondary uppercase tracking-wider mb-2">{group}</p>
-                  <div className="space-y-1">
-                    {tools.map((tool) => {
-                      const isSelected = selectedToolsToAdd.has(tool.name);
-                      const accessLevel = (tool as any).accessLevel;
-                      return (
-                        <label
-                          key={tool.name}
-                          className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
-                            isSelected ? 'border-brand bg-brand-light/20' : 'border-warm-border hover:bg-warm-bg'
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => {
-                              setSelectedToolsToAdd((prev) => {
-                                const next = new Set(prev);
-                                if (next.has(tool.name)) {
-                                  next.delete(tool.name);
-                                } else {
-                                  next.add(tool.name);
-                                }
-                                return next;
-                              });
-                            }}
-                            className="h-4 w-4 rounded border-warm-border text-brand focus:ring-brand"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p className="text-sm font-medium">{tool.displayName}</p>
-                              {accessLevel && (
-                                <Badge
-                                  variant={accessLevel === 'read-write' ? 'warning' : 'default'}
-                                  className="text-[10px] shrink-0"
-                                >
-                                  {formatAccessLevel(accessLevel)}
-                                </Badge>
-                              )}
-                            </div>
-                            <p className="text-xs text-warm-text-secondary line-clamp-1">{tool.description}</p>
-                          </div>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))
+              (() => {
+                // Group available tools: integration tools by base name, others individually
+                const integrationGroups: Record<string, { base: string; displayName: string; description: string; readTool?: string; writeTool?: string }> = {};
+                const coreTools: typeof toolsNotAdded = [];
+                for (const tool of toolsNotAdded) {
+                  if (tool.source === 'integration') {
+                    const readMatch = tool.name.match(/^(.+)-(read|search)$/);
+                    const writeMatch = tool.name.match(/^(.+)-write$/);
+                    const base = readMatch?.[1] || writeMatch?.[1];
+                    if (base) {
+                      if (!integrationGroups[base]) {
+                        integrationGroups[base] = {
+                          base,
+                          displayName: base.charAt(0).toUpperCase() + base.slice(1).replace(/[-_]/g, ' '),
+                          description: tool.description,
+                        };
+                      }
+                      if (readMatch) integrationGroups[base].readTool = tool.name;
+                      if (writeMatch) integrationGroups[base].writeTool = tool.name;
+                    } else {
+                      coreTools.push(tool);
+                    }
+                  } else {
+                    coreTools.push(tool);
+                  }
+                }
+                const integrations = Object.values(integrationGroups);
+                return (
+                  <>
+                    {integrations.length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-warm-text-secondary uppercase tracking-wider mb-2">Connected Services</p>
+                        <div className="space-y-1">
+                          {integrations.map((integ) => {
+                            const readSelected = selectedToolsToAdd.has(integ.readTool || '');
+                            const writeSelected = selectedToolsToAdd.has(integ.writeTool || '');
+                            const anySelected = readSelected || writeSelected;
+                            return (
+                              <div
+                                key={integ.base}
+                                className={`rounded-lg border p-3 transition-colors ${anySelected ? 'border-brand bg-brand-light/20' : 'border-warm-border'}`}
+                              >
+                                <p className="text-sm font-medium mb-1">{integ.displayName}</p>
+                                <p className="text-xs text-warm-text-secondary mb-2 line-clamp-1">{integ.description}</p>
+                                <div className="flex gap-2">
+                                  {integ.readTool && (
+                                    <label className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs cursor-pointer transition-colors ${readSelected ? 'bg-blue-100 text-blue-700' : 'bg-warm-bg text-warm-text-secondary hover:bg-warm-bg/80'}`}>
+                                      <input type="checkbox" checked={readSelected} onChange={() => {
+                                        setSelectedToolsToAdd(prev => {
+                                          const next = new Set(prev);
+                                          if (next.has(integ.readTool!)) next.delete(integ.readTool!); else next.add(integ.readTool!);
+                                          return next;
+                                        });
+                                      }} className="h-3 w-3" />
+                                      Can view data
+                                    </label>
+                                  )}
+                                  {integ.writeTool && (
+                                    <label className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs cursor-pointer transition-colors ${writeSelected ? 'bg-amber-100 text-amber-700' : 'bg-warm-bg text-warm-text-secondary hover:bg-warm-bg/80'}`}>
+                                      <input type="checkbox" checked={writeSelected} onChange={() => {
+                                        setSelectedToolsToAdd(prev => {
+                                          const next = new Set(prev);
+                                          if (next.has(integ.writeTool!)) next.delete(integ.writeTool!); else next.add(integ.writeTool!);
+                                          return next;
+                                        });
+                                      }} className="h-3 w-3" />
+                                      Can make changes
+                                    </label>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                    {coreTools.length > 0 && (
+                      <div>
+                        <p className="text-xs font-semibold text-warm-text-secondary uppercase tracking-wider mb-2">Core Tools</p>
+                        <div className="space-y-1">
+                          {coreTools.map((tool) => {
+                            const isSelected = selectedToolsToAdd.has(tool.name);
+                            return (
+                              <label
+                                key={tool.name}
+                                className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${isSelected ? 'border-brand bg-brand-light/20' : 'border-warm-border hover:bg-warm-bg'}`}
+                              >
+                                <input type="checkbox" checked={isSelected} onChange={() => {
+                                  setSelectedToolsToAdd(prev => {
+                                    const next = new Set(prev);
+                                    if (next.has(tool.name)) next.delete(tool.name); else next.add(tool.name);
+                                    return next;
+                                  });
+                                }} className="h-4 w-4 rounded border-warm-border text-brand focus:ring-brand" />
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-sm font-medium">{tool.displayName}</p>
+                                  <p className="text-xs text-warm-text-secondary line-clamp-1">{tool.description}</p>
+                                </div>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                );
+              })()
             )}
           </div>
           {toolsNotAdded.length > 0 && (

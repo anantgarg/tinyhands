@@ -208,9 +208,6 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
       if (userRole === 'viewer') {
         permissionContext += '\nNote: This user has viewer-level access. Write actions should explain the limitation and suggest requesting an upgrade.';
       }
-      if ((agent as any).write_policy === 'deny') {
-        permissionContext += '\nIMPORTANT: Write operations are disabled for this agent. Never attempt write actions.';
-      }
     }
   } catch (err) {
     logger.warn('Failed to get user role for permission context', { error: String(err) });
@@ -224,17 +221,6 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
   const writePolicy = (agent as any).write_policy || 'auto';
   const disallowedTools: string[] = [];
 
-  // For 'deny' policy, block all write tools
-  if (writePolicy === 'deny') {
-    try {
-      const allCustomTools = await listCustomTools(workspaceId);
-      for (const t of allCustomTools) {
-        if (agent.tools.includes(t.name) && t.access_level === 'read-write') {
-          disallowedTools.push(t.name);
-        }
-      }
-    } catch { /* best-effort */ }
-  }
 
   // Collect agent's skills and custom tools for injection
   let skillsConfig = '[]';
