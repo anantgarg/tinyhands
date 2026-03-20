@@ -2,29 +2,15 @@
 
 ## Pending Features
 - [ ] Slack DM: Make DMs work like channels with access to all agents user has access to
-- [x] Google Drive: Visual folder picker (browse + select, with breadcrumb navigation)
+- [ ] Google Drive: Per-agent folder restrictions (limit which folders an agent can access)
 
-## Recently Completed (verify on next deploy)
-- [x] Version History: Tracks ALL changes (tools, model, effort, memory, access, write policy), shows config snapshot in preview
-- [x] KB Sources: Edit existing sources, help text on all config forms
-- [x] Google Workspace: Restructured into 4 separate tools (Drive, Sheets, Docs, Gmail)
-- [x] Legacy Google cleanup: Migration 019 removes fake connection + old tools from DB
-- [x] Agent Create: Settings step descriptions under each field
-- [x] Agent Create: Tools step uses grouped integration format with read/write toggles
-- [x] Agent Create: Goal analyzer auto-selects relevant tools (merges custom_tools)
-- [x] Agent Create: Model auto-filled from goal analyzer (fixed mapping)
-- [x] Non-admin restrictions: Hide Create Agent, hide actions for non-owners, admin-only pages gated
-- [x] .gitignore entries (tsconfig.tsbuildinfo, dist/)
-- [x] Agent name editable by clicking (useAuthStore hook fix)
-- [x] Agent creation: channel_id null error fixed
-- [x] TipTap rich text editor for instructions
-- [x] Audit log: Backend returns {entries, total} format
-- [x] Toasts auto-dismiss after 5 seconds
-- [x] Tools simplified: core tools always-on, integrations grouped with read/write toggles
-- [x] Tool credentials: Team / Requesting user's / Agent creator's (no silent fallback)
-- [x] Slack Home Tab simplified to dashboard button
-- [x] /agents command redirects to web dashboard
-- [x] Super Admin label (two words)
-- [x] Sidebar nav restructured
-- [x] Trigger cron description improved
-- [x] Knowledge Base: Source filter, entry editing, entries count fix
+## Recently Completed
+- [x] KB hierarchy: Sources → Documents → Content browsing with source cards
+- [x] KB: Entry counts fixed (computed dynamically, not stale), search bar above cards, pending tab only for manual
+- [x] KB Sources: Edit existing sources, help text on all config forms, Drive folder picker
+- [x] Google OAuth: Fixed redirect_uri_mismatch, all 4 Google integrations work
+- [x] Google Workspace: Split into 4 tools (Drive, Sheets, Docs, Gmail), legacy hidden + cleaned up
+- [x] Tools page: "Connect with Google" for OAuth, no access token field, no Edit for OAuth
+- [x] Version History: Tracks ALL config changes (model, tools, effort, memory, access, write policy)
+- [x] Agent Create: Settings descriptions, grouped tools with read/write toggles, goal analyzer auto-select
+- [x] Non-admin restrictions: Hide Create Agent, owner-only actions, admin-only pages gated
