@@ -74,6 +74,60 @@ function InfoTooltip({ text }: { text: string }) {
   );
 }
 
+/** Normalize full model IDs to the values used by our Select options */
+function normalizeModelValue(model: string): string {
+  if (model.includes('opus')) return 'claude-opus-4-20250514';
+  if (model.includes('haiku')) return 'claude-haiku-4-20250514';
+  return 'claude-sonnet-4-20250514';
+}
+
+/** Format snake_case category names for display */
+function formatCategory(cat: string): string {
+  return cat
+    .split('_')
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
+
+const BUILTIN_FRIENDLY_NAMES: Record<string, string> = {
+  'web-search': 'Web Search',
+  'code-exec': 'Code Execution',
+  'file-read': 'File Read',
+  'file-write': 'File Write',
+  'memory-store': 'Memory Store',
+  'memory-recall': 'Memory Recall',
+};
+
+/** Get a human-readable display name for a tool slug */
+function getToolDisplayName(toolName: string, availableTools?: { name: string; displayName: string }[]): string {
+  const meta = (availableTools ?? []).find((t) => t.name === toolName);
+  if (meta?.displayName) return meta.displayName;
+  if (BUILTIN_FRIENDLY_NAMES[toolName]) return BUILTIN_FRIENDLY_NAMES[toolName];
+  // Convert slugs to friendly: "serpapi-read" -> "Serpapi (Read)", "kb-search" -> "KB Search"
+  const parts = toolName.split('-');
+  if (parts.length >= 2) {
+    const last = parts[parts.length - 1];
+    const base = parts.slice(0, -1).map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(' ');
+    if (['read', 'write', 'search'].includes(last)) {
+      return `${base} (${last.charAt(0).toUpperCase() + last.slice(1)})`;
+    }
+  }
+  return toolName.replace(/[-_]/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** Convert friendly schedule settings to a cron expression */
+function buildCronFromSchedule(frequency: string, time: string): string {
+  const [hour, minute] = time.split(':').map(Number);
+  switch (frequency) {
+    case 'hourly': return `${minute} * * * *`;
+    case 'daily': return `${minute} ${hour} * * *`;
+    case 'weekdays': return `${minute} ${hour} * * 1-5`;
+    case 'weekly': return `${minute} ${hour} * * 1`;
+    case 'monthly': return `${minute} ${hour} 1 * *`;
+    default: return `${minute} ${hour} * * *`;
+  }
+}
+
 
 
 export function AgentDetail() {
@@ -173,6 +227,7 @@ export function AgentDetail() {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
+          <TabsTrigger value="tools">Tools</TabsTrigger>
           <TabsTrigger value="runs">Runs</TabsTrigger>
           <TabsTrigger value="memory">Memory</TabsTrigger>
           <TabsTrigger value="triggers">Triggers</TabsTrigger>
@@ -182,6 +237,9 @@ export function AgentDetail() {
         <TabsContent value="overview">
           <OverviewTab agentId={id!} agent={agent} />
         </TabsContent>
+        <TabsContent value="tools">
+          <ToolsTab agentId={id!} agent={agent} />
+        </TabsContent>
         <TabsContent value="runs">
           <RunsTab agentId={id!} />
         </TabsContent>
@@ -189,7 +247,7 @@ export function AgentDetail() {
           <MemoryTab agentId={id!} />
         </TabsContent>
         <TabsContent value="triggers">
-          <TriggersTab agentId={id!} />
+          <TriggersTab agentId={id!} agent={agent} />
         </TabsContent>
         <TabsContent value="access">
           <AccessTab agentId={id!} agent={agent} />
@@ -205,9 +263,6 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
   const updateAgent = useUpdateAgent();
   const { data: versions, isLoading: versionsLoading } = useAgentVersions(agentId);
   const revertAgent = useRevertAgent();
-  const { data: availableTools } = useAvailableTools();
-  const removeAgentTool = useRemoveAgentTool();
-  const addAgentTool = useAddAgentTool();
 
   // Instructions editing
   const [editingPrompt, setEditingPrompt] = useState(false);
@@ -216,19 +271,11 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
   // Configuration editing
   const [configDirty, setConfigDirty] = useState(false);
   const [configDraft, setConfigDraft] = useState({
-    model: agent.model,
+    model: normalizeModelValue(agent.model),
     maxTurns: agent.maxTurns,
-    mentionsOnly: agent.mentionsOnly,
-    respondToAllMessages: agent.respondToAllMessages,
     memoryEnabled: agent.memoryEnabled,
     selfEvolutionMode: agent.selfEvolutionMode ?? 'off',
-    writePolicy: agent.writePolicy ?? 'auto',
-    defaultAccess: agent.defaultAccess ?? 'member',
   });
-
-  // Tool dialog
-  const [showAddTool, setShowAddTool] = useState(false);
-  const [selectedToolsToAdd, setSelectedToolsToAdd] = useState<Set<string>>(new Set());
 
   // Version preview dialog
   const [previewVersion, setPreviewVersion] = useState<AgentVersion | null>(null);
@@ -276,50 +323,6 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
     }
   };
 
-  const handleRemoveTool = (tool: string) => {
-    removeAgentTool.mutate(
-      { agentId, tool },
-      { onSuccess: () => toast({ title: `Removed ${tool}`, variant: 'success' }) },
-    );
-  };
-
-  const handleAddSelectedTools = () => {
-    const tools = Array.from(selectedToolsToAdd);
-    if (tools.length === 0) return;
-    let completed = 0;
-    for (const tool of tools) {
-      addAgentTool.mutate(
-        { agentId, tool },
-        {
-          onSuccess: () => {
-            completed++;
-            if (completed === tools.length) {
-              toast({ title: `Added ${tools.length} tool(s)`, variant: 'success' });
-              setShowAddTool(false);
-              setSelectedToolsToAdd(new Set());
-            }
-          },
-        },
-      );
-    }
-  };
-
-  const currentTools = agent.tools ?? [];
-  const toolsNotAdded = (availableTools ?? []).filter((t) => !currentTools.includes(t.name));
-
-  // Group tools not added by source
-  const groupedToolsNotAdded = toolsNotAdded.reduce<Record<string, typeof toolsNotAdded>>((acc, tool) => {
-    const group = tool.source === 'integration' ? 'Connected Services' : tool.source === 'custom' ? 'Custom Tools' : 'Core Tools';
-    if (!acc[group]) acc[group] = [];
-    acc[group].push(tool);
-    return acc;
-  }, {});
-
-  const getToolDisplayName = (toolName: string): string => {
-    const meta = (availableTools ?? []).find((t) => t.name === toolName);
-    return meta?.displayName ?? toolName;
-  };
-
   return (
     <div className="space-y-6">
       {/* Section 1: Instructions */}
@@ -356,7 +359,7 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
         </CardContent>
       </Card>
 
-      {/* Section 2: Configuration */}
+      {/* Section 2: Configuration — Model, Effort, Memory, Self-Improvement */}
       <Card>
         <CardHeader className="flex-row items-center justify-between">
           <CardTitle className="text-base">Configuration</CardTitle>
@@ -390,10 +393,10 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
               >
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="10">Quick (10)</SelectItem>
-                  <SelectItem value="25">Standard (25)</SelectItem>
-                  <SelectItem value="50">Thorough (50)</SelectItem>
-                  <SelectItem value="100">Unlimited (100)</SelectItem>
+                  <SelectItem value="10">Quick</SelectItem>
+                  <SelectItem value="25">Standard</SelectItem>
+                  <SelectItem value="50">Thorough</SelectItem>
+                  <SelectItem value="100">Unlimited</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -410,9 +413,12 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
               </div>
             </div>
 
-            {/* Evolution */}
+            {/* Self-Improvement */}
             <div>
-              <Label className="text-warm-text-secondary text-xs">Evolution</Label>
+              <Label className="text-warm-text-secondary text-xs">
+                Self-Improvement
+                <InfoTooltip text="When enabled, the agent can propose improvements to its own instructions based on interactions. Autonomous = applies changes automatically. Approval Required = changes need manual review first." />
+              </Label>
               <Select
                 value={configDraft.selfEvolutionMode}
                 onValueChange={(v) => updateConfig({ selfEvolutionMode: v })}
@@ -425,160 +431,11 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
                 </SelectContent>
               </Select>
             </div>
-
-            {/* Access */}
-            <div>
-              <Label className="text-warm-text-secondary text-xs">
-                Access
-                <InfoTooltip text="Full Access = everyone can use, agent performs all actions. Limited Access = everyone can interact, but agent can only read (no writes). Invite Only = only people with assigned roles can use this agent." />
-              </Label>
-              <Select
-                value={configDraft.defaultAccess}
-                onValueChange={(v) => updateConfig({ defaultAccess: v })}
-              >
-                <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="member">Full Access</SelectItem>
-                  <SelectItem value="viewer">Limited Access</SelectItem>
-                  <SelectItem value="none">Invite Only</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Section 3: Tools & Actions */}
-      <Card>
-        <CardHeader className="flex-row items-center justify-between">
-          <CardTitle className="text-base">Tools & Actions</CardTitle>
-          <Button variant="ghost" size="sm" onClick={() => { setShowAddTool(true); setSelectedToolsToAdd(new Set()); }}>
-            <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Tool
-          </Button>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Action Approval setting */}
-          <div>
-            <Label className="text-warm-text-secondary text-xs">
-              Action Approval
-              <InfoTooltip text="Controls whether the agent needs approval before making changes. Automatic = no approval needed. Ask User = asks the person who triggered the agent. Ask Owner/Admins = asks an agent owner or admin to approve." />
-            </Label>
-            <Select value={configDraft.writePolicy} onValueChange={(v) => updateConfig({ writePolicy: v })}>
-              <SelectTrigger className="mt-1 max-w-xs"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="auto">Automatic</SelectItem>
-                <SelectItem value="confirm">Ask User First</SelectItem>
-                <SelectItem value="admin_confirm">Ask Owner/Admins</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Tools table */}
-          {currentTools.length === 0 ? (
-            <p className="text-sm text-warm-text-secondary">No tools configured</p>
-          ) : (
-            <div className="rounded-card border border-warm-border overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead className="w-10"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {currentTools.map((tool) => (
-                    <TableRow key={tool}>
-                      <TableCell className="font-medium">{getToolDisplayName(tool)}</TableCell>
-                      <TableCell>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 text-red-500"
-                          onClick={() => handleRemoveTool(tool)}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-
-          <p className="text-xs text-warm-text-secondary">
-            Tools use team credentials by default. Configure per-tool credentials in <Link to="/connections" className="text-brand hover:underline">Connections</Link>.
-          </p>
-        </CardContent>
-      </Card>
-
-      {/* Add Tool Dialog */}
-      <Dialog open={showAddTool} onOpenChange={setShowAddTool}>
-        <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>Add Tools</DialogTitle>
-            <DialogDescription>Select tools to add to this agent.</DialogDescription>
-          </DialogHeader>
-          <div className="max-h-[400px] overflow-y-auto space-y-4">
-            {toolsNotAdded.length === 0 ? (
-              <p className="text-sm text-warm-text-secondary text-center py-4">All available tools are already added</p>
-            ) : (
-              Object.entries(groupedToolsNotAdded).map(([group, tools]) => (
-                <div key={group}>
-                  <p className="text-xs font-semibold text-warm-text-secondary uppercase tracking-wider mb-2">{group}</p>
-                  <div className="space-y-1">
-                    {tools.map((tool) => {
-                      const isSelected = selectedToolsToAdd.has(tool.name);
-                      return (
-                        <label
-                          key={tool.name}
-                          className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
-                            isSelected ? 'border-brand bg-brand-light/20' : 'border-warm-border hover:bg-warm-bg'
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => {
-                              setSelectedToolsToAdd((prev) => {
-                                const next = new Set(prev);
-                                if (next.has(tool.name)) {
-                                  next.delete(tool.name);
-                                } else {
-                                  next.add(tool.name);
-                                }
-                                return next;
-                              });
-                            }}
-                            className="h-4 w-4 rounded border-warm-border text-brand focus:ring-brand"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium">{tool.displayName}</p>
-                            <p className="text-xs text-warm-text-secondary line-clamp-1">{tool.description}</p>
-                          </div>
-                        </label>
-                      );
-                    })}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-          {toolsNotAdded.length > 0 && (
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setShowAddTool(false)}>Cancel</Button>
-              <Button
-                onClick={handleAddSelectedTools}
-                disabled={selectedToolsToAdd.size === 0 || addAgentTool.isPending}
-              >
-                Add Selected ({selectedToolsToAdd.size})
-              </Button>
-            </DialogFooter>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Section 4: Version History */}
+      {/* Section 3: Version History */}
       <Card>
         <CardHeader>
           <CardTitle className="text-base">Version History</CardTitle>
@@ -667,6 +524,205 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
               </Button>
             )}
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ---- Tools Tab ----
+
+function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
+  const updateAgent = useUpdateAgent();
+  const { data: availableTools } = useAvailableTools();
+  const removeAgentTool = useRemoveAgentTool();
+  const addAgentTool = useAddAgentTool();
+  const [showAddTool, setShowAddTool] = useState(false);
+  const [selectedToolsToAdd, setSelectedToolsToAdd] = useState<Set<string>>(new Set());
+  const [writePolicy, setWritePolicy] = useState(agent.writePolicy ?? 'auto');
+
+  const currentTools = agent.tools ?? [];
+  const toolsNotAdded = (availableTools ?? []).filter((t) => !currentTools.includes(t.name));
+
+  // Group tools not added by source
+  const groupedToolsNotAdded = toolsNotAdded.reduce<Record<string, typeof toolsNotAdded>>((acc, tool) => {
+    const group = tool.source === 'integration' ? 'Connected Services' : tool.source === 'custom' ? 'Custom Tools' : 'Core Tools';
+    if (!acc[group]) acc[group] = [];
+    acc[group].push(tool);
+    return acc;
+  }, {});
+
+  const handleRemoveTool = (tool: string) => {
+    removeAgentTool.mutate(
+      { agentId, tool },
+      { onSuccess: () => toast({ title: `Removed ${getToolDisplayName(tool, availableTools)}`, variant: 'success' }) },
+    );
+  };
+
+  const handleAddSelectedTools = () => {
+    const tools = Array.from(selectedToolsToAdd);
+    if (tools.length === 0) return;
+    let completed = 0;
+    for (const tool of tools) {
+      addAgentTool.mutate(
+        { agentId, tool },
+        {
+          onSuccess: () => {
+            completed++;
+            if (completed === tools.length) {
+              toast({ title: `Added ${tools.length} tool(s)`, variant: 'success' });
+              setShowAddTool(false);
+              setSelectedToolsToAdd(new Set());
+            }
+          },
+        },
+      );
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Action Approval */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">
+            Action Approval
+            <InfoTooltip text="Controls whether the agent needs approval before making changes to external tools like creating tickets or updating records." />
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-end gap-3">
+            <div className="flex-1 max-w-xs">
+              <Select value={writePolicy} onValueChange={setWritePolicy}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">Automatic</SelectItem>
+                  <SelectItem value="confirm">Ask User First</SelectItem>
+                  <SelectItem value="admin_confirm">Ask Owner/Admins</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <Button size="sm" onClick={() => {
+              updateAgent.mutate(
+                { id: agentId, writePolicy },
+                { onSuccess: () => toast({ title: 'Action approval updated', variant: 'success' }) },
+              );
+            }} disabled={updateAgent.isPending}>
+              Save
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Tools list */}
+      <Card>
+        <CardHeader className="flex-row items-center justify-between">
+          <CardTitle className="text-base">Connected Tools ({currentTools.length})</CardTitle>
+          <Button variant="ghost" size="sm" onClick={() => { setShowAddTool(true); setSelectedToolsToAdd(new Set()); }}>
+            <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Tool
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {currentTools.length === 0 ? (
+            <p className="text-sm text-warm-text-secondary">No tools configured</p>
+          ) : (
+            <div className="rounded-card border border-warm-border overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Name</TableHead>
+                    <TableHead className="w-10"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {currentTools.map((tool) => (
+                    <TableRow key={tool}>
+                      <TableCell className="font-medium">{getToolDisplayName(tool, availableTools)}</TableCell>
+                      <TableCell>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-red-500"
+                          onClick={() => handleRemoveTool(tool)}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+          <p className="text-xs text-warm-text-secondary mt-4">
+            Tools use team credentials by default. Configure per-tool credentials in <Link to="/connections" className="text-brand hover:underline">Connections</Link>.
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Add Tool Dialog */}
+      <Dialog open={showAddTool} onOpenChange={setShowAddTool}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Add Tools</DialogTitle>
+            <DialogDescription>Select tools to add to this agent.</DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[400px] overflow-y-auto space-y-4">
+            {toolsNotAdded.length === 0 ? (
+              <p className="text-sm text-warm-text-secondary text-center py-4">All available tools are already added</p>
+            ) : (
+              Object.entries(groupedToolsNotAdded).map(([group, tools]) => (
+                <div key={group}>
+                  <p className="text-xs font-semibold text-warm-text-secondary uppercase tracking-wider mb-2">{group}</p>
+                  <div className="space-y-1">
+                    {tools.map((tool) => {
+                      const isSelected = selectedToolsToAdd.has(tool.name);
+                      return (
+                        <label
+                          key={tool.name}
+                          className={`flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors ${
+                            isSelected ? 'border-brand bg-brand-light/20' : 'border-warm-border hover:bg-warm-bg'
+                          }`}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => {
+                              setSelectedToolsToAdd((prev) => {
+                                const next = new Set(prev);
+                                if (next.has(tool.name)) {
+                                  next.delete(tool.name);
+                                } else {
+                                  next.add(tool.name);
+                                }
+                                return next;
+                              });
+                            }}
+                            className="h-4 w-4 rounded border-warm-border text-brand focus:ring-brand"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium">{tool.displayName}</p>
+                            <p className="text-xs text-warm-text-secondary line-clamp-1">{tool.description}</p>
+                          </div>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+          {toolsNotAdded.length > 0 && (
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowAddTool(false)}>Cancel</Button>
+              <Button
+                onClick={handleAddSelectedTools}
+                disabled={selectedToolsToAdd.size === 0 || addAgentTool.isPending}
+              >
+                Add Selected ({selectedToolsToAdd.size})
+              </Button>
+            </DialogFooter>
+          )}
         </DialogContent>
       </Dialog>
     </div>
@@ -849,7 +905,7 @@ function MemoryTab({ agentId }: { agentId: string }) {
               <TableRow key={mem.id}>
                 <TableCell className="max-w-[350px]">{mem.fact}</TableCell>
                 <TableCell>
-                  <Badge variant="secondary">{mem.category}</Badge>
+                  <Badge variant="secondary">{formatCategory(mem.category)}</Badge>
                 </TableCell>
                 <TableCell>
                   <Badge variant={mem.source === 'agent' ? 'default' : 'warning'}>
@@ -907,7 +963,7 @@ function MemoryTab({ agentId }: { agentId: string }) {
                 </SelectTrigger>
                 <SelectContent>
                   {['general', 'customer_preference', 'decision', 'context', 'technical', 'preference', 'procedure', 'correction', 'entity'].map((cat) => (
-                    <SelectItem key={cat} value={cat}>{cat}</SelectItem>
+                    <SelectItem key={cat} value={cat}>{formatCategory(cat)}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -925,14 +981,18 @@ function MemoryTab({ agentId }: { agentId: string }) {
 
 // ---- Triggers Tab ----
 
-function TriggersTab({ agentId }: { agentId: string }) {
+function TriggersTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
   const { data: triggers, isLoading } = useAgentTriggers(agentId);
   const updateTrigger = useUpdateTrigger();
   const deleteTrigger = useDeleteTrigger();
   const addTrigger = useAddAgentTrigger();
   const [showAddTrigger, setShowAddTrigger] = useState(false);
   const [newTriggerType, setNewTriggerType] = useState('schedule');
-  const [newTriggerConfig, setNewTriggerConfig] = useState('{}');
+
+  // Schedule-specific state
+  const [scheduleFrequency, setScheduleFrequency] = useState('daily');
+  const [scheduleTime, setScheduleTime] = useState('09:00');
+  const [scheduleTimezone, setScheduleTimezone] = useState('America/New_York');
 
   if (isLoading) return <Skeleton className="h-[200px]" />;
 
@@ -968,6 +1028,18 @@ function TriggersTab({ agentId }: { agentId: string }) {
     }
   };
 
+  const getTriggerTypeName = (type: string) => {
+    switch (type) {
+      case 'slack_channel': return 'Slack Channel';
+      case 'schedule': return 'Schedule';
+      case 'webhook': return 'Webhook';
+      case 'linear': return 'Linear';
+      case 'zendesk': return 'Zendesk';
+      case 'intercom': return 'Intercom';
+      default: return type;
+    }
+  };
+
   const handleToggle = (triggerId: string, currentEnabled: boolean) => {
     updateTrigger.mutate(
       { id: triggerId, enabled: !currentEnabled },
@@ -984,29 +1056,64 @@ function TriggersTab({ agentId }: { agentId: string }) {
   };
 
   const handleCreateTrigger = () => {
-    let config: Record<string, unknown>;
-    try {
-      config = JSON.parse(newTriggerConfig);
-    } catch {
-      toast({ title: 'Invalid JSON config', variant: 'error' });
-      return;
+    let config: Record<string, unknown> = {};
+
+    if (newTriggerType === 'schedule') {
+      const cron = buildCronFromSchedule(scheduleFrequency, scheduleTime);
+      config = { cron, timezone: scheduleTimezone };
+    } else if (newTriggerType === 'webhook') {
+      config = {};
     }
+
     addTrigger.mutate(
       { agentId, type: newTriggerType, config },
       {
         onSuccess: () => {
           toast({ title: 'Trigger created', variant: 'success' });
           setShowAddTrigger(false);
-          setNewTriggerConfig('{}');
+          setScheduleFrequency('daily');
+          setScheduleTime('09:00');
+          setScheduleTimezone('America/New_York');
         },
       },
     );
   };
 
+  const openAddDialog = () => {
+    setNewTriggerType('schedule');
+    setScheduleFrequency('daily');
+    setScheduleTime('09:00');
+    setScheduleTimezone('America/New_York');
+    setShowAddTrigger(true);
+  };
+
   return (
     <div className="space-y-4">
+      {/* Slack Activation */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Slack Activation</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-warm-text-secondary mb-3">
+            How this agent responds to messages in Slack channels.
+          </p>
+          <Badge variant={agent.mentionsOnly ? 'secondary' : agent.respondToAllMessages ? 'success' : 'default'}>
+            {agent.mentionsOnly ? 'Only when @mentioned' : agent.respondToAllMessages ? 'Every message' : 'Relevant messages only'}
+          </Badge>
+          <p className="text-xs text-warm-text-secondary mt-2">
+            {agent.mentionsOnly
+              ? 'The agent only responds when someone @mentions it directly.'
+              : agent.respondToAllMessages
+                ? 'The agent reads and responds to every message in its channels.'
+                : 'The agent automatically decides which messages are relevant and responds to those, plus any @mentions.'}
+          </p>
+        </CardContent>
+      </Card>
+
+      {/* Triggers */}
       <div className="flex justify-end">
-        <Button variant="outline" size="sm" onClick={() => setShowAddTrigger(true)}>
+        <Button variant="outline" size="sm" onClick={openAddDialog}>
           <Plus className="mr-2 h-4 w-4" />
           Add Trigger
         </Button>
@@ -1029,7 +1136,7 @@ function TriggersTab({ agentId }: { agentId: string }) {
                 <TableCell>
                   <div className="flex items-center gap-2">
                     {getTriggerIcon(trigger.type)}
-                    <Badge variant="default">{trigger.type}</Badge>
+                    <Badge variant="default">{getTriggerTypeName(trigger.type)}</Badge>
                   </div>
                 </TableCell>
                 <TableCell className="text-sm text-warm-text-secondary max-w-[300px] truncate">
@@ -1092,7 +1199,7 @@ function TriggersTab({ agentId }: { agentId: string }) {
               <Select value={newTriggerType} onValueChange={setNewTriggerType}>
                 <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="schedule">Schedule (Cron)</SelectItem>
+                  <SelectItem value="schedule">Schedule</SelectItem>
                   <SelectItem value="webhook">Webhook</SelectItem>
                   <SelectItem value="slack_channel">Slack Channel</SelectItem>
                   <SelectItem value="linear">Linear</SelectItem>
@@ -1101,25 +1208,82 @@ function TriggersTab({ agentId }: { agentId: string }) {
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label>Configuration (JSON)</Label>
-              <Textarea
-                value={newTriggerConfig}
-                onChange={(e) => setNewTriggerConfig(e.target.value)}
-                className="mt-1 font-mono text-sm"
-                rows={5}
-                placeholder='{"cron": "0 9 * * 1-5", "timezone": "America/New_York"}'
-              />
-              <p className="text-xs text-warm-text-secondary mt-1">
-                {newTriggerType === 'schedule' && 'Example: {"cron": "0 9 * * 1-5", "timezone": "America/New_York"}'}
-                {newTriggerType === 'webhook' && 'Example: {"secret": "my-secret"}'}
-                {newTriggerType === 'slack_channel' && 'Example: {"channelId": "C...", "mentionsOnly": true}'}
-              </p>
-            </div>
+
+            {/* Schedule fields */}
+            {newTriggerType === 'schedule' && (
+              <div className="space-y-4">
+                <div>
+                  <Label>Run every</Label>
+                  <div className="flex gap-2 mt-1">
+                    <Select value={scheduleFrequency} onValueChange={setScheduleFrequency}>
+                      <SelectTrigger className="flex-1"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="hourly">Hour</SelectItem>
+                        <SelectItem value="daily">Day</SelectItem>
+                        <SelectItem value="weekdays">Weekday</SelectItem>
+                        <SelectItem value="weekly">Week</SelectItem>
+                        <SelectItem value="monthly">Month</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div>
+                  <Label>At time</Label>
+                  <Input type="time" value={scheduleTime} onChange={(e) => setScheduleTime(e.target.value)} className="mt-1" />
+                </div>
+                <div>
+                  <Label>Timezone</Label>
+                  <Select value={scheduleTimezone} onValueChange={setScheduleTimezone}>
+                    <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="America/New_York">Eastern (New York)</SelectItem>
+                      <SelectItem value="America/Chicago">Central (Chicago)</SelectItem>
+                      <SelectItem value="America/Denver">Mountain (Denver)</SelectItem>
+                      <SelectItem value="America/Los_Angeles">Pacific (Los Angeles)</SelectItem>
+                      <SelectItem value="Europe/London">London</SelectItem>
+                      <SelectItem value="Europe/Berlin">Berlin</SelectItem>
+                      <SelectItem value="Asia/Kolkata">India (Kolkata)</SelectItem>
+                      <SelectItem value="Asia/Tokyo">Tokyo</SelectItem>
+                      <SelectItem value="UTC">UTC</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+            )}
+
+            {/* Webhook info */}
+            {newTriggerType === 'webhook' && (
+              <div className="rounded-lg border border-warm-border bg-warm-bg p-4">
+                <p className="text-sm text-warm-text-secondary">
+                  A unique webhook URL will be generated for this agent. You can use this URL to trigger the agent from any external service.
+                </p>
+              </div>
+            )}
+
+            {/* Slack Channel info */}
+            {newTriggerType === 'slack_channel' && (
+              <div className="rounded-lg border border-warm-border bg-warm-bg p-4">
+                <p className="text-sm text-warm-text-secondary">
+                  Slack channel activation is managed in the agent's channel settings. Invite the agent to a channel and it will automatically start listening.
+                </p>
+              </div>
+            )}
+
+            {/* Linear/Zendesk/Intercom info */}
+            {['linear', 'zendesk', 'intercom'].includes(newTriggerType) && (
+              <div className="rounded-lg border border-warm-border bg-warm-bg p-4">
+                <p className="text-sm text-warm-text-secondary">
+                  {newTriggerType.charAt(0).toUpperCase() + newTriggerType.slice(1)} triggers are configured through the service's webhook settings. Make sure the {newTriggerType.charAt(0).toUpperCase() + newTriggerType.slice(1)} integration is connected in your tool settings first.
+                </p>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAddTrigger(false)}>Cancel</Button>
-            <Button onClick={handleCreateTrigger} disabled={addTrigger.isPending}>
+            <Button
+              onClick={handleCreateTrigger}
+              disabled={addTrigger.isPending || ['slack_channel'].includes(newTriggerType)}
+            >
               Create Trigger
             </Button>
           </DialogFooter>
@@ -1141,7 +1305,6 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
   const denyUpgrade = useDenyUpgrade();
 
   const [defaultAccess, setDefaultAccess] = useState(agent.defaultAccess ?? 'viewer');
-  const [writePolicy, setWritePolicy] = useState(agent.writePolicy ?? 'auto');
 
   // Add user dialog
   const [showAddUser, setShowAddUser] = useState(false);
@@ -1152,13 +1315,6 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
     updateAccess.mutate(
       { agentId, defaultAccess },
       { onSuccess: () => toast({ title: 'Default access updated', variant: 'success' }) },
-    );
-  };
-
-  const handleSaveWritePolicy = () => {
-    updateAccess.mutate(
-      { agentId, writePolicy },
-      { onSuccess: () => toast({ title: 'Write policy updated', variant: 'success' }) },
     );
   };
 
@@ -1211,33 +1367,6 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
               </Select>
             </div>
             <Button size="sm" onClick={handleSaveAccess} disabled={updateAccess.isPending}>
-              Save
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Action Approval */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">
-            Action Approval
-            <InfoTooltip text="Controls whether the agent needs approval before making changes. Automatic = no approval needed. Ask User = asks the person who triggered the agent. Ask Owner/Admins = asks an agent owner or admin." />
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-end gap-3">
-            <div className="flex-1 max-w-xs">
-              <Select value={writePolicy} onValueChange={setWritePolicy}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="auto">Auto</SelectItem>
-                  <SelectItem value="confirm">Confirm</SelectItem>
-                  <SelectItem value="admin_confirm">Admin Confirm</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <Button size="sm" onClick={handleSaveWritePolicy} disabled={updateAccess.isPending}>
               Save
             </Button>
           </div>
