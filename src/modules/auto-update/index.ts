@@ -64,6 +64,17 @@ export async function handleDeploy(payload: any): Promise<DeployResult> {
       execSync('npm install --include=dev', { cwd: process.cwd(), timeout: 120000 });
     }
 
+    // 2.1. Install web dependencies if web/package.json changed
+    const webPackageChanged = changedFiles.some((f: string) => f === 'web/package.json' || f === 'web/package-lock.json');
+    if (webPackageChanged || isPullBased) {
+      logger.info('Deploy: installing web dependencies');
+      try {
+        execSync('cd web && npm install', { cwd: process.cwd(), timeout: 120000 });
+      } catch (webErr: any) {
+        logger.warn('Web dependency install failed', { error: webErr.message });
+      }
+    }
+
     // 3. Docker rebuild if Dockerfile changed
     if (dockerfileChanged) {
       logger.info('Deploy: rebuilding Docker image');
@@ -76,6 +87,17 @@ export async function handleDeploy(payload: any): Promise<DeployResult> {
     // 4. Build TypeScript
     logger.info('Deploy: building TypeScript');
     execSync('npm run build', { cwd: process.cwd(), timeout: 60000 });
+
+    // 4.1. Build web frontend if web/ files changed
+    const webChanged = changedFiles.some((f: string) => f.startsWith('web/')) || isPullBased;
+    if (webChanged) {
+      logger.info('Deploy: building web frontend');
+      try {
+        execSync('npm run build:web', { cwd: process.cwd(), timeout: 120000 });
+      } catch (webErr: any) {
+        logger.warn('Web frontend build failed, continuing deploy', { error: webErr.message });
+      }
+    }
 
     // 4.5. Run database migrations
     const migrationChanged = changedFiles.some((f: string) => f.includes('migrations/'));
