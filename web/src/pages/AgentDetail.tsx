@@ -612,7 +612,7 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
                       <TableCell className="text-sm text-warm-text-secondary max-w-[200px] truncate">
                         {v.changeNote || '\u2014'}
                       </TableCell>
-                      <TableCell className="text-sm text-warm-text-secondary">{v.changedBy}</TableCell>
+                      <TableCell className="text-sm text-warm-text-secondary">{(v as any).changedByName || '\u2014'}</TableCell>
                       <TableCell className="text-sm text-warm-text-secondary">
                         {formatDistanceToNow(new Date(v.createdAt), { addSuffix: true })}
                       </TableCell>
@@ -652,7 +652,7 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
           <DialogHeader>
             <DialogTitle>Version {previewVersion?.version} Preview</DialogTitle>
             <DialogDescription>
-              {previewVersion?.changeNote || 'No change note'} - by {previewVersion?.changedBy}{' '}
+              {previewVersion?.changeNote || 'No change note'} - by {(previewVersion as any)?.changedByName || '\u2014'}{' '}
               {previewVersion?.createdAt && format(new Date(previewVersion.createdAt), 'MMM d, yyyy HH:mm')}
             </DialogDescription>
           </DialogHeader>

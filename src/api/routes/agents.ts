@@ -119,7 +119,12 @@ router.get('/:id/versions', async (req: Request, res: Response) => {
       return;
     }
     const versions = await getAgentVersions(workspaceId, id);
-    res.json(versions);
+    const userIds = (versions as any[]).map((v: any) => v.changed_by).filter(Boolean);
+    const names = await resolveUserNames(userIds);
+    res.json((versions as any[]).map((v: any) => ({
+      ...v,
+      changedByName: names[v.changed_by] || v.changed_by,
+    })));
   } catch (err: any) {
     logger.error('Get agent versions error', { error: err.message });
     res.status(500).json({ error: 'Failed to get versions' });
