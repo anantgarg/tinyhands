@@ -38,7 +38,7 @@ export async function createAgent(workspaceId: string, params: CreateAgentParams
     name: params.name,
     channel_id: channelIds[0] || '',
     channel_ids: channelIds,
-    system_prompt: params.systemPrompt,
+    system_prompt: params.systemPrompt || 'You are a helpful AI assistant.',
     tools: (params.tools || []).filter(t => !['Read', 'Write', 'Edit', 'Glob', 'Grep', 'Bash', 'WebSearch', 'WebFetch', 'NotebookEdit', 'TodoWrite', 'Agent', 'Mcp'].includes(t)),
     avatar_emoji: params.avatarEmoji || ':robot_face:',
     status: 'active',

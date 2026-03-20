@@ -70,7 +70,8 @@ export function AgentCreate() {
         setName(result.agentName || result.name || '');
         setAvatarEmoji(result.avatarEmoji || result.avatar_emoji || '');
         setSystemPrompt(result.systemPrompt || result.system_prompt || '');
-        setModel(result.model || 'claude-sonnet-4-20250514');
+        const modelMap: Record<string, string> = { opus: 'claude-opus-4-20250514', haiku: 'claude-haiku-4-20250514', sonnet: 'claude-sonnet-4-20250514' };
+        setModel(modelMap[result.model] || result.model || 'claude-sonnet-4-20250514');
         setSelectedTools(result.tools || []);
         setMentionsOnly(result.mentionsOnly ?? result.mentions_only ?? false);
         setMemoryEnabled(result.memoryEnabled ?? result.memory_enabled ?? false);

@@ -11,3 +11,5 @@ coverage/
 .claude/
 feedback/
 .claude/feedback-server/node_modules/
+web/tsconfig.tsbuildinfo
+dist/

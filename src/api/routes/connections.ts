@@ -183,6 +183,20 @@ router.put('/agent/:agentId/:toolName', async (req: Request, res: Response) => {
   }
 });
 
+// GET /connections/oauth/:integration/start — Start OAuth flow (redirects to provider)
+router.get('/oauth/:integration/start', async (req: Request, res: Response) => {
+  try {
+    const { workspaceId, userId } = getSessionUser(req);
+    const integration = req.params.integration as string;
+    const { getOAuthUrl } = await import('../../modules/connections/oauth');
+    const { url } = await getOAuthUrl(integration, workspaceId, userId);
+    res.redirect(url);
+  } catch (err: any) {
+    logger.error('OAuth start error', { error: err.message });
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // GET /connections/oauth-integrations — List OAuth-capable integrations
 router.get('/oauth-integrations', async (_req: Request, res: Response) => {
   try {

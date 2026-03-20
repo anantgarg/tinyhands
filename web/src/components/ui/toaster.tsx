@@ -16,17 +16,22 @@ function mapVariant(v: ToastVariant | undefined) {
 }
 
 export function Toaster() {
-  const { toasts } = useToast();
+  const { toasts, dismiss } = useToast();
 
   return (
     <ToastProvider>
       {toasts.map(({ id, title, description, variant, ...props }) => (
         <Toast key={id} variant={mapVariant(variant)} {...props}>
-          <div className="grid gap-1">
+          <div className="grid gap-1 pr-6">
             {title && <ToastTitle>{title}</ToastTitle>}
             {description && <ToastDescription>{description}</ToastDescription>}
           </div>
-          <ToastClose />
+          <button
+            onClick={() => dismiss(id)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-warm-text-secondary hover:text-warm-text"
+          >
+            <span className="text-lg leading-none">&times;</span>
+          </button>
         </Toast>
       ))}
       <ToastViewport />
