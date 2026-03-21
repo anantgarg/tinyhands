@@ -12,9 +12,9 @@ TinyHands uses a three-tier platform role system:
 
 | Role | Permissions |
 |------|-------------|
-| **Superadmin** | Full platform control — manage all agents, tools, KB, roles, audit log |
-| **Admin** | Manage tools, KB, and agents — cannot change platform roles |
-| **Member** | Create and use agents (configurable via workspace settings) |
+| **Superadmin** | Full platform control -- manage all agents, tools, KB, roles, audit log |
+| **Admin** | Manage tools, KB, and agents -- cannot change platform roles |
+| **Member** | View and interact with agents (cannot create agents or manage integrations) |
 
 ### Becoming the First Superadmin
 
@@ -30,20 +30,44 @@ add @username as superadmin
 
 Only existing superadmins can change platform roles. There must always be at least one superadmin.
 
+### Non-Admin Restrictions
+
+Members (non-admin users) have the following restrictions:
+
+- Cannot create new agents (the "New Agent" button is hidden; navigating to the create page redirects to the agents list)
+- Cannot access the Tools & Integrations page (shown an "Admin Access Required" message)
+- Cannot manage KB sources or API keys (only search and add entries)
+- Can only edit or delete agents they own
+- When the AI goal analyzer runs for a non-admin, it restricts tool suggestions to read-only tools and does not propose new tools
+
+---
+
+## Web Dashboard
+
+TinyHands includes a web dashboard for managing agents, tools, connections, and knowledge base. The `/agents` Slack command provides a direct link to the dashboard.
+
+### Dashboard URL Configuration
+
+Set the `WEB_DASHBOARD_URL` environment variable to your dashboard's public URL. This URL is used in Slack messages that link to the dashboard. If not set, it falls back to `OAUTH_REDIRECT_BASE_URL` or `http://localhost:3000`.
+
+```env
+WEB_DASHBOARD_URL=https://dashboard.yourdomain.com
+```
+
 ---
 
 ## Integration & Tool Management
 
-DM the TinyHands bot and type `/tools` to open the integration dashboard. The `/tools` command is now accessible to **all users**, showing three sections: Shared Tools, My Connections, and Available integrations. Admins see additional management options (register, configure, delete).
+Open the **Tools & Integrations** page in the web dashboard. This page is accessible to admins only. Non-admin users see an "Admin Access Required" message.
 
 ### Registering an Integration
 
-1. Open `/tools` in the bot DM
-2. Under **Available** integrations, click **Register** next to the integration you want (admin only)
-3. Fill in the required credentials in the modal (API keys, tokens, etc.)
-4. Submit — the credentials are encrypted (AES-256-GCM) and stored as a **team connection**, and the integration's tools become available to agents
+1. Open the Tools & Integrations page
+2. Under **Available** integrations, click **Connect** next to the integration you want
+3. Fill in the required credentials in the dialog (API keys, tokens, etc.)
+4. Submit -- the credentials are encrypted (AES-256-GCM) and stored as a **team connection**, and the integration's tools become available to agents
 
-Registration now automatically creates an encrypted team connection. This means credentials are never stored in plain text — they are encrypted at rest and decrypted only at execution time.
+For OAuth integrations (Google, Notion, GitHub), clicking Connect opens a browser-based authorization flow instead of a credential dialog.
 
 ### Supported Integrations
 
@@ -54,108 +78,102 @@ Registration now automatically creates an encrypted team connection. This means 
 | **PostHog** | API key, team ID, personal API key | Team | Query events, feature flags, user analytics (read-only) |
 | **HubSpot** | API key | Team | Search/manage contacts, deals, companies |
 | **SerpAPI** | API key | Team | Track search rankings across Google, Bing, Yahoo (read-only) |
-| **Chargebee** | API key, site name | Team | List customers, subscriptions, invoices, plans (read-only) |
-| **Google** | OAuth | Personal/Hybrid | Drive, Sheets, Gmail access |
-| **Notion** | OAuth | Personal/Hybrid | Workspace access |
-| **GitHub** | OAuth | Personal/Hybrid | Repository access |
+| **Chargebee** | API key, site name | Team | List customers, subscriptions, invoices, plans |
+| **Google Drive** | OAuth | Personal | Search, browse, download files; create folders, move files, upload |
+| **Google Sheets** | OAuth | Personal | Read sheet data; create, update, append spreadsheets |
+| **Google Docs** | OAuth | Personal | Read documents; create and update documents |
+| **Gmail** | OAuth | Personal | Search and read emails; send and reply to emails |
+| **Notion** | OAuth | Personal | Workspace access |
+| **GitHub** | OAuth | Personal | Repository access |
+
+The four Google integrations (Drive, Sheets, Docs, Gmail) all share a single OAuth configuration. One Google OAuth connection gives access to all four services. Which services an agent can use depends on which tools are enabled for that agent.
+
+A legacy "Google Workspace" integration exists for backward compatibility but registers no new tools. Migration 019 cleans up legacy `google-read`/`google-write` tools from existing agents.
 
 Each integration manifest declares a `connectionModel` property: `team` (shared creds only), `personal` (each user connects individually), or `hybrid` (supports both team and personal).
 
 ### Managing Tools
 
-From the `/tools` dashboard, use the overflow menu on any tool to:
+From the Tools & Integrations page, connected integrations show:
 
 | Action | Description |
 |--------|-------------|
-| **Configure** | Add or update API credentials and config values |
-| **Change Access Level** | Toggle between read-only and read-write |
-| **Add to Agent** | Attach the tool to a specific agent |
-| **Approve** | Approve tools that are pending admin approval |
-| **Delete** | Remove the tool from the system |
+| **Edit** | Update API credentials and config values (for team-credential integrations) |
+| **Disconnect** | Remove the integration and revoke agent access |
 
-### Tool Access Levels
+Tool access levels are displayed using the labels "Can view data" and "Can make changes" to indicate read-only and read-write capabilities respectively.
 
-- **Read-only**: Safe for any agent — cannot modify external data
-- **Read-write**: Can create/update/delete external data — requires admin approval before agents can use it
+### Agent-Created Tools
+
+Agents can create tools during execution. These appear in the "Agent-Created Tools" section and require admin approval before other agents can use them. From the overflow menu you can approve or delete individual tools.
 
 ### Credential Resolution
 
-When an agent runs and needs tool credentials, the system resolves them in this order based on the tool's connection mode on that agent:
+When an agent runs and needs tool credentials, the system resolves them based on the tool's connection mode on that agent:
 
-1. **Team mode** — uses the encrypted team connection registered by an admin
-2. **Delegated mode** — uses the agent owner's personal connection
-3. **Runtime mode** — uses the invoking user's personal connection
+1. **Team mode** -- uses the encrypted team connection registered by an admin
+2. **Delegated mode** -- uses the agent owner's personal connection
+3. **Runtime mode** -- uses the invoking user's personal connection
 
 If the required credential is missing at execution time, the agent pauses and DMs the user with a prompt to connect. Once the user completes the connection (OAuth or API key), the agent automatically retries the action.
 
 ### Agent Tool Connection Editing
 
-After an agent is created, admins and owners can change how each tool resolves credentials. From `/agents` → overflow menu → **View Config**, the tool connections section shows each tool's current connection mode with an **Edit** button. Clicking Edit opens a modal where you can switch between team, delegated, and runtime modes for that tool on that agent.
+After an agent is created, admins and owners can change how each tool resolves credentials. On the agent's detail page, the **Tools** tab shows each tool's current connection mode. You can switch between team, delegated, and runtime modes for any tool on that agent.
 
 ---
 
 ## Knowledge Base Management
 
-DM the TinyHands bot and type `/kb` to open the knowledge base dashboard. Regular users only have access to `/kb search` and `/kb add`.
+Open the **Knowledge Base** page in the web dashboard.
 
-### The KB Dashboard
+### The KB Page
 
-The superadmin dashboard shows:
-- Connected knowledge sources with sync status
-- Pending KB entries awaiting approval
-- Recent approved entries
-- Statistics (total entries, pending count, categories, sources)
-- API key management
+The knowledge base page shows:
+- Statistics: total entries, pending review, categories, sources
+- Source cards for browsing by source (click a source to see its entries)
+- A "Manual Entries" card for hand-written content
+- A search bar for searching across all entries
+- Tabs for Published and Pending Review entries (when viewing manual entries or search results)
 
-### Connecting a Knowledge Source
+Admins can add manual entries, edit non-synced entries, approve pending entries, and delete entries. Auto-synced entries from connected sources cannot be edited (noted in the detail dialog).
 
-1. Open `/kb` in the bot DM
-2. Click **Add Source**
-3. Choose the source type and enter the required configuration
+### KB Sources
+
+Click the **Sources** button on the Knowledge Base page to manage data sources and API keys.
 
 #### Supported Source Types
 
 | Source | Setup Requirements | Config Options |
 |--------|-------------------|----------------|
-| **Google Drive** | OAuth 2.0 credentials (Client ID, Secret, Refresh Token) | Folder ID, file types (doc, pdf, sheet, etc.). Supports OCR for PDFs/images |
-| **Zendesk Help Center** | Zendesk API token | Category ID (optional), locale |
-| **Website / Docs (Firecrawl)** | Firecrawl API key (firecrawl.dev) | URL, max pages, include/exclude paths |
-| **GitHub** | Fine-grained GitHub token | Repository (owner/repo), branch, paths, content type (docs, mintlify, source_code) |
-| **HubSpot KB** | HubSpot private app access token | Portal ID, article state filter |
-| **Linear Docs** | Linear API key | Team key (optional), include issues/projects flags |
+| **GitHub** | GitHub API token (configured via KB API keys) | Repository (owner/name), branch, path filter |
+| **Google Drive** | Google OAuth connection | Folder ID (browsable via folder picker) |
+| **Zendesk Help Center** | Zendesk API token (configured via KB API keys) | Subdomain, category ID (optional) |
+| **Website / Docs (Web Crawl)** | Firecrawl API key (configured via KB API keys) | Start URL, max pages, URL pattern filter |
+| **Notion** | Notion OAuth connection | Root page ID |
 
-### Managing Sources
+#### Adding a Source
 
-From the `/kb` dashboard, use the overflow menu on any source to:
+The "Add Source" button opens a four-step wizard:
+
+1. **Choose Source Type** -- Select from GitHub, Google Drive, Zendesk, Web Crawl, or Notion
+2. **Configure** -- Enter the source name and type-specific settings. For Google Drive sources, a folder picker lets you browse and select folders from your connected Google account.
+3. **Sync Settings** -- Toggle auto-sync (periodic 24-hour syncing) and optionally assign a category
+4. **Review & Create** -- Confirm all settings and create the source
+
+#### Managing Sources
+
+From the Sources page, each source has action buttons:
 
 | Action | Description |
 |--------|-------------|
-| **Configure** | Update source-specific settings (folder ID, URL, etc.) |
-| **Sync Now** | Run an immediate one-time sync |
-| **Flush & Re-sync** | Delete all indexed entries and re-sync from scratch |
-| **Toggle Auto-sync** | Enable/disable periodic syncing (24-hour intervals) |
-| **Remove** | Delete the source and all its associated entries |
+| **Edit** | Update source name and configuration |
+| **Sync** | Run an immediate one-time sync |
+| **Delete** | Delete the source and all its associated entries |
 
-Source status indicators:
-- Green = active
-- Arrows = currently syncing
-- Warning = needs setup
-- Red = error
+#### API Keys
 
-### Managing KB Entries
-
-- Entries added by superadmins are auto-approved
-- Entries added by regular users via `/kb add` are submitted for approval
-- Pending entries appear in the dashboard — click to approve or delete
-- Synced entries from connected sources are automatically approved
-
-### KB Categories
-
-Entries can be organized into: General, Engineering, Product, Support, Sales, HR, Legal, Finance, Operations.
-
-### API Key Management
-
-Click the **API Keys** button in the `/kb` dashboard to manage credentials for all KB providers in one place. The dashboard shows which providers are configured, incomplete, or not yet set up.
+The Sources page also manages API keys for external KB access. Click **New API Key** to generate a key. Keys are shown once at creation -- copy them immediately.
 
 ---
 
@@ -163,43 +181,52 @@ Click the **API Keys** button in the `/kb` dashboard to manage credentials for a
 
 ### Creating Agents
 
-DM the TinyHands bot, type `/agents`, and click **+ New Agent**. The guided flow asks:
+Open the **Agents** page in the dashboard and click **New Agent**. Only admins and superadmins see this button.
 
-1. **What should this agent do?** — Describe the goal in plain English
-2. **When should it run?** — Describe the trigger (channel messages, schedule, or external events)
+The four-step wizard works as follows:
 
-TinyHands auto-configures: name, avatar, system prompt, model, tools, effort level, memory, response mode, and channel.
+1. **Describe** -- Enter a plain-English description of what the agent should do. TinyHands uses AI (the goal analyzer) to automatically generate a complete configuration: name, emoji, instructions, model, tools, effort level, memory setting, and response mode. The AI considers which integrations are available and configured. For non-admin users, the analyzer restricts suggestions to read-only tools.
 
-You'll see a confirmation screen where you can adjust:
-- **Model**: haiku, sonnet, or opus
-- **Effort level**: low, medium, high, or max
-- **Default Access**: none, viewer, or member
-- **Write Policy**: auto, confirm, admin_confirm, or deny
-- **Channel**: existing channel or create a new one
+2. **Identity** -- Review and customize the agent name, emoji avatar, and instructions.
 
-### Agent Configuration
+3. **Settings** -- Adjust model, effort, Slack activation mode, access level, action approval policy, and memory toggle.
 
-Each agent has these settings (viewable via `/agents` → overflow → View Config):
+4. **Tools** -- Select which connected services the agent can use. Each service shows two checkboxes:
+   - "Can view data" (read-only access)
+   - "Can make changes" (read-write access; automatically enables view access)
 
-| Setting | Options |
-|---------|---------|
-| **Status** | active, paused, archived |
-| **Model** | haiku, sonnet, opus |
-| **Effort level** | Low (1-2 turns), Medium (10-25), High (50), Max (100+) |
-| **Memory** | Enabled or disabled |
-| **Default Access** | None (hidden), Viewer (read-only), Member (full) |
-| **Write Policy** | Auto, Confirm, Admin Confirm, Deny |
-| **Response mode** | All messages or mentions only |
-| **Tools** | Built-in + custom integrations |
-| **System prompt** | Auto-generated or custom |
+### Agent Detail Page
 
-### Updating Agents
+Each agent's detail page has six tabs:
 
-DM the bot and type `/update-agent`, then select the agent to update. You can modify the system prompt, tools, model, effort, channels, visibility, and members via conversation.
+| Tab | Contents |
+|-----|----------|
+| **Overview** | Editable instructions with rich text editor, model/effort dropdowns (auto-save on change), version history with preview and restore |
+| **Tools** | Action approval policy, list of enabled tools with connection modes, add/remove tools |
+| **Runs** | Paginated execution history with status, user, duration, tokens, cost |
+| **Memory** | Stored memories with category, content, and delete capability |
+| **Triggers** | Schedule and event triggers with add, edit, pause, and delete |
+| **Access** | Default access level, user roles, upgrade requests with approve/deny |
+
+### Version History
+
+Every configuration change creates a new version entry. Version history tracks changes to:
+- Instructions (system prompt)
+- Model
+- Tools
+- Effort (max turns)
+- Memory enabled/disabled
+- Mentions only / respond to all
+- Default access level
+- Write policy
+
+Each version shows the change note, who made the change, and when. You can preview any version to see its full configuration snapshot, and restore it to revert the agent.
+
+This is powered by migration 020 which added columns for model, tools, max_turns, memory_enabled, mentions_only, respond_to_all, default_access, and write_policy to the `agent_versions` table.
 
 ### Pausing and Deleting
 
-From `/agents`, use the overflow menu to pause (stop responding), resume, or delete agents.
+From the agent detail page header, use the Pause/Resume button or the overflow menu to delete. From the Agents list, use the row overflow menu.
 
 ---
 
@@ -209,32 +236,31 @@ From `/agents`, use the overflow menu to pause (stop responding), resume, or del
 
 Each agent has a **default access level** that determines what unenrolled users can do:
 
-| Default Access | Behavior for users without explicit role |
-|---------------|------------------------------------------|
-| **None** | Agent is hidden — only explicitly granted users can see/use it |
-| **Viewer** | Can see the agent, but write actions trigger upgrade requests |
-| **Member** | Can fully interact with the agent |
+| Default Access | Dashboard Label | Behavior for users without explicit role |
+|---------------|-----------------|------------------------------------------|
+| **None** | Invite Only | Agent is hidden -- only explicitly granted users can see/use it |
+| **Viewer** | Limited Access | Can see the agent, but write actions trigger upgrade requests |
+| **Member** | Full Access | Can fully interact with the agent |
 
 Individual users can be granted specific roles that override the default:
 
 | Role | Permissions |
 |------|-------------|
-| **Owner** | Full control — modify agent, manage roles, delete, approve upgrades |
-| **Member** | Full interaction — read and write tool actions |
-| **Viewer** | Read-only — write actions trigger an automatic upgrade request |
+| **Owner** | Full control -- modify agent, manage roles, delete, approve upgrades |
+| **Member** | Full interaction -- read and write tool actions |
+| **Viewer** | Read-only -- write actions trigger an automatic upgrade request |
 
 The agent creator automatically becomes the owner. Platform admins (superadmin/admin) have owner-level access to all agents.
 
-### Write Policies
+### Action Approval (Write Policies)
 
-Each agent has a **write policy** controlling how write tool actions are handled at runtime:
+Each agent has an **action approval** setting controlling how write tool actions are handled at runtime:
 
-| Policy | Behavior |
-|--------|----------|
-| **Auto** | Write actions execute immediately for members |
-| **Confirm** | Agent pauses and DMs the requesting user with action details and Approve/Deny buttons |
-| **Admin Confirm** | Agent pauses and DMs the agent owner with action details and Approve/Deny buttons |
-| **Deny** | Write actions are blocked — the agent receives an error and cannot perform writes |
+| Setting | Dashboard Label | Behavior |
+|---------|----------------|----------|
+| **auto** | Automatic | Write actions execute immediately for members |
+| **confirm** | Ask User First | Agent pauses and DMs the requesting user with action details and Approve/Deny buttons |
+| **admin_confirm** | Ask Owner/Admins | Agent pauses and DMs the agent owner with action details and Approve/Deny buttons |
 
 Approval gates are enforced at runtime via Redis-backed state. When an approval request is created, the agent's execution is suspended until the approver responds. If approved, execution resumes and the write action completes. If denied, the requesting user receives a DM notification explaining which action was blocked.
 
@@ -251,7 +277,7 @@ When a viewer attempts a write action on an agent (and write_policy is not "deny
 
 ### Managing Agent Roles
 
-From `/agents`, click the overflow menu on an agent → **Members** to manage roles. You can grant owner, member, or viewer access to specific users.
+On the agent's detail page, go to the **Access** tab to manage roles. You can grant owner, member, or viewer access to specific users.
 
 ---
 
@@ -265,43 +291,52 @@ Each tool on an agent can be configured with a connection mode:
 |------|-------------|
 | **Team** | Single shared credential for the whole workspace |
 | **Delegated** | Owner's personal credential shared through the agent |
-| **Runtime** | Each user brings their own credential (prompted to `/connect` if missing) |
+| **Runtime** | Each user brings their own credential (prompted to connect if missing) |
 
 ### Personal Connections
 
-Users connect their personal accounts via `/tools` or `/connect`:
-1. Run `/tools` in a bot DM — the **Available** section shows integrations that support personal connections
-2. Click **Connect** next to the desired service
-3. Complete the OAuth flow in the browser, or enter an API key in the modal
-4. Credentials are encrypted with AES-256-GCM and stored securely
+Users connect their personal accounts from the **Connections** page in the dashboard:
 
-Users can also run `/connect` as a shortcut for the same flow.
+1. Go to the Connections page
+2. Click **Add Connection**
+3. Choose an OAuth service or API key integration from the list
+4. Complete the OAuth flow in the browser, or enter credentials in the dialog
 
-Connected services appear in the **My Connections** section of `/tools`, where users can disconnect at any time.
+Credentials are encrypted with AES-256-GCM and stored securely. Connected services appear in the **Personal Connections** tab, where users can disconnect at any time.
 
 Supported personal connection types:
-- **Google** — Drive, Sheets, Gmail (OAuth)
-- **Notion** — Workspace access (OAuth)
-- **GitHub** — Personal repository access (OAuth)
-- **API key integrations** — Any integration with `connectionModel: "personal"` or `"hybrid"` that accepts API keys
+- **Google** -- Drive, Sheets, Docs, Gmail (single OAuth connection covers all four)
+- **Notion** -- Workspace access (OAuth)
+- **GitHub** -- Personal repository access (OAuth)
+- **API key integrations** -- Any integration with `connectionModel: "personal"` or `"hybrid"` that accepts API keys
+
+### Google Drive Folder Restrictions
+
+For Google connections, users can restrict access to a specific Drive folder. On the Connections page, click **Set Folder** or **Change Folder** next to a Google connection. A folder browser lets you navigate your Drive hierarchy and select a folder. When a folder restriction is set:
+
+- The connection shows the folder name beneath the integration name
+- Agents using this connection can only access files within that folder and its subfolders
+- Click **Change Folder** to pick a different folder, or clear the restriction for full access
+
+This restriction is stored as `root_folder_id` and `root_folder_name` in the connection's encrypted credentials.
 
 ### Setting Up OAuth (Admin)
 
-To enable personal connections, configure these environment variables:
+To enable personal connections via OAuth, configure these environment variables:
 
 ```env
 # Generate with: openssl rand -base64 32
 ENCRYPTION_KEY=<at least 32 characters>
 
-# From Google Cloud Console → APIs & Services → Credentials → OAuth 2.0
+# From Google Cloud Console -> APIs & Services -> Credentials -> OAuth 2.0
 GOOGLE_OAUTH_CLIENT_ID=<your-client-id>
 GOOGLE_OAUTH_CLIENT_SECRET=<your-client-secret>
 
-# From notion.so/my-integrations → Create integration → OAuth
+# From notion.so/my-integrations -> Create integration -> OAuth
 NOTION_OAUTH_CLIENT_ID=<your-client-id>
 NOTION_OAUTH_CLIENT_SECRET=<your-client-secret>
 
-# From github.com/settings/developers → OAuth Apps → New
+# From github.com/settings/developers -> OAuth Apps -> New
 GITHUB_OAUTH_CLIENT_ID=<your-client-id>
 GITHUB_OAUTH_CLIENT_SECRET=<your-client-secret>
 
@@ -309,7 +344,32 @@ GITHUB_OAUTH_CLIENT_SECRET=<your-client-secret>
 OAUTH_REDIRECT_BASE_URL=https://your-domain.com
 ```
 
-OAuth callbacks are handled at `GET /auth/callback/:integration` on the Express server.
+#### Google OAuth Setup
+
+All four Google integrations (Drive, Sheets, Docs, Gmail) share a single OAuth client configuration. You only need to set up one Google OAuth app:
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/) and create or select a project
+2. Navigate to **APIs & Services > Credentials**
+3. Click **Create Credentials > OAuth 2.0 Client ID**
+4. Set application type to **Web application**
+5. Add the authorized redirect URI: `https://your-domain.com/auth/callback/google`
+6. Copy the client ID and client secret into your `.env` file
+
+Required Google API scopes (requested automatically during OAuth):
+- `https://www.googleapis.com/auth/drive` (Drive access)
+- `https://www.googleapis.com/auth/spreadsheets` (Sheets access)
+- `https://www.googleapis.com/auth/documents` (Docs access)
+- `https://mail.google.com/` (Gmail access)
+
+All Google OAuth flows use a single callback path `/auth/callback/google` regardless of which Google integration initiated the flow. The system stores the original integration ID (e.g., `google-drive`, `gmail`) in the OAuth state and creates the connection for the correct integration after the callback completes.
+
+#### OAuth Callback Handling
+
+OAuth callbacks are handled at `GET /auth/callback/:integration` on the Express server. The callback path determines the redirect URI that must match what's registered with the OAuth provider:
+
+- Google: `/auth/callback/google` (all four Google integrations share this)
+- Notion: `/auth/callback/notion`
+- GitHub: `/auth/callback/github`
 
 ### SSL / Nginx Setup for OAuth
 
@@ -354,8 +414,8 @@ You can also pass the domain and email as arguments:
 
 The Docker Compose setup includes:
 
-- **Nginx** (`nginx:alpine`) — listens on ports 80 and 443, redirects HTTP to HTTPS, proxies HTTPS traffic to the TinyHands app on port 3000
-- **Certbot** (`certbot/certbot`) — automatically renews certificates every 12 hours
+- **Nginx** (`nginx:alpine`) -- listens on ports 80 and 443, redirects HTTP to HTTPS, proxies HTTPS traffic to the TinyHands app on port 3000
+- **Certbot** (`certbot/certbot`) -- automatically renews certificates every 12 hours
 
 The Nginx configuration template at `nginx/default.conf.template` uses the `OAUTH_DOMAIN` environment variable for `server_name` and SSL certificate paths. The `nginx:alpine` image automatically substitutes environment variables in template files.
 
@@ -371,13 +431,13 @@ Certificates are renewed automatically by the certbot service. No manual interve
 
 ## Triggers
 
-Triggers are configured during agent creation based on the "When should it run?" description. Types include:
+Triggers are configured on the agent's Triggers tab in the dashboard. Types include:
 
-- **Channel messages** — agent responds when messages appear in its channel
-- **Scheduled** — agent runs on a cron schedule (e.g., "Every Monday at 9am")
-- **External events** — agent triggers on webhooks from Linear, Zendesk, etc.
+- **Channel messages** -- agent responds when messages appear in its channel
+- **Scheduled** -- agent runs on a cron schedule (e.g., "Every Monday at 9am")
+- **External events** -- agent triggers on webhooks from Linear, Zendesk, Intercom, or GitHub
 
-Triggers can be paused and resumed from `/agents`.
+Triggers can be paused and resumed from the Triggers tab.
 
 ---
 
@@ -414,14 +474,38 @@ These notifications include the agent name, requesting user, and context, with o
 
 ---
 
+## Database Migrations
+
+### Migration 019: Legacy Google Cleanup
+
+Migration `019_cleanup_legacy_google.sql` removes the legacy monolithic Google Workspace integration:
+
+- Deletes connections for the legacy `google` integration ID
+- Removes `google-read` and `google-write` tool names from all agents' tools arrays
+- Deletes the legacy `google-read` and `google-write` custom tool records
+
+This migration runs automatically and is safe to apply -- the four new Google integrations (google-drive, google-sheets, google-docs, gmail) are independent and unaffected.
+
+### Migration 020: Version History Fields
+
+Migration `020_version_history_fields.sql` expands the `agent_versions` table to track all configuration changes, not just system prompt changes. New columns:
+
+- `model` (TEXT)
+- `tools` (TEXT, JSON array)
+- `max_turns` (INTEGER)
+- `memory_enabled` (BOOLEAN)
+- `mentions_only` (BOOLEAN)
+- `respond_to_all` (BOOLEAN)
+- `default_access` (TEXT)
+- `write_policy` (TEXT)
+
+---
+
 ## Quick Reference
 
 | Command | Where | Who | What it does |
 |---------|-------|-----|--------------|
-| `/agents` | Bot DM | All users | View and manage agents |
-| `/update-agent` | Bot DM | Agent owners/admins | Update an agent via conversation |
-| `/tools` | Bot DM | All users (admin actions restricted) | Browse tools, manage personal connections, register integrations (admin) |
-| `/kb` | Bot DM | Platform admins | KB dashboard (sources, entries, API keys) |
+| `/agents` | Bot DM | All users | Get a link to the web dashboard |
 | `/kb search <query>` | Bot DM | All users | Search the knowledge base |
 | `/kb add` | Bot DM | All users | Submit a KB entry (pending approval if non-admin) |
 | `/connect` | Bot DM | All users | Manage personal tool connections |
@@ -430,12 +514,51 @@ These notifications include the agent name, requesting user, and context, with o
 
 ---
 
+## Environment Variables
+
+Core required vars (see `.env.example` for full list):
+
+```env
+SLACK_BOT_TOKEN=xoxb-...
+SLACK_APP_TOKEN=xapp-...
+SLACK_SIGNING_SECRET=...
+ANTHROPIC_API_KEY=...
+DATABASE_URL=postgresql://...
+REDIS_URL=redis://...
+```
+
+Optional:
+
+| Variable | Purpose |
+|----------|---------|
+| `WEB_DASHBOARD_URL` | Public URL for the web dashboard (used in Slack messages) |
+| `ENCRYPTION_KEY` | 32+ character key for encrypting credentials (AES-256-GCM) |
+| `GOOGLE_OAUTH_CLIENT_ID` | Google OAuth client ID (shared by Drive, Sheets, Docs, Gmail) |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | Google OAuth client secret |
+| `NOTION_OAUTH_CLIENT_ID` | Notion OAuth client ID |
+| `NOTION_OAUTH_CLIENT_SECRET` | Notion OAuth client secret |
+| `GITHUB_OAUTH_CLIENT_ID` | GitHub OAuth client ID |
+| `GITHUB_OAUTH_CLIENT_SECRET` | GitHub OAuth client secret |
+| `OAUTH_REDIRECT_BASE_URL` | Public URL for OAuth callbacks (e.g., `https://yourdomain.com`) |
+| `OAUTH_DOMAIN` | Domain for Nginx SSL setup |
+| `LETSENCRYPT_EMAIL` | Email for Let's Encrypt certificate notifications |
+| `GITHUB_TOKEN` | GitHub token for auto-update feature |
+| `PORT` | Server port (default 3000) |
+| `LOG_LEVEL` | Logging level |
+| `DOCKER_BASE_IMAGE` | Base Docker image for agent execution |
+| `DAILY_BUDGET_USD` | Daily spending limit |
+| `AUTO_UPDATE_ENABLED` | Enable pull-based auto-update from GitHub |
+
+---
+
 ## Tips
 
-- Set up integrations (`/tools`) and knowledge sources (`/kb`) before creating agents — agents auto-select tools based on their goal.
-- Use read-only access levels for integrations unless agents genuinely need write access.
+- Set up integrations (Tools & Integrations page) and knowledge sources (KB Sources page) before creating agents -- agents auto-select tools based on their goal.
+- For Google services, set up one OAuth app with the `/auth/callback/google` redirect URI -- it covers Drive, Sheets, Docs, and Gmail.
+- Use "Can view data" access for integrations unless agents genuinely need to make changes.
 - Enable auto-sync on knowledge sources to keep agent context up to date.
-- Use default access "none" for team-specific agents (e.g., engineering-only, sales-only).
-- Set write policy to "admin_confirm" for agents that modify external systems.
+- Use "Invite Only" access for team-specific agents (e.g., engineering-only, sales-only).
+- Set action approval to "Ask Owner/Admins" for agents that modify external systems.
 - Use "runtime" connection mode for tools that should use each user's own credentials.
-- Start with medium effort level — increase to high or max only for agents doing deep research.
+- Start with Standard effort level -- increase to Thorough or Maximum only for agents doing deep research.
+- Use folder restrictions on Google Drive connections to limit agent access to specific folders.

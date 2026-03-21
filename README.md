@@ -1,8 +1,8 @@
-# ✋ Tiny Hands
+# Tiny Hands
 
-**Extra hands for your Slack workspace. Open-source, self-hosted, 16-bit.**
+**Extra hands for your Slack workspace. Open-source, self-hosted.**
 
-While big tech builds "Enterprise Agentic Operating Systems," we build extra hands. Create autonomous AI agents that live in your Slack channels, connect to your tools and data, and get work done through conversation. Your VPS, your keys, your hands.
+Create autonomous AI agents that live in your Slack channels, connect to your tools and data, and get work done through conversation. Your VPS, your keys, your hands.
 
 ---
 
@@ -18,7 +18,7 @@ docker compose up -d
 
 For OAuth (Google, GitHub, Notion), set `OAUTH_DOMAIN` in `.env` and run `./deploy/init-letsencrypt.sh` to enable HTTPS with auto-renewing SSL certificates.
 
-**Install script** (Ubuntu/Debian — installs Docker, configures everything interactively):
+**Install script** (Ubuntu/Debian -- installs Docker, configures everything interactively):
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/anantgarg/tinyhands/main/scripts/install.sh | sudo bash
@@ -28,425 +28,168 @@ curl -sSL https://raw.githubusercontent.com/anantgarg/tinyhands/main/scripts/ins
 
 ## What is Tiny Hands?
 
-Tiny Hands turns your Slack workspace into a crew of nimble AI teammates. Each hand gets its own channel, its own persona, its own tools, and its own knowledge. You talk to them like teammates — they juggle tasks autonomously using Claude, grab context from connected sources, and learn from feedback.
+Tiny Hands turns your Slack workspace into a crew of AI teammates. Each agent gets its own channel, persona, tools, and knowledge. You talk to them like teammates -- they execute tasks autonomously using Claude, pull context from connected sources, and learn from feedback.
 
-**Core idea:** Every agent is Claude running in a Docker container. Slack is the control plane. You describe the job, give it the right equipment — Claude does the rest.
-
----
-
-## Who's in the Crew?
-
-### Customer Support
-- **Ticket triage hand** — Automatically categorize and route incoming Zendesk tickets by priority and topic
-- **Help desk buddy** — Answer customer questions by searching your help center, internal docs, and past tickets
-- **Escalation watcher** — Watch for tickets approaching SLA deadlines and alert the right team
-
-### Sales
-- **Lead enrichment hand** — When a contact form submission arrives, research the company and enrich the lead with firmographic data
-- **Deal intel hand** — Summarize HubSpot deal activity, flag stalled deals, and prep account briefs before meetings
-- **Competitive scout** — Monitor competitor websites and docs for changes, summarize weekly
-
-### Engineering
-- **PR reviewer** — Analyze pull requests on GitHub, flag potential issues, suggest improvements
-- **Incident responder** — When an alert fires, gather context from logs, recent deploys, and related issues
-- **Docs keeper** — Monitor code changes and flag when documentation is out of date
-
-### Product
-- **Feature request tracker** — Aggregate and categorize feature requests from Zendesk, Intercom, and Slack into themes
-- **Release notes writer** — Pull merged PRs and Linear issues to draft release notes each sprint
-- **User research hand** — Search across customer conversations and tickets to find patterns
-
-### Operations & HR
-- **Onboarding buddy** — Answer new hire questions from your internal wiki, HR docs, and company policies
-- **Procurement hand** — Look up vendor information, compare quotes, and prep approval requests
-- **Reporting hand** — Generate weekly metrics reports from PostHog, Zendesk, or HubSpot data
-
-### Marketing
-- **Content researcher** — Research topics by pulling from your knowledge base, competitor sites, and industry data
-- **SEO monitor** — Track SERP rankings, monitor your docs and blog content, suggest optimization opportunities
-- **Social listener** — Summarize brand mentions and competitor activity
+**Core idea:** Every agent is Claude running in a Docker container. Slack is the control plane. A web dashboard manages everything. You describe the job, give it tools -- Claude does the rest.
 
 ---
 
-## What Can They Do?
+## Use Cases
+
+**Customer Support** -- Triage tickets, answer questions from your help center, watch for SLA breaches
+
+**Sales** -- Enrich leads, summarize deal activity, monitor competitors
+
+**Engineering** -- Review PRs, respond to incidents, keep docs updated
+
+**Product** -- Track feature requests, draft release notes, analyze user research
+
+**Marketing** -- Research content, track SEO rankings, monitor brand mentions
+
+**Operations** -- Onboard new hires, generate reports, manage procurement
+
+---
+
+## Features
 
 ### Agent Management
-- Run `/agents` to open the interactive dashboard — create, update, pause, resume, and delete agents all from one place
-- Click **+ New Agent** — a guided 2-step flow asks _what_ the hand should do and _when_ it should run
-- Use the overflow menu on any agent to update its goal, channels, or config
-- Each hand gets a dedicated Slack channel with a custom avatar emoji and persona
+- **Web Dashboard** at your domain -- create, configure, pause, resume, and delete agents
+- **Agent Creation Wizard** -- 4-step flow: Describe (AI generates config), Identity, Settings, Tools
+- **AI Goal Analyzer** -- describe what the agent should do and it auto-generates name, instructions, model, tools, and activation mode
+- **Templates** -- 10 pre-built agent templates, activate with one click
+- **Version History** -- every config change tracked (instructions, model, tools, effort, memory, access, write policy) with preview and restore
+- **Inline Editing** -- click agent name to rename, edit instructions with rich text editor, auto-save dropdowns
 
 ### Tool Integrations
-Register and manage third-party tool integrations entirely from Slack via `/tools`:
 
-| Integration | Read Tools | Write Tools |
-|-------------|-----------|-------------|
-| **Zendesk** | Search tickets, get details, list groups/users | Create tickets, add comments, update priority/tags |
-| **Linear** | Search issues, list projects/teams/cycles | Create/update issues, add comments, create projects |
-| **PostHog** | Query events, get persons, list feature flags & insights | — (read-only) |
-| **HubSpot** | Search contacts/deals/companies, list pipelines | Create/update contacts/deals/companies, add notes/tasks |
-| **SerpAPI** | SERP rankings across Google, Bing, Yahoo | — (read-only) |
+Core tools (file access, web search, code execution) are always available. Connected services add external capabilities:
 
-- `/tools` is accessible to **all users** — three-section view: Shared Tools, My Connections, Available
-- **Personal connections** — connect your own credentials via OAuth or API key directly from `/tools`
-- **Encrypted credentials** — all tool registrations create AES-256-GCM encrypted connections (team or personal)
-- **Connection modes**: team (shared creds), delegated (owner's personal creds), runtime (each user brings own)
-- **Write policies** per agent with **runtime approval gates**: auto, confirm (user approves via DM), admin_confirm (owner approves via DM), deny
-- **Missing credential detection** — if a user lacks required credentials, they're prompted to connect and the agent auto-retries
-- **Credential selection during agent creation** — choose connection mode per tool when setting up an agent
+| Integration | Can View Data | Can Make Changes | Connection |
+|-------------|--------------|-----------------|------------|
+| **Chargebee** | Customers, subscriptions, invoices | Manage billing, apply coupons | API key |
+| **Google Drive** | Search, list, download files | Create folders, move files, upload | OAuth |
+| **Google Sheets** | Read spreadsheet data | Create, update, append sheets | OAuth |
+| **Google Docs** | Read documents | Create, update documents | OAuth |
+| **Gmail** | Search, read emails | Send, reply to emails | OAuth |
+| **HubSpot** | Contacts, deals, companies | Create/update records, tasks | API key |
+| **Knowledge Base** | Search internal KB | -- | Auto |
+| **Linear** | Issues, projects, cycles | Create/update issues, comments | API key |
+| **PostHog** | Events, persons, feature flags | -- | API key |
+| **SerpAPI** | SERP rankings (Google, Bing, Yahoo) | -- | API key |
+| **Zendesk** | Tickets, groups, users | Create tickets, comments, update priority | API key |
+
+All four Google integrations share a single OAuth flow -- one authorization covers Drive, Sheets, Docs, and Gmail.
 
 ### Knowledge Base
-Manage a shared knowledge base via `/kb`:
+
+Hierarchical browsing: **Sources > Documents > Content**
 
 | Source Type | Description |
 |-------------|-------------|
-| **Google Drive** | Import docs, sheets, PDFs from Drive folders. Google Docs/Sheets exported as text. |
-| **Zendesk Help Center** | Import published help center articles |
-| **Website** | Scrape and import content from any website or documentation site |
-| **GitHub** | Import docs, READMEs, source code — with **Mintlify docs** auto-detection |
-| **HubSpot KB** | Import knowledge base articles from HubSpot CMS |
-| **Linear Docs** | Import project documents and optionally issues from Linear |
+| **GitHub** | Markdown files from repos, with Mintlify docs auto-detection |
+| **Google Drive** | Docs, sheets, PDFs from Drive folders (with folder picker) |
+| **Zendesk Help Center** | Published help center articles |
+| **Website** | Crawl and index web pages |
+| **HubSpot KB** | Knowledge base articles from HubSpot CMS |
+| **Linear Docs** | Project documents from Linear |
 
-- **Step-by-step setup** — Adding a source walks you through API key configuration and source settings in a guided thread
-- **Auto-sync** with configurable intervals (default 24h)
-- **Flush & Re-sync** to start fresh
-- Full-text search via PostgreSQL `tsvector` + GIN indexes
-- Manual entries with approval workflow for agent-contributed content
+- Source cards show entry counts and sync status
+- Click into a source to browse its entries
+- Auto-sync with configurable intervals
+- Full-text search via PostgreSQL tsvector + GIN indexes
+- Manual entries with approval workflow
+- Edit existing sources (name, config) with help text on all fields
+- Google Drive folder picker with breadcrumb navigation
 
-### Mintlify Docs Support
-The GitHub connector automatically detects Mintlify documentation projects:
-- Finds `docs.json` or `mint.json` in the repo
-- Parses the navigation structure to discover all pages
-- Fetches MDX files, strips JSX components, extracts YAML frontmatter
-- Creates properly categorized KB entries with titles and descriptions from frontmatter
+### Connections & Credentials
 
-### More Tricks
-- **Autonomous Execution** — BullMQ job queue dispatches tasks to Docker-isolated Claude containers with real-time streaming status to Slack threads
-- **Self-Improvement** — Critique an agent's output in-thread and it proposes diffs to its own system prompt. Full version history.
-- **Agent Memory** — Optional persistent memory across runs
-- **Schedule Triggers** — Run agents hourly, daily, or weekly with cron expressions. Timezone auto-detected from your Slack profile.
-- **Event Triggers** — Fire agents on Slack messages, Linear updates, Zendesk tickets, or any webhook
-- **Skills** — Attach MCP server integrations and prompt template skills
-- **Multi-Step Workflows** — Stateful workflows with timers, branching, and human-in-the-loop
-- **Agent Teams** — Lead agents spawn sub-agents for parallel/delegated work
-- **Observability** — Structured logging, cost tracking, alerting
-- **Self-Evolution** — Agents can write their own tools, create MCP configs, and update their prompts
-- **Role-Based Access Control** — Platform roles (superadmin/admin/member), per-agent access levels (owner/member/viewer/none), write policies, auto-upgrade requests
-- **Nginx Reverse Proxy with Auto-SSL** — Built-in Nginx + Let's Encrypt for HTTPS, required for OAuth callbacks (Google, GitHub, Notion). One command to bootstrap certificates.
-- **Complete Tool Connections UX** — Encrypted credential storage (AES-256-GCM), OAuth and API key flows, team/delegated/runtime connection modes, credential selection during agent creation, missing-credential prompts with auto-retry
-- **Runtime Approval Gates** — Write policies enforced at execution time with DM-based approve/deny flows for confirm and admin_confirm modes
-- **Audit Logging** — Comprehensive action audit trail for role changes, tool invocations, agent operations, and connection management
-- **Pull-Based Deploy** — Multiple deployments poll for updates automatically. No webhook needed.
-- **Agent Templates** — 10 pre-built agent templates. Browse via `/templates`, activate with one click.
-- **Contributor-Friendly** — Add templates, skills, or tools via PR. No wiring needed — just drop a file.
+- **Team connections** -- shared API keys managed by admins in Tools & Integrations
+- **Personal connections** -- individual OAuth or API key credentials on the Connections page
+- **Google OAuth** -- "Connect with Google" button, no manual token entry
+- **Folder restrictions** -- Set Folder / Change Folder on Google Drive connections to limit agent access
+- **Credential modes per tool** -- Team credentials, Requesting user's, or Agent creator's
+- **AES-256-GCM encryption** for all stored credentials
+
+### Slack Integration
+
+- **Channel-based agents** -- each agent lives in one or more Slack channels
+- **DM routing** -- message the bot directly, it routes to the most relevant agent or shows a picker
+- **Activation modes** -- only when @mentioned, relevant messages (AI-determined), or every message
+- **Real-time streaming** -- agent responses stream to Slack threads in real-time
+- **Custom avatars** -- each agent posts with its own name and emoji
+- **Slash commands** -- `/agents` opens dashboard, `/new-agent` creates agents from Slack
+
+### Triggers & Automation
+
+| Type | Description |
+|------|-------------|
+| **Schedule** | Cron expressions with timezone support (auto-detected from Slack) |
+| **Slack Channel** | Fire on messages in specific channels |
+| **Linear** | React to issue updates |
+| **Zendesk** | React to ticket events |
+| **Intercom** | React to conversation events |
+| **Webhook** | Generic HTTP webhook trigger |
+
+### Access Control
+
+- **Platform roles** -- Super Admin, Admin, Member
+- **Agent roles** -- Owner, Member (full access), Viewer (limited)
+- **Default access levels** -- Full Access, Limited Access, Invite Only
+- **Action approval** -- Automatic, Ask User First, Ask Owner/Admins
+- **Non-admin restrictions** -- members cannot create agents, manage integrations, or access admin pages
+- **Upgrade requests** -- viewers can request elevated access
+
+### More
+
+- **Agent Memory** -- optional persistent memory across runs (facts, preferences, context)
+- **Self-Improvement** -- critique an agent's output in-thread and it proposes prompt updates
+- **Self-Evolution** -- agents can write their own tools and MCP configs
+- **Agent Teams** -- lead agents spawn sub-agents for parallel work
+- **Multi-Step Workflows** -- stateful DAG workflows with timers and human-in-the-loop
+- **Skills** -- attach MCP server integrations and prompt template skills
+- **Observability** -- cost tracking, error rates, alerts, daily digest
+- **Audit Log** -- comprehensive action trail for all changes
+- **Auto-Deploy** -- pull-based deploy from GitHub, no webhook needed
 
 ---
 
-## Slack Commands
+## Web Dashboard
 
-| Command | Description |
-|---------|-------------|
-| `/agents` | Interactive agent dashboard — create, update, pause, resume, delete |
-| `/templates` | Browse and activate pre-built agent templates |
-| `/tools` | Browse tools, manage personal connections, register integrations (all users) |
-| `/kb` | Knowledge base dashboard — sources, entries, API keys |
-| `/connect` | Manage personal tool connections (Google, Notion, GitHub) |
-| `/audit` | View action audit log (platform admins only) |
+The dashboard is the primary management interface. Pages:
+
+| Page | Access | Description |
+|------|--------|-------------|
+| Dashboard | All | Agent metrics, recent activity, cost tracking |
+| Agents | All | List, filter, search agents. Create/edit (admin only) |
+| Tools & Integrations | Admin | Connect services, manage integrations |
+| Connections | All | Personal OAuth/API key connections, folder restrictions |
+| Knowledge Base | All | Browse sources and entries, search, add entries (admin) |
+| Triggers | All | Manage schedule, webhook, and event triggers |
+| Requests | All | Pending tool requests, upgrade requests, evolution proposals |
+| Error Logs | All | Recent errors and failed runs |
+| Audit Log | Admin | Full action audit trail |
+| Access & Roles | Admin | Platform role management |
+| Workspace Settings | Admin | Global configuration |
 
 ---
 
 ## Architecture
 
 ```
-SLACK WORKSPACE
-  └── Slash commands + messages → Bolt Socket Mode listener
-  └── Webhooks (Linear, Zendesk, GitHub) → Express HTTP :3000
-
-TINY HANDS CORE (Node.js + TypeScript — PM2 managed)
-  ├── Slack Listener    — receives messages, resolves agent, enqueues jobs
-  ├── Webhook Receiver  — /webhooks/* endpoints for triggers and auto-deploy
-  ├── Background Sync   — periodic source re-index + KB auto-sync
-  ├── Scheduler         — cron-based schedule trigger evaluation (60s loop)
-  └── Dashboard         — Slack Home Tab via views.publish
-
-BULLMQ + REDIS
-  ├── Priority queues: high (interactive) → normal (triggers) → low (background)
-  ├── Token bucket rate limiter (Anthropic API)
-  └── Delayed jobs for workflow timers
-
-WORKERS (1–3 concurrent, PM2 managed)
-  └── Worker pulls job → spawns Docker container → runs Claude Agent SDK
-      → streams events to Slack → writes structured logs
-
-DOCKER CONTAINERS (ephemeral, one per run)
-  ├── Base image: tinyhands-runner (Node.js + Claude Agent SDK + tools)
-  ├── Mounted: agent working dir (rw), source cache (ro), memory (ro)
-  └── Tool configs injected as /tools/{name}.config.json
-
-DATA LAYER
-  ├── PostgreSQL: agents, versions, permissions, sources, KB (FTS), workflows, memory
-  ├── Redis: BullMQ jobs, rate limiter, trigger dedup cache
-  └── Filesystem: agent working dirs, Docker volumes, JSON logs
+Slack (Socket Mode) + Web Dashboard (React)
+                |                    |
+         Bolt Listener         Express API
+                |                    |
+         BullMQ + Redis (job queue, rate limiting)
+                |
+         Workers (1-3, PM2 managed)
+                |
+         Docker containers (one per run)
+                |
+         Claude Agent SDK + mounted tools
 ```
 
----
-
-## Installation
-
-### Prerequisites
-
-- A server with 8+ GB RAM (Ubuntu 22.04+ recommended)
-- A Slack workspace where you can install apps
-- An Anthropic API key
-
-### Option A: Docker Compose (any server)
-
-Requires Docker with Compose plugin. Includes PostgreSQL and Redis — no external databases needed.
-
-```bash
-git clone https://github.com/anantgarg/tinyhands.git /opt/tinyhands
-cd /opt/tinyhands
-cp .env.example .env
-```
-
-Edit `.env` with your Slack and Anthropic credentials (see [Slack App Setup](#slack-app-setup) below), then:
-
-```bash
-docker compose up -d
-```
-
-This builds and starts everything: Tiny Hands, PostgreSQL, Redis, and the agent runner image.
-
-### Option B: Install Script (Ubuntu/Debian)
-
-Installs Docker, clones the repo, and walks you through configuration:
-
-```bash
-curl -sSL https://raw.githubusercontent.com/anantgarg/tinyhands/main/scripts/install.sh | sudo bash
-```
-
-### Option C: Manual Installation
-
-<details>
-<summary>Click to expand manual setup steps</summary>
-
-#### 1. Install system dependencies
-
-```bash
-# Docker
-curl -fsSL https://get.docker.com | sh
-
-# Node.js 20
-curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-apt-get install -y nodejs
-
-# PM2
-npm install -g pm2
-
-# Redis
-apt-get install -y redis-server
-systemctl enable redis-server
-```
-
-#### 2. Clone and install
-
-```bash
-git clone https://github.com/anantgarg/tinyhands.git /opt/tinyhands
-cd /opt/tinyhands
-npm install
-```
-
-#### 3. Build the Docker base image
-
-```bash
-docker build -t tinyhands-runner:latest ./docker/
-```
-
-#### 4. Set up PostgreSQL
-
-Create a database and note the connection string:
-
-```bash
-# Example for managed Postgres (DigitalOcean, Supabase, etc.)
-# Your DATABASE_URL will look like:
-# postgresql://user:password@host:25060/tinyhands?sslmode=require
-```
-
-#### 5. Configure environment
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env` with your credentials:
-
-```env
-# Required
-SLACK_BOT_TOKEN=xoxb-...
-SLACK_APP_TOKEN=xapp-...
-SLACK_SIGNING_SECRET=...
-ANTHROPIC_API_KEY=sk-ant-...
-DATABASE_URL=postgresql://...
-REDIS_URL=redis://localhost:6379
-
-# Optional
-GITHUB_TOKEN=ghp_...              # For auto-deploy webhook
-GITHUB_WEBHOOK_SECRET=...         # For auto-deploy verification
-AUTO_UPDATE_ENABLED=true          # Pull-based auto-deploy
-AUTO_UPDATE_INTERVAL=300000       # Check every 5 minutes
-LOG_LEVEL=info
-DAILY_BUDGET_USD=50
-MAX_CONCURRENT_WORKERS=3
-```
-
-#### 6. Run migrations and start
-
-```bash
-npm run build
-npx tsx src/db/migrate.ts
-pm2 start ecosystem.config.js
-pm2 save && pm2 startup
-```
-
-This starts:
-- **tinyhands-listener** — Slack event handler and slash command processor
-- **tinyhands-worker-1/2/3** — Job workers that execute agent runs in Docker
-- **tinyhands-sync** — Background sync for sources and auto-sync schedules
-- **tinyhands-scheduler** — Cron-based schedule trigger evaluation
-
-</details>
-
-### Slack App Setup
-
-1. Go to [api.slack.com/apps](https://api.slack.com/apps) and click **Create New App** > **From scratch**
-2. Enable **Socket Mode** under Settings and generate an App-Level Token (`xapp-...`)
-3. Under **OAuth & Permissions**, add these Bot Token Scopes:
-   - `channels:manage`, `channels:read`, `channels:history`, `channels:join`
-   - `chat:write`, `chat:write.customize` (enables per-agent bot name and avatar)
-   - `commands`
-   - `users:read`
-   - `reactions:read`, `reactions:write`
-   - `files:read`
-   - `groups:history`, `groups:write` (for private channel support)
-   - `im:history`, `im:write` (for superadmin DM commands)
-4. Under **Slash Commands**, create:
-   - `/agents` — Manage AI agents
-   - `/templates` — Browse and activate agent templates
-   - `/tools` — Manage tool integrations
-   - `/kb` — Knowledge base dashboard
-5. Under **Interactivity & Shortcuts**, enable Interactivity
-6. Under **Event Subscriptions**, subscribe to bot events:
-   - `message.channels`, `message.im`, `app_mention`
-   - `reaction_added`
-   - `app_home_opened`
-7. Install the app to your workspace and copy the Bot Token (`xoxb-...`)
-
-### Initialize Superadmin
-
-The first user to run `/agents` is automatically promoted to superadmin. Superadmins can:
-- Register and configure tool integrations
-- Manage KB API keys and sources
-- Approve write-tool access requests
-- Manage all agents regardless of ownership
-
----
-
-## Usage
-
-### Creating an Agent from a Template
-
-1. Run `/templates` (or click **Templates** from `/agents`)
-2. Browse 10 pre-built CMO agent templates grouped by category
-3. Click **Use Template** — pick a channel and confirm
-4. The agent is live with a tuned system prompt, tools, skills, and model pre-configured
-5. On first interaction, templates like Competitor Analyst and SEO Monitor will ask for your company context and remember it
-
-**Available templates:** SEO Monitor, Content Strategist, Social Media Manager, Brand Monitor, Competitor Analyst, Market Research Analyst, Marketing Analytics Reporter, Email Campaign Optimizer, Customer Feedback Analyst, Growth Strategist
-
-### Creating a Custom Agent
-
-1. Run `/agents` and click **+ New Agent**
-2. **Step 1:** Describe what you want the hand to do (e.g., "Enrich incoming leads with company data from their email domain")
-3. **Step 2:** Choose when it should run — every message, when @mentioned, when relevant, on a schedule, or a combination
-4. Pick a channel for the hand to live in (or create a new one)
-5. Confirm — Tiny Hands auto-configures the name, model, tools, and system prompt
-6. Message the agent in its channel — it responds autonomously
-
-### Connecting Tool Integrations
-
-**Admins** register team-wide integrations:
-1. Run `/tools` to see the tools dashboard
-2. Under **Available**, click **Register** on an integration (e.g., Zendesk)
-3. Enter your API credentials — stored encrypted as a team connection
-4. The tool is now available for agents to use
-
-**All users** can connect personal credentials:
-1. Run `/tools` to see the tools dashboard
-2. Under **Available**, click **Connect** on an integration that supports personal connections
-3. Complete the OAuth flow or enter an API key
-4. Your credentials are encrypted and available to agents configured to use them
-
-### Setting Up the Knowledge Base
-
-1. Run `/kb` to open the KB dashboard
-2. Click **Add Source** — a guided thread walks you through:
-   - Selecting the source type (Google Drive, GitHub, Website, etc.)
-   - Entering API keys (if not already configured — with step-by-step instructions)
-   - Configuring source-specific settings (folder ID, repo name, URL, etc.)
-3. The source syncs automatically — use the overflow menu to re-sync or toggle auto-sync
-4. Agents automatically search the KB for relevant context during runs
-
-### Managing Agents
-
-Run `/agents` to see all agents. Use the overflow menu on any agent to:
-- **View Config** — See the agent's full system prompt, tools, and settings
-- **Update** — Change the agent's goal or channels
-- **Pause/Resume** — Temporarily disable an agent
-- **Delete** — Remove the agent and its channel
-
----
-
-## Environment Variables
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `SLACK_BOT_TOKEN` | Yes | Bot OAuth token (`xoxb-...`) |
-| `SLACK_APP_TOKEN` | Yes | App-level token for Socket Mode (`xapp-...`) |
-| `SLACK_SIGNING_SECRET` | Yes | Request verification |
-| `ANTHROPIC_API_KEY` | Yes | Claude API access |
-| `DATABASE_URL` | Yes | PostgreSQL connection string |
-| `REDIS_URL` | Yes | Redis for BullMQ (default: `redis://localhost:6379`) |
-| `GITHUB_TOKEN` | No | For source connections and auto-deploy |
-| `GITHUB_WEBHOOK_SECRET` | No | Auto-deploy webhook verification |
-| `AUTO_UPDATE_ENABLED` | No | Enable pull-based auto-deploy (default: `false`) |
-| `AUTO_UPDATE_INTERVAL` | No | Auto-update check interval in ms (default: `300000`) |
-| `PORT` | No | HTTP server port (default: `3000`) |
-| `LOG_LEVEL` | No | `debug`, `info`, `warn`, `error` (default: `info`) |
-| `DAILY_BUDGET_USD` | No | Daily spend alert threshold (default: `50`) |
-| `MAX_CONCURRENT_WORKERS` | No | Worker concurrency (default: `3`) |
-| `DOCKER_BASE_IMAGE` | No | Docker image for agent runs (default: `tinyhands-runner:latest`) |
-| `ENCRYPTION_KEY` | No | AES-256 key for encrypting tool credentials (32+ chars, required for connections) |
-| `GOOGLE_OAUTH_CLIENT_ID` | No | OAuth client ID for Google integrations |
-| `GOOGLE_OAUTH_CLIENT_SECRET` | No | OAuth client secret for Google integrations |
-| `NOTION_OAUTH_CLIENT_ID` | No | OAuth client ID for Notion integration |
-| `NOTION_OAUTH_CLIENT_SECRET` | No | OAuth client secret for Notion integration |
-| `GITHUB_OAUTH_CLIENT_ID` | No | OAuth client ID for GitHub integration |
-| `GITHUB_OAUTH_CLIENT_SECRET` | No | OAuth client secret for GitHub integration |
-| `OAUTH_REDIRECT_BASE_URL` | No | Public URL for OAuth callbacks (default: `http://localhost:3000`) |
-| `OAUTH_DOMAIN` | No | Domain for Nginx SSL (e.g., `tinyhands.example.com`) |
-| `LETSENCRYPT_EMAIL` | No | Email for Let's Encrypt certificate notifications |
-
----
-
-## VPS Sizing
-
-| Resource | Minimum (5 agents) | Recommended (20+ agents) |
-|----------|---------------------|--------------------------|
-| CPU | 4 vCPUs | 8 vCPUs |
-| RAM | 8 GB | 16 GB |
-| Disk | 40 GB SSD | 100 GB SSD |
-
-16 GB handles ~4 concurrent Docker agent runs. Beyond ~8 concurrent runs, upgrade or split workers to a second machine (BullMQ supports remote workers via shared Redis).
+Six PM2 processes: listener, 3 workers, scheduler, sync.
 
 ---
 
@@ -454,90 +197,35 @@ Run `/agents` to see all agents. Use the overflow menu on any agent to:
 
 | Component | Technology |
 |-----------|------------|
-| Language | TypeScript (Node.js, ES2022) |
-| Slack SDK | Bolt for Node.js (Socket Mode) |
-| AI | Claude Agent SDK + Anthropic API |
+| Backend | TypeScript, Node.js, Express |
+| Frontend | React, Vite, Tailwind CSS, Radix UI, TanStack Query |
+| Slack | Bolt for Node.js (Socket Mode) |
+| AI | Claude Agent SDK, Anthropic API |
 | Database | PostgreSQL (FTS via tsvector + GIN) |
 | Job Queue | BullMQ + Redis |
 | Containers | Docker (ephemeral per run) |
 | Process Manager | PM2 |
-| HTTP Server | Express |
-| Logging | Winston |
 
 ---
 
-## Contributing Templates, Skills & Tools
+## Contributing
 
-Tiny Hands is designed so anyone can add templates, skills, or tool integrations via PR — no wiring or boilerplate needed.
+Add templates, skills, or tool integrations via PR -- no wiring needed:
 
-### Add a Template
-
-Create `templates/my-agent.md` with YAML frontmatter (config) + markdown body (system prompt):
-
-```markdown
----
-id: my-agent
-name: My Agent
-emoji: ":robot_face:"
-category: Content & SEO
-description: Does something useful.
-model: sonnet
-memory_enabled: true
-mentions_only: false
-respond_to_all_messages: false
-max_turns: 25
-tools:
-  - WebSearch
-  - WebFetch
-custom_tools: []
-skills: []
-relevance_keywords:
-  - keyword
----
-
-You are an agent that does something useful...
-```
-
-### Add a Skill
-
-Create `skills/my-skill.md`. Prompt template skills have a body; MCP skills are frontmatter-only:
-
-```markdown
----
-id: my-skill
-name: My Skill
-skillType: prompt_template
-description: What this skill does
----
-
-Analyze {{topic}} and return key findings, trends, and recommendations.
-```
-
-### Add a Tool Integration
-
-Create `src/modules/tools/integrations/myservice/index.ts` and export a `manifest` satisfying the `ToolManifest` interface. See any existing integration for the pattern. Tools are auto-discovered — no imports to update.
-
----
-
-## FAQ
-
-**Q: Why "Tiny" Hands?**
-**A:** Big hands are clumsy. They break CSS, they accidentally delete production databases, and they cost $200k in consulting fees. Tiny hands are for precision. They are nimble enough to slide into your Slack threads and get work done without making a mess.
-
-**Q: Are the hands "autonomous"?**
-**A:** Yes, but they aren't anarchists. They'll do the work, but if they need to "write" something (like a merge or a payment), they'll ask you for a high-five first. ✋
+- **Templates** -- drop a markdown file in `templates/`
+- **Skills** -- drop a markdown file in `skills/`
+- **Tool Integrations** -- add a folder in `src/modules/tools/integrations/` with an `index.ts` exporting a manifest
 
 ---
 
 ## Guides
 
-- **[Product Guide](./PRODUCT_GUIDE.md)** — For all users: how to create agents, talk to them, use DMs, manage settings, and more.
-- **[Admin Guide](./ADMIN_GUIDE.md)** — For superadmins: setup, integrations, knowledge base, access control, and ongoing management.
+- **[Product Guide](./PRODUCT_GUIDE.md)** -- capabilities, workflows, and how to use agents
+- **[Admin Guide](./ADMIN_GUIDE.md)** -- setup, configuration, integrations, and administration
+- **[Features](./FEATURES.md)** -- comprehensive feature inventory with code locations
 
 ---
 
 ## License
 
-[MIT](./LICENSE) — Copyright (c) 2026 Anant Garg
-
-✋ *High five to the open-source community. Our hands are tiny, but together they're mighty.*
+[MIT](./LICENSE) -- Copyright (c) 2026 Anant Garg
