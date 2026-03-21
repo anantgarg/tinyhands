@@ -64,14 +64,16 @@ router.get('/personal', async (req: Request, res: Response) => {
     const userIds = (connections as any[]).map((c: any) => c.user_id).filter(Boolean);
     const names = await resolveUserNames(userIds);
 
-    const { decryptCredentials } = await import('../../modules/connections');
     res.json((connections as any[]).map((c: any) => {
       let rootFolderId = null;
       let rootFolderName = null;
       try {
-        const creds = decryptCredentials(c);
-        rootFolderId = creds.root_folder_id || null;
-        rootFolderName = creds.root_folder_name || null;
+        if (c.credentials_encrypted && c.credentials_iv) {
+          const { decryptCredentials } = require('../../modules/connections');
+          const creds = decryptCredentials(c);
+          rootFolderId = creds.root_folder_id || null;
+          rootFolderName = creds.root_folder_name || null;
+        }
       } catch { /* ignore decrypt errors */ }
       return {
         id: c.id,

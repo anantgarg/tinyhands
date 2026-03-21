@@ -384,13 +384,14 @@ describe('Connection Routes', () => {
 
   describe('GET /connections/agent/:agentId', () => {
     it('returns agent tool connections', async () => {
-      const conns = [{ toolName: 'linear', mode: 'team' }];
+      const conns = [{ agent_id: 'a1', tool_name: 'linear', connection_mode: 'team', connection_id: null }];
       mockListAgentToolConnections.mockResolvedValueOnce(conns);
 
       const res = await makeRequest(app, 'GET', '/connections/agent/a1');
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual(conns);
+      expect(res.body[0].toolName).toBe('linear');
+      expect(res.body[0].mode).toBe('team');
     });
   });
 
