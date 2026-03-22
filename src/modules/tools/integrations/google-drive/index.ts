@@ -70,6 +70,9 @@ if (!token) {
   process.exit(0);
 }
 
+var rootFolderId = config.root_folder_id || null;
+var rootFolderName = config.root_folder_name || null;
+
 ${GOOGLE_REQUEST_FN}
 
 async function run() {
@@ -80,15 +83,23 @@ async function run() {
     case 'search': {
       if (!input.query) return { error: 'query is required for search' };
       var q = encodeURIComponent(input.query);
+      var searchQ = 'fullText+contains+%27' + q + '%27';
+      // If restricted to a folder, scope search to that folder's descendants
+      if (rootFolderId) {
+        searchQ += '+and+%27' + rootFolderId + '%27+in+parents';
+      }
       var res = await googleRequest(
-        'https://www.googleapis.com/drive/v3/files?q=fullText+contains+%27' + q + '%27&pageSize=' + pageSize + '&fields=files(id,name,mimeType,modifiedTime,webViewLink,size)',
+        'https://www.googleapis.com/drive/v3/files?q=' + searchQ + '&pageSize=' + pageSize + '&fields=files(id,name,mimeType,modifiedTime,webViewLink,size)',
         'GET'
       );
       if (res.status !== 200) return { error: 'Drive API error', status: res.status, details: res.data };
+      if (rootFolderId && rootFolderName) {
+        return { restricted_to: rootFolderName, files: res.data.files || [] };
+      }
       return { files: res.data.files || [] };
     }
     case 'list_files': {
-      var folderId = input.folder_id || 'root';
+      var folderId = input.folder_id || rootFolderId || 'root';
       var q2 = encodeURIComponent("'" + folderId + "' in parents and trashed = false");
       var res2 = await googleRequest(
         'https://www.googleapis.com/drive/v3/files?q=' + q2 + '&pageSize=' + pageSize + '&fields=files(id,name,mimeType,modifiedTime,webViewLink,size)&orderBy=modifiedTime+desc',
@@ -170,6 +181,8 @@ if (!token) {
   process.exit(0);
 }
 
+var rootFolderId = config.root_folder_id || null;
+
 ${GOOGLE_REQUEST_FN}
 
 async function run() {
@@ -179,7 +192,8 @@ async function run() {
     case 'create_folder': {
       if (!input.title) return { error: 'title is required' };
       var folderMeta = { name: input.title, mimeType: 'application/vnd.google-apps.folder' };
-      if (input.parent_folder_id) folderMeta.parents = [input.parent_folder_id];
+      var parentId = input.parent_folder_id || rootFolderId;
+      if (parentId) folderMeta.parents = [parentId];
       var res = await googleRequest('https://www.googleapis.com/drive/v3/files', 'POST', folderMeta);
       if (res.status !== 200) return { error: 'Drive API error', status: res.status, details: res.data };
       return { folder_id: res.data.id, name: res.data.name };
@@ -205,7 +219,8 @@ async function run() {
       if (!input.title || !input.content) return { error: 'title and content are required' };
       // Create file metadata first
       var fileMeta = { name: input.title };
-      if (input.parent_folder_id) fileMeta.parents = [input.parent_folder_id];
+      var uploadParent = input.parent_folder_id || rootFolderId;
+      if (uploadParent) fileMeta.parents = [uploadParent];
       var created = await googleRequest('https://www.googleapis.com/drive/v3/files', 'POST', fileMeta);
       if (created.status !== 200) return { error: 'Drive API error', status: created.status, details: created.data };
       var fileId = created.data.id;
