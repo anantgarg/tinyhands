@@ -505,6 +505,34 @@ export function useDenyToolRequest() {
   });
 }
 
+// ── Feature Requests ──
+
+export interface FeatureRequest {
+  id: string;
+  goal: string;
+  blockers: string[];
+  summary: string;
+  suggestedName: string;
+  requestedBy: string;
+  requestedByName: string;
+  createdAt: string;
+}
+
+export function useFeatureRequests() {
+  return useQuery<FeatureRequest[]>({
+    queryKey: ['feature-requests'],
+    queryFn: () => api.get('/agents/feature-requests'),
+  });
+}
+
+export function useDismissFeatureRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.del(`/agents/feature-requests/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['feature-requests'] }),
+  });
+}
+
 // ── Self-Improvement ──
 
 export interface PromptDiff {

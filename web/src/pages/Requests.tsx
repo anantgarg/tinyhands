@@ -14,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   useUpgradeRequests, useApproveUpgrade, useDenyUpgrade, useAgents,
   useToolRequests, useApproveToolRequest, useDenyToolRequest,
+  useFeatureRequests, useDismissFeatureRequest,
 } from '@/api/agents';
 import type { ToolRequest } from '@/api/agents';
 import { useEvolutionProposals, useApproveProposal, useRejectProposal } from '@/api/evolution';
@@ -32,6 +33,7 @@ export function Requests() {
           <TabsTrigger value="approvals">Action Approvals</TabsTrigger>
           <TabsTrigger value="evolution">Evolution Proposals</TabsTrigger>
           <TabsTrigger value="tool-requests">Tool Requests</TabsTrigger>
+          <TabsTrigger value="feature-requests">Feature Requests</TabsTrigger>
         </TabsList>
 
         <TabsContent value="upgrades">
@@ -45,6 +47,9 @@ export function Requests() {
         </TabsContent>
         <TabsContent value="tool-requests">
           <ToolRequestsTab />
+        </TabsContent>
+        <TabsContent value="feature-requests">
+          <FeatureRequestsTab />
         </TabsContent>
       </Tabs>
     </div>
@@ -413,6 +418,76 @@ function ToolRequestsTab() {
           </TableBody>
         </Table>
       </div>
+    </div>
+  );
+}
+
+function FeatureRequestsTab() {
+  const { data: requests, isLoading } = useFeatureRequests();
+  const dismiss = useDismissFeatureRequest();
+
+  if (isLoading) return <Skeleton className="h-[300px]" />;
+
+  if (!requests || requests.length === 0) {
+    return (
+      <EmptyState
+        icon={Bell}
+        title="No feature requests"
+        description="When users request agents that need unavailable tools or connections, those requests appear here."
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-4 mt-4">
+      {requests.map((req) => (
+        <Card key={req.id}>
+          <CardHeader className="pb-2">
+            <div className="flex items-start justify-between">
+              <div>
+                <CardTitle className="text-base">{req.suggestedName || 'Unnamed Agent'}</CardTitle>
+                <p className="text-xs text-warm-text-secondary mt-0.5">
+                  Requested by {req.requestedByName} {formatDistanceToNow(new Date(req.createdAt), { addSuffix: true })}
+                </p>
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => dismiss.mutate(req.id, {
+                  onSuccess: () => toast({ title: 'Request dismissed', variant: 'success' }),
+                })}
+              >
+                <XCircle className="mr-1 h-3.5 w-3.5" /> Dismiss
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div>
+              <p className="text-xs font-medium text-warm-text-secondary">Goal</p>
+              <p className="text-sm">{req.goal}</p>
+            </div>
+            {req.blockers.length > 0 && (
+              <div>
+                <p className="text-xs font-medium text-warm-text-secondary">Blockers</p>
+                <ul className="text-sm space-y-1 mt-1">
+                  {req.blockers.map((b, i) => (
+                    <li key={i} className="flex items-start gap-1.5">
+                      <Badge variant="warning" className="mt-0.5 text-[10px]">!</Badge>
+                      <span>{b}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {req.summary && (
+              <div>
+                <p className="text-xs font-medium text-warm-text-secondary">Summary</p>
+                <p className="text-sm text-warm-text-secondary">{req.summary}</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ))}
     </div>
   );
 }

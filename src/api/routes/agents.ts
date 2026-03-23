@@ -638,6 +638,53 @@ router.post('/:id/tool-requests/:requestId/deny', async (req: Request, res: Resp
   }
 });
 
+// ── Feature Requests ──
+
+// GET /agents/feature-requests — List feature requests (must be before /:id)
+router.get('/feature-requests', async (req: Request, res: Response) => {
+  try {
+    const { workspaceId } = getSessionUser(req);
+    const rows = await query(
+      `SELECT id, data, created_at FROM pending_confirmations
+       WHERE data->>'type' = 'feature_request' AND expires_at > NOW()
+       AND (workspace_id = $1 OR workspace_id IS NULL)
+       ORDER BY created_at DESC`,
+      [workspaceId]
+    );
+    const userIds = (rows as any[]).map((r: any) => r.data?.requestedBy).filter(Boolean);
+    const names = await resolveUserNames(userIds);
+    res.json((rows as any[]).map((r: any) => ({
+      id: r.id,
+      goal: r.data.goal,
+      blockers: r.data.analysis?.blockers || [],
+      summary: r.data.analysis?.summary || '',
+      suggestedName: r.data.analysis?.agent_name || '',
+      requestedBy: r.data.requestedBy,
+      requestedByName: names[r.data.requestedBy] || r.data.requestedBy,
+      createdAt: r.created_at,
+    })));
+  } catch (err: any) {
+    logger.error('List feature requests error', { error: err.message });
+    res.status(500).json({ error: 'Failed to list feature requests' });
+  }
+});
+
+// DELETE /agents/feature-requests/:id — Dismiss a feature request (must be before /:id)
+router.delete('/feature-requests/:requestId', async (req: Request, res: Response) => {
+  try {
+    const { workspaceId } = getSessionUser(req);
+    const requestId = req.params.requestId as string;
+    await query(
+      `DELETE FROM pending_confirmations WHERE id = $1 AND (workspace_id = $2 OR workspace_id IS NULL)`,
+      [requestId, workspaceId]
+    );
+    res.json({ ok: true });
+  } catch (err: any) {
+    logger.error('Dismiss feature request error', { error: err.message });
+    res.status(400).json({ error: err.message });
+  }
+});
+
 // ── Self-Improvement ──
 
 // POST /agents/:id/suggest-improvement — Submit critique, get AI-proposed prompt improvement

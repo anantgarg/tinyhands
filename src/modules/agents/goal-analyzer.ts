@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { getBuiltinTools, listUserAvailableTools, listWriteTools } from '../tools';
+import { getIntegrations } from '../tools/integrations';
 import { getAvailableSkills } from '../skills';
 import { isSuperadmin } from '../access-control';
 import { logger } from '../../utils/logger';
@@ -62,8 +63,23 @@ export async function analyzeGoal(workspaceId: string, goal: string, existingPro
     ...availableSkills.prompt.map(s => `Prompt: ${s.name} (${s.description})`),
   ];
 
-  const customToolsSection = readOnlyToolList.length > 0 || writeToolList.length > 0
-    ? `\nAvailable custom tools (read-only, always available):\n${readOnlyToolList.join('\n') || '(none)'}\n\nAvailable custom tools (read-write, requires admin approval):\n${writeToolList.join('\n') || '(none)'}`
+  // Get ALL integration manifests (connected or not) so the analyzer knows what's possible
+  const registeredToolNames = new Set([...readOnlyTools.map(t => t.name), ...writeTools.map(t => t.name)]);
+  const unregisteredIntegrations: string[] = [];
+  try {
+    const integrations = getIntegrations();
+    for (const integ of integrations) {
+      for (const tool of (integ as any).tools || []) {
+        if (!registeredToolNames.has(tool.name)) {
+          const schema = typeof tool.schema === 'string' ? JSON.parse(tool.schema) : tool.schema;
+          unregisteredIntegrations.push(`${tool.name} (${tool.accessLevel || 'read-only'}) [NOT CONNECTED — requires OAuth or admin setup]: ${schema.description || integ.description || 'Integration tool'}`);
+        }
+      }
+    }
+  } catch { /* integrations module may not be available */ }
+
+  const customToolsSection = readOnlyToolList.length > 0 || writeToolList.length > 0 || unregisteredIntegrations.length > 0
+    ? `\nAvailable custom tools (read-only, always available):\n${readOnlyToolList.join('\n') || '(none)'}\n\nAvailable custom tools (read-write, requires admin approval):\n${writeToolList.join('\n') || '(none)'}${unregisteredIntegrations.length > 0 ? `\n\nIntegration tools available but NOT YET CONNECTED (admin must connect these first):\n${unregisteredIntegrations.join('\n')}` : ''}`
     : '';
 
   const userRestrictions = isAdmin
@@ -134,6 +150,7 @@ IMPORTANT guidelines:
 - Use opus for complex multi-step reasoning, haiku for simple/fast classification, sonnet for general purpose
 - Enable memory for agents that build up context over time
 - FEASIBILITY: Set "feasible" to true if the agent can work with existing tools/skills. Set "feasible" to false if the goal requires tools or capabilities that don't exist yet — list specific blockers. If new tools are needed, include them in new_tools_needed so an admin can build them.
+- UNCONNECTED INTEGRATIONS: If an integration tool exists but is marked [NOT CONNECTED], the agent CAN use it — but admin must connect it first. Set "feasible" to true, include the tool in "custom_tools", and add a blocker like "Tool 'gmail-read' exists but is not connected. Admin must set up the OAuth connection." Do NOT say the tool doesn't exist — it does, it just needs to be connected.
 - SLACK MENTIONS: If the goal references tagging/mentioning/notifying a specific person, use the Slack mention format <@USER_ID> in the system_prompt. The requesting user's Slack ID is provided below — use it when the goal says "tag me", "notify me", "mention me", etc. For other users mentioned by name, include a note in the system_prompt to use <@USER_ID> format and that the admin should configure the correct user ID.`,
     messages: [{
       role: 'user',
