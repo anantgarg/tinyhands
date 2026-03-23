@@ -68,7 +68,7 @@ export function AgentCreate() {
   const [name, setName] = useState('');
   const [avatarEmoji, setAvatarEmoji] = useState('');
   const [systemPrompt, setSystemPrompt] = useState('');
-  const [model, setModel] = useState('claude-sonnet-4-20250514');
+  const [model, setModel] = useState('sonnet');
   const [maxTurns, setMaxTurns] = useState('25');
   const [memoryEnabled, setMemoryEnabled] = useState(false);
   const [mentionsOnly, setMentionsOnly] = useState(false);
@@ -84,8 +84,8 @@ export function AgentCreate() {
         setName(result.agentName || result.name || '');
         setAvatarEmoji(result.avatarEmoji || result.avatar_emoji || '');
         setSystemPrompt(result.systemPrompt || result.system_prompt || '');
-        const modelMap: Record<string, string> = { opus: 'claude-opus-4-20250514', haiku: 'claude-haiku-4-20250514', sonnet: 'claude-sonnet-4-20250514' };
-        setModel(modelMap[result.model] || result.model || 'claude-sonnet-4-20250514');
+        const m = result.model || 'sonnet';
+        setModel(m.includes('opus') ? 'opus' : m.includes('haiku') ? 'haiku' : 'sonnet');
         setSelectedTools([...(result.tools || []), ...(result.custom_tools || []), ...(result.customTools || [])]);
         setMentionsOnly(result.mentionsOnly ?? result.mentions_only ?? false);
         setMemoryEnabled(result.memoryEnabled ?? result.memory_enabled ?? false);
@@ -266,9 +266,9 @@ export function AgentCreate() {
                 <Select value={model} onValueChange={setModel}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="claude-sonnet-4-20250514">Sonnet &mdash; balanced (recommended)</SelectItem>
-                    <SelectItem value="claude-opus-4-20250514">Opus &mdash; most capable</SelectItem>
-                    <SelectItem value="claude-haiku-4-20250514">Haiku &mdash; fastest</SelectItem>
+                    <SelectItem value="sonnet">Sonnet &mdash; balanced (recommended)</SelectItem>
+                    <SelectItem value="opus">Opus &mdash; most capable</SelectItem>
+                    <SelectItem value="haiku">Haiku &mdash; fastest</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

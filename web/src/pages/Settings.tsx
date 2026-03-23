@@ -33,7 +33,7 @@ function SettingsContent() {
 
   const [general, setGeneral] = useState({
     workspaceName: '',
-    defaultModel: 'claude-sonnet-4-20250514',
+    defaultModel: 'sonnet',
     dailyBudgetUsd: 50,
   });
   const [defaults, setDefaults] = useState({
@@ -58,7 +58,7 @@ function SettingsContent() {
       if (settings.general) {
         setGeneral({
           workspaceName: settings.general.workspaceName ?? '',
-          defaultModel: settings.general.defaultModel ?? 'claude-sonnet-4-20250514',
+          defaultModel: settings.general.defaultModel ?? 'sonnet',
           dailyBudgetUsd: settings.general.dailyBudgetUsd ?? 50,
         });
       }
@@ -148,16 +148,16 @@ function SettingsContent() {
             <div>
               <Label>Default Model</Label>
               <Select
-                value={general.defaultModel ?? 'claude-sonnet-4-20250514'}
+                value={general.defaultModel ?? 'sonnet'}
                 onValueChange={(v) => setGeneral({ ...general, defaultModel: v })}
               >
                 <SelectTrigger className="mt-1">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="claude-opus-4-20250514">Opus — most capable, best for complex tasks</SelectItem>
-                  <SelectItem value="claude-sonnet-4-20250514">Sonnet — balanced speed and quality (recommended)</SelectItem>
-                  <SelectItem value="claude-haiku-4-20250514">Haiku — fastest, good for simple tasks</SelectItem>
+                  <SelectItem value="opus">Opus — most capable, best for complex tasks</SelectItem>
+                  <SelectItem value="sonnet">Sonnet — balanced speed and quality (recommended)</SelectItem>
+                  <SelectItem value="haiku">Haiku — fastest, good for simple tasks</SelectItem>
                 </SelectContent>
               </Select>
             </div>

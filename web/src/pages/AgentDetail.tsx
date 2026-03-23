@@ -89,11 +89,11 @@ function InfoTooltip({ text }: { text: string }) {
   );
 }
 
-/** Normalize full model IDs to the values used by our Select options */
+/** Normalize model to alias used by backend */
 function normalizeModelValue(model: string): string {
-  if (model.includes('opus')) return 'claude-opus-4-20250514';
-  if (model.includes('haiku')) return 'claude-haiku-4-20250514';
-  return 'claude-sonnet-4-20250514';
+  if (model.includes('opus')) return 'opus';
+  if (model.includes('haiku')) return 'haiku';
+  return 'sonnet';
 }
 
 /** Format snake_case category names for display */
@@ -469,9 +469,9 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
               <Select value={normalizeModelValue(agent.model)} onValueChange={(v) => autoSaveConfig('model', v)}>
                 <SelectTrigger className="mt-1"><SelectValue placeholder="Select model" /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="claude-sonnet-4-20250514">Sonnet</SelectItem>
-                  <SelectItem value="claude-opus-4-20250514">Opus</SelectItem>
-                  <SelectItem value="claude-haiku-4-20250514">Haiku</SelectItem>
+                  <SelectItem value="sonnet">Sonnet</SelectItem>
+                  <SelectItem value="opus">Opus</SelectItem>
+                  <SelectItem value="haiku">Haiku</SelectItem>
                 </SelectContent>
               </Select>
             </div>
