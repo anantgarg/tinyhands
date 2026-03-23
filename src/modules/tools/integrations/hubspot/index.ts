@@ -81,6 +81,12 @@ async function main() {
   switch (a) {
     case 'search_contacts': {
       if (!input.query) { result = { error: 'query is required for search_contacts' }; break; }
+      // Detect misuse: agent trying to find blank/empty/unset properties via text search
+      var q = input.query.toLowerCase();
+      if (q.match(/blank|empty|unset|not set|no lead.?status|missing|null|without|where.*is.*blank/)) {
+        result = { error: 'WRONG ACTION: search_contacts does full-text search — it CANNOT filter by blank/empty properties. Use filter_contacts with operator NOT_HAS_PROPERTY instead. Example: {"action":"filter_contacts","filters":[{"propertyName":"hs_lead_status","operator":"NOT_HAS_PROPERTY"}]}' };
+        break;
+      }
       var body = { query: input.query, limit: lim, properties: props.length > 0 ? props : ['email', 'firstname', 'lastname', 'phone', 'company'] };
       if (input.after) body.after = input.after;
       result = await hubspotRequest('/crm/v3/objects/contacts/search', 'POST', body);
