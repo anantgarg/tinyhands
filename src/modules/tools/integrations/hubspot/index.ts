@@ -12,10 +12,11 @@ const READ_SCHEMA = JSON.stringify({
   properties: {
     action: {
       type: 'string',
-      enum: ['search_contacts', 'search_deals', 'get_contact', 'get_deal', 'list_pipelines', 'get_company', 'search_companies'],
-      description: 'The HubSpot action to perform',
+      enum: ['search_contacts', 'filter_contacts', 'search_deals', 'get_contact', 'get_deal', 'list_pipelines', 'get_company', 'search_companies'],
+      description: 'The HubSpot action to perform. Use filter_contacts to find contacts by property filters (e.g. blank lead status).',
     },
     query: { type: 'string', description: 'Search query text (for search_contacts, search_deals, search_companies)' },
+    filters: { type: 'array', items: { type: 'object', properties: { propertyName: { type: 'string' }, operator: { type: 'string', description: 'HubSpot filter operator: EQ, NEQ, GT, LT, GTE, LTE, HAS_PROPERTY, NOT_HAS_PROPERTY, CONTAINS_TOKEN, NOT_CONTAINS_TOKEN' }, value: { type: 'string' } }, required: ['propertyName', 'operator'] }, description: 'Filters for filter_contacts. Use NOT_HAS_PROPERTY to find contacts where a property is blank/empty.' },
     contact_id: { type: 'string', description: 'Contact ID (for get_contact)' },
     deal_id: { type: 'string', description: 'Deal ID (for get_deal)' },
     company_id: { type: 'string', description: 'Company ID (for get_company)' },
@@ -85,6 +86,21 @@ async function main() {
       result = await hubspotRequest('/crm/v3/objects/contacts/search', 'POST', body);
       break;
     }
+    case 'filter_contacts': {
+      if (!input.filters || !Array.isArray(input.filters) || input.filters.length === 0) {
+        result = { error: 'filters array is required for filter_contacts. Example: [{"propertyName":"hs_lead_status","operator":"NOT_HAS_PROPERTY"}]' };
+        break;
+      }
+      var filterBody = {
+        filterGroups: [{ filters: input.filters }],
+        limit: lim,
+        properties: props.length > 0 ? props : ['email', 'firstname', 'lastname', 'phone', 'company', 'hs_lead_status', 'createdate'],
+        sorts: [{ propertyName: 'createdate', direction: 'DESCENDING' }]
+      };
+      if (input.after) filterBody.after = input.after;
+      result = await hubspotRequest('/crm/v3/objects/contacts/search', 'POST', filterBody);
+      break;
+    }
     case 'search_deals': {
       if (!input.query) { result = { error: 'query is required for search_deals' }; break; }
       var body = { query: input.query, limit: lim, properties: props.length > 0 ? props : ['dealname', 'amount', 'dealstage', 'pipeline', 'closedate'] };
@@ -122,7 +138,7 @@ async function main() {
       break;
     }
     default:
-      result = { error: 'Unknown action: ' + a + '. Valid: search_contacts, search_deals, get_contact, get_deal, list_pipelines, get_company, search_companies' };
+      result = { error: 'Unknown action: ' + a + '. Valid: search_contacts, filter_contacts, search_deals, get_contact, get_deal, list_pipelines, get_company, search_companies' };
   }
 
   console.log(JSON.stringify(result));

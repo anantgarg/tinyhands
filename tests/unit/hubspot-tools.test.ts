@@ -58,7 +58,7 @@ describe('HubSpot Tools Module', () => {
       expect(readSchema.type).toBe('object');
       expect(readSchema.description).toContain('Read-only access to HubSpot CRM');
       expect(readSchema.properties.action.enum).toEqual([
-        'search_contacts', 'search_deals', 'get_contact', 'get_deal',
+        'search_contacts', 'filter_contacts', 'search_deals', 'get_contact', 'get_deal',
         'list_pipelines', 'get_company', 'search_companies',
       ]);
       expect(readSchema.required).toEqual(['action']);
