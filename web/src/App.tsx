@@ -25,6 +25,7 @@ const AccessRoles = lazy(() => import('@/pages/AccessRoles').then(m => ({ defaul
 const Settings = lazy(() => import('@/pages/Settings').then(m => ({ default: m.Settings })));
 const Requests = lazy(() => import('@/pages/Requests').then(m => ({ default: m.Requests })));
 const ErrorLogs = lazy(() => import('@/pages/ErrorLogs').then(m => ({ default: m.ErrorLogs })));
+const Skills = lazy(() => import('@/pages/Skills').then(m => ({ default: m.Skills })));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -108,6 +109,7 @@ export function App() {
                 <Route path="agents/templates" element={<Suspense fallback={<PageLoader />}><AgentTemplates /></Suspense>} />
                 <Route path="agents/:id" element={<Suspense fallback={<PageLoader />}><AgentDetail /></Suspense>} />
                 <Route path="tools" element={<Suspense fallback={<PageLoader />}><Tools /></Suspense>} />
+                <Route path="skills" element={<Suspense fallback={<PageLoader />}><Skills /></Suspense>} />
                 <Route path="kb" element={<Suspense fallback={<PageLoader />}><KnowledgeBase /></Suspense>} />
                 <Route path="kb/sources" element={<Suspense fallback={<PageLoader />}><KBSources /></Suspense>} />
                 <Route path="connections" element={<Suspense fallback={<PageLoader />}><Connections /></Suspense>} />

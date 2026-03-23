@@ -90,6 +90,16 @@ export async function updateSkill(workspaceId: string, id: string, config: Recor
   return (await getSkill(workspaceId, id))!;
 }
 
+export async function deleteSkill(workspaceId: string, id: string): Promise<void> {
+  const existing = await getSkill(workspaceId, id);
+  if (!existing) throw new Error(`Skill ${id} not found`);
+
+  // Remove agent attachments first
+  await execute('DELETE FROM agent_skills WHERE skill_id = $1 AND workspace_id = $2', [id, workspaceId]);
+  await execute('DELETE FROM skills WHERE id = $1 AND workspace_id = $2', [id, workspaceId]);
+  logger.info('Skill deleted', { skillId: id });
+}
+
 // ── Agent-Skill Attachment ──
 
 export async function attachSkillToAgent(

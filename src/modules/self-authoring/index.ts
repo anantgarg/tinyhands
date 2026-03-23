@@ -169,7 +169,7 @@ export async function getToolVersions(workspaceId: string, toolName: string): Pr
 //  3. SANDBOX TESTING
 // ══════════════════════════════════════════════════
 
-async function sandboxTest(
+export async function sandboxTest(
   code: string,
   language: string,
   inputSchema: Record<string, any>,

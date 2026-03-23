@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { getSessionUser } from '../middleware/auth';
-import { getAvailableSkills, listSkills } from '../../modules/skills';
+import { requireAdmin } from '../middleware/admin';
+import { getAvailableSkills, listSkills, registerSkill, getSkill, updateSkill, deleteSkill } from '../../modules/skills';
 import { logger } from '../../utils/logger';
 
 const router = Router();
@@ -26,6 +27,103 @@ router.get('/', async (req: Request, res: Response) => {
   } catch (err: any) {
     logger.error('List skills error', { error: err.message });
     res.status(500).json({ error: 'Failed to list skills' });
+  }
+});
+
+// POST /skills — Create a new skill
+router.post('/', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { workspaceId } = getSessionUser(req);
+    const { name, type, description, template, capabilities } = req.body;
+    if (!name || !type) {
+      res.status(400).json({ error: 'name and type are required' });
+      return;
+    }
+    const config: Record<string, any> = { description: description || '' };
+    if (type === 'prompt_template') {
+      config.template = template || '';
+    } else if (type === 'mcp') {
+      config.capabilities = capabilities || [];
+    }
+    const skill = await registerSkill(workspaceId, name, type, config);
+    res.status(201).json(skill);
+  } catch (err: any) {
+    logger.error('Create skill error', { error: err.message });
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// PUT /skills/:id — Update a skill
+router.put('/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { workspaceId } = getSessionUser(req);
+    const id = req.params.id as string;
+    const { name, description, template, capabilities } = req.body;
+    const config: Record<string, any> = {};
+    if (name !== undefined) config.name = name;
+    if (description !== undefined) config.description = description;
+    if (template !== undefined) config.template = template;
+    if (capabilities !== undefined) config.capabilities = capabilities;
+    const skill = await updateSkill(workspaceId, id, config);
+    res.json(skill);
+  } catch (err: any) {
+    logger.error('Update skill error', { error: err.message });
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// DELETE /skills/:id — Delete a skill
+router.delete('/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { workspaceId } = getSessionUser(req);
+    const id = req.params.id as string;
+    await deleteSkill(workspaceId, id);
+    res.json({ ok: true });
+  } catch (err: any) {
+    logger.error('Delete skill error', { error: err.message });
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// POST /skills/generate — AI-generate a prompt template skill from description
+router.post('/generate', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { workspaceId } = getSessionUser(req);
+    const { description } = req.body;
+    if (!description) {
+      res.status(400).json({ error: 'description is required' });
+      return;
+    }
+
+    // Use Claude to generate a skill template
+    const Anthropic = (await import('@anthropic-ai/sdk')).default;
+    const client = new Anthropic();
+    const response = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 1024,
+      system: `You are a skill template generator. Given a description, generate a JSON object with:
+- name: kebab-case skill name
+- description: one-line description
+- template: a reusable prompt template with {{placeholder}} variables
+
+Return ONLY valid JSON, no markdown fences.`,
+      messages: [{ role: 'user', content: description }],
+    });
+
+    const text = response.content
+      .filter((b: any) => b.type === 'text')
+      .map((b: any) => b.text)
+      .join('');
+
+    const generated = JSON.parse(text);
+    res.json({
+      name: generated.name || 'custom-skill',
+      description: generated.description || description,
+      template: generated.template || '',
+    });
+  } catch (err: any) {
+    logger.error('Generate skill error', { error: err.message });
+    res.status(500).json({ error: 'Failed to generate skill: ' + err.message });
   }
 });
 

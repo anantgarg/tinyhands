@@ -3,6 +3,7 @@ import {
   LayoutDashboard,
   Bot,
   Wrench,
+  Sparkles,
   BookOpen,
   Link,
   Zap,
@@ -34,6 +35,7 @@ const mainNav: NavItem[] = [
 
 const manageNav: NavItem[] = [
   { label: 'Agents', to: '/agents', icon: Bot },
+  { label: 'Skills', to: '/skills', icon: Sparkles, adminOnly: true },
   { label: 'Tools & Integrations', to: '/tools', icon: Wrench, adminOnly: true },
   { label: 'Connections', to: '/connections', icon: Link },
   { label: 'Knowledge Base', to: '/kb', icon: BookOpen },

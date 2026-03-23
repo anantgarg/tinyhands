@@ -4,7 +4,7 @@ import {
   ArrowLeft, Pause, Play, MoreVertical, Trash2, Plus, X,
   Info, Pencil, Check, Loader2, RotateCcw, Eye,
   Webhook, Clock, MessageSquare, Zap,
-  Search,
+  Search, Sparkles, Wand2, Cpu, FileText,
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import { Textarea } from '@/components/ui/textarea';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
@@ -50,9 +51,15 @@ import {
   useAddAgentTrigger,
   useAgentToolRequests,
   useCreateToolRequest,
+  useAgentSkills,
+  useAttachSkill,
+  useDetachSkill,
+  useSuggestImprovement,
+  useApplyImprovement,
 } from '@/api/agents';
 import type { Agent as AgentData, AgentVersion } from '@/api/agents';
 import { useAvailableTools } from '@/api/tools';
+import { useBuiltinSkills, useWorkspaceSkills } from '@/api/skills';
 import { useUpdateTrigger, useDeleteTrigger } from '@/api/triggers';
 import { useAgentToolConnections, useSetAgentToolConnection } from '@/api/connections';
 import { useSlackChannels, useSlackUsers } from '@/api/slack';
@@ -293,6 +300,7 @@ export function AgentDetail() {
           <TabsTrigger value="tools">Tools</TabsTrigger>
           <TabsTrigger value="runs">Runs</TabsTrigger>
           <TabsTrigger value="memory">Memory</TabsTrigger>
+          <TabsTrigger value="skills">Skills</TabsTrigger>
           <TabsTrigger value="triggers">Triggers</TabsTrigger>
           <TabsTrigger value="access">Access</TabsTrigger>
         </TabsList>
@@ -308,6 +316,9 @@ export function AgentDetail() {
         </TabsContent>
         <TabsContent value="memory">
           <MemoryTab agentId={id!} agent={agent} />
+        </TabsContent>
+        <TabsContent value="skills">
+          <SkillsTab agentId={id!} />
         </TabsContent>
         <TabsContent value="triggers">
           <TriggersTab agentId={id!} agent={agent} />
@@ -413,9 +424,12 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
         <CardHeader className="flex-row items-center justify-between">
           <CardTitle className="text-base">Instructions</CardTitle>
           {!editingPrompt && (
-            <Button variant="ghost" size="sm" onClick={startEditPrompt}>
-              <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
-            </Button>
+            <div className="flex gap-1.5">
+              <SuggestImprovementButton agentId={agentId} />
+              <Button variant="ghost" size="sm" onClick={startEditPrompt}>
+                <Pencil className="mr-1.5 h-3.5 w-3.5" /> Edit
+              </Button>
+            </div>
           )}
         </CardHeader>
         <CardContent>
@@ -1301,6 +1315,279 @@ function MemoryTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+// ---- Skills Tab ----
+
+function SkillsTab({ agentId }: { agentId: string }) {
+  const { data: attachedSkills, isLoading } = useAgentSkills(agentId);
+  const { data: builtinSkills } = useBuiltinSkills();
+  const { data: workspaceSkills } = useWorkspaceSkills();
+  const attachSkill = useAttachSkill();
+  const detachSkill = useDetachSkill();
+  const [showAdd, setShowAdd] = useState(false);
+  const [selectedSkillName, setSelectedSkillName] = useState('');
+  const [permLevel, setPermLevel] = useState<string>('read');
+
+  const handleAttach = () => {
+    if (!selectedSkillName) return;
+    attachSkill.mutate(
+      { agentId, skillName: selectedSkillName, permissionLevel: permLevel },
+      {
+        onSuccess: () => {
+          toast({ title: 'Skill attached', variant: 'success' });
+          setShowAdd(false);
+          setSelectedSkillName('');
+        },
+        onError: (err: any) => toast({ title: 'Error', description: err.message, variant: 'error' }),
+      },
+    );
+  };
+
+  const handleDetach = (skillId: string) => {
+    if (!confirm('Detach this skill from the agent?')) return;
+    detachSkill.mutate(
+      { agentId, skillId },
+      { onSuccess: () => toast({ title: 'Skill detached', variant: 'success' }) },
+    );
+  };
+
+  // Build list of available skills for the add dialog
+  const availableSkills: Array<{ name: string; type: string; description: string }> = [];
+  if (builtinSkills) {
+    for (const s of builtinSkills.mcp) {
+      availableSkills.push({ name: s.name, type: 'MCP', description: s.capabilities.join(', ') });
+    }
+    for (const s of builtinSkills.prompt) {
+      availableSkills.push({ name: s.name, type: 'Prompt', description: s.description });
+    }
+  }
+  if (workspaceSkills) {
+    for (const s of workspaceSkills) {
+      try {
+        const cfg = JSON.parse(s.configJson);
+        availableSkills.push({ name: s.name, type: s.skillType === 'mcp' ? 'MCP' : 'Prompt', description: cfg.description || '' });
+      } catch {
+        availableSkills.push({ name: s.name, type: s.skillType === 'mcp' ? 'MCP' : 'Prompt', description: '' });
+      }
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="text-sm font-medium text-warm-text-secondary">Attached Skills</h3>
+        <Button size="sm" variant="outline" onClick={() => setShowAdd(true)}>
+          <Plus className="mr-1 h-3.5 w-3.5" /> Add Skill
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <div className="space-y-2">
+          {[1, 2].map((i) => <Skeleton key={i} className="h-16 rounded-lg" />)}
+        </div>
+      ) : attachedSkills && attachedSkills.length > 0 ? (
+        <div className="grid gap-3 sm:grid-cols-2">
+          {attachedSkills.map((s: any) => (
+            <Card key={s.id} className="border-warm-border">
+              <CardContent className="flex items-center justify-between p-3">
+                <div className="flex items-center gap-2.5">
+                  {s.skillType === 'mcp' ? (
+                    <Cpu className="h-4 w-4 text-blue-500 shrink-0" />
+                  ) : (
+                    <FileText className="h-4 w-4 text-amber-500 shrink-0" />
+                  )}
+                  <div>
+                    <span className="text-sm font-medium">{s.name}</span>
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <Badge variant="secondary" className="text-[10px]">
+                        {s.skillType === 'mcp' ? 'MCP' : 'Prompt'}
+                      </Badge>
+                      <Badge variant="secondary" className="text-[10px]">
+                        {s.permissionLevel || 'read'}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleDetach(s.id)}
+                  className="text-warm-text-secondary hover:text-red-600"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      ) : (
+        <Card className="border-warm-border border-dashed">
+          <CardContent className="flex flex-col items-center justify-center py-8">
+            <Sparkles className="h-6 w-6 text-warm-text-secondary/30 mb-2" />
+            <p className="text-sm text-warm-text-secondary">No skills attached</p>
+            <Button variant="outline" size="sm" className="mt-2" onClick={() => setShowAdd(true)}>
+              Add a skill
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Add Skill Dialog */}
+      <Dialog open={showAdd} onOpenChange={setShowAdd}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Skill</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Skill</Label>
+              <Select value={selectedSkillName} onValueChange={setSelectedSkillName}>
+                <SelectTrigger><SelectValue placeholder="Choose a skill" /></SelectTrigger>
+                <SelectContent>
+                  {availableSkills.map((s) => (
+                    <SelectItem key={s.name} value={s.name}>
+                      <span className="flex items-center gap-1.5">
+                        <Badge variant="secondary" className="text-[9px] px-1">{s.type}</Badge>
+                        {s.name}
+                      </span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Permission Level</Label>
+              <Select value={permLevel} onValueChange={setPermLevel}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="read">Read</SelectItem>
+                  <SelectItem value="write">Write</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowAdd(false)}>Cancel</Button>
+            <Button onClick={handleAttach} disabled={!selectedSkillName || attachSkill.isPending}>
+              {attachSkill.isPending ? 'Attaching...' : 'Attach'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ---- Suggest Improvement Button ----
+
+function SuggestImprovementButton({ agentId }: { agentId: string }) {
+  const [open, setOpen] = useState(false);
+  const [feedback, setFeedback] = useState('');
+  const [diff, setDiff] = useState<{ original: string; proposed: string; changeNote: string } | null>(null);
+  const suggestMut = useSuggestImprovement();
+  const applyMut = useApplyImprovement();
+
+  const handleAnalyze = () => {
+    suggestMut.mutate(
+      { agentId, feedback },
+      {
+        onSuccess: (data) => setDiff(data),
+        onError: (err: any) => toast({ title: 'Error', description: err.message, variant: 'error' }),
+      },
+    );
+  };
+
+  const handleApply = () => {
+    if (!diff) return;
+    applyMut.mutate(
+      { agentId, newPrompt: diff.proposed, changeNote: diff.changeNote },
+      {
+        onSuccess: () => {
+          toast({ title: 'Improvement applied', description: 'A new version has been created', variant: 'success' });
+          setOpen(false);
+          setFeedback('');
+          setDiff(null);
+        },
+        onError: (err: any) => toast({ title: 'Error', description: err.message, variant: 'error' }),
+      },
+    );
+  };
+
+  const handleDismiss = () => {
+    setDiff(null);
+    setFeedback('');
+  };
+
+  return (
+    <>
+      <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>
+        <Wand2 className="mr-1.5 h-3.5 w-3.5" /> Suggest Improvement
+      </Button>
+
+      <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setDiff(null); setFeedback(''); } }}>
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Suggest Improvement</DialogTitle>
+            <DialogDescription>
+              Describe how the agent's behavior should change. AI will propose specific prompt edits.
+            </DialogDescription>
+          </DialogHeader>
+
+          {!diff ? (
+            <div className="space-y-4">
+              <Textarea
+                value={feedback}
+                onChange={(e) => setFeedback(e.target.value)}
+                placeholder="e.g., The agent should be more concise in its responses and always include source links..."
+                rows={4}
+              />
+              <Button onClick={handleAnalyze} disabled={!feedback.trim() || suggestMut.isPending} className="w-full">
+                {suggestMut.isPending ? (
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Analyzing...</>
+                ) : (
+                  <><Wand2 className="mr-1.5 h-4 w-4" /> Analyze &amp; Suggest</>
+                )}
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-warm-border p-3 bg-amber-50/50">
+                <p className="text-xs font-medium text-amber-700 mb-1">Change Note</p>
+                <p className="text-sm text-amber-900">{diff.changeNote}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs font-medium text-warm-text-secondary mb-1">Original</p>
+                  <div className="rounded-lg border border-warm-border p-3 bg-red-50/30 max-h-60 overflow-y-auto">
+                    <pre className="text-xs whitespace-pre-wrap font-mono text-warm-text-secondary">{diff.original}</pre>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-warm-text-secondary mb-1">Proposed</p>
+                  <div className="rounded-lg border border-warm-border p-3 bg-green-50/30 max-h-60 overflow-y-auto">
+                    <pre className="text-xs whitespace-pre-wrap font-mono">{diff.proposed}</pre>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={handleDismiss}>Dismiss</Button>
+                <Button onClick={handleApply} disabled={applyMut.isPending}>
+                  {applyMut.isPending ? (
+                    <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Applying...</>
+                  ) : (
+                    <><Check className="mr-1.5 h-4 w-4" /> Apply</>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

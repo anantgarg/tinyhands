@@ -155,3 +155,77 @@ export function useAvailableTools() {
     queryFn: () => api.get('/tools/available'),
   });
 }
+
+// ── Custom Tool Builder ──
+
+export interface GeneratedTool {
+  name: string;
+  description: string;
+  inputSchema: Record<string, unknown>;
+  code: string;
+  language: string;
+}
+
+export interface SandboxTestResult {
+  passed: boolean;
+  output: string;
+  error: string | null;
+  durationMs: number;
+}
+
+export interface ToolVersion {
+  version: number;
+  changedBy: string;
+  createdAt: string;
+}
+
+export interface ToolAnalytics {
+  toolName: string;
+  totalRuns: number;
+  successRate: number;
+  avgDurationMs: number;
+  lastUsed: string | null;
+  lastError: string | null;
+}
+
+export function useGenerateTool() {
+  return useMutation({
+    mutationFn: ({ description, language }: { description: string; language?: string }) =>
+      api.post<GeneratedTool>('/tools/custom/generate', { description, language }),
+  });
+}
+
+export function useTestTool() {
+  return useMutation({
+    mutationFn: ({ name, code, inputSchema }: { name: string; code?: string; inputSchema?: Record<string, unknown> }) =>
+      api.post<SandboxTestResult>(`/tools/custom/${name}/test`, { code, inputSchema }),
+  });
+}
+
+export function useToolVersions(name: string) {
+  return useQuery<ToolVersion[]>({
+    queryKey: ['tools', 'custom', name, 'versions'],
+    queryFn: () => api.get(`/tools/custom/${name}/versions`),
+    enabled: !!name,
+  });
+}
+
+export function useRollbackTool() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ name, version }: { name: string; version: number }) =>
+      api.post(`/tools/custom/${name}/rollback`, { version }),
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: ['tools', 'custom'] });
+      qc.invalidateQueries({ queryKey: ['tools', 'custom', variables.name, 'versions'] });
+    },
+  });
+}
+
+export function useToolAnalytics(name: string) {
+  return useQuery<ToolAnalytics>({
+    queryKey: ['tools', 'custom', name, 'analytics'],
+    queryFn: () => api.get(`/tools/custom/${name}/analytics`),
+    enabled: !!name,
+  });
+}

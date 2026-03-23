@@ -302,4 +302,132 @@ router.delete('/integrations/:id/disconnect', requireAdmin, async (req: Request,
   }
 });
 
+// ── Custom Tool Builder ──
+
+// POST /tools/custom/generate — AI-generate a custom tool from description
+router.post('/custom/generate', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { workspaceId } = getSessionUser(req);
+    const { description, language } = req.body;
+    if (!description) {
+      res.status(400).json({ error: 'description is required' });
+      return;
+    }
+
+    const Anthropic = (await import('@anthropic-ai/sdk')).default;
+    const client = new Anthropic();
+    const lang = language || 'javascript';
+    const response = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 2048,
+      system: `You are a tool code generator. Given a description, generate a JSON object with:
+- name: kebab-case tool name
+- description: one-line description
+- inputSchema: JSON Schema object for the tool's input parameters
+- code: ${lang} code that implements the tool (reads input from stdin JSON, writes output to stdout)
+- language: "${lang}"
+
+Return ONLY valid JSON, no markdown fences.`,
+      messages: [{ role: 'user', content: description }],
+    });
+
+    const text = response.content
+      .filter((b: any) => b.type === 'text')
+      .map((b: any) => b.text)
+      .join('');
+
+    const generated = JSON.parse(text);
+    res.json({
+      name: generated.name || 'custom-tool',
+      description: generated.description || description,
+      inputSchema: generated.inputSchema || { type: 'object', properties: {} },
+      code: generated.code || '',
+      language: generated.language || lang,
+    });
+  } catch (err: any) {
+    logger.error('Generate tool error', { error: err.message });
+    res.status(500).json({ error: 'Failed to generate tool: ' + err.message });
+  }
+});
+
+// POST /tools/custom/:name/test — Test a custom tool in sandbox
+router.post('/custom/:name/test', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { workspaceId } = getSessionUser(req);
+    const name = req.params.name as string;
+    const tool = await getCustomTool(workspaceId, name);
+    if (!tool) {
+      res.status(404).json({ error: 'Tool not found' });
+      return;
+    }
+
+    const { code, inputSchema } = req.body;
+    const toolCode = code || (tool as any).script_code;
+    const schema = inputSchema || (tool as any).schema_json;
+
+    if (!toolCode) {
+      res.status(400).json({ error: 'Tool has no code to test' });
+      return;
+    }
+
+    try {
+      const { sandboxTest: doSandboxTest } = await import('../../modules/self-authoring');
+      const result = await (doSandboxTest as any)(toolCode, (tool as any).language || 'javascript', typeof schema === 'string' ? JSON.parse(schema) : schema);
+      res.json(result);
+    } catch (sandboxErr: any) {
+      res.json({ passed: false, output: '', error: sandboxErr.message, durationMs: 0 });
+    }
+  } catch (err: any) {
+    logger.error('Test tool error', { error: err.message });
+    res.status(500).json({ error: 'Failed to test tool: ' + err.message });
+  }
+});
+
+// GET /tools/custom/:name/versions — Get version history
+router.get('/custom/:name/versions', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { workspaceId } = getSessionUser(req);
+    const name = req.params.name as string;
+    const { getToolVersions } = await import('../../modules/self-authoring');
+    const versions = await getToolVersions(workspaceId, name);
+    res.json(versions);
+  } catch (err: any) {
+    logger.error('Get tool versions error', { error: err.message });
+    res.status(500).json({ error: 'Failed to get versions' });
+  }
+});
+
+// POST /tools/custom/:name/rollback — Rollback to a version
+router.post('/custom/:name/rollback', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { workspaceId, userId } = getSessionUser(req);
+    const name = req.params.name as string;
+    const { version } = req.body;
+    if (!version) {
+      res.status(400).json({ error: 'version is required' });
+      return;
+    }
+    const { rollbackTool } = await import('../../modules/self-authoring');
+    await rollbackTool(workspaceId, name, version, userId);
+    res.json({ ok: true });
+  } catch (err: any) {
+    logger.error('Rollback tool error', { error: err.message });
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// GET /tools/custom/:name/analytics — Get tool analytics
+router.get('/custom/:name/analytics', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { workspaceId } = getSessionUser(req);
+    const name = req.params.name as string;
+    const { getToolAnalytics } = await import('../../modules/self-authoring');
+    const analytics = await getToolAnalytics(workspaceId, name);
+    res.json(analytics);
+  } catch (err: any) {
+    logger.error('Get tool analytics error', { error: err.message });
+    res.status(500).json({ error: 'Failed to get analytics' });
+  }
+});
+
 export default router;

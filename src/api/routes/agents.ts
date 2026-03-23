@@ -638,4 +638,57 @@ router.post('/:id/tool-requests/:requestId/deny', async (req: Request, res: Resp
   }
 });
 
+// ── Self-Improvement ──
+
+// POST /agents/:id/suggest-improvement — Submit critique, get AI-proposed prompt improvement
+router.post('/:id/suggest-improvement', async (req: Request, res: Response) => {
+  try {
+    const { workspaceId, userId } = getSessionUser(req);
+    const id = req.params.id as string;
+    if (!(await canModifyAgent(workspaceId, id, userId))) {
+      res.status(403).json({ error: 'Insufficient permissions' });
+      return;
+    }
+    const { feedback } = req.body;
+    if (!feedback) {
+      res.status(400).json({ error: 'feedback is required' });
+      return;
+    }
+    const agent = await getAgent(workspaceId, id);
+    if (!agent) {
+      res.status(404).json({ error: 'Agent not found' });
+      return;
+    }
+    const { generatePromptDiff } = await import('../../modules/self-improvement');
+    const diff = await generatePromptDiff((agent as any).system_prompt, feedback, '');
+    res.json(diff);
+  } catch (err: any) {
+    logger.error('Suggest improvement error', { error: err.message });
+    res.status(500).json({ error: 'Failed to generate improvement: ' + err.message });
+  }
+});
+
+// POST /agents/:id/apply-improvement — Apply proposed prompt improvement
+router.post('/:id/apply-improvement', async (req: Request, res: Response) => {
+  try {
+    const { workspaceId, userId } = getSessionUser(req);
+    const id = req.params.id as string;
+    if (!(await canModifyAgent(workspaceId, id, userId))) {
+      res.status(403).json({ error: 'Insufficient permissions' });
+      return;
+    }
+    const { newPrompt, changeNote } = req.body;
+    if (!newPrompt) {
+      res.status(400).json({ error: 'newPrompt is required' });
+      return;
+    }
+    const { applyPromptDiff } = await import('../../modules/self-improvement');
+    const result = await applyPromptDiff(workspaceId, id, newPrompt, changeNote || 'Applied improvement from dashboard', userId);
+    res.json(result);
+  } catch (err: any) {
+    logger.error('Apply improvement error', { error: err.message });
+    res.status(400).json({ error: err.message });
+  }
+});
+
 export default router;

@@ -380,8 +380,8 @@ export function useAgentSkills(id: string) {
 export function useAttachSkill() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ agentId, skillId }: { agentId: string; skillId: string }) =>
-      api.post(`/agents/${agentId}/skills`, { skillId }),
+    mutationFn: ({ agentId, skillName, permissionLevel }: { agentId: string; skillName: string; permissionLevel?: string }) =>
+      api.post(`/agents/${agentId}/skills`, { skillName, permissionLevel: permissionLevel || 'read' }),
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: ['agents', variables.agentId, 'skills'] });
     },
@@ -501,6 +501,33 @@ export function useDenyToolRequest() {
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: ['agents', variables.agentId, 'tool-requests'] });
       qc.invalidateQueries({ queryKey: ['tool-requests'] });
+    },
+  });
+}
+
+// ── Self-Improvement ──
+
+export interface PromptDiff {
+  original: string;
+  proposed: string;
+  changeNote: string;
+}
+
+export function useSuggestImprovement() {
+  return useMutation({
+    mutationFn: ({ agentId, feedback }: { agentId: string; feedback: string }) =>
+      api.post<PromptDiff>(`/agents/${agentId}/suggest-improvement`, { feedback }),
+  });
+}
+
+export function useApplyImprovement() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ agentId, newPrompt, changeNote }: { agentId: string; newPrompt: string; changeNote: string }) =>
+      api.post(`/agents/${agentId}/apply-improvement`, { newPrompt, changeNote }),
+    onSuccess: (_data, variables) => {
+      qc.invalidateQueries({ queryKey: ['agents', variables.agentId] });
+      qc.invalidateQueries({ queryKey: ['agents', variables.agentId, 'versions'] });
     },
   });
 }

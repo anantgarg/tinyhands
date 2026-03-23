@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, Trash2, MoreVertical, AlertCircle, Shield, Pencil, Unplug } from 'lucide-react';
+import { Check, Trash2, MoreVertical, AlertCircle, Shield, Pencil, Unplug, Plus, Wand2, Loader2, Play } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent } from '@/components/ui/card';
@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Textarea } from '@/components/ui/textarea';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
   Dialog,
@@ -30,6 +32,9 @@ import {
   useCustomTools,
   useApproveCustomTool,
   useDeleteCustomTool,
+  useCreateCustomTool,
+  useGenerateTool,
+  useTestTool,
 } from '@/api/tools';
 import { useAuthStore } from '@/store/auth';
 import { toast } from '@/components/ui/use-toast';
@@ -89,6 +94,80 @@ function ToolsContent() {
   const disconnectIntegration = useDisconnectIntegration();
   const approveCustomTool = useApproveCustomTool();
   const deleteCustomTool = useDeleteCustomTool();
+  const createCustomTool = useCreateCustomTool();
+  const generateTool = useGenerateTool();
+  const testTool = useTestTool();
+
+  // Create tool dialog state
+  const [showCreateTool, setShowCreateTool] = useState(false);
+  const [createToolMode, setCreateToolMode] = useState<'ai' | 'manual'>('ai');
+  const [toolAiDesc, setToolAiDesc] = useState('');
+  const [toolName, setToolName] = useState('');
+  const [toolDesc, setToolDesc] = useState('');
+  const [toolLang, setToolLang] = useState('javascript');
+  const [toolCode, setToolCode] = useState('');
+  const [toolSchema, setToolSchema] = useState('{"type":"object","properties":{}}');
+  const [testResult, setTestResult] = useState<{ passed: boolean; output: string; error: string | null } | null>(null);
+
+  const resetToolForm = () => {
+    setToolAiDesc('');
+    setToolName('');
+    setToolDesc('');
+    setToolLang('javascript');
+    setToolCode('');
+    setToolSchema('{"type":"object","properties":{}}');
+    setTestResult(null);
+  };
+
+  const handleGenerateTool = () => {
+    generateTool.mutate(
+      { description: toolAiDesc, language: toolLang },
+      {
+        onSuccess: (data) => {
+          setToolName(data.name);
+          setToolDesc(data.description);
+          setToolCode(data.code);
+          setToolSchema(JSON.stringify(data.inputSchema, null, 2));
+          setToolLang(data.language);
+          setCreateToolMode('manual');
+          toast({ title: 'Tool generated', description: 'Review the code and test it', variant: 'success' });
+        },
+        onError: (err: any) => toast({ title: 'Generation failed', description: err.message, variant: 'error' }),
+      },
+    );
+  };
+
+  const handleTestTool = () => {
+    if (!toolName) { toast({ title: 'Name required', variant: 'error' }); return; }
+    testTool.mutate(
+      { name: toolName, code: toolCode, inputSchema: JSON.parse(toolSchema) },
+      {
+        onSuccess: (data) => {
+          setTestResult(data);
+          if (data.passed) {
+            toast({ title: 'Test passed', variant: 'success' });
+          } else {
+            toast({ title: 'Test failed', description: data.error || 'Unknown error', variant: 'error' });
+          }
+        },
+        onError: (err: any) => toast({ title: 'Test error', description: err.message, variant: 'error' }),
+      },
+    );
+  };
+
+  const handleCreateTool = () => {
+    createCustomTool.mutate(
+      { name: toolName, displayName: toolName, description: toolDesc, schema: JSON.parse(toolSchema), code: toolCode },
+      {
+        onSuccess: () => {
+          toast({ title: 'Tool created', variant: 'success' });
+          setShowCreateTool(false);
+          resetToolForm();
+        },
+        onError: (err: any) => toast({ title: 'Error', description: err.message, variant: 'error' }),
+      },
+    );
+  };
 
   const [registerDialog, setRegisterDialog] = useState<{
     id: string;
@@ -148,7 +227,11 @@ function ToolsContent() {
 
   return (
     <div>
-      <PageHeader title="Tools & Integrations" description="Connect external services for your agents to use" />
+      <PageHeader title="Tools & Integrations" description="Connect external services for your agents to use">
+        <Button onClick={() => setShowCreateTool(true)}>
+          <Plus className="mr-1.5 h-4 w-4" /> Create Tool
+        </Button>
+      </PageHeader>
 
       {/* Connected Integrations */}
       <section className="mb-8">
@@ -431,6 +514,119 @@ function ToolsContent() {
               {registerDialog?.isEdit ? 'Save Changes' : 'Connect'}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Tool Dialog */}
+      <Dialog open={showCreateTool} onOpenChange={(v) => { setShowCreateTool(v); if (!v) resetToolForm(); }}>
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Create Custom Tool</DialogTitle>
+            <DialogDescription>Build a new tool using AI or write code manually.</DialogDescription>
+          </DialogHeader>
+
+          <Tabs value={createToolMode} onValueChange={(v) => setCreateToolMode(v as any)}>
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="ai"><Wand2 className="mr-1.5 h-3.5 w-3.5" /> AI Generate</TabsTrigger>
+              <TabsTrigger value="manual"><Pencil className="mr-1.5 h-3.5 w-3.5" /> Manual</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="ai" className="space-y-4 mt-4">
+              <div>
+                <Label>Describe what the tool should do</Label>
+                <Textarea
+                  value={toolAiDesc}
+                  onChange={(e) => setToolAiDesc(e.target.value)}
+                  placeholder="e.g., A tool that fetches weather data for a given city and returns temperature, humidity, and conditions"
+                  rows={4}
+                />
+              </div>
+              <div>
+                <Label>Language</Label>
+                <select
+                  value={toolLang}
+                  onChange={(e) => setToolLang(e.target.value)}
+                  className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                >
+                  <option value="javascript">JavaScript</option>
+                  <option value="python">Python</option>
+                  <option value="bash">Bash</option>
+                </select>
+              </div>
+              <Button onClick={handleGenerateTool} disabled={!toolAiDesc.trim() || generateTool.isPending} className="w-full">
+                {generateTool.isPending ? (
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Generating...</>
+                ) : (
+                  <><Wand2 className="mr-1.5 h-4 w-4" /> Generate Tool</>
+                )}
+              </Button>
+            </TabsContent>
+
+            <TabsContent value="manual" className="space-y-4 mt-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Name</Label>
+                  <Input value={toolName} onChange={(e) => setToolName(e.target.value)} placeholder="my-custom-tool" />
+                </div>
+                <div>
+                  <Label>Language</Label>
+                  <select
+                    value={toolLang}
+                    onChange={(e) => setToolLang(e.target.value)}
+                    className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+                  >
+                    <option value="javascript">JavaScript</option>
+                    <option value="python">Python</option>
+                    <option value="bash">Bash</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <Label>Description</Label>
+                <Input value={toolDesc} onChange={(e) => setToolDesc(e.target.value)} placeholder="What does this tool do?" />
+              </div>
+              <div>
+                <Label>Input Schema (JSON)</Label>
+                <Textarea
+                  value={toolSchema}
+                  onChange={(e) => setToolSchema(e.target.value)}
+                  rows={4}
+                  className="font-mono text-xs"
+                />
+              </div>
+              <div>
+                <Label>Code</Label>
+                <Textarea
+                  value={toolCode}
+                  onChange={(e) => setToolCode(e.target.value)}
+                  placeholder="// Tool code here..."
+                  rows={10}
+                  className="font-mono text-xs"
+                />
+              </div>
+
+              {testResult && (
+                <div className={`rounded-lg border p-3 text-sm ${testResult.passed ? 'border-green-200 bg-green-50' : 'border-red-200 bg-red-50'}`}>
+                  <p className="font-medium mb-1">{testResult.passed ? 'Test Passed' : 'Test Failed'}</p>
+                  {testResult.output && <pre className="text-xs font-mono whitespace-pre-wrap">{testResult.output}</pre>}
+                  {testResult.error && <pre className="text-xs font-mono text-red-700 whitespace-pre-wrap">{testResult.error}</pre>}
+                </div>
+              )}
+
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={handleTestTool} disabled={!toolName || !toolCode || testTool.isPending}>
+                  {testTool.isPending ? (
+                    <><Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> Testing...</>
+                  ) : (
+                    <><Play className="mr-1.5 h-3.5 w-3.5" /> Test in Sandbox</>
+                  )}
+                </Button>
+                <Button onClick={handleCreateTool} disabled={!toolName || createCustomTool.isPending}>
+                  {createCustomTool.isPending ? 'Creating...' : 'Create Tool'}
+                </Button>
+              </div>
+            </TabsContent>
+          </Tabs>
         </DialogContent>
       </Dialog>
     </div>
