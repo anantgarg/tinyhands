@@ -351,8 +351,8 @@ describe('DB Module', () => {
       expect(Pool).toHaveBeenCalledWith(
         expect.objectContaining({
           connectionString: 'postgresql://localhost:5432/tinyhands_test',
-          max: 20,
-          idleTimeoutMillis: 30000,
+          max: 3,
+          idleTimeoutMillis: 10000,
           connectionTimeoutMillis: 5000,
         }),
       );
