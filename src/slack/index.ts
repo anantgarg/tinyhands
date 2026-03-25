@@ -209,9 +209,18 @@ export async function sendDMBlocks(userId: string, blocks: any[], text: string):
   return sendDM(userId, text, blocks);
 }
 
+// Slack errors for channel types that don't support conversations.join
+// (Slack Connect, shared external, DMs, group DMs)
+const UNJOINABLE_CHANNEL_ERRORS = new Set([
+  'already_in_channel',
+  'method_not_supported_for_channel_type',
+  'channel_type_not_supported',
+  'is_archived',
+]);
+
 /**
  * Ensure the bot is a member of the given channels so it receives events.
- * Silently ignores failures (e.g. missing scope, private channels).
+ * Silently skips channel types that don't support joining (Slack Connect, DMs, etc.).
  */
 export async function ensureBotInChannels(channelIds: string[]): Promise<void> {
   const client = getSlackApp().client;
@@ -220,9 +229,8 @@ export async function ensureBotInChannels(channelIds: string[]): Promise<void> {
       await client.conversations.join({ channel: channelId });
       logger.info('Bot joined channel', { channelId });
     } catch (err: any) {
-      // already_in_channel, missing_scope, channel_not_found, etc.
       const code = err.data?.error || err.message;
-      if (code !== 'already_in_channel') {
+      if (!UNJOINABLE_CHANNEL_ERRORS.has(code)) {
         logger.warn('Could not auto-join channel — invite the bot manually', { channelId, error: code });
       }
     }

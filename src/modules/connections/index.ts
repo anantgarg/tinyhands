@@ -131,8 +131,43 @@ export async function deleteConnection(wsId: string, id: string): Promise<void> 
   logger.info('Connection deleted (soft)', { wsId, id });
 }
 
+const MIGRATION_MARKER = 'NEEDS_RE_ENCRYPTION:';
+
 export function decryptCredentials(conn: Connection): Record<string, string> {
   return JSON.parse(decrypt(conn.credentials_encrypted, conn.credentials_iv));
+}
+
+/**
+ * Re-encrypt any connections left by the backfill migration (016).
+ * Those rows have credentials_encrypted = 'NEEDS_RE_ENCRYPTION:<plaintext_json>'
+ * and credentials_iv = 'migrated'. This function properly encrypts them in place.
+ * Safe to call on every startup — skips if none found.
+ */
+export async function reEncryptMigratedCredentials(): Promise<number> {
+  const rows = await query<Connection>(
+    `SELECT * FROM connections WHERE credentials_iv = 'migrated' AND credentials_encrypted LIKE '${MIGRATION_MARKER}%'`
+  );
+  if (rows.length === 0) return 0;
+
+  let fixed = 0;
+  for (const row of rows) {
+    try {
+      const plaintext = row.credentials_encrypted.slice(MIGRATION_MARKER.length);
+      // Validate it's valid JSON before encrypting
+      JSON.parse(plaintext);
+      const { encrypted, iv } = encrypt(plaintext);
+      await execute(
+        'UPDATE connections SET credentials_encrypted = $1, credentials_iv = $2, updated_at = NOW() WHERE id = $3',
+        [encrypted, iv, row.id]
+      );
+      fixed++;
+      logger.info('Re-encrypted migrated credential', { connectionId: row.id, integrationId: row.integration_id });
+    } catch (err: any) {
+      logger.warn('Failed to re-encrypt migrated credential', { connectionId: row.id, error: err.message });
+    }
+  }
+  logger.info('Migrated credential re-encryption complete', { total: rows.length, fixed });
+  return fixed;
 }
 
 // ── Agent Tool Connections ──

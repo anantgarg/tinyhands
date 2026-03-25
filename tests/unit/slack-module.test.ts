@@ -544,6 +544,36 @@ describe('Slack module', () => {
       await expect(ensureBotInChannels(['C001'])).resolves.toBeUndefined();
     });
 
+    it('should silently skip method_not_supported_for_channel_type (Slack Connect channels)', async () => {
+      mockSlackClient.conversations.join.mockRejectedValueOnce({
+        data: { error: 'method_not_supported_for_channel_type' },
+        message: 'method_not_supported_for_channel_type',
+      });
+      const { logger } = await import('../../src/utils/logger');
+      await ensureBotInChannels(['C001']);
+      expect(logger.warn).not.toHaveBeenCalled();
+    });
+
+    it('should silently skip channel_type_not_supported errors', async () => {
+      mockSlackClient.conversations.join.mockRejectedValueOnce({
+        data: { error: 'channel_type_not_supported' },
+        message: 'channel_type_not_supported',
+      });
+      const { logger } = await import('../../src/utils/logger');
+      await ensureBotInChannels(['C001']);
+      expect(logger.warn).not.toHaveBeenCalled();
+    });
+
+    it('should silently skip is_archived errors', async () => {
+      mockSlackClient.conversations.join.mockRejectedValueOnce({
+        data: { error: 'is_archived' },
+        message: 'is_archived',
+      });
+      const { logger } = await import('../../src/utils/logger');
+      await ensureBotInChannels(['C001']);
+      expect(logger.warn).not.toHaveBeenCalled();
+    });
+
     it('should warn on other join errors but not throw', async () => {
       mockSlackClient.conversations.join.mockRejectedValueOnce({
         data: { error: 'channel_not_found' },

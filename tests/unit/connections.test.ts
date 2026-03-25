@@ -54,6 +54,7 @@ import {
   getAgentToolConnection,
   resolveToolCredentials,
   getCredentialErrorContext,
+  reEncryptMigratedCredentials,
 } from '../../src/modules/connections';
 
 const TEST_WORKSPACE_ID = 'W_TEST_123';
@@ -435,6 +436,70 @@ describe('getIntegrationIdForTool', () => {
     const result = getIntegrationIdForTool('standalone');
 
     expect(result).toBe('standalone');
+  });
+});
+
+describe('reEncryptMigratedCredentials', () => {
+  it('should re-encrypt credentials with NEEDS_RE_ENCRYPTION marker', async () => {
+    const migratedRows = [
+      {
+        id: 'conn-migrated-1',
+        workspace_id: TEST_WORKSPACE_ID,
+        integration_id: 'chargebee',
+        credentials_encrypted: 'NEEDS_RE_ENCRYPTION:{"api_key":"live_xxx","site":"test"}',
+        credentials_iv: 'migrated',
+      },
+    ];
+    mockQuery.mockResolvedValueOnce(migratedRows);
+    mockEncrypt.mockReturnValue({ encrypted: 'properly_encrypted.authtag', iv: 'new_iv_hex' });
+    mockExecute.mockResolvedValueOnce(undefined);
+
+    const fixed = await reEncryptMigratedCredentials();
+
+    expect(fixed).toBe(1);
+    expect(mockEncrypt).toHaveBeenCalledWith('{"api_key":"live_xxx","site":"test"}');
+    expect(mockExecute).toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE connections SET credentials_encrypted'),
+      ['properly_encrypted.authtag', 'new_iv_hex', 'conn-migrated-1']
+    );
+  });
+
+  it('should return 0 when no migrated credentials exist', async () => {
+    mockQuery.mockResolvedValueOnce([]);
+
+    const fixed = await reEncryptMigratedCredentials();
+
+    expect(fixed).toBe(0);
+    expect(mockEncrypt).not.toHaveBeenCalled();
+    expect(mockExecute).not.toHaveBeenCalled();
+  });
+
+  it('should skip rows with invalid JSON and continue', async () => {
+    const migratedRows = [
+      {
+        id: 'conn-bad',
+        workspace_id: TEST_WORKSPACE_ID,
+        integration_id: 'broken',
+        credentials_encrypted: 'NEEDS_RE_ENCRYPTION:not-valid-json',
+        credentials_iv: 'migrated',
+      },
+      {
+        id: 'conn-good',
+        workspace_id: TEST_WORKSPACE_ID,
+        integration_id: 'chargebee',
+        credentials_encrypted: 'NEEDS_RE_ENCRYPTION:{"api_key":"ok"}',
+        credentials_iv: 'migrated',
+      },
+    ];
+    mockQuery.mockResolvedValueOnce(migratedRows);
+    mockEncrypt.mockReturnValue({ encrypted: 'enc.tag', iv: 'iv' });
+    mockExecute.mockResolvedValueOnce(undefined);
+
+    const fixed = await reEncryptMigratedCredentials();
+
+    // Only the valid one should be fixed
+    expect(fixed).toBe(1);
+    expect(mockExecute).toHaveBeenCalledTimes(1);
   });
 });
 

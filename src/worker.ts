@@ -1,3 +1,4 @@
+process.env.PROCESS_TYPE = 'worker';
 import { createWorker } from './modules/execution';
 import { initSlackClient, getSlackApp } from './slack';
 import { initDb, upsertWorkspace, setDefaultWorkspaceId, execute, getDefaultWorkspaceId } from './db';

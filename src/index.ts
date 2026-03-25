@@ -1,3 +1,4 @@
+process.env.PROCESS_TYPE = 'listener';
 import { createSlackApp } from './slack';
 import { startWebhookServer } from './server';
 import { initDb, upsertWorkspace, setDefaultWorkspaceId, execute } from './db';
@@ -53,6 +54,13 @@ async function main(): Promise<void> {
   } catch (err: any) {
     logger.warn('Workspace backfill failed', { error: err.message });
   }
+
+  // Re-encrypt any credentials left by the backfill migration (016)
+  import('./modules/connections').then(({ reEncryptMigratedCredentials }) =>
+    reEncryptMigratedCredentials()
+  ).catch(err =>
+    logger.warn('Credential re-encryption failed', { error: err.message })
+  );
 
   // Ensure bot is a member of all agent channels (for receiving events)
   ensureBotInAllAgentChannels().catch(err =>

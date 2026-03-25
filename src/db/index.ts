@@ -14,7 +14,8 @@ function isConnectionError(err: any): boolean {
   return code === 'ECONNREFUSED' || code === 'ECONNRESET' || code === 'ETIMEDOUT' ||
     msg.includes('timeout') || msg.includes('connection terminated') ||
     msg.includes('connection refused') || msg.includes('cert') ||
-    msg.includes('ssl') || msg.includes('unexpected eof');
+    msg.includes('ssl') || msg.includes('unexpected eof') ||
+    msg.includes('remaining connection slots');
 }
 
 function createPool(): Pool {
@@ -41,18 +42,35 @@ async function resetPool(): Promise<void> {
   }
 }
 
+/**
+ * Per-process pool sizing: not all processes need the same number of connections.
+ * Workers handle heavy concurrent queries; scheduler/sync are lightweight.
+ * Defaults (total = 1 + 3×3 + 1 + 1 = 12, well under DigitalOcean's 25-connection limit):
+ *   listener=2, worker=3, scheduler=1, sync=1
+ * Override with DB_POOL_MAX env var to set all processes uniformly.
+ */
+function getPoolMaxForProcess(): number {
+  if (process.env.DB_POOL_MAX) return parseInt(process.env.DB_POOL_MAX, 10);
+  const processType = process.env.PROCESS_TYPE || '';
+  switch (processType) {
+    case 'scheduler': return 1;
+    case 'sync': return 1;
+    case 'listener': return 2;
+    case 'worker': return 3;
+    default: return 3;
+  }
+}
+
 export async function initDb(): Promise<void> {
   if (pool) return;
 
-  let connectionString = config.database.url;
+  // Use DATABASE_POOL_URL (PgBouncer) if available, otherwise direct connection
+  let connectionString = process.env.DATABASE_POOL_URL || config.database.url;
   const needsSsl = connectionString.includes('sslmode=');
   // Strip sslmode from connection string — pg v8.13+ treats it as verify-full
   connectionString = connectionString.replace(/[?&]sslmode=[^&]*/g, '').replace(/\?$/, '');
 
-  // DigitalOcean managed DB allows 25 connections total.
-  // With 6 PM2 processes, each gets floor(25/6) - 1 = 3 to stay safely under the limit.
-  // Configurable via DB_POOL_MAX for when the DB plan is upgraded.
-  const poolMax = parseInt(process.env.DB_POOL_MAX || '3', 10);
+  const poolMax = getPoolMaxForProcess();
 
   poolConfig = {
     connectionString,
@@ -62,9 +80,22 @@ export async function initDb(): Promise<void> {
 
   pool = createPool();
 
-  // Run migrations
-  const { runMigrations } = await import('./migrate');
-  await runMigrations(pool);
+  // Run migrations (always against the direct URL, not PgBouncer — DDL needs direct)
+  const migrationString = config.database.url.replace(/[?&]sslmode=[^&]*/g, '').replace(/\?$/, '');
+  if (process.env.DATABASE_POOL_URL && migrationString !== connectionString) {
+    const { Pool: PgPool } = await import('pg');
+    const migrationPool = new PgPool({
+      connectionString: migrationString,
+      ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
+      max: 1,
+    });
+    const { runMigrations } = await import('./migrate');
+    await runMigrations(migrationPool);
+    await migrationPool.end();
+  } else {
+    const { runMigrations } = await import('./migrate');
+    await runMigrations(pool);
+  }
 }
 
 function getPool(): Pool {

@@ -406,6 +406,62 @@ describe('DB Module', () => {
       (config as any).database.url = 'postgresql://localhost:5432/tinyhands_test';
     });
 
+    it('should use per-process pool sizing based on PROCESS_TYPE', async () => {
+      vi.resetModules();
+      vi.clearAllMocks();
+      process.env.PROCESS_TYPE = 'scheduler';
+      delete process.env.DB_POOL_MAX;
+      (config as any).database.url = 'postgresql://localhost:5432/tinyhands_test';
+      const dbModule = await import('../../src/db/index');
+
+      await dbModule.initDb();
+
+      expect(Pool).toHaveBeenCalledWith(
+        expect.objectContaining({ max: 1 }),
+      );
+
+      await dbModule.closeDb();
+      delete process.env.PROCESS_TYPE;
+    });
+
+    it('should override per-process sizing when DB_POOL_MAX is set', async () => {
+      vi.resetModules();
+      vi.clearAllMocks();
+      process.env.PROCESS_TYPE = 'scheduler';
+      process.env.DB_POOL_MAX = '5';
+      (config as any).database.url = 'postgresql://localhost:5432/tinyhands_test';
+      const dbModule = await import('../../src/db/index');
+
+      await dbModule.initDb();
+
+      expect(Pool).toHaveBeenCalledWith(
+        expect.objectContaining({ max: 5 }),
+      );
+
+      await dbModule.closeDb();
+      delete process.env.PROCESS_TYPE;
+      delete process.env.DB_POOL_MAX;
+    });
+
+    it('should use DATABASE_POOL_URL when available', async () => {
+      vi.resetModules();
+      vi.clearAllMocks();
+      process.env.DATABASE_POOL_URL = 'postgresql://localhost:6432/tinyhands_pooler';
+      (config as any).database.url = 'postgresql://localhost:5432/tinyhands_test';
+      const dbModule = await import('../../src/db/index');
+
+      await dbModule.initDb();
+
+      expect(Pool).toHaveBeenCalledWith(
+        expect.objectContaining({
+          connectionString: 'postgresql://localhost:6432/tinyhands_pooler',
+        }),
+      );
+
+      await dbModule.closeDb();
+      delete process.env.DATABASE_POOL_URL;
+    });
+
     it('should not enable SSL when sslmode is absent', async () => {
       vi.resetModules();
       vi.clearAllMocks();
@@ -518,6 +574,24 @@ describe('DB Module', () => {
       await expect(dbModule.query('SELECT 1')).rejects.toThrow('timeout');
       await expect(dbModule.query('SELECT 1')).rejects.toThrow('timeout');
       // Third failure triggers pool reset + retry on new pool
+      const result = await dbModule.query('SELECT 1');
+      expect(result).toEqual([{ ok: true }]);
+
+      // Pool was created once in initDb, once in reset
+      expect(Pool).toHaveBeenCalledTimes(2);
+    });
+
+    it('should recognize "remaining connection slots" as a connection error', async () => {
+      const slotsError = new Error('remaining connection slots are reserved for roles with the SUPERUSER attribute');
+
+      mockPoolQuery
+        .mockRejectedValueOnce(slotsError)
+        .mockRejectedValueOnce(slotsError)
+        .mockRejectedValueOnce(slotsError) // triggers reset
+        .mockResolvedValueOnce({ rows: [{ ok: true }], rowCount: 1 });
+
+      await expect(dbModule.query('SELECT 1')).rejects.toThrow('remaining connection slots');
+      await expect(dbModule.query('SELECT 1')).rejects.toThrow('remaining connection slots');
       const result = await dbModule.query('SELECT 1');
       expect(result).toEqual([{ ok: true }]);
 

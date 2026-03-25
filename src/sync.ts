@@ -1,3 +1,4 @@
+process.env.PROCESS_TYPE = 'sync';
 import { initDb, upsertWorkspace, setDefaultWorkspaceId, getDefaultWorkspaceId } from './db';
 import { getSourcesDueForSync, updateSourceStatus, ingestContent, getSource } from './modules/sources';
 import { checkAlerts } from './modules/observability';

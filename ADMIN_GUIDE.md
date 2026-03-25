@@ -561,6 +561,7 @@ Optional:
 | `DOCKER_BASE_IMAGE` | Base Docker image for agent execution |
 | `DAILY_BUDGET_USD` | Daily spending limit |
 | `AUTO_UPDATE_ENABLED` | Enable pull-based auto-update from GitHub |
+| `DATABASE_POOL_URL` | PgBouncer connection string (DigitalOcean managed DB pooler port). When set, app connects via pooler for queries and direct URL for migrations |
 
 ---
 

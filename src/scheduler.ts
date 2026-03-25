@@ -1,3 +1,4 @@
+process.env.PROCESS_TYPE = 'scheduler';
 import { initDb, upsertWorkspace, setDefaultWorkspaceId } from './db';
 import { initSlackClient, getSlackApp } from './slack';
 import { config } from './config';
