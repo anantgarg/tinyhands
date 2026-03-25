@@ -2890,8 +2890,21 @@ async function handleInfeasibleRequest(
   logger.info('Infeasible agent request queued', { requestId, userId, blockers: analysis.blockers });
 }
 
+const CREDENTIAL_MODE_LABELS: Record<string, string> = {
+  team: 'Use shared credentials',
+  delegated: 'Use my credentials',
+  runtime: 'Each user uses their own',
+};
+
+const CREDENTIAL_MODE_RATIONALE: Record<string, string> = {
+  team: 'acts on behalf of the whole team',
+  delegated: 'acts on behalf of its creator',
+  runtime: 'acts on behalf of individual users',
+};
+
 async function buildCredentialSelectionBlocks(
   workspaceId: string, userId: string, customToolNames: string[], confirmId: string,
+  recommendedModes?: Record<string, 'team' | 'delegated' | 'runtime'>,
 ): Promise<any[]> {
   const blocks: any[] = [];
   try {
@@ -2920,53 +2933,61 @@ async function buildCredentialSelectionBlocks(
       const teamConn = await getTeamConnection(workspaceId, intId);
       const personalConn = await getPersonalConnection(workspaceId, intId, userId);
       const isOAuth = oauthIntegrations.includes(intId);
+      const connectionModel = (manifest as any).connectionModel || 'team';
+      const recommended = recommendedModes?.[intId];
 
-      if (teamConn && personalConn) {
-        // Both available — let user choose
+      // Build available options based on connectionModel and available connections
+      const allOptions: Array<{ text: { type: string; text: string }; value: string }> = [];
+      if (connectionModel === 'team' || connectionModel === 'hybrid') {
+        allOptions.push({ text: { type: 'plain_text', text: CREDENTIAL_MODE_LABELS.team }, value: 'team' });
+      }
+      if (connectionModel === 'personal' || connectionModel === 'hybrid') {
+        allOptions.push({ text: { type: 'plain_text', text: CREDENTIAL_MODE_LABELS.delegated }, value: 'delegated' });
+        allOptions.push({ text: { type: 'plain_text', text: CREDENTIAL_MODE_LABELS.runtime }, value: 'runtime' });
+      }
+
+      // Pick the initial option: AI recommendation > first available connection > first option
+      let initialValue = allOptions[0]?.value || 'team';
+      if (recommended && allOptions.some(o => o.value === recommended)) {
+        initialValue = recommended;
+      } else if (teamConn && allOptions.some(o => o.value === 'team')) {
+        initialValue = 'team';
+      } else if (personalConn && allOptions.some(o => o.value === 'delegated')) {
+        initialValue = 'delegated';
+      }
+      const initialOption = allOptions.find(o => o.value === initialValue) || allOptions[0];
+
+      if (teamConn || personalConn) {
+        // At least one connection available — show options
+        const statusParts: string[] = [];
+        if (teamConn) statusParts.push('Shared');
+        if (personalConn) statusParts.push('Personal');
+        const statusText = statusParts.join(' + ') + ' available';
+
         blocks.push({
           type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `${manifest.icon} *${manifest.label}:* Shared + personal available`,
-          },
+          text: { type: 'mrkdwn', text: `${manifest.icon} *${manifest.label}:* ${statusText}` },
         });
-        blocks.push({
-          type: 'actions',
-          elements: [{
-            type: 'radio_buttons',
-            action_id: `credential_mode_select:${confirmId}:${intId}`,
-            initial_option: { text: { type: 'plain_text', text: 'Use shared credentials' }, value: 'team' },
-            options: [
-              { text: { type: 'plain_text', text: 'Use shared credentials' }, value: 'team' },
-              { text: { type: 'plain_text', text: 'Use my credentials' }, value: 'delegated' },
-              { text: { type: 'plain_text', text: 'Each user uses their own' }, value: 'runtime' },
-            ],
-          }],
-        });
-      } else if (teamConn) {
-        // Only shared — auto-set, just inform
-        blocks.push({
-          type: 'section',
-          text: { type: 'mrkdwn', text: `${manifest.icon} *${manifest.label}:* Using shared credentials` },
-        });
-      } else if (personalConn) {
-        // Only personal
-        blocks.push({
-          type: 'section',
-          text: { type: 'mrkdwn', text: `${manifest.icon} *${manifest.label}:* Using your credentials` },
-        });
-        blocks.push({
-          type: 'actions',
-          elements: [{
-            type: 'radio_buttons',
-            action_id: `credential_mode_select:${confirmId}:${intId}`,
-            initial_option: { text: { type: 'plain_text', text: 'Use my credentials' }, value: 'delegated' },
-            options: [
-              { text: { type: 'plain_text', text: 'Use my credentials' }, value: 'delegated' },
-              { text: { type: 'plain_text', text: 'Each user uses their own' }, value: 'runtime' },
-            ],
-          }],
-        });
+
+        // Show AI recommendation hint if available
+        if (recommended) {
+          blocks.push({
+            type: 'context',
+            elements: [{ type: 'mrkdwn', text: `:bulb: *Recommended:* ${CREDENTIAL_MODE_LABELS[recommended]} — this agent ${CREDENTIAL_MODE_RATIONALE[recommended]}` }],
+          });
+        }
+
+        if (allOptions.length > 1) {
+          blocks.push({
+            type: 'actions',
+            elements: [{
+              type: 'radio_buttons',
+              action_id: `credential_mode_select:${confirmId}:${intId}`,
+              initial_option: initialOption,
+              options: allOptions,
+            }],
+          });
+        }
       } else {
         // Neither — prompt to connect
         const connectBtn = isOAuth
@@ -2976,6 +2997,12 @@ async function buildCredentialSelectionBlocks(
           type: 'section',
           text: { type: 'mrkdwn', text: `${manifest.icon} *${manifest.label}:* No credentials configured` },
         });
+        if (recommended) {
+          blocks.push({
+            type: 'context',
+            elements: [{ type: 'mrkdwn', text: `:bulb: *Recommended:* ${CREDENTIAL_MODE_LABELS[recommended]} — this agent ${CREDENTIAL_MODE_RATIONALE[recommended]}` }],
+          });
+        }
         blocks.push({
           type: 'actions',
           elements: [connectBtn],
@@ -3002,7 +3029,7 @@ async function showNewAgentConfirmation(
   const defaultEffort = maxTurnsToEffort(analysis.max_turns || 25);
   await execute(
     `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
-    [confirmId, JSON.stringify({ analysis, name: agentName, goal, userId, existingChannelIds: selectedChannels, selectedModel: analysis.model, selectedEffort: defaultEffort, visibility: 'public', defaultAccess: 'viewer', writePolicy: 'auto', memberIds: [] })],
+    [confirmId, JSON.stringify({ analysis, name: agentName, goal, userId, existingChannelIds: selectedChannels, selectedModel: analysis.model, selectedEffort: defaultEffort, visibility: 'public', defaultAccess: 'viewer', writePolicy: 'auto', memberIds: [], credentialModes: analysis.credential_modes || {} })],
   );
 
   const configSummary = buildConfigSummary(agentName, analysis, goal);
@@ -3053,7 +3080,7 @@ async function showNewAgentConfirmation(
         },
       ],
     },
-    ...await buildCredentialSelectionBlocks(wsId, userId, analysis.custom_tools || [], confirmId),
+    ...await buildCredentialSelectionBlocks(wsId, userId, analysis.custom_tools || [], confirmId, analysis.credential_modes || {}),
     {
       type: 'actions',
       elements: [
@@ -3308,7 +3335,7 @@ async function showUpdateAgentConfirmation(
   const defaultEffort = maxTurnsToEffort(analysis.max_turns || agent.max_turns || 25);
   await execute(
     `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
-    [confirmId, JSON.stringify({ analysis, name: agent.name, goal: newGoal, userId, agentId, newChannelIds, channelId, threadTs, selectedModel: analysis.model, selectedEffort: defaultEffort })],
+    [confirmId, JSON.stringify({ analysis, name: agent.name, goal: newGoal, userId, agentId, newChannelIds, channelId, threadTs, selectedModel: analysis.model, selectedEffort: defaultEffort, credentialModes: analysis.credential_modes || {} })],
   );
 
   const configSummary = buildConfigSummary(agent.name, analysis, newGoal, agent);

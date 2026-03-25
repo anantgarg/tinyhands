@@ -31,10 +31,14 @@ vi.mock('../../src/modules/audit', () => ({
   logAuditEvent: vi.fn(),
 }));
 
-// Mock access-control for resolveToolCredentials
-const mockGetAgentOwners = vi.fn().mockResolvedValue(['U_OWNER1']);
+// Mock access-control for resolveToolCredentials and getCredentialErrorContext
+const mockGetAgentOwners = vi.fn().mockResolvedValue([{ user_id: 'U_OWNER1' }]);
+const mockGetPlatformRole = vi.fn().mockResolvedValue('member');
+const mockGetAgentRole = vi.fn().mockResolvedValue('viewer');
 vi.mock('../../src/modules/access-control', () => ({
   getAgentOwners: (...args: any[]) => mockGetAgentOwners(...args),
+  getPlatformRole: (...args: any[]) => mockGetPlatformRole(...args),
+  getAgentRole: (...args: any[]) => mockGetAgentRole(...args),
 }));
 
 import {
@@ -49,6 +53,7 @@ import {
   setAgentToolConnection,
   getAgentToolConnection,
   resolveToolCredentials,
+  getCredentialErrorContext,
 } from '../../src/modules/connections';
 
 const TEST_WORKSPACE_ID = 'W_TEST_123';
@@ -430,5 +435,58 @@ describe('getIntegrationIdForTool', () => {
     const result = getIntegrationIdForTool('standalone');
 
     expect(result).toBe('standalone');
+  });
+});
+
+describe('getCredentialErrorContext', () => {
+  it('should return correct context for admin running team-mode agent', async () => {
+    mockQueryOne.mockResolvedValueOnce({ connection_mode: 'team', tool_name: 'chargebee-read' });
+    mockGetPlatformRole.mockResolvedValueOnce('admin');
+    mockGetAgentRole.mockResolvedValueOnce('member');
+    mockGetAgentOwners.mockResolvedValueOnce([{ user_id: 'U_OWNER1' }]);
+
+    const ctx = await getCredentialErrorContext(TEST_WORKSPACE_ID, 'agent-1', 'chargebee-read', 'U_ADMIN');
+
+    expect(ctx.mode).toBe('team');
+    expect(ctx.isRunnerAdmin).toBe(true);
+    expect(ctx.isRunnerOwner).toBe(false);
+    expect(ctx.agentOwnerIds).toEqual(['U_OWNER1']);
+  });
+
+  it('should return correct context for owner running delegated-mode agent', async () => {
+    mockQueryOne.mockResolvedValueOnce({ connection_mode: 'delegated', tool_name: 'gmail-read' });
+    mockGetPlatformRole.mockResolvedValueOnce('member');
+    mockGetAgentRole.mockResolvedValueOnce('owner');
+    mockGetAgentOwners.mockResolvedValueOnce([{ user_id: 'U_OWNER1' }]);
+
+    const ctx = await getCredentialErrorContext(TEST_WORKSPACE_ID, 'agent-1', 'gmail-read', 'U_OWNER1');
+
+    expect(ctx.mode).toBe('delegated');
+    expect(ctx.isRunnerOwner).toBe(true);
+    expect(ctx.isRunnerAdmin).toBe(false);
+  });
+
+  it('should return null mode when no agent_tool_connection exists', async () => {
+    mockQueryOne.mockResolvedValueOnce(null);
+    mockGetPlatformRole.mockResolvedValueOnce('member');
+    mockGetAgentRole.mockResolvedValueOnce('viewer');
+    mockGetAgentOwners.mockResolvedValueOnce([]);
+
+    const ctx = await getCredentialErrorContext(TEST_WORKSPACE_ID, 'agent-1', 'chargebee-read', 'U_USER');
+
+    expect(ctx.mode).toBeNull();
+  });
+
+  it('should resolve integration label from fallback when manifest not available', async () => {
+    mockQueryOne.mockResolvedValueOnce({ connection_mode: 'team' });
+    mockGetPlatformRole.mockResolvedValueOnce('member');
+    mockGetAgentRole.mockResolvedValueOnce('viewer');
+    mockGetAgentOwners.mockResolvedValueOnce([]);
+
+    const ctx = await getCredentialErrorContext(TEST_WORKSPACE_ID, 'agent-1', 'chargebee-read', 'U_USER');
+
+    // Falls back to integration ID since manifest require() won't resolve in tests
+    expect(ctx.integrationId).toBe('chargebee');
+    expect(ctx.integrationLabel).toBe('chargebee');
   });
 });

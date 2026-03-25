@@ -1,8 +1,9 @@
 import { v4 as uuid } from 'uuid';
 import { query, queryOne, execute } from '../../db';
 import { encrypt, decrypt } from './crypto';
-import type { Connection, AgentToolConnection } from '../../types';
+import type { Connection, AgentToolConnection, ConnectionMode, PlatformRole, AgentAccessLevel } from '../../types';
 import { logger } from '../../utils/logger';
+import type { CredentialErrorContext } from './errors';
 
 // ── Connection CRUD ──
 
@@ -268,4 +269,44 @@ export async function resolveToolCredentials(
   }
 
   return null;
+}
+
+export async function getCredentialErrorContext(
+  wsId: string,
+  agentId: string,
+  toolName: string,
+  runnerId: string,
+): Promise<CredentialErrorContext> {
+  const atc = await getAgentToolConnection(wsId, agentId, toolName);
+  const integrationId = getIntegrationIdForTool(toolName);
+
+  let integrationLabel = integrationId;
+  let integrationIcon = ':wrench:';
+  try {
+    const { getIntegration } = require('../tools/integrations');
+    const manifest = getIntegration(integrationId);
+    if (manifest) {
+      integrationLabel = manifest.label;
+      integrationIcon = manifest.icon;
+    }
+  } catch { /* best-effort */ }
+
+  const { getPlatformRole, getAgentRole, getAgentOwners } = await import('../access-control');
+  const platformRole: PlatformRole = await getPlatformRole(wsId, runnerId);
+  const agentRole: AgentAccessLevel = await getAgentRole(wsId, agentId, runnerId);
+  const owners = await getAgentOwners(wsId, agentId);
+  const ownerIds = owners.map(o => o.user_id);
+  const isAdmin = platformRole === 'superadmin' || platformRole === 'admin';
+
+  return {
+    mode: (atc?.connection_mode as ConnectionMode) || null,
+    integrationId,
+    integrationLabel,
+    integrationIcon,
+    runnerPlatformRole: platformRole,
+    runnerAgentRole: agentRole,
+    agentOwnerIds: ownerIds,
+    isRunnerOwner: agentRole === 'owner',
+    isRunnerAdmin: isAdmin,
+  };
 }

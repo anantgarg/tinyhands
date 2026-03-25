@@ -261,27 +261,29 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
     for (const t of agentCustomTools) {
       const execScript = await getToolExecutionScript(workspaceId, t.name);
 
-      // Resolve credentials via connection system, fall back to config_json
+      // Resolve credentials via connection system — never fall back silently
       let toolConfig: Record<string, any>;
       try {
-        const { resolveToolCredentials, getAgentToolConnection, getIntegrationIdForTool } = await import('../connections');
+        const { resolveToolCredentials, getCredentialErrorContext, getIntegrationIdForTool } = await import('../connections');
+        const { buildCredentialError } = await import('../connections/errors');
         const resolved = await resolveToolCredentials(workspaceId, agent.id, t.name, data.userId || undefined);
 
         if (!resolved) {
-          // Check if this is a runtime mode tool missing user credentials
-          const atc = await getAgentToolConnection(workspaceId, agent.id, t.name);
-          if (atc?.connection_mode === 'runtime' && data.userId && data.channelId) {
-            const integrationId = getIntegrationIdForTool(t.name);
-            const manifest = getIntegration(integrationId);
-            const { getSupportedOAuthIntegrations } = await import('../connections/oauth');
-            const oauthIntegrations = getSupportedOAuthIntegrations();
-            const isOAuth = oauthIntegrations.includes(integrationId);
+          const runnerId = data.userId || '';
+          const errorCtx = await getCredentialErrorContext(workspaceId, agent.id, t.name, runnerId);
+          const credError = buildCredentialError(errorCtx);
 
-            // Post connect prompt in thread
-            const { postBlocks: postConnBlocks } = await import('../../slack');
-            await postConnBlocks(data.channelId, [
-              { type: 'section', text: { type: 'mrkdwn', text: `:key: I need your *${manifest?.label || integrationId}* credentials to proceed.` } },
-              {
+          if (data.channelId) {
+            const errorBlocks = [...credError.blocks];
+
+            // Add connect button for runtime mode or delegated mode where runner is owner
+            if (credError.showConnectButton && runnerId) {
+              const integrationId = getIntegrationIdForTool(t.name);
+              const { getSupportedOAuthIntegrations } = await import('../connections/oauth');
+              const oauthIntegrations = getSupportedOAuthIntegrations();
+              const isOAuth = oauthIntegrations.includes(integrationId);
+
+              errorBlocks.push({
                 type: 'actions',
                 elements: [{
                   type: 'button',
@@ -289,38 +291,49 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
                   action_id: isOAuth ? 'connect_personal_oauth' : 'connect_personal_apikey',
                   value: integrationId,
                 }],
-              },
-            ], `Connect ${integrationId}`, data.threadTs);
+              });
 
-            // Store pending retry
-            try {
-              const { execute: dbExec } = await import('../../db');
-              const { v4: retryUuid } = await import('uuid');
-              await dbExec(
-                `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
-                [retryUuid(), JSON.stringify({
-                  type: 'pending_connection_retry',
-                  userId: data.userId,
-                  integrationId,
-                  jobData: data,
-                })],
-              );
-            } catch { /* best-effort */ }
+              // Store pending retry so the job auto-retries after user connects
+              try {
+                const { execute: dbExec } = await import('../../db');
+                const { v4: retryUuid } = await import('uuid');
+                await dbExec(
+                  `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
+                  [retryUuid(), JSON.stringify({
+                    type: 'pending_connection_retry',
+                    userId: runnerId,
+                    integrationId,
+                    jobData: data,
+                  })],
+                );
+              } catch { /* best-effort */ }
+            }
 
-            // Skip this run gracefully
-            await updateRunRecord(workspaceId, runRecord.id, {
-              status: 'failed',
-              output: `Missing ${manifest?.label || integrationId} credentials for user`,
-              completed_at: new Date().toISOString(),
-            });
-            return 'Waiting for user credentials';
+            const { postBlocks: postConnBlocks } = await import('../../slack');
+            await postConnBlocks(data.channelId, errorBlocks, `Missing ${errorCtx.integrationLabel} credentials`, data.threadTs);
           }
+
+          await updateRunRecord(workspaceId, runRecord.id, {
+            status: 'failed',
+            output: credError.message,
+            completed_at: new Date().toISOString(),
+          });
+          return credError.message;
         }
 
-        toolConfig = resolved || JSON.parse(t.config_json || '{}');
+        toolConfig = resolved;
       } catch (resolveErr) {
-        logger.warn('Credential resolution failed', { tool: t.name, error: String(resolveErr) });
-        toolConfig = JSON.parse(t.config_json || '{}');
+        logger.warn('Credential resolution failed, aborting run', { tool: t.name, error: String(resolveErr) });
+        if (data.channelId) {
+          const { postMessage: postMsg } = await import('../../slack');
+          await postMsg(data.channelId, `:warning: Failed to load credentials for *${t.name}*. Please contact a workspace admin.`, data.threadTs);
+        }
+        await updateRunRecord(workspaceId, runRecord.id, {
+          status: 'failed',
+          output: `Credential resolution error for ${t.name}`,
+          completed_at: new Date().toISOString(),
+        });
+        return `Credential resolution failed for ${t.name}`;
       }
 
       customToolEntries.push({

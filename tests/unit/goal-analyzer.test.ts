@@ -57,6 +57,7 @@ function makeGoalAnalysisJson(overrides: Partial<GoalAnalysis> = {}): GoalAnalys
     new_tools_needed: [],
     new_skills_needed: [],
     write_tools_requested: [],
+    credential_modes: {},
     feasible: true,
     blockers: [],
     summary: 'A simple test agent.',
@@ -351,6 +352,7 @@ describe('Goal Analyzer', () => {
       expect(result.new_tools_needed).toEqual([]);
       expect(result.new_skills_needed).toEqual([]);
       expect(result.write_tools_requested).toEqual([]);
+      expect(result.credential_modes).toEqual({});
     });
 
     it('should not check isSuperadmin when requestingUserId is not provided', async () => {
@@ -367,6 +369,47 @@ describe('Goal Analyzer', () => {
       await analyzeGoal(TEST_WORKSPACE_ID, 'Build a bot', undefined, 'U123');
 
       expect(mockIsSuperadmin).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 'U123');
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────
+  // credential_modes
+  // ────────────────────────────────────────────────────────────
+  describe('credential_modes', () => {
+    it('should include credential_modes in analysis output', async () => {
+      mockAnthropicJsonResponse({
+        credential_modes: { chargebee: 'team' },
+      });
+
+      const result = await analyzeGoal(TEST_WORKSPACE_ID, 'Build a bot');
+      // credential_modes with unknown integration IDs are removed during validation,
+      // but the field itself should exist
+      expect(result.credential_modes).toBeDefined();
+      expect(typeof result.credential_modes).toBe('object');
+    });
+
+    it('should default credential_modes to empty object when not returned', async () => {
+      mockAnthropicResponse(JSON.stringify({
+        agent_name: 'no-creds-agent',
+        system_prompt: 'You are a test agent.',
+        tools: ['Read'],
+        model: 'sonnet',
+        summary: 'Test.',
+      }));
+
+      const result = await analyzeGoal(TEST_WORKSPACE_ID, 'Build a bot');
+      expect(result.credential_modes).toEqual({});
+    });
+
+    it('should include credential model info in the Claude prompt', async () => {
+      mockAnthropicJsonResponse();
+
+      await analyzeGoal(TEST_WORKSPACE_ID, 'Build a bot');
+
+      const callArgs = mockCreate.mock.calls[0][0];
+      const systemPrompt = callArgs.system;
+      expect(systemPrompt).toContain('credential_modes');
+      expect(systemPrompt).toContain('team|delegated|runtime');
     });
   });
 

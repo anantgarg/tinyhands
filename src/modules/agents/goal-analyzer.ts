@@ -24,6 +24,7 @@ export interface GoalAnalysis {
   new_tools_needed: Array<{ name: string; description: string }>;
   new_skills_needed: Array<{ name: string; description: string }>;
   write_tools_requested: string[];
+  credential_modes: Record<string, 'team' | 'delegated' | 'runtime'>;
   feasible: boolean;
   blockers: string[];
   summary: string;
@@ -66,9 +67,13 @@ export async function analyzeGoal(workspaceId: string, goal: string, existingPro
   // Get ALL integration manifests (connected or not) so the analyzer knows what's possible
   const registeredToolNames = new Set([...readOnlyTools.map(t => t.name), ...writeTools.map(t => t.name)]);
   const unregisteredIntegrations: string[] = [];
+  const integrationConnectionModels = new Map<string, string>();
   try {
     const integrations = getIntegrations();
     for (const integ of integrations) {
+      if ((integ as any).connectionModel) {
+        integrationConnectionModels.set(integ.id, (integ as any).connectionModel);
+      }
       for (const tool of (integ as any).tools || []) {
         if (!registeredToolNames.has(tool.name)) {
           const schema = typeof tool.schema === 'string' ? JSON.parse(tool.schema) : tool.schema;
@@ -77,6 +82,16 @@ export async function analyzeGoal(workspaceId: string, goal: string, existingPro
       }
     }
   } catch { /* integrations module may not be available */ }
+
+  const connectionModelSection = integrationConnectionModels.size > 0
+    ? `\nIntegration credential models (determines which credential modes are valid for each integration):
+${Array.from(integrationConnectionModels.entries()).map(([id, model]) => `- ${id}: ${model}`).join('\n')}
+
+Credential model rules:
+- "team" model: only "team" credential mode is valid (shared org credentials)
+- "personal" model: only "delegated" or "runtime" modes are valid (NOT "team")
+- "hybrid" model: all modes are valid ("team", "delegated", "runtime")`
+    : '';
 
   const customToolsSection = readOnlyToolList.length > 0 || writeToolList.length > 0 || unregisteredIntegrations.length > 0
     ? `\nAvailable custom tools (read-only, always available):\n${readOnlyToolList.join('\n') || '(none)'}\n\nAvailable custom tools (read-write, requires admin approval):\n${writeToolList.join('\n') || '(none)'}${unregisteredIntegrations.length > 0 ? `\n\nIntegration tools available but NOT YET CONNECTED (admin must connect these first):\n${unregisteredIntegrations.join('\n')}` : ''}`
@@ -105,6 +120,7 @@ Available trigger types: slack_channel, linear, zendesk, intercom, webhook, sche
 Schedule trigger config: { "cron": "0 9 * * *", "timezone": "auto", "description": "Daily at 9am" }
 Common cron patterns: hourly "0 * * * *", daily "0 9 * * *", weekly Mon "0 9 * * 1"
 When timezone is "auto", system detects from Slack.
+${connectionModelSection}
 ${userRestrictions}
 
 Return ONLY valid JSON matching this schema:
@@ -129,6 +145,7 @@ Return ONLY valid JSON matching this schema:
   "new_tools_needed": [{"name": "kebab-case-name", "description": "detailed description of what this tool should do"}],
   "new_skills_needed": [{"name": "kebab-case-name", "description": "detailed description of what this skill template should do"}],
   "write_tools_requested": ["names-of-read-write-custom-tools-the-agent-needs"],
+  "credential_modes": {"integration_id": "team|delegated|runtime"},
   "feasible": true,
   "blockers": [],
   "summary": "2-3 sentence explanation of the configuration and why each choice was made"
@@ -152,6 +169,11 @@ IMPORTANT guidelines:
 - Enable memory for agents that build up context over time
 - FEASIBILITY: Set "feasible" to true if the agent can work with existing tools/skills. Set "feasible" to false if the goal requires tools or capabilities that don't exist yet — list specific blockers. If new tools are needed, include them in new_tools_needed so an admin can build them.
 - UNCONNECTED INTEGRATIONS: If an integration tool exists but is marked [NOT CONNECTED], the agent CAN use it — but it needs to be connected first via the Connections page in the dashboard. Set "feasible" to true, include the tool in "custom_tools", and add a blocker like "Gmail needs to be connected. Go to the Connections page in the dashboard to set it up." Do NOT say the tool doesn't exist — it does, it just needs to be connected.
+- credential_modes: For each integration in custom_tools, recommend a credential mode. Only include integrations that appear in custom_tools or write_tools_requested. Choose based on the agent's purpose:
+  - "team": agent monitors or acts on behalf of the whole team (e.g., ticket triage, monitoring dashboards, team-wide reporting). Uses shared org-level credentials.
+  - "delegated": agent is personal to the creator and acts on their behalf (e.g., "manage MY email", "track MY tasks"). Uses the creator's own credentials.
+  - "runtime": agent acts on behalf of whichever user talks to it (e.g., "send email as the requesting user", "file a ticket as the user"). Each user provides their own credentials.
+  Respect the integration's credential model constraints (see above). If a tool has a "team" model, only use "team". If "personal" model, use "delegated" or "runtime". If "hybrid", any mode works.
 - SLACK MENTIONS: If the goal references tagging/mentioning/notifying a specific person, use the Slack mention format <@USER_ID> in the system_prompt. The requesting user's Slack ID is provided below — use it when the goal says "tag me", "notify me", "mention me", etc. For other users mentioned by name, include a note in the system_prompt to use <@USER_ID> format and that the admin should configure the correct user ID.`,
     messages: [{
       role: 'user',
@@ -220,6 +242,35 @@ IMPORTANT guidelines:
     }
   }
 
+  // Validate credential_modes against manifest connectionModels
+  if (!analysis.credential_modes) analysis.credential_modes = {};
+  const allCustomToolNames = [...(analysis.custom_tools || []), ...(analysis.write_tools_requested || [])];
+  const usedIntegrationIds = new Set<string>();
+  try {
+    const integrations = getIntegrations();
+    for (const toolName of allCustomToolNames) {
+      for (const integ of integrations) {
+        if ((integ as any).tools?.some((t: any) => t.name === toolName)) {
+          usedIntegrationIds.add(integ.id);
+        }
+      }
+    }
+    // Remove entries for integrations not used by the agent
+    for (const integId of Object.keys(analysis.credential_modes)) {
+      if (!usedIntegrationIds.has(integId)) {
+        delete analysis.credential_modes[integId];
+        continue;
+      }
+      const integ = integrations.find(i => i.id === integId);
+      if (!integ) { delete analysis.credential_modes[integId]; continue; }
+      const cm = (integ as any).connectionModel || 'team';
+      const mode = analysis.credential_modes[integId];
+      // Correct modes that violate connectionModel constraints
+      if (cm === 'team' && mode !== 'team') analysis.credential_modes[integId] = 'team';
+      if (cm === 'personal' && mode === 'team') analysis.credential_modes[integId] = 'delegated';
+    }
+  } catch { /* best-effort */ }
+
   // Ensure defaults
   if (!analysis.relevance_keywords) analysis.relevance_keywords = [];
   if (!analysis.triggers) analysis.triggers = [];
@@ -239,6 +290,7 @@ IMPORTANT guidelines:
     model: analysis.model,
     triggers: analysis.triggers.length,
     respondToAll: analysis.respond_to_all_messages,
+    credentialModes: analysis.credential_modes,
     isAdmin,
   });
 

@@ -115,7 +115,20 @@ When an agent runs and needs tool credentials, the system resolves them based on
 2. **Delegated mode** -- uses the agent owner's personal connection
 3. **Runtime mode** -- uses the invoking user's personal connection
 
-If the required credential is missing at execution time, the agent pauses and DMs the user with a prompt to connect. Once the user completes the connection (OAuth or API key), the agent automatically retries the action.
+If the required credential is missing at execution time, the agent posts a role-aware error message in the thread and fails the run. The message tells the user exactly what happened and who can fix it:
+
+| Mode | Runner Role | Message |
+|------|------------|---------|
+| Team | Admin | "Shared credentials haven't been set up. Go to the Connections page in the dashboard." |
+| Team | Agent owner | "Ask a workspace admin to connect the tool in the Connections page." |
+| Team | Regular user | "Let @owner or a workspace admin know." |
+| Delegated | Agent owner | "You haven't connected yet." + Connect button |
+| Delegated | Others | "The owner's credentials aren't set up. Let @owner know." |
+| Runtime | Anyone | "I need your credentials to proceed." + Connect button |
+
+For runtime and delegated-owner cases, a **Connect** button is included. After the user completes the connection, the agent automatically retries.
+
+**Important:** The system never silently falls back to stale or empty credentials. If a connection mode is configured but the credentials are missing, the run fails with a clear error rather than proceeding with potentially broken config.
 
 ### Agent Tool Connection Editing
 

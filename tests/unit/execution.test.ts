@@ -87,10 +87,32 @@ vi.mock('../../src/modules/audit', () => ({
 const mockResolveToolCredentials = vi.fn().mockResolvedValue(null);
 const mockGetAgentToolConnection = vi.fn().mockResolvedValue(null);
 const mockGetIntegrationIdForTool = vi.fn().mockImplementation((name: string) => name.split('-')[0]);
+const mockGetCredentialErrorContext = vi.fn().mockResolvedValue({
+  mode: null,
+  integrationId: 'chargebee',
+  integrationLabel: 'Chargebee',
+  integrationIcon: ':chargebee:',
+  runnerPlatformRole: 'member',
+  runnerAgentRole: 'viewer',
+  agentOwnerIds: ['U_OWNER1'],
+  isRunnerOwner: false,
+  isRunnerAdmin: false,
+});
 vi.mock('../../src/modules/connections', () => ({
   resolveToolCredentials: (...args: any[]) => mockResolveToolCredentials(...args),
   getAgentToolConnection: (...args: any[]) => mockGetAgentToolConnection(...args),
   getIntegrationIdForTool: (...args: any[]) => mockGetIntegrationIdForTool(...args),
+  getCredentialErrorContext: (...args: any[]) => mockGetCredentialErrorContext(...args),
+}));
+
+// Mock connections/errors for credential error building
+const mockBuildCredentialError = vi.fn().mockReturnValue({
+  message: 'Missing shared Chargebee credentials',
+  blocks: [{ type: 'section', text: { type: 'mrkdwn', text: ':chargebee: Missing credentials' } }],
+  showConnectButton: false,
+});
+vi.mock('../../src/modules/connections/errors', () => ({
+  buildCredentialError: (...args: any[]) => mockBuildCredentialError(...args),
 }));
 
 // Mock connections/oauth for runtime mode
@@ -110,6 +132,15 @@ vi.mock('@anthropic-ai/sdk', () => ({
   default: class {
     messages = { create: (...args: any[]) => mockAnthropicCreate(...args) };
   },
+}));
+
+// Mock Slack module for credential error posting
+const mockPostBlocks = vi.fn().mockResolvedValue(undefined);
+const mockPostMessage = vi.fn().mockResolvedValue(undefined);
+vi.mock('../../src/slack', () => ({
+  postBlocks: (...args: any[]) => mockPostBlocks(...args),
+  postMessage: (...args: any[]) => mockPostMessage(...args),
+  ensureBotInChannels: vi.fn(),
 }));
 
 // Mock BullMQ Worker
@@ -1142,6 +1173,7 @@ describe('Execution Module – executeAgentRun', () => {
       { name: 'other-tool', schema_json: '{}', script_path: '/scripts/other.js', language: 'python', config_json: '{"x":1}' },
     ]);
     mockGetToolExecutionScript.mockResolvedValue('console.log("hello")');
+    mockResolveToolCredentials.mockResolvedValueOnce({ api_key: 'resolved-key' });
 
     const container = { id: 'container-1' };
     mockCreateAgentContainer.mockResolvedValue(container);
@@ -1159,7 +1191,7 @@ describe('Execution Module – executeAgentRun', () => {
     expect(customTools[0].name).toBe('my-custom-tool');
     expect(customTools[0].schema).toEqual({ type: 'object' });
     expect(customTools[0].script_code).toBe('console.log("hello")');
-    expect(customTools[0].config).toEqual({}); // config_json was null, falls back to '{}'
+    expect(customTools[0].config).toEqual({ api_key: 'resolved-key' });
   });
 
   it('should load approved MCP configs and merge with skills', async () => {
@@ -2131,42 +2163,44 @@ describe('Execution Module – Credential Resolution', () => {
     }
   });
 
-  it('should fall back to config_json when no connection exists', async () => {
+  it('should fail run with role-aware error when no connection exists', async () => {
     const agent = makeAgent({ tools: ['chargebee-read'] });
     mockGetAgent.mockResolvedValue(agent);
     mockListCustomTools.mockResolvedValue([
       { name: 'chargebee-read', schema_json: '{}', config_json: '{"api_key":"fallback-key"}', language: 'javascript' },
     ]);
     mockGetToolExecutionScript.mockResolvedValue('console.log("test")');
-    mockResolveToolCredentials.mockResolvedValue(null); // No connection found
+    mockResolveToolCredentials.mockResolvedValue(null);
     mockGetAgentToolConnection.mockResolvedValue(null);
-
-    // Mock container lifecycle
-    const container = { id: 'container-1' };
-    mockCreateAgentContainer.mockResolvedValue(container);
-    mockFollowContainerOutput.mockResolvedValue({
-      exitCode: 0,
-      allLogs: 'TINYHANDS_OUTPUT:{"output":"Done","input_tokens":50,"output_tokens":25,"tool_calls_count":0,"cost_usd":0.001}',
-    });
 
     const data = makeJobData();
     const job = makeFakeJob(data);
 
-    await executeAgentRun(job);
+    const result = await executeAgentRun(job);
 
-    // Should have tried to resolve but got null, falling back to config_json
     expect(mockResolveToolCredentials).toHaveBeenCalled();
-
-    // The fallback config should be used
-    expect(mockCreateAgentContainer).toHaveBeenCalled();
-    const containerArgs = mockCreateAgentContainer.mock.calls[0];
-    const customToolsArg = containerArgs.find((arg: any) => typeof arg === 'string' && arg.includes('chargebee-read'));
-    if (customToolsArg) {
-      expect(customToolsArg).toContain('fallback-key');
-    }
+    expect(mockGetCredentialErrorContext).toHaveBeenCalledWith(
+      TEST_WORKSPACE_ID, 'agent-1', 'chargebee-read', 'U001',
+    );
+    expect(mockBuildCredentialError).toHaveBeenCalled();
+    // Should post error blocks to Slack
+    expect(mockPostBlocks).toHaveBeenCalledWith(
+      'C123',
+      expect.any(Array),
+      expect.stringContaining('Chargebee'),
+      '1700000000.000000',
+    );
+    // Should fail the run — not proceed with container
+    expect(mockCreateAgentContainer).not.toHaveBeenCalled();
+    // Run record should be updated with failed status
+    expect(mockExecute).toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE run_history'),
+      expect.arrayContaining(['failed']),
+    );
+    expect(result).toBe('Missing shared Chargebee credentials');
   });
 
-  it('should fall back to config_json when credential resolution throws', async () => {
+  it('should fail run when credential resolution throws', async () => {
     const agent = makeAgent({ tools: ['chargebee-read'] });
     mockGetAgent.mockResolvedValue(agent);
     mockListCustomTools.mockResolvedValue([
@@ -2175,12 +2209,47 @@ describe('Execution Module – Credential Resolution', () => {
     mockGetToolExecutionScript.mockResolvedValue('console.log("test")');
     mockResolveToolCredentials.mockRejectedValue(new Error('Connection DB error'));
 
-    // Mock container lifecycle
-    const container = { id: 'container-1' };
-    mockCreateAgentContainer.mockResolvedValue(container);
-    mockFollowContainerOutput.mockResolvedValue({
-      exitCode: 0,
-      allLogs: 'TINYHANDS_OUTPUT:{"output":"Done","input_tokens":50,"output_tokens":25,"tool_calls_count":0,"cost_usd":0.001}',
+    const data = makeJobData();
+    const job = makeFakeJob(data);
+
+    const result = await executeAgentRun(job);
+
+    expect(mockResolveToolCredentials).toHaveBeenCalled();
+    expect(mockLoggerWarn).toHaveBeenCalledWith('Credential resolution failed, aborting run', expect.objectContaining({ tool: 'chargebee-read' }));
+    // Should post error message to Slack
+    expect(mockPostMessage).toHaveBeenCalledWith(
+      'C123',
+      expect.stringContaining('chargebee-read'),
+      '1700000000.000000',
+    );
+    // Should NOT proceed with container creation
+    expect(mockCreateAgentContainer).not.toHaveBeenCalled();
+    expect(result).toBe('Credential resolution failed for chargebee-read');
+  });
+
+  it('should add connect button for runtime mode missing credentials', async () => {
+    const agent = makeAgent({ tools: ['gmail-read'] });
+    mockGetAgent.mockResolvedValue(agent);
+    mockListCustomTools.mockResolvedValue([
+      { name: 'gmail-read', schema_json: '{}', config_json: '{}', language: 'javascript' },
+    ]);
+    mockGetToolExecutionScript.mockResolvedValue('console.log("test")');
+    mockResolveToolCredentials.mockResolvedValue(null);
+    mockGetCredentialErrorContext.mockResolvedValue({
+      mode: 'runtime',
+      integrationId: 'gmail',
+      integrationLabel: 'Gmail',
+      integrationIcon: ':email:',
+      runnerPlatformRole: 'member',
+      runnerAgentRole: 'member',
+      agentOwnerIds: ['U_OWNER1'],
+      isRunnerOwner: false,
+      isRunnerAdmin: false,
+    });
+    mockBuildCredentialError.mockReturnValue({
+      message: 'Missing Gmail credentials for user',
+      blocks: [{ type: 'section', text: { type: 'mrkdwn', text: ':key: I need your *Gmail* credentials' } }],
+      showConnectButton: true,
     });
 
     const data = makeJobData();
@@ -2188,11 +2257,11 @@ describe('Execution Module – Credential Resolution', () => {
 
     await executeAgentRun(job);
 
-    // Should have tried to resolve and caught the error
-    expect(mockResolveToolCredentials).toHaveBeenCalled();
-    // Should log the warning
-    expect(mockLoggerWarn).toHaveBeenCalledWith('Credential resolution failed', expect.objectContaining({ tool: 'chargebee-read' }));
-    // Container should still be created with fallback config
-    expect(mockCreateAgentContainer).toHaveBeenCalled();
+    // Should have posted error blocks with a connect button
+    expect(mockPostBlocks).toHaveBeenCalled();
+    const postedBlocks = mockPostBlocks.mock.calls[0][1];
+    const actionsBlock = postedBlocks.find((b: any) => b.type === 'actions');
+    expect(actionsBlock).toBeDefined();
+    expect(actionsBlock.elements[0].action_id).toMatch(/connect_personal/);
   });
 });

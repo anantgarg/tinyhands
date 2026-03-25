@@ -178,21 +178,27 @@ For Google connections, you can restrict an agent's access to a specific Drive f
 
 Leave the folder restriction empty for full access to all files.
 
-### Credential Selection During Agent Creation
+### Smart Credential Recommendations
 
-When creating an agent, if the selected tools require credentials, you may see a **credential selection step**. For each tool, you choose which connection mode to use:
+When creating an agent, TinyHands analyzes the agent's purpose and automatically recommends which credential mode to use for each connected tool:
 
-| Mode | Behavior |
-|------|----------|
-| **Team** | Uses the shared team credential registered by an admin |
-| **Delegated** | Uses the agent owner's personal credential |
-| **Runtime** | Each user provides their own credential at run time |
+| Mode | When recommended | Behavior |
+|------|-----------------|----------|
+| **Team** | Agent monitors or acts for the whole team (e.g., ticket triage, dashboards) | Uses the shared team credential registered by an admin |
+| **Creator's** | Agent is personal to you (e.g., "manage MY tasks") | Uses the agent creator's personal credential |
+| **Each User's Own** | Agent acts on behalf of whoever talks to it (e.g., "send email as the requesting user") | Each user provides their own credential at run time |
 
-This ensures agents always have the right credentials configured before they start running.
+The recommendation appears as a hint during setup, with a brief explanation of why that mode fits. You can always override it using the radio buttons. The system also respects each tool's connection model -- for example, a team-only tool like Chargebee will always use shared credentials.
 
 ### Missing Credentials
 
-If an agent tries to use a tool and the required credentials are missing (e.g., you haven't connected your personal account), you'll receive a DM prompting you to connect. The message includes a direct link to set up the connection. After you complete the connection, the agent automatically retries the action -- no need to re-send your original message.
+If an agent tries to use a tool and the required credentials are missing, you'll see a clear, specific error message tailored to your role:
+
+- **Admins** see instructions to set up shared credentials in the dashboard
+- **Agent owners** are told whether they need to connect their own account or ask an admin
+- **Regular users** are told who to contact (the agent owner or a workspace admin)
+
+For tools that need your personal credentials, the message includes a **Connect** button. After you complete the connection, the agent automatically retries -- no need to re-send your original message.
 
 ---
 
