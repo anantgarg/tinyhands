@@ -144,7 +144,14 @@ export function registerEvents(app: App): void {
       const cleanInput = modelOverride ? stripModelOverride(mentionCleaned) : mentionCleaned;
 
       if (agents.length === 0) {
-        await postMessage(channelId, `No agents are assigned to this channel yet.\n\nUse \`/agents\` to see available agents, or \`/new-agent\` to create one and add it to this channel.`, threadTs);
+        if (allAgents.length > 0) {
+          // Agents exist in the channel but this user doesn't have access
+          const creatorIds = [...new Set(allAgents.map(a => a.created_by).filter(Boolean))];
+          const creatorMentions = creatorIds.map(id => `<@${id}>`).join(' or ');
+          await postMessage(channelId, `You don't have access to the agent in this channel yet. Please ask ${creatorMentions} to give you access.`, threadTs);
+        } else {
+          await postMessage(channelId, `No agents are assigned to this channel yet.\n\nUse \`/agents\` to see available agents, or \`/new-agent\` to create one and add it to this channel.`, threadTs);
+        }
         return;
       }
 

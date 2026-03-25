@@ -12,11 +12,16 @@ export async function initDb(): Promise<void> {
   // Strip sslmode from connection string — pg v8.13+ treats it as verify-full
   connectionString = connectionString.replace(/[?&]sslmode=[^&]*/g, '').replace(/\?$/, '');
 
+  // DigitalOcean managed DB allows 25 connections total.
+  // With 6 PM2 processes, each gets floor(25/6) - 1 = 3 to stay safely under the limit.
+  // Configurable via DB_POOL_MAX for when the DB plan is upgraded.
+  const poolMax = parseInt(process.env.DB_POOL_MAX || '3', 10);
+
   pool = new Pool({
     connectionString,
     ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
-    max: 20,
-    idleTimeoutMillis: 30000,
+    max: poolMax,
+    idleTimeoutMillis: 10000,
     connectionTimeoutMillis: 5000,
   });
 
