@@ -46,6 +46,9 @@ FEATURES.md mentions OAuth for Notion and GitHub, but the Connections page only 
 ### 14. Folder Restrictions Enforcement
 The folder picker exists on the Connections page, but the Google Drive tool code doesn't actually read the `root_folder_id` from the credentials to restrict operations. The setting is stored but not enforced at runtime.
 
+### 15. Agent Diagnostics Assistant
+An AI-powered diagnostic agent (like Claude Code for TinyHands) that agent creators can talk to when an agent responds incorrectly. It would pull the agent's run logs, tool call history, system prompt, and tool schemas to diagnose why the agent behaved the way it did — e.g., "the HubSpot tool returned 0 results because search_contacts can't filter by blank properties, you need filter_contacts." Today when an agent gives a wrong answer, there's no way for the creator to know whether the problem is the prompt, the tool, the data, or the model — they just see the wrong output. This assistant would bridge that gap.
+
 ---
 
 ## Completed

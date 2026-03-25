@@ -59,7 +59,7 @@ export async function analyzeGoal(workspaceId: string, goal: string, existingPro
   });
 
   const skillList = [
-    ...availableSkills.mcp.map(s => `MCP: ${s.name} (${s.capabilities.join(', ')})`),
+    ...availableSkills.mcp.map(s => `Integration: ${s.name} (${s.capabilities.join(', ')})`),
     ...availableSkills.prompt.map(s => `Prompt: ${s.name} (${s.description})`),
   ];
 
@@ -98,7 +98,7 @@ export async function analyzeGoal(workspaceId: string, goal: string, existingPro
 Core tools (Bash, Read, Write, Edit, Glob, Grep, WebSearch, WebFetch) are always available to every agent.
 Additional integration tools that can be enabled: ${customToolsSection ? 'see below' : 'none'}
 ${customToolsSection}
-Available MCP/prompt skills:
+Available skills:
 ${skillList.join('\n')}
 
 Available trigger types: slack_channel, linear, zendesk, intercom, webhook, schedule
@@ -136,6 +136,7 @@ Return ONLY valid JSON matching this schema:
 
 IMPORTANT guidelines:
 - The system_prompt is the agent's brain. Make it extremely detailed and specific to the goal. Include explicit instructions about output formatting for Slack (no markdown headers, use *bold* not **bold**, use • for bullets, etc.)
+- IMPORTANT: In the system_prompt, always include this instruction: "Never use technical terms like MCP, MCP servers, Claude Code, or API configuration in your responses. If a tool or connection is missing, tell the user to go to the Connections page in the TinyHands dashboard or ask the person who set up this agent. Keep all responses simple and non-technical."
 - RESPONSE MODE — there are three modes, choose ONE based on the TRIGGER/SCHEDULE instructions:
   - "every message": set respond_to_all_messages=true, mentions_only=false. Use when the goal requires responding to every single message.
   - "when tagged" / "mentions only": set respond_to_all_messages=false, mentions_only=true. The agent ONLY responds when @mentioned or in thread replies. Use this when the TRIGGER/SCHEDULE says "when tagged", "when mentioned", or "mentions only".
@@ -150,7 +151,7 @@ IMPORTANT guidelines:
 - Use opus for complex multi-step reasoning, haiku for simple/fast classification, sonnet for general purpose
 - Enable memory for agents that build up context over time
 - FEASIBILITY: Set "feasible" to true if the agent can work with existing tools/skills. Set "feasible" to false if the goal requires tools or capabilities that don't exist yet — list specific blockers. If new tools are needed, include them in new_tools_needed so an admin can build them.
-- UNCONNECTED INTEGRATIONS: If an integration tool exists but is marked [NOT CONNECTED], the agent CAN use it — but admin must connect it first. Set "feasible" to true, include the tool in "custom_tools", and add a blocker like "Tool 'gmail-read' exists but is not connected. Admin must set up the OAuth connection." Do NOT say the tool doesn't exist — it does, it just needs to be connected.
+- UNCONNECTED INTEGRATIONS: If an integration tool exists but is marked [NOT CONNECTED], the agent CAN use it — but it needs to be connected first via the Connections page in the dashboard. Set "feasible" to true, include the tool in "custom_tools", and add a blocker like "Gmail needs to be connected. Go to the Connections page in the dashboard to set it up." Do NOT say the tool doesn't exist — it does, it just needs to be connected.
 - SLACK MENTIONS: If the goal references tagging/mentioning/notifying a specific person, use the Slack mention format <@USER_ID> in the system_prompt. The requesting user's Slack ID is provided below — use it when the goal says "tag me", "notify me", "mention me", etc. For other users mentioned by name, include a note in the system_prompt to use <@USER_ID> format and that the admin should configure the correct user ID.`,
     messages: [{
       role: 'user',

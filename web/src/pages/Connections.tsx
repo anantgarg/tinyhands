@@ -102,7 +102,7 @@ function ConnectionsContent() {
           </TableHeader>
           <TableBody>
             {connections.map((conn) => {
-              const isGoogleDrive = conn.integrationId?.includes('google') || conn.integrationId?.includes('gmail');
+              const isGoogleDrive = conn.integrationId === 'google-drive';
               return (
                 <TableRow key={conn.id}>
                   <TableCell>
@@ -225,7 +225,7 @@ function ConnectionsContent() {
           <div className="flex items-start gap-3">
             <Info className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
             <p className="text-sm text-blue-900">
-              Each agent's tools are configured to use either team credentials, a specific user's credentials, or a combination. You can manage which credentials an agent uses in the agent's Tools tab.
+              Connections let your agents access external services like Gmail, Google Sheets, and more. There are two types: *Team connections* are shared across all agents, while *Personal connections* use your own account. Each agent can be configured to use team credentials, the creator's credentials, or your personal credentials from the agent's Tools tab.
             </p>
           </div>
         </CardContent>

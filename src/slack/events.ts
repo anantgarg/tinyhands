@@ -1112,7 +1112,7 @@ async function handleAgentChannelCommand(
         `:toolbox: *Capabilities for ${agent.name}*`,
         `Built-in tools: ${summary.builtin.join(', ') || 'none'}`,
         `Custom tools: ${summary.custom.join(', ') || 'none'}`,
-        `MCP integrations: ${summary.mcp.join(', ') || 'none'}`,
+        `Integrations: ${summary.mcp.join(', ') || 'none'}`,
       ];
 
       if (mcpConfigs.length > 0) {

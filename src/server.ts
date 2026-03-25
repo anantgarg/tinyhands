@@ -188,7 +188,9 @@ export function createWebhookServer(): express.Application {
           const wsId = (await import('./db')).getDefaultWorkspaceId();
           await manifest.register(wsId, userId, {});
         }
-      } catch { /* tool registration is best-effort */ }
+      } catch (regErr: any) {
+        logger.error('Tool registration failed during OAuth callback', { integration, error: regErr.message });
+      }
 
       // DM the user about successful connection + notify in channel
       try {

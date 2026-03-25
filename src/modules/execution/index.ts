@@ -234,8 +234,29 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
       config: JSON.parse(s.config_json),
       permission_level: s.permission_level,
     })));
-    const customTools = await listCustomTools(workspaceId);
-    const agentCustomTools = customTools.filter(t => agent.tools.includes(t.name));
+    let customTools = await listCustomTools(workspaceId);
+    let agentCustomTools = customTools.filter(t => agent.tools.includes(t.name));
+
+    // Auto-recovery: if agent references tools not in custom_tools, try registering from integration manifests
+    const missingTools = (agent.tools as string[]).filter(name => !customTools.find(t => t.name === name));
+    if (missingTools.length > 0) {
+      try {
+        const { getIntegrations, getIntegration: getInteg } = await import('../tools/integrations');
+        for (const integ of getIntegrations()) {
+          const integTools = (integ as any).tools || [];
+          const needed = integTools.filter((t: any) => missingTools.includes(t.name));
+          if (needed.length > 0 && integ.register) {
+            await integ.register(workspaceId, data.userId || 'system', {});
+            logger.info('Auto-registered integration tools', { integration: integ.id, tools: needed.map((t: any) => t.name) });
+          }
+        }
+        // Re-fetch after registration
+        customTools = await listCustomTools(workspaceId);
+        agentCustomTools = customTools.filter(t => agent.tools.includes(t.name));
+      } catch (autoRegErr: any) {
+        logger.warn('Auto-registration of missing tools failed', { error: autoRegErr.message, missingTools });
+      }
+    }
     const customToolEntries = [];
     for (const t of agentCustomTools) {
       const execScript = await getToolExecutionScript(workspaceId, t.name);
