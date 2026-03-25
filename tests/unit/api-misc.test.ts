@@ -803,30 +803,41 @@ describe('Evolution Routes', () => {
   });
 
   describe('GET /evolution/proposals', () => {
-    it('lists pending proposals by default', async () => {
-      const proposals = [{ id: 'p1' }];
+    it('lists pending proposals with agent info', async () => {
+      const proposals = [{ id: 'p1', agent_id: 'a1', action: 'update_prompt', description: 'Refine prompt', diff: '{}', status: 'pending', created_at: '2026-01-01T00:00:00Z', resolved_at: null }];
       mockGetPendingProposals.mockResolvedValueOnce(proposals);
+      // Agent lookup
+      mockQuery.mockResolvedValueOnce([{ id: 'a1', name: 'TestBot', avatar_emoji: ':robot_face:' }]);
 
       const res = await makeRequest(app, 'GET', '/evolution/proposals');
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual(proposals);
+      expect(res.body.proposals).toHaveLength(1);
+      expect(res.body.proposals[0].agentName).toBe('TestBot');
+      expect(res.body.proposals[0].agentAvatar).toBe(':robot_face:');
+      expect(res.body.proposals[0].action).toBe('update_prompt');
+      expect(res.body.total).toBe(1);
     });
 
     it('filters by agentId', async () => {
       mockGetPendingProposals.mockResolvedValueOnce([]);
+      // No agents to look up when empty
 
       await makeRequest(app, 'GET', '/evolution/proposals?agentId=a1&status=pending');
 
       expect(mockGetPendingProposals).toHaveBeenCalledWith('W123', 'a1');
     });
 
-    it('returns history when status is not pending', async () => {
-      mockGetProposalHistory.mockResolvedValueOnce([]);
+    it('queries directly for non-pending status filters', async () => {
+      mockQuery
+        .mockResolvedValueOnce([{ id: 'p2', agent_id: 'a1', action: 'write_tool', description: 'Write tool', diff: '{}', status: 'approved', created_at: '2026-01-01T00:00:00Z', resolved_at: '2026-01-01T01:00:00Z' }])
+        .mockResolvedValueOnce([{ id: 'a1', name: 'Bot', avatar_emoji: ':star:' }]);
 
-      await makeRequest(app, 'GET', '/evolution/proposals?status=approved&agentId=a1');
+      const res = await makeRequest(app, 'GET', '/evolution/proposals?status=approved&agentId=a1');
 
-      expect(mockGetProposalHistory).toHaveBeenCalledWith('W123', 'a1');
+      expect(res.status).toBe(200);
+      expect(res.body.proposals[0].status).toBe('approved');
+      expect(res.body.total).toBe(1);
     });
 
     it('returns 500 on error', async () => {

@@ -559,3 +559,11 @@ export function useApplyImprovement() {
     },
   });
 }
+
+export function usePromptSize(agentId: string) {
+  return useQuery<{ tokenCount: number; warning: boolean }>({
+    queryKey: ['agents', agentId, 'prompt-size'],
+    queryFn: () => api.get(`/agents/${agentId}/prompt-size`),
+    enabled: !!agentId,
+  });
+}

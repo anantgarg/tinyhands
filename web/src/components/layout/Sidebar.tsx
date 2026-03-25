@@ -10,6 +10,7 @@ import {
   Bell,
   FileText,
   AlertTriangle,
+  Lightbulb,
   Shield,
   Settings,
   LogOut,
@@ -44,6 +45,7 @@ const manageNav: NavItem[] = [
 
 const reviewNav: NavItem[] = [
   { label: 'Requests', to: '/requests', icon: Bell },
+  { label: 'Evolution', to: '/evolution', icon: Lightbulb, adminOnly: true },
   { label: 'Error Logs', to: '/errors', icon: AlertTriangle },
   { label: 'Audit Log', to: '/audit', icon: FileText, adminOnly: true },
 ];

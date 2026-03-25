@@ -78,6 +78,14 @@ vi.mock('../../src/modules/triggers', () => ({
   getAgentTriggers: (...args: any[]) => mockGetAgentTriggers(...args),
 }));
 
+const mockCheckPromptSize = vi.fn();
+
+vi.mock('../../src/modules/self-improvement', () => ({
+  checkPromptSize: (...args: any[]) => mockCheckPromptSize(...args),
+  generatePromptDiff: vi.fn(),
+  applyPromptDiff: vi.fn(),
+}));
+
 const mockQuery = vi.fn();
 
 vi.mock('../../src/db', () => ({
@@ -966,6 +974,36 @@ describe('Agent Routes', () => {
 
       expect(res.status).toBe(500);
       expect(res.body).toEqual({ error: 'Failed to get triggers' });
+    });
+  });
+
+  describe('GET /agents/:id/prompt-size', () => {
+    it('returns prompt size for agent', async () => {
+      mockCanView.mockResolvedValueOnce(true);
+      mockCheckPromptSize.mockResolvedValueOnce({ tokenCount: 2500, warning: false });
+
+      const res = await makeRequest(app, 'GET', '/agents/a1/prompt-size');
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ tokenCount: 2500, warning: false });
+    });
+
+    it('returns warning when prompt is large', async () => {
+      mockCanView.mockResolvedValueOnce(true);
+      mockCheckPromptSize.mockResolvedValueOnce({ tokenCount: 5000, warning: true });
+
+      const res = await makeRequest(app, 'GET', '/agents/a1/prompt-size');
+
+      expect(res.status).toBe(200);
+      expect(res.body.warning).toBe(true);
+    });
+
+    it('returns 403 when not authorized', async () => {
+      mockCanView.mockResolvedValueOnce(false);
+
+      const res = await makeRequest(app, 'GET', '/agents/a1/prompt-size');
+
+      expect(res.status).toBe(403);
     });
   });
 });

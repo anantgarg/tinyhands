@@ -738,4 +738,22 @@ router.post('/:id/apply-improvement', async (req: Request, res: Response) => {
   }
 });
 
+// GET /agents/:id/prompt-size — Check prompt token count
+router.get('/:id/prompt-size', async (req: Request, res: Response) => {
+  try {
+    const { workspaceId, userId } = getSessionUser(req);
+    const id = req.params.id as string;
+    if (!(await canView(workspaceId, id, userId))) {
+      res.status(403).json({ error: 'Insufficient permissions' });
+      return;
+    }
+    const { checkPromptSize } = await import('../../modules/self-improvement');
+    const result = await checkPromptSize(workspaceId, id);
+    res.json(result);
+  } catch (err: any) {
+    logger.error('Check prompt size error', { error: err.message });
+    res.status(400).json({ error: err.message });
+  }
+});
+
 export default router;

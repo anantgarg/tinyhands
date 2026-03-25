@@ -1,20 +1,17 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from './client';
 
-interface EvolutionProposal {
+export interface EvolutionProposal {
   id: string;
   agentId: string;
   agentName: string;
   agentAvatar: string;
-  type: 'prompt_refinement' | 'tool_suggestion' | 'behavior_change';
-  title: string;
+  action: string;
   description: string;
   diff: string;
-  status: 'pending' | 'approved' | 'rejected';
-  confidence: number;
+  status: 'pending' | 'approved' | 'rejected' | 'executed';
   createdAt: string;
-  reviewedBy: string | null;
-  reviewedAt: string | null;
+  resolvedAt: string | null;
 }
 
 interface EvolutionParams {

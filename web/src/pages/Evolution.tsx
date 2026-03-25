@@ -11,14 +11,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useEvolutionProposals, useApproveProposal, useRejectProposal } from '@/api/evolution';
 import { toast } from '@/components/ui/use-toast';
 
-function humanizeType(type: unknown): string {
-  if (!type || typeof type !== 'string') return 'Unknown';
+function humanizeAction(action: string): string {
   const map: Record<string, string> = {
-    prompt_refinement: 'Prompt Refinement',
-    tool_suggestion: 'Tool Suggestion',
+    write_tool: 'Tool Created',
+    update_prompt: 'Prompt Refined',
+    create_mcp: 'MCP Config',
+    commit_code: 'Code Change',
+    add_to_kb: 'Knowledge Added',
+    prompt_refinement: 'Prompt Refined',
+    tool_suggestion: 'Tool Suggested',
     behavior_change: 'Behavior Change',
   };
-  return map[type] || type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  return map[action] || action.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 function fmtRelative(v: unknown): string {
@@ -97,9 +101,9 @@ export function Evolution() {
                   <div className="flex items-center gap-3">
                     <span className="text-xl">{proposal.agentAvatar ?? '\uD83E\uDD16'}</span>
                     <div>
-                      <CardTitle className="text-base">{proposal.title ?? 'Untitled Proposal'}</CardTitle>
+                      <CardTitle className="text-base">{proposal.description}</CardTitle>
                       <CardDescription>
-                        {proposal.agentName ?? 'Unknown Agent'} &middot; {humanizeType(proposal.type)} &middot; Confidence: {Math.round((proposal.confidence ?? 0) * 100)}%
+                        {proposal.agentName} &middot; {humanizeAction(proposal.action)}
                       </CardDescription>
                     </div>
                   </div>
@@ -107,18 +111,16 @@ export function Evolution() {
                     variant={
                       proposal.status === 'pending'
                         ? 'warning'
-                        : proposal.status === 'approved'
+                        : proposal.status === 'approved' || proposal.status === 'executed'
                         ? 'success'
                         : 'danger'
                     }
                   >
-                    {proposal.status ?? 'unknown'}
+                    {proposal.status === 'executed' ? 'Approved' : proposal.status}
                   </Badge>
                 </div>
               </CardHeader>
               <CardContent>
-                <p className="text-sm text-warm-text-secondary mb-4">{proposal.description ?? ''}</p>
-
                 {proposal.diff && (
                   <div className="mb-4">
                     <p className="text-xs font-medium text-warm-text-secondary mb-2">Proposed changes:</p>
@@ -131,7 +133,7 @@ export function Evolution() {
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-warm-text-secondary">
                     {fmtRelative(proposal.createdAt)}
-                    {proposal.reviewedBy ? ` \u2014 reviewed by ${proposal.reviewedBy}` : ''}
+                    {proposal.resolvedAt ? ` \u2014 resolved ${fmtRelative(proposal.resolvedAt)}` : ''}
                   </span>
                   {proposal.status === 'pending' && (
                     <div className="flex gap-2">

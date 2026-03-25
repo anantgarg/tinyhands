@@ -222,7 +222,7 @@ describe('Tool Routes', () => {
       expect(res.status).toBe(201);
       expect(res.body).toEqual(tool);
       expect(mockRegisterCustomTool).toHaveBeenCalledWith(
-        'W123', 'new-tool', { type: 'object' }, 'console.log("hi")', 'U123', undefined,
+        'W123', 'new-tool', '{"type":"object"}', null, 'U123', { code: 'console.log("hi")' },
       );
     });
 
@@ -230,7 +230,7 @@ describe('Tool Routes', () => {
       const res = await makeRequest(app, 'POST', '/tools/custom', {});
 
       expect(res.status).toBe(400);
-      expect(res.body).toEqual({ error: 'name and schemaJson are required' });
+      expect(res.body).toEqual({ error: 'name and schemaJson (or schema) are required' });
     });
 
     it('returns 403 for non-admin', async () => {

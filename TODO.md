@@ -13,17 +13,21 @@ No dashboard UI for configuring teams, spawning sub-agents, or viewing team resu
 ### 3. Skills
 No Skills tab on the agent detail page. No way to attach/detach skills from the dashboard. Skills are managed only via Slack commands. The backend and API exist but the dashboard has no UI.
 
-### 4. Custom Tool Creation
-The Tools page shows/approves/deletes existing custom tools, but there's no UI to create a custom tool (define schema, write code, test). Creation happens only through agent self-authoring or Slack.
+### ~~4. Custom Tool Creation~~ ✅
+~~The Tools page shows/approves/deletes existing custom tools, but there's no UI to create a custom tool (define schema, write code, test). Creation happens only through agent self-authoring or Slack.~~
+Done: Create Tool dialog with 3 tabs (AI Generate, API Template, Manual), access level selector, name validation, sandbox testing with duration display.
 
-### 5. Tool Authoring / Self-Authoring
-No dashboard UI for AI-powered tool generation, sandbox testing, or tool pipelines. This is backend-only functionality triggered during agent runs.
+### ~~5. Tool Authoring / Self-Authoring~~ ✅
+~~No dashboard UI for AI-powered tool generation, sandbox testing, or tool pipelines. This is backend-only functionality triggered during agent runs.~~
+Done: Tool Detail dialog with Overview (code + schema + sandbox test), Versions (history + rollback), and Usage (analytics) tabs. Clickable tool rows.
 
-### 6. Critique-Driven Learning / Self-Improvement
-No dashboard UI. Critique detection and prompt refinement happen in Slack threads only.
+### ~~6. Critique-Driven Learning / Self-Improvement~~ ✅
+~~No dashboard UI. Critique detection and prompt refinement happen in Slack threads only.~~
+Done: Learning tab on Agent Detail with prompt health indicator, inline suggest improvement (side-by-side diff), and full version history with preview/restore.
 
-### 7. Evolution Proposals Navigation
-The Evolution page exists and works, but it's only accessible from the Requests page tab. There's no standalone Evolution page in the sidebar navigation. The page exists at `/evolution` but isn't linked.
+### ~~7. Evolution Proposals Navigation~~ ✅
+~~The Evolution page exists and works, but it's only accessible from the Requests page tab. There's no standalone Evolution page in the sidebar navigation. The page exists at `/evolution` but isn't linked.~~
+Done: Added route in App.tsx, sidebar link under Review, fixed backend to enrich with agent name/avatar, fixed frontend type mismatches.
 
 ### 8. Document Filling
 No dashboard UI. Template field extraction and KB-powered filling is backend-only, triggered during agent runs.
@@ -71,3 +75,7 @@ An AI-powered diagnostic agent (like Claude Code for TinyHands) that agent creat
 - [x] Non-admin restrictions: Hide Create Agent, owner-only actions
 - [x] Adding tools to agents: checks integration manifests (not just custom_tools DB)
 - [x] Auto-synced entries note moved above buttons in KB entry dialog
+- [x] Custom Tool Creation: 3-tab dialog (AI Generate, API Template, Manual), access level, name validation, sandbox test
+- [x] Tool Detail dialog: Overview (code/schema/test), Versions (history/rollback), Usage (analytics)
+- [x] Learning tab: Prompt health, inline suggest improvement with diff view, full version history
+- [x] Evolution page: Route + sidebar link, enriched API response with agent name/avatar, fixed type mismatches

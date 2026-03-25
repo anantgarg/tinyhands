@@ -45,6 +45,7 @@ interface CreateCustomToolPayload {
   description: string;
   schema: Record<string, unknown>;
   code: string;
+  language?: string;
   accessLevel?: string;
 }
 
@@ -226,6 +227,29 @@ export function useToolAnalytics(name: string) {
   return useQuery<ToolAnalytics>({
     queryKey: ['tools', 'custom', name, 'analytics'],
     queryFn: () => api.get(`/tools/custom/${name}/analytics`),
+    enabled: !!name,
+  });
+}
+
+export interface CustomToolDetail {
+  id: string;
+  name: string;
+  displayName: string;
+  description: string;
+  type: string;
+  accessLevel: string;
+  approved: boolean;
+  createdBy: string;
+  createdAt: string;
+  schemaJson: string;
+  scriptCode: string;
+  language: string;
+}
+
+export function useCustomToolDetail(name: string) {
+  return useQuery<CustomToolDetail>({
+    queryKey: ['tools', 'custom', name, 'detail'],
+    queryFn: () => api.get(`/tools/custom/${name}`),
     enabled: !!name,
   });
 }

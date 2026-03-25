@@ -26,6 +26,7 @@ const Settings = lazy(() => import('@/pages/Settings').then(m => ({ default: m.S
 const Requests = lazy(() => import('@/pages/Requests').then(m => ({ default: m.Requests })));
 const ErrorLogs = lazy(() => import('@/pages/ErrorLogs').then(m => ({ default: m.ErrorLogs })));
 const Skills = lazy(() => import('@/pages/Skills').then(m => ({ default: m.Skills })));
+const Evolution = lazy(() => import('@/pages/Evolution').then(m => ({ default: m.Evolution })));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -116,6 +117,7 @@ export function App() {
                 <Route path="triggers" element={<Suspense fallback={<PageLoader />}><Triggers /></Suspense>} />
                 <Route path="requests" element={<Suspense fallback={<PageLoader />}><Requests /></Suspense>} />
                 <Route path="errors" element={<Suspense fallback={<PageLoader />}><ErrorLogs /></Suspense>} />
+                <Route path="evolution" element={<Suspense fallback={<PageLoader />}><Evolution /></Suspense>} />
 
                 <Route path="audit" element={<Suspense fallback={<PageLoader />}><AuditLog /></Suspense>} />
                 <Route path="access" element={<Suspense fallback={<PageLoader />}><AccessRoles /></Suspense>} />

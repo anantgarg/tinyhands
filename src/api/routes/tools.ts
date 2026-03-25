@@ -54,15 +54,27 @@ router.get('/custom/:name', requireAdmin, async (req: Request, res: Response) =>
 });
 
 // POST /tools/custom — Register custom tool (admin-only)
+// Accepts either backend format {schemaJson, scriptCode, options} or dashboard format {schema, code, language, accessLevel}
 router.post('/custom', requireAdmin, async (req: Request, res: Response) => {
   try {
     const { workspaceId, userId } = getSessionUser(req);
-    const { name, schemaJson, scriptCode, options } = req.body;
+    const { name, options } = req.body;
+    // Accept both field name conventions, ensure string format
+    const rawSchema = req.body.schemaJson || req.body.schema;
+    const schemaJson = rawSchema ? (typeof rawSchema === 'string' ? rawSchema : JSON.stringify(rawSchema)) : undefined;
+    const scriptCode = req.body.scriptCode || req.body.code || null;
+    const mergedOptions = {
+      ...options,
+      ...(req.body.language ? { language: req.body.language } : {}),
+      ...(req.body.accessLevel ? { accessLevel: req.body.accessLevel } : {}),
+      ...(req.body.description ? { description: req.body.description } : {}),
+      ...(req.body.code || req.body.scriptCode ? { code: scriptCode } : {}),
+    };
     if (!name || !schemaJson) {
-      res.status(400).json({ error: 'name and schemaJson are required' });
+      res.status(400).json({ error: 'name and schemaJson (or schema) are required' });
       return;
     }
-    const tool = await registerCustomTool(workspaceId, name, schemaJson, scriptCode || null, userId, options);
+    const tool = await registerCustomTool(workspaceId, name, schemaJson, null, userId, mergedOptions);
     res.status(201).json(tool);
   } catch (err: any) {
     logger.error('Register custom tool error', { error: err.message });

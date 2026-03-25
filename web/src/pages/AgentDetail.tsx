@@ -56,6 +56,7 @@ import {
   useDetachSkill,
   useSuggestImprovement,
   useApplyImprovement,
+  usePromptSize,
 } from '@/api/agents';
 import type { Agent as AgentData, AgentVersion } from '@/api/agents';
 import { useAvailableTools } from '@/api/tools';
@@ -303,6 +304,7 @@ export function AgentDetail() {
           <TabsTrigger value="skills">Skills</TabsTrigger>
           <TabsTrigger value="triggers">Triggers</TabsTrigger>
           <TabsTrigger value="access">Access</TabsTrigger>
+          <TabsTrigger value="learning">Learning</TabsTrigger>
         </TabsList>
 
         <TabsContent value="overview">
@@ -325,6 +327,9 @@ export function AgentDetail() {
         </TabsContent>
         <TabsContent value="access">
           <AccessTab agentId={id!} agent={agent} />
+        </TabsContent>
+        <TabsContent value="learning">
+          <LearningTab agentId={id!} agent={agent} />
         </TabsContent>
       </Tabs>
     </div>
@@ -1473,6 +1478,214 @@ function SkillsTab({ agentId }: { agentId: string }) {
             <Button onClick={handleAttach} disabled={!selectedSkillName || attachSkill.isPending}>
               {attachSkill.isPending ? 'Attaching...' : 'Attach'}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+// ---- Learning Tab ----
+
+function LearningTab({ agentId, agent }: { agentId: string; agent: any }) {
+  const { data: promptSize } = usePromptSize(agentId);
+  const { data: versions, isLoading: versionsLoading } = useAgentVersions(agentId);
+  const revertAgent = useRevertAgent();
+  const suggestMut = useSuggestImprovement();
+  const applyMut = useApplyImprovement();
+  const [feedback, setFeedback] = useState('');
+  const [diff, setDiff] = useState<{ original: string; proposed: string; changeNote: string } | null>(null);
+  const [previewVersion, setPreviewVersion] = useState<AgentVersion | null>(null);
+
+  const handleAnalyze = () => {
+    suggestMut.mutate(
+      { agentId, feedback },
+      {
+        onSuccess: (data) => setDiff(data),
+        onError: (err: any) => toast({ title: 'Error', description: err.message, variant: 'error' }),
+      },
+    );
+  };
+
+  const handleApply = () => {
+    if (!diff) return;
+    applyMut.mutate(
+      { agentId, newPrompt: diff.proposed, changeNote: diff.changeNote },
+      {
+        onSuccess: () => {
+          toast({ title: 'Improvement applied', variant: 'success' });
+          setFeedback('');
+          setDiff(null);
+        },
+        onError: (err: any) => toast({ title: 'Error', description: err.message, variant: 'error' }),
+      },
+    );
+  };
+
+  const handleRevert = (version: number) => {
+    if (confirm(`Revert to version ${version}? The current configuration will be overwritten.`)) {
+      revertAgent.mutate(
+        { id: agentId, version },
+        { onSuccess: () => toast({ title: `Reverted to version ${version}`, variant: 'success' }) },
+      );
+    }
+  };
+
+  const tokenCount = promptSize?.tokenCount ?? 0;
+  const tokenPct = Math.min(100, (tokenCount / 4000) * 100);
+  const tokenColor = tokenCount < 3000 ? 'bg-green-500' : tokenCount < 4000 ? 'bg-yellow-500' : 'bg-red-500';
+
+  return (
+    <div className="space-y-6 mt-4">
+      {/* Prompt Health */}
+      <Card>
+        <CardContent className="p-5">
+          <CardTitle className="text-base mb-3">Prompt Health</CardTitle>
+          <div className="flex items-center gap-4">
+            <div className="flex-1">
+              <div className="flex justify-between text-xs mb-1">
+                <span className="text-warm-text-secondary">Estimated tokens</span>
+                <span className="font-medium">{tokenCount.toLocaleString()} / 4,000</span>
+              </div>
+              <div className="h-2 rounded-full bg-warm-sidebar overflow-hidden">
+                <div className={`h-full rounded-full transition-all ${tokenColor}`} style={{ width: `${tokenPct}%` }} />
+              </div>
+            </div>
+          </div>
+          {promptSize?.warning && (
+            <p className="text-xs text-amber-600 mt-2">Your instructions are getting long. Consider condensing to maintain agent effectiveness.</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Suggest Improvement (inline) */}
+      <Card>
+        <CardContent className="p-5">
+          <CardTitle className="text-base mb-3">Suggest Improvement</CardTitle>
+          <p className="text-xs text-warm-text-secondary mb-3">Describe how this agent's behavior should change. AI will analyze and propose specific prompt edits.</p>
+
+          {!diff ? (
+            <div className="space-y-3">
+              <Textarea
+                value={feedback}
+                onChange={(e) => setFeedback(e.target.value)}
+                placeholder="e.g., The agent should be more concise in its responses and always include source links..."
+                rows={3}
+              />
+              <Button onClick={handleAnalyze} disabled={!feedback.trim() || suggestMut.isPending} size="sm">
+                {suggestMut.isPending ? (
+                  <><Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> Analyzing...</>
+                ) : (
+                  <><Wand2 className="mr-1.5 h-3.5 w-3.5" /> Analyze &amp; Suggest</>
+                )}
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="rounded-lg border border-warm-border p-3 bg-amber-50/50">
+                <p className="text-xs font-medium text-amber-700 mb-1">Proposed Change</p>
+                <p className="text-sm text-amber-900">{diff.changeNote}</p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <p className="text-xs font-medium text-warm-text-secondary mb-1">Current</p>
+                  <div className="rounded-lg border border-warm-border p-3 bg-red-50/30 max-h-48 overflow-y-auto">
+                    <pre className="text-xs whitespace-pre-wrap font-mono text-warm-text-secondary">{diff.original}</pre>
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-medium text-warm-text-secondary mb-1">Proposed</p>
+                  <div className="rounded-lg border border-warm-border p-3 bg-green-50/30 max-h-48 overflow-y-auto">
+                    <pre className="text-xs whitespace-pre-wrap font-mono">{diff.proposed}</pre>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" size="sm" onClick={() => { setDiff(null); setFeedback(''); }}>Dismiss</Button>
+                <Button size="sm" onClick={handleApply} disabled={applyMut.isPending}>
+                  {applyMut.isPending ? <><Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> Applying...</> : <><Check className="mr-1.5 h-3.5 w-3.5" /> Apply Changes</>}
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Full Version History */}
+      <Card>
+        <CardContent className="p-5">
+          <CardTitle className="text-base mb-3">Version History</CardTitle>
+          {versionsLoading ? (
+            <Skeleton className="h-[100px]" />
+          ) : (versions ?? []).length === 0 ? (
+            <p className="text-sm text-warm-text-secondary">No version history</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Version</TableHead>
+                    <TableHead>Changes</TableHead>
+                    <TableHead>By</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead className="w-32"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(versions ?? []).map((v, idx) => (
+                    <TableRow key={v.id ?? v.version}>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium">v{v.version}</span>
+                          {idx === 0 && <Badge variant="success" className="text-xs">Current</Badge>}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-xs text-warm-text-secondary max-w-[200px] truncate">{v.changeNote || '\u2014'}</TableCell>
+                      <TableCell className="text-xs text-warm-text-secondary">{(v as any)?.changedByName || '\u2014'}</TableCell>
+                      <TableCell className="text-xs text-warm-text-secondary">
+                        {v.createdAt ? formatDistanceToNow(new Date(v.createdAt), { addSuffix: true }) : '\u2014'}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setPreviewVersion(v)}>Preview</Button>
+                          {idx > 0 && (
+                            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleRevert(v.version)}>
+                              <RotateCcw className="mr-1 h-3 w-3" /> Restore
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Version Preview Dialog */}
+      <Dialog open={!!previewVersion} onOpenChange={() => setPreviewVersion(null)}>
+        <DialogContent className="sm:max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Version {previewVersion?.version} Preview</DialogTitle>
+            <DialogDescription>
+              {previewVersion?.changeNote || 'No change note'} &mdash; {(previewVersion as any)?.changedByName || '\u2014'}{' '}
+              {previewVersion?.createdAt && format(new Date(previewVersion.createdAt), 'MMM d, yyyy HH:mm')}
+            </DialogDescription>
+          </DialogHeader>
+          <pre className="max-h-[400px] overflow-y-auto whitespace-pre-wrap text-xs bg-warm-sidebar rounded-btn p-4 font-mono">
+            {previewVersion?.systemPrompt || 'No instructions in this version.'}
+          </pre>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPreviewVersion(null)}>Close</Button>
+            {previewVersion && (
+              <Button onClick={() => { handleRevert(previewVersion.version); setPreviewVersion(null); }}>
+                <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Restore This Version
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>
