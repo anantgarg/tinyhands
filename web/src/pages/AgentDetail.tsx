@@ -1487,7 +1487,7 @@ function SkillsTab({ agentId }: { agentId: string }) {
 
 // ---- Learning Tab ----
 
-function LearningTab({ agentId, agent }: { agentId: string; agent: any }) {
+function LearningTab({ agentId }: { agentId: string; agent: any }) {
   const { data: promptSize } = usePromptSize(agentId);
   const { data: versions, isLoading: versionsLoading } = useAgentVersions(agentId);
   const revertAgent = useRevertAgent();

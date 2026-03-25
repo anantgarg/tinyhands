@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, Trash2, MoreVertical, AlertCircle, Shield, Pencil, Unplug, Plus, Wand2, Loader2, Play, Globe, RotateCcw, BarChart3, Clock, X } from 'lucide-react';
+import { Check, Trash2, MoreVertical, AlertCircle, Shield, Pencil, Unplug, Plus, Wand2, Loader2, Play, Globe, RotateCcw, BarChart3, X } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardContent } from '@/components/ui/card';
@@ -40,7 +40,6 @@ import {
   useRollbackTool,
   useToolAnalytics,
 } from '@/api/tools';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useAuthStore } from '@/store/auth';
 import { toast } from '@/components/ui/use-toast';
 

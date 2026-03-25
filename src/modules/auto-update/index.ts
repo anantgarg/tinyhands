@@ -64,9 +64,10 @@ export async function handleDeploy(payload: any): Promise<DeployResult> {
       execSync('npm install --include=dev', { cwd: process.cwd(), timeout: 120000 });
     }
 
-    // 2.1. Install web dependencies if web/package.json changed
+    // 2.1. Install web dependencies if web files changed (not just package.json — new components may need existing deps)
+    const webFilesChanged = changedFiles.some((f: string) => f.startsWith('web/'));
     const webPackageChanged = changedFiles.some((f: string) => f === 'web/package.json' || f === 'web/package-lock.json');
-    if (webPackageChanged || isPullBased) {
+    if (webPackageChanged || webFilesChanged || isPullBased) {
       logger.info('Deploy: installing web dependencies');
       try {
         execSync('cd web && npm install', { cwd: process.cwd(), timeout: 120000 });

@@ -240,15 +240,14 @@ function EvolutionProposalsTab() {
                 <div className="flex items-center gap-2">
                   <span className="text-lg">{proposal.agentAvatar || '\uD83E\uDD16'}</span>
                   <div>
-                    <CardTitle className="text-sm">{proposal.title}</CardTitle>
+                    <CardTitle className="text-sm">{proposal.description}</CardTitle>
                     <p className="text-xs text-warm-text-secondary mt-0.5">
                       {proposal.agentName} - {formatDistanceToNow(new Date(proposal.createdAt), { addSuffix: true })}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant="secondary">{proposal.type}</Badge>
-                  <Badge variant="warning">{Math.round(proposal.confidence * 100)}% confidence</Badge>
+                  <Badge variant="secondary">{(proposal.action || '').replace(/_/g, ' ')}</Badge>
                 </div>
               </div>
             </CardHeader>
