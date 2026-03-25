@@ -1,8 +1,45 @@
 import { Pool, PoolClient } from 'pg';
 import path from 'path';
 import { config } from '../config';
+import { logger } from '../utils/logger';
 
 let pool: Pool | null = null;
+let poolConfig: { connectionString: string; ssl: any; max: number } | null = null;
+let consecutiveFailures = 0;
+const MAX_FAILURES_BEFORE_RESET = 3;
+
+function isConnectionError(err: any): boolean {
+  const msg = (err.message || '').toLowerCase();
+  const code = err.code || '';
+  return code === 'ECONNREFUSED' || code === 'ECONNRESET' || code === 'ETIMEDOUT' ||
+    msg.includes('timeout') || msg.includes('connection terminated') ||
+    msg.includes('connection refused') || msg.includes('cert') ||
+    msg.includes('ssl') || msg.includes('unexpected eof');
+}
+
+function createPool(): Pool {
+  if (!poolConfig) throw new Error('Database not initialized. Call initDb() first.');
+  const p = new Pool({
+    ...poolConfig,
+    idleTimeoutMillis: 10000,
+    connectionTimeoutMillis: 5000,
+  });
+  p.on('error', (err) => {
+    logger.error('Idle database connection error', { error: err.message });
+  });
+  return p;
+}
+
+async function resetPool(): Promise<void> {
+  if (!poolConfig) return;
+  const old = pool;
+  pool = createPool();
+  consecutiveFailures = 0;
+  logger.info('Database pool recreated');
+  if (old) {
+    old.end().catch(() => {});
+  }
+}
 
 export async function initDb(): Promise<void> {
   if (pool) return;
@@ -17,13 +54,13 @@ export async function initDb(): Promise<void> {
   // Configurable via DB_POOL_MAX for when the DB plan is upgraded.
   const poolMax = parseInt(process.env.DB_POOL_MAX || '3', 10);
 
-  pool = new Pool({
+  poolConfig = {
     connectionString,
     ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
     max: poolMax,
-    idleTimeoutMillis: 10000,
-    connectionTimeoutMillis: 5000,
-  });
+  };
+
+  pool = createPool();
 
   // Run migrations
   const { runMigrations } = await import('./migrate');
@@ -37,6 +74,27 @@ function getPool(): Pool {
   return pool;
 }
 
+async function resilientQuery(sql: string, params?: any[]): Promise<any> {
+  try {
+    const result = await getPool().query(sql, sanitizeParams(params));
+    consecutiveFailures = 0;
+    return result;
+  } catch (err: any) {
+    if (isConnectionError(err)) {
+      consecutiveFailures++;
+      if (consecutiveFailures >= MAX_FAILURES_BEFORE_RESET) {
+        logger.warn('Multiple consecutive DB failures, resetting pool', { failures: consecutiveFailures });
+        await resetPool();
+        // Retry once with fresh pool
+        const result = await getPool().query(sql, sanitizeParams(params));
+        consecutiveFailures = 0;
+        return result;
+      }
+    }
+    throw err;
+  }
+}
+
 // Strip null bytes from string params — Postgres TEXT columns reject 0x00
 function sanitizeParams(params?: any[]): any[] | undefined {
   if (!params) return params;
@@ -44,22 +102,39 @@ function sanitizeParams(params?: any[]): any[] | undefined {
 }
 
 export async function query<T = any>(sql: string, params?: any[]): Promise<T[]> {
-  const result = await getPool().query(sql, sanitizeParams(params));
+  const result = await resilientQuery(sql, params);
   return result.rows as T[];
 }
 
 export async function queryOne<T = any>(sql: string, params?: any[]): Promise<T | undefined> {
-  const result = await getPool().query(sql, sanitizeParams(params));
+  const result = await resilientQuery(sql, params);
   return result.rows[0] as T | undefined;
 }
 
 export async function execute(sql: string, params?: any[]): Promise<{ rowCount: number }> {
-  const result = await getPool().query(sql, sanitizeParams(params));
+  const result = await resilientQuery(sql, params);
   return { rowCount: result.rowCount || 0 };
 }
 
 export async function withTransaction<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
-  const client = await getPool().connect();
+  let client: PoolClient;
+  try {
+    client = await getPool().connect();
+  } catch (err: any) {
+    if (isConnectionError(err)) {
+      consecutiveFailures++;
+      if (consecutiveFailures >= MAX_FAILURES_BEFORE_RESET) {
+        logger.warn('Transaction connect failed, resetting pool', { failures: consecutiveFailures });
+        await resetPool();
+        client = await getPool().connect();
+        consecutiveFailures = 0;
+      } else {
+        throw err;
+      }
+    } else {
+      throw err;
+    }
+  }
   // Wrap client.query to sanitize params, preventing null byte errors
   const originalQuery = client.query.bind(client);
   (client as any).query = (sql: any, params?: any) => {

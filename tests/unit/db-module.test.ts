@@ -4,13 +4,15 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 const mockPoolQuery = vi.fn();
 const mockPoolConnect = vi.fn();
-const mockPoolEnd = vi.fn();
+const mockPoolEnd = vi.fn().mockResolvedValue(undefined);
+const mockPoolOn = vi.fn();
 
 vi.mock('pg', () => ({
   Pool: vi.fn().mockImplementation(() => ({
     query: mockPoolQuery,
     connect: mockPoolConnect,
     end: mockPoolEnd,
+    on: mockPoolOn,
   })),
 }));
 
@@ -24,6 +26,14 @@ vi.mock('../../src/config', () => ({
     database: {
       url: 'postgresql://localhost:5432/tinyhands_test',
     },
+  },
+}));
+
+vi.mock('../../src/utils/logger', () => ({
+  logger: {
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
   },
 }));
 
@@ -465,6 +475,116 @@ describe('DB Module', () => {
       await dbModule.closeDb();
 
       expect(mockPoolEnd).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── pool resilience ──
+
+  describe('pool resilience', () => {
+    let dbModule: typeof import('../../src/db/index');
+
+    beforeEach(async () => {
+      vi.resetModules();
+      vi.clearAllMocks();
+      dbModule = await import('../../src/db/index');
+      await dbModule.initDb();
+    });
+
+    afterEach(async () => {
+      await dbModule.closeDb();
+    });
+
+    it('should reset counter on successful query', async () => {
+      mockPoolQuery.mockResolvedValue({ rows: [{ id: 1 }], rowCount: 1 });
+
+      await dbModule.query('SELECT 1');
+      await dbModule.query('SELECT 2');
+
+      // No pool recreation should have occurred — only 1 Pool created (in initDb)
+      expect(Pool).toHaveBeenCalledTimes(1);
+    });
+
+    it('should recreate pool after 3 consecutive connection failures', async () => {
+      const connError = new Error('timeout');
+      (connError as any).code = 'ETIMEDOUT';
+
+      // First 3 calls fail (hitting the threshold), 4th succeeds on new pool
+      mockPoolQuery
+        .mockRejectedValueOnce(connError)
+        .mockRejectedValueOnce(connError)
+        .mockRejectedValueOnce(connError) // triggers reset, then retries
+        .mockResolvedValueOnce({ rows: [{ ok: true }], rowCount: 1 });
+
+      await expect(dbModule.query('SELECT 1')).rejects.toThrow('timeout');
+      await expect(dbModule.query('SELECT 1')).rejects.toThrow('timeout');
+      // Third failure triggers pool reset + retry on new pool
+      const result = await dbModule.query('SELECT 1');
+      expect(result).toEqual([{ ok: true }]);
+
+      // Pool was created once in initDb, once in reset
+      expect(Pool).toHaveBeenCalledTimes(2);
+    });
+
+    it('should not reset pool for non-connection errors', async () => {
+      const dbError = new Error('relation "users" does not exist');
+      mockPoolQuery
+        .mockRejectedValueOnce(dbError)
+        .mockRejectedValueOnce(dbError)
+        .mockRejectedValueOnce(dbError);
+
+      await expect(dbModule.query('SELECT 1')).rejects.toThrow('relation');
+      await expect(dbModule.query('SELECT 1')).rejects.toThrow('relation');
+      await expect(dbModule.query('SELECT 1')).rejects.toThrow('relation');
+
+      // No reset — only the original pool
+      expect(Pool).toHaveBeenCalledTimes(1);
+    });
+
+    it('should reset failure counter after a successful query', async () => {
+      const connError = new Error('connection refused');
+      (connError as any).code = 'ECONNREFUSED';
+
+      // 2 failures, then success, then 2 more failures — should NOT trigger reset
+      mockPoolQuery
+        .mockRejectedValueOnce(connError)
+        .mockRejectedValueOnce(connError)
+        .mockResolvedValueOnce({ rows: [], rowCount: 0 })
+        .mockRejectedValueOnce(connError)
+        .mockRejectedValueOnce(connError);
+
+      await expect(dbModule.query('Q')).rejects.toThrow();
+      await expect(dbModule.query('Q')).rejects.toThrow();
+      await dbModule.query('Q'); // success resets counter
+      await expect(dbModule.query('Q')).rejects.toThrow();
+      await expect(dbModule.query('Q')).rejects.toThrow();
+
+      // No pool reset happened
+      expect(Pool).toHaveBeenCalledTimes(1);
+    });
+
+    it('should handle pool reset for withTransaction connect failures', async () => {
+      const connError = new Error('connection refused');
+      (connError as any).code = 'ECONNREFUSED';
+
+      const mockClientQuery = vi.fn().mockResolvedValue({ rows: [], rowCount: 0 });
+      const mockClientRelease = vi.fn();
+
+      // Use regular query failures to bump counter to 2
+      mockPoolQuery.mockRejectedValueOnce(connError).mockRejectedValueOnce(connError);
+      await expect(dbModule.query('Q')).rejects.toThrow();
+      await expect(dbModule.query('Q')).rejects.toThrow();
+
+      // Third failure via withTransaction connect triggers reset, then retry succeeds
+      mockPoolConnect
+        .mockRejectedValueOnce(connError)
+        .mockResolvedValueOnce({
+          query: mockClientQuery,
+          release: mockClientRelease,
+        });
+
+      const result = await dbModule.withTransaction(async () => 'done');
+      expect(result).toBe('done');
+      expect(Pool).toHaveBeenCalledTimes(2);
     });
   });
 
