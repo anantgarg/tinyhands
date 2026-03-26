@@ -1081,6 +1081,16 @@ export function registerInlineActions(app: App): void {
     await startNewAgentFlow(body.user.id, channelId);
   });
 
+  // "Create New Agent" button from Home Tab dashboard
+  app.action('dashboard_create_agent', async ({ ack, body }) => {
+    await ack();
+    const userId = body.user.id;
+    const conv = await getSlackApp().client.conversations.open({ users: userId });
+    const dmChannelId = conv.channel?.id;
+    if (!dmChannelId) return;
+    await startNewAgentFlow(userId, dmChannelId);
+  });
+
   // "Templates" button from /agents dashboard
   app.action('agents_browse_templates', async ({ ack, body }) => {
     await ack();

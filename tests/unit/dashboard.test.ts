@@ -824,3 +824,39 @@ describe.skip('buildDashboardBlocks (simplified to dashboard button)', () => {
     expect(unavailable).toBeDefined();
   });
 });
+
+// ── buildDashboardBlocks (current simplified version) ──
+
+describe('buildDashboardBlocks', () => {
+  it('should include a Create New Agent button', async () => {
+    const blocks = await buildDashboardBlocks(TEST_WORKSPACE_ID);
+    const actionsBlock = blocks.find((b) => b.type === 'actions');
+    expect(actionsBlock).toBeDefined();
+    const createBtn = actionsBlock!.elements.find(
+      (e: any) => e.action_id === 'dashboard_create_agent',
+    );
+    expect(createBtn).toBeDefined();
+    expect(createBtn!.text.text).toBe('Create New Agent');
+  });
+
+  it('should include Open Dashboard button with primary style', async () => {
+    const blocks = await buildDashboardBlocks(TEST_WORKSPACE_ID);
+    const actionsBlock = blocks.find((b) => b.type === 'actions');
+    expect(actionsBlock).toBeDefined();
+    const dashBtn = actionsBlock!.elements.find(
+      (e: any) => e.url !== undefined,
+    );
+    expect(dashBtn).toBeDefined();
+    expect(dashBtn!.text.text).toBe('Open Dashboard');
+    expect(dashBtn!.style).toBe('primary');
+  });
+
+  it('should not apply a style to the Create New Agent button', async () => {
+    const blocks = await buildDashboardBlocks(TEST_WORKSPACE_ID);
+    const actionsBlock = blocks.find((b) => b.type === 'actions');
+    const createBtn = actionsBlock!.elements.find(
+      (e: any) => e.action_id === 'dashboard_create_agent',
+    );
+    expect(createBtn!.style).toBeUndefined();
+  });
+});
