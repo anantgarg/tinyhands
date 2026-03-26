@@ -409,8 +409,8 @@ router.get('/:id/memories', async (req: Request, res: Response) => {
     }
     const limit = parseInt(req.query.limit as string) || 50;
     const memories = await query(
-      'SELECT * FROM agent_memories WHERE agent_id = $1 ORDER BY created_at DESC LIMIT $2',
-      [id, limit],
+      'SELECT * FROM agent_memory WHERE workspace_id = $1 AND agent_id = $2 ORDER BY created_at DESC LIMIT $3',
+      [workspaceId, id, limit],
     );
     res.json(memories);
   } catch (err: any) {
