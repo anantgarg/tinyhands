@@ -70,7 +70,7 @@ export async function handleDeploy(payload: any): Promise<DeployResult> {
     if (webPackageChanged || webFilesChanged || isPullBased) {
       logger.info('Deploy: installing web dependencies');
       try {
-        execSync('cd web && npm install', { cwd: process.cwd(), timeout: 120000 });
+        execSync('cd web && npm install --include=dev', { cwd: process.cwd(), timeout: 120000 });
       } catch (webErr: any) {
         logger.warn('Web dependency install failed', { error: webErr.message });
       }
