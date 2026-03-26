@@ -112,9 +112,9 @@ export async function handleDeploy(payload: any): Promise<DeployResult> {
 
     // 5. Graceful reload — sends SIGTERM to each process one at a time,
     // waits for it to exit (allowing active agent runs to finish), then starts the new version.
-    // This prevents orphaned Docker containers from interrupted runs.
+    // --force prevents "Reload already in progress" errors from overlapping deploys.
     logger.info('Deploy: graceful reload via PM2');
-    execSync('pm2 reload ecosystem.config.js', { cwd: process.cwd(), timeout: 120000 });
+    execSync('pm2 reload ecosystem.config.js --force', { cwd: process.cwd(), timeout: 120000 });
 
     const restartTime = Date.now() - startTime;
 

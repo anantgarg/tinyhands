@@ -165,7 +165,7 @@ describe('Auto-Update Module', () => {
       expect(calls).not.toContainEqual(expect.stringContaining('npm install'));
       expect(calls).toContainEqual('npm run build');
       expect(calls).toContainEqual('npm run migrate');
-      expect(calls).toContainEqual('pm2 reload ecosystem.config.js');
+      expect(calls).toContainEqual('pm2 reload ecosystem.config.js --force');
     });
 
     it('should run npm install when package.json is modified', async () => {
@@ -267,14 +267,14 @@ describe('Auto-Update Module', () => {
 
     it('should return failure result when PM2 restart fails', async () => {
       mockExecSync.mockImplementation((cmd: string) => {
-        if (cmd.includes('pm2 reload')) throw new Error('PM2 not found');
+        if (cmd.includes('pm2 reload')) throw new Error('PM2 reload failed');
         return Buffer.from('');
       });
 
       const result = await handleDeploy(makePushPayload());
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe('PM2 not found');
+      expect(result.error).toBe('PM2 reload failed');
     });
 
     it('should handle payload with no commits array', async () => {
@@ -313,7 +313,7 @@ describe('Auto-Update Module', () => {
       expect(result.success).toBe(true);
 
       const calls = mockExecSync.mock.calls.map((c: any[]) => c[0]);
-      expect(calls).toContainEqual('pm2 reload ecosystem.config.js');
+      expect(calls).toContainEqual('pm2 reload ecosystem.config.js --force');
     });
 
     it('should report restartTime in the result', async () => {
