@@ -1869,19 +1869,20 @@ function TriggersTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
     );
   };
 
-  const getTriggerDescription = (trigger: { type: string; config: Record<string, unknown> }) => {
+  const getTriggerDescription = (trigger: { type: string; config?: Record<string, unknown> }) => {
+    const cfg = trigger.config || {};
     switch (trigger.type) {
       case 'schedule': {
-        const cron = String(trigger.config.cron ?? trigger.config.expression ?? '');
-        const tz = trigger.config.timezone ? ` (${trigger.config.timezone})` : '';
+        const cron = String(cfg.cron ?? cfg.expression ?? '');
+        const tz = cfg.timezone ? ` (${cfg.timezone})` : '';
         return `${cron}${tz}`;
       }
       case 'webhook': {
-        const url = trigger.config.url ?? trigger.config.webhookUrl ?? '';
+        const url = cfg.url ?? cfg.webhookUrl ?? '';
         return String(url);
       }
       default: {
-        const eventType = trigger.config.eventType ?? trigger.config.event ?? trigger.type;
+        const eventType = cfg.eventType ?? cfg.event ?? trigger.type;
         return `Event: ${eventType}`;
       }
     }
