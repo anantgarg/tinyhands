@@ -136,7 +136,7 @@ Hierarchical browsing: **Sources > Documents > Content**
 - **Agent roles** -- Owner, Member (full access), Viewer (limited)
 - **Default access levels** -- Full Access, Limited Access, Invite Only
 - **Action approval** -- Automatic, Ask User First, Ask Owner/Admins
-- **Non-admin restrictions** -- members cannot create agents, manage integrations, or access admin pages
+- **Non-admin restrictions** -- members cannot manage integrations or access admin pages
 - **Upgrade requests** -- viewers can request elevated access
 
 ### More
