@@ -138,6 +138,40 @@ export function decryptCredentials(conn: Connection): Record<string, string> {
 }
 
 /**
+ * For Google OAuth connections, refresh the access_token using the stored refresh_token.
+ * Updates the stored credentials with the fresh token so subsequent calls within the hour
+ * don't need to refresh again. Returns credentials with a valid access_token.
+ */
+async function refreshIfGoogleOAuth(
+  credentials: Record<string, string>,
+  conn: Connection,
+): Promise<Record<string, string>> {
+  // Only refresh if this is a Google connection with a refresh_token
+  if (!credentials.refresh_token) return credentials;
+
+  const { isGoogleIntegration, refreshGoogleAccessToken } = await import('./oauth');
+  if (!isGoogleIntegration(conn.integration_id)) return credentials;
+
+  try {
+    const freshAccessToken = await refreshGoogleAccessToken(credentials.refresh_token);
+    credentials.access_token = freshAccessToken;
+
+    // Update stored credentials with fresh token (best-effort, don't block on failure)
+    const { encrypted, iv } = encrypt(JSON.stringify(credentials));
+    execute(
+      'UPDATE connections SET credentials_encrypted = $1, credentials_iv = $2, updated_at = NOW() WHERE id = $3',
+      [encrypted, iv, conn.id]
+    ).catch(() => {});
+
+    logger.info('Refreshed Google OAuth token', { connectionId: conn.id, integrationId: conn.integration_id });
+    return credentials;
+  } catch (err: any) {
+    logger.warn('Google OAuth token refresh failed, using stored token', { connectionId: conn.id, error: err.message });
+    return credentials;
+  }
+}
+
+/**
  * Re-encrypt any connections left by the backfill migration (016).
  * Those rows have credentials_encrypted = 'NEEDS_RE_ENCRYPTION:<plaintext_json>'
  * and credentials_iv = 'migrated'. This function properly encrypts them in place.
@@ -270,11 +304,17 @@ export async function resolveToolCredentials(
   const atc = await getAgentToolConnection(wsId, agentId, toolName);
   const integrationId = getIntegrationIdForTool(toolName);
 
+  // Helper: decrypt and auto-refresh Google OAuth tokens
+  async function resolveFromConnection(conn: Connection): Promise<Record<string, string>> {
+    const creds = decryptCredentials(conn);
+    return refreshIfGoogleOAuth(creds, conn);
+  }
+
   if (atc) {
     switch (atc.connection_mode) {
       case 'team': {
         const conn = await getTeamConnection(wsId, integrationId);
-        if (conn) return decryptCredentials(conn);
+        if (conn) return resolveFromConnection(conn);
         break;
       }
       case 'delegated': {
@@ -283,14 +323,14 @@ export async function resolveToolCredentials(
         const owners = await getAgentOwners(wsId, agentId);
         for (const owner of owners) {
           const conn = await getPersonalConnection(wsId, integrationId, owner.user_id);
-          if (conn) return decryptCredentials(conn);
+          if (conn) return resolveFromConnection(conn);
         }
         break;
       }
       case 'runtime': {
         if (userId) {
           const conn = await getPersonalConnection(wsId, integrationId, userId);
-          if (conn) return decryptCredentials(conn);
+          if (conn) return resolveFromConnection(conn);
         }
         break;
       }
@@ -300,7 +340,7 @@ export async function resolveToolCredentials(
   // If no explicit mode set, default to team connection
   if (!atc) {
     const teamConn = await getTeamConnection(wsId, integrationId);
-    if (teamConn) return decryptCredentials(teamConn);
+    if (teamConn) return resolveFromConnection(teamConn);
   }
 
   return null;

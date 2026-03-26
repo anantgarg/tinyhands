@@ -160,6 +160,66 @@ export async function handleOAuthCallback(
   };
 }
 
+// ── Google OAuth Token Refresh ──
+
+const GOOGLE_INTEGRATION_IDS = new Set(['google', 'google_drive', 'google-drive', 'google-sheets', 'google-docs', 'gmail']);
+
+export function isGoogleIntegration(integrationId: string): boolean {
+  return GOOGLE_INTEGRATION_IDS.has(integrationId);
+}
+
+/**
+ * Refresh a Google OAuth access token using the stored refresh_token.
+ * Returns a fresh access_token. Uses server-side client credentials (never exposed to containers).
+ */
+export async function refreshGoogleAccessToken(refreshToken: string): Promise<string> {
+  const clientId = config.oauth.googleClientId;
+  const clientSecret = config.oauth.googleClientSecret;
+  if (!clientId || !clientSecret) {
+    throw new Error('Google OAuth not configured (missing GOOGLE_OAUTH_CLIENT_ID or GOOGLE_OAUTH_CLIENT_SECRET)');
+  }
+
+  const body = new URLSearchParams({
+    client_id: clientId,
+    client_secret: clientSecret,
+    refresh_token: refreshToken,
+    grant_type: 'refresh_token',
+  }).toString();
+
+  return new Promise((resolve, reject) => {
+    const req = https.request({
+      hostname: 'oauth2.googleapis.com',
+      path: '/token',
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Length': Buffer.byteLength(body),
+      },
+    }, (res) => {
+      let data = '';
+      res.on('data', (chunk) => data += chunk);
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(data);
+          if (parsed.error || !parsed.access_token) {
+            reject(new Error(`Google token refresh failed: ${parsed.error_description || parsed.error || 'no access_token'}`));
+            return;
+          }
+          resolve(parsed.access_token);
+        } catch {
+          reject(new Error('Failed to parse Google token refresh response'));
+        }
+      });
+    });
+
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
+
+// ── Token Exchange ──
+
 async function exchangeCodeForToken(
   tokenUrl: string,
   code: string,
