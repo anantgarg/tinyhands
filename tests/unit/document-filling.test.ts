@@ -444,7 +444,7 @@ describe('writeBackDocument', () => {
     // The google drive module import will fail in test, caught by try/catch
     const result = await writeBackDocument(url, 'col1\tcol2', 'google_sheets');
     expect(result).toBe(url);
-  }, 15000);
+  });
 
   it('should handle google_docs with invalid URL', async () => {
     const url = 'https://docs.google.com/some-invalid-url';

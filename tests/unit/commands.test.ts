@@ -6693,55 +6693,6 @@ describe('Commands Module', () => {
     });
   });
 
-  describe('dashboard_create_agent', () => {
-    it('should open a DM and start the new agent flow', async () => {
-      const app = createMockApp();
-      await safeRegisterInlineActions(app);
-
-      if (!app.handlers.action['dashboard_create_agent']) return;
-
-      mockGetSlackApp.mockReturnValue({
-        client: {
-          conversations: {
-            open: vi.fn().mockResolvedValue({ channel: { id: 'D_DM_CHAN' } }),
-          },
-        },
-      });
-
-      const ack = vi.fn();
-      const body = { user: { id: 'U_HOME' }, team: { id: 'W_TEST_123' } };
-
-      await app.handlers.action['dashboard_create_agent']({ ack, body });
-
-      expect(ack).toHaveBeenCalled();
-      expect(mockGetSlackApp().client.conversations.open).toHaveBeenCalledWith({ users: 'U_HOME' });
-      expect(mockPostBlocks).toHaveBeenCalledWith('D_DM_CHAN', expect.any(Array), expect.any(String));
-    });
-
-    it('should no-op when DM channel cannot be opened', async () => {
-      const app = createMockApp();
-      await safeRegisterInlineActions(app);
-
-      if (!app.handlers.action['dashboard_create_agent']) return;
-
-      mockGetSlackApp.mockReturnValue({
-        client: {
-          conversations: {
-            open: vi.fn().mockResolvedValue({ channel: undefined }),
-          },
-        },
-      });
-
-      const ack = vi.fn();
-      const body = { user: { id: 'U_HOME' }, team: { id: 'W_TEST_123' } };
-
-      await app.handlers.action['dashboard_create_agent']({ ack, body });
-
-      expect(ack).toHaveBeenCalled();
-      expect(mockPostBlocks).not.toHaveBeenCalled();
-    });
-  });
-
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // Additional coverage: handleConversationReply — update goal analysis error
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

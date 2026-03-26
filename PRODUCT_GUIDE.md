@@ -8,7 +8,7 @@ We're excited to launch TinyHands, a platform that lets you create and manage AI
 
 ### Step 1: Create Your First Agent
 
-Open the TinyHands web dashboard and go to the **Agents** page. Click **New Agent**. You can also create an agent directly from Slack by clicking **Create New Agent** on the TinyHands Home Tab, or by running `/new-agent` in a DM. You will be guided through a setup wizard:
+Open the TinyHands web dashboard and go to the **Agents** page. Click **New Agent**. You will be guided through a four-step wizard:
 
 1. **Describe** -- Tell the agent what it should do in plain English. For example:
    - *"Answer customer support questions using our help center docs"*

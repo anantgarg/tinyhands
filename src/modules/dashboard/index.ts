@@ -32,11 +32,6 @@ export async function buildDashboardBlocks(_workspaceId: string): Promise<Record
           url: dashboardUrl,
           style: 'primary',
         },
-        {
-          type: 'button',
-          text: { type: 'plain_text', text: 'Create New Agent' },
-          action_id: 'dashboard_create_agent',
-        },
       ],
     },
     {

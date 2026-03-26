@@ -118,7 +118,6 @@ Hierarchical browsing: **Sources > Documents > Content**
 - **Real-time streaming** -- agent responses stream to Slack threads in real-time
 - **Custom avatars** -- each agent posts with its own name and emoji
 - **Slash commands** -- `/agents` opens dashboard, `/new-agent` creates agents from Slack
-- **Home Tab quick actions** -- create new agents directly from the Slack Home Tab
 
 ### Triggers & Automation
 
