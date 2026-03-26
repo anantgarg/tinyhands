@@ -736,8 +736,8 @@ describe('Commands Module', () => {
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
       const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
-      expect(allText).toContain('agents_new_agent');
-      expect(allText).toContain('New Agent');
+      expect(allText).toContain('Create New Agent');
+      expect(allText).toContain('/agents/new');
     });
 
     it('should include a Templates button in the dashboard', async () => {
@@ -997,68 +997,23 @@ describe('Commands Module', () => {
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   describe('/new-agent command handler', () => {
-    it('should ack and start the new agent flow', async () => {
+    it('should redirect to the web dashboard', async () => {
       const app = createMockApp();
       registerCommands(app as any);
 
       const ack = vi.fn();
+      const respond = vi.fn();
       const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
-      await app.handlers.command['/new-agent']({ command, ack });
+      await app.handlers.command['/new-agent']({ command, ack, respond });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockInitSuperadmin).toHaveBeenCalledWith('W_TEST_123', 'U123');
-      // Should post the intro blocks
-      expect(mockPostBlocks).toHaveBeenCalledWith(
-        'C_CHAN',
-        expect.arrayContaining([
-          expect.objectContaining({
-            type: 'section',
-            text: expect.objectContaining({
-              text: expect.stringContaining('build a new hand'),
-            }),
-          }),
-        ]),
-        'New agent',
-      );
-    });
-
-    it('should post follow-up message in thread and insert pending confirmation', async () => {
-      const app = createMockApp();
-      registerCommands(app as any);
-
-      mockPostBlocks.mockResolvedValue('thread-ts-abc');
-      const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
-
-      await app.handlers.command['/new-agent']({ command, ack });
-
-      expect(mockPostMessage).toHaveBeenCalledWith(
-        'C_CHAN',
-        expect.stringContaining('Step 1'),
-        'thread-ts-abc',
-      );
-      expect(mockExecute).toHaveBeenCalledWith(
-        expect.stringContaining('INSERT INTO pending_confirmations'),
-        expect.arrayContaining([
-          'test-uuid-1234',
-          expect.stringContaining('awaiting_goal'),
-        ]),
-      );
-    });
-
-    it('should skip thread message and DB insert when postBlocks returns null', async () => {
-      const app = createMockApp();
-      registerCommands(app as any);
-
-      mockPostBlocks.mockResolvedValue(null);
-      const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
-
-      await app.handlers.command['/new-agent']({ command, ack });
-
-      expect(mockPostMessage).not.toHaveBeenCalled();
-      expect(mockExecute).not.toHaveBeenCalled();
+      expect(respond).toHaveBeenCalledWith(expect.objectContaining({
+        response_type: 'ephemeral',
+        text: expect.stringContaining('/agents/new'),
+      }));
+      // Should NOT start the conversational flow
+      expect(mockPostBlocks).not.toHaveBeenCalled();
     });
   });
 
@@ -2322,17 +2277,16 @@ describe('Commands Module', () => {
       expect(allText).toContain('Are you sure');
     });
 
-    it('agents_new_agent button should start new agent flow', async () => {
+    it('agents_new_agent button should ack (no-op, creation is via web dashboard)', async () => {
       const app = createMockApp();
       await safeRegisterInlineActions(app);
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' }, channel: { id: 'C_CHAN' }, team: { id: 'W_TEST_123' } };
 
       if (app.handlers.action['agents_new_agent']) {
-        await app.handlers.action['agents_new_agent']({ ack, body });
+        await app.handlers.action['agents_new_agent']({ ack });
         expect(ack).toHaveBeenCalled();
-        expect(mockPostBlocks).toHaveBeenCalled();
+        expect(mockPostBlocks).not.toHaveBeenCalled();
       }
     });
 
@@ -6676,17 +6630,16 @@ describe('Commands Module', () => {
   // Additional coverage: replyToAction edge cases
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  describe('agents_new_agent - no channel', () => {
-    it('should no-op when channelId is missing', async () => {
+  describe('agents_new_agent - no-op handler', () => {
+    it('should just ack without starting any flow', async () => {
       const app = createMockApp();
       await safeRegisterInlineActions(app);
 
       if (!app.handlers.action['agents_new_agent']) return;
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } }; // no channel
 
-      await app.handlers.action['agents_new_agent']({ ack, body });
+      await app.handlers.action['agents_new_agent']({ ack });
 
       expect(ack).toHaveBeenCalled();
       expect(mockPostBlocks).not.toHaveBeenCalled();

@@ -247,14 +247,15 @@ export function registerCommands(app: App): void {
     }
 
     blocks.push({ type: 'divider' });
+    const agentsDashboardUrl = config.server.webDashboardUrl || config.oauth.redirectBaseUrl || `http://localhost:${config.server.port}`;
     blocks.push({
       type: 'actions',
       elements: [
         {
           type: 'button',
-          text: { type: 'plain_text', text: ':heavy_plus_sign: New Agent' },
+          text: { type: 'plain_text', text: 'Create New Agent' },
+          url: `${agentsDashboardUrl}/agents/new`,
           style: 'primary',
-          action_id: 'agents_new_agent',
         },
         {
           type: 'button',
@@ -267,13 +268,14 @@ export function registerCommands(app: App): void {
     await respond({ response_type: 'in_channel', blocks, text: 'Agents' });
   });
 
-  // /new-agent — Alias, starts new agent flow directly
+  // /new-agent — Redirect to web dashboard
   app.command('/new-agent', async ({ command, ack, respond }) => {
-    if (!(await requireDM(command, ack, respond))) return;
     await ack();
-    const workspaceId = command.team_id || getDefaultWorkspaceId();
-    await initSuperadmin(workspaceId, command.user_id);
-    await startNewAgentFlow(command.user_id, command.channel_id);
+    const dashboardUrl = config.server.webDashboardUrl || config.oauth.redirectBaseUrl || `http://localhost:${config.server.port}`;
+    await respond({
+      response_type: 'ephemeral',
+      text: `Create new agents from the web dashboard: ${dashboardUrl}/agents/new`,
+    });
   });
 
   // /update-agent — Alias, shows agent selector
@@ -1073,12 +1075,9 @@ export function registerInlineActions(app: App): void {
     }
   });
 
-  // "New Agent" button from /agents dashboard
-  app.action('agents_new_agent', async ({ ack, body }) => {
+  // "New Agent" button — kept for backwards compatibility, no-op (creation is via web dashboard)
+  app.action('agents_new_agent', async ({ ack }) => {
     await ack();
-    const channelId = body.channel?.id;
-    if (!channelId) return;
-    await startNewAgentFlow(body.user.id, channelId);
   });
 
   // "Templates" button from /agents dashboard
