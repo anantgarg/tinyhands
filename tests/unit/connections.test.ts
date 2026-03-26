@@ -275,8 +275,6 @@ describe('resolveToolCredentials', () => {
   it('should fallback to team connection when no agent tool connection exists', async () => {
     // getAgentToolConnection returns null
     mockQueryOne.mockResolvedValueOnce(undefined);
-    // sibling atc query returns empty
-    mockQuery.mockResolvedValueOnce([]);
     // getTeamConnection fallback
     mockQueryOne.mockResolvedValueOnce({
       credentials_encrypted: 'enc.tag',
@@ -289,28 +287,8 @@ describe('resolveToolCredentials', () => {
     expect(result).toEqual({ api_key: 'fallback-key' });
   });
 
-  it('should inherit sibling tool mode when no explicit connection exists for this tool', async () => {
-    // getAgentToolConnection for google-sheets-write returns null
-    mockQueryOne.mockResolvedValueOnce(undefined);
-    // sibling atc query finds google-sheets-read with delegated mode
-    mockQuery.mockResolvedValueOnce([
-      { tool_name: 'google-sheets-read', connection_mode: 'delegated', connection_id: null },
-    ]);
-    // getPersonalConnection for owner
-    mockQueryOne.mockResolvedValueOnce({
-      credentials_encrypted: 'enc.tag',
-      credentials_iv: 'iv123',
-    });
-    mockDecrypt.mockReturnValue('{"access_token":"owner-tok"}');
-
-    const result = await resolveToolCredentials(TEST_WORKSPACE_ID, 'agent-1', 'google-sheets-write');
-
-    expect(result).toEqual({ access_token: 'owner-tok' });
-  });
-
   it('should return null when no connection is found', async () => {
     mockQueryOne.mockResolvedValue(undefined);
-    mockQuery.mockResolvedValueOnce([]);
 
     const result = await resolveToolCredentials(TEST_WORKSPACE_ID, 'agent-1', 'chargebee-read');
 

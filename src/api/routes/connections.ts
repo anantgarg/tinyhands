@@ -220,6 +220,10 @@ router.get('/agent/:agentId', async (req: Request, res: Response) => {
 });
 
 // PUT /connections/agent/:agentId/:toolName — Set agent tool connection
+// When setting a mode for one tool, also sets it for all sibling tools from the
+// same integration (e.g. setting google-sheets-read to delegated also sets
+// google-sheets-write). This ensures the credential mode is consistent at the
+// integration level, matching the dashboard's per-integration dropdown.
 router.put('/agent/:agentId/:toolName', async (req: Request, res: Response) => {
   try {
     const { workspaceId, userId } = getSessionUser(req);
@@ -233,10 +237,27 @@ router.put('/agent/:agentId/:toolName', async (req: Request, res: Response) => {
     // Map frontend labels to backend connection modes
     const MODE_MAP: Record<string, string> = { team: 'team', personal: 'runtime', creator: 'delegated', runtime: 'runtime', delegated: 'delegated' };
     const resolvedMode = MODE_MAP[mode] || mode;
+
+    // Set for the requested tool
     const result = await setAgentToolConnection(
       workspaceId, agentId, toolName,
       resolvedMode, connectionId || null, userId,
     );
+
+    // Also set for all sibling tools from the same integration that the agent has
+    const { getIntegrationIdForTool } = await import('../../modules/connections');
+    const { getAgent } = await import('../../modules/agents');
+    const integrationId = getIntegrationIdForTool(toolName);
+    const agent = await getAgent(workspaceId, agentId);
+    if (agent) {
+      const siblingTools = (agent.tools || []).filter(
+        (t: string) => t !== toolName && getIntegrationIdForTool(t) === integrationId
+      );
+      for (const sibling of siblingTools) {
+        await setAgentToolConnection(workspaceId, agentId, sibling, resolvedMode, connectionId || null, userId);
+      }
+    }
+
     res.json(result);
   } catch (err: any) {
     logger.error('Set agent tool connection error', { error: err.message });

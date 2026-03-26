@@ -23,6 +23,12 @@ vi.mock('../../src/modules/connections', () => ({
   listAgentToolConnections: (...args: any[]) => mockListAgentToolConnections(...args),
   setAgentToolConnection: (...args: any[]) => mockSetAgentToolConnection(...args),
   getToolAgentUsage: (...args: any[]) => mockGetToolAgentUsage(...args),
+  getIntegrationIdForTool: (name: string) => name.split('-')[0],
+}));
+
+const mockGetAgent = vi.fn();
+vi.mock('../../src/modules/agents', () => ({
+  getAgent: (...args: any[]) => mockGetAgent(...args),
 }));
 
 // Triggers
@@ -396,17 +402,22 @@ describe('Connection Routes', () => {
   });
 
   describe('PUT /connections/agent/:agentId/:toolName', () => {
-    it('sets agent tool connection', async () => {
+    it('sets agent tool connection for all tools in integration', async () => {
       const result = { ok: true };
-      mockSetAgentToolConnection.mockResolvedValueOnce(result);
+      mockSetAgentToolConnection.mockResolvedValue(result);
+      // getAgent returns agent with both -read and -write tools
+      mockGetAgent.mockResolvedValueOnce({ tools: ['linear-read', 'linear-write'] });
 
-      const res = await makeRequest(app, 'PUT', '/connections/agent/a1/linear', {
+      const res = await makeRequest(app, 'PUT', '/connections/agent/a1/linear-read', {
         mode: 'team',
         connectionId: 'c1',
       });
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual(result);
+      // Should set for the requested tool AND the sibling
+      expect(mockSetAgentToolConnection).toHaveBeenCalledTimes(2);
+      expect(mockSetAgentToolConnection).toHaveBeenCalledWith('W123', 'a1', 'linear-read', 'team', 'c1', 'U123');
+      expect(mockSetAgentToolConnection).toHaveBeenCalledWith('W123', 'a1', 'linear-write', 'team', 'c1', 'U123');
     });
 
     it('returns 400 when mode is missing', async () => {

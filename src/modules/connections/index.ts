@@ -297,38 +297,8 @@ export async function resolveToolCredentials(
     }
   }
 
-  // If no explicit mode set for this tool, check if a sibling tool from the same
-  // integration has a mode configured (e.g. google-sheets-read is delegated, so
-  // google-sheets-write should also use delegated). This prevents the common case
-  // where only the -read tool gets a mode set but -write silently falls to team.
+  // If no explicit mode set, default to team connection
   if (!atc) {
-    const siblingAtcs = await query<AgentToolConnection>(
-      'SELECT * FROM agent_tool_connections WHERE workspace_id = $1 AND agent_id = $2',
-      [wsId, agentId]
-    );
-    const siblingMode = siblingAtcs.find(s => getIntegrationIdForTool(s.tool_name) === integrationId);
-    if (siblingMode) {
-      switch (siblingMode.connection_mode) {
-        case 'delegated': {
-          const { getAgentOwners } = await import('../access-control');
-          const owners = await getAgentOwners(wsId, agentId);
-          for (const owner of owners) {
-            const conn = await getPersonalConnection(wsId, integrationId, owner.user_id);
-            if (conn) return decryptCredentials(conn);
-          }
-          break;
-        }
-        case 'runtime': {
-          if (userId) {
-            const conn = await getPersonalConnection(wsId, integrationId, userId);
-            if (conn) return decryptCredentials(conn);
-          }
-          break;
-        }
-      }
-    }
-
-    // Final fallback: team connection
     const teamConn = await getTeamConnection(wsId, integrationId);
     if (teamConn) return decryptCredentials(teamConn);
   }
