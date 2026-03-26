@@ -278,447 +278,54 @@ export function registerCommands(app: App): void {
     });
   });
 
-  // /update-agent — Alias, shows agent selector
+  // /update-agent — Redirect to web dashboard
   app.command('/update-agent', async ({ command, ack, respond }) => {
-    if (!(await requireDM(command, ack, respond))) return;
     await ack();
-    const workspaceId = command.team_id || getDefaultWorkspaceId();
-    await startUpdateAgentFlow(workspaceId, command.user_id, command.channel_id);
+    const dashboardUrl = config.server.webDashboardUrl || config.oauth.redirectBaseUrl || `http://localhost:${config.server.port}`;
+    await respond({
+      response_type: 'ephemeral',
+      text: `Update agents from the web dashboard: ${dashboardUrl}/agents`,
+    });
   });
 
-  // /tools — Interactive tool management for all users
+  // /tools — Redirect to web dashboard
   app.command('/tools', async ({ command, ack, respond }) => {
-    if (!(await requireDM(command, ack, respond))) return;
     await ack();
-    const workspaceId = command.team_id || getDefaultWorkspaceId();
-    const userId = command.user_id;
-
-    const { isPlatformAdmin: checkAdmin } = await import('../modules/access-control');
-    const isAdmin = await checkAdmin(workspaceId, userId);
-
-    const { listCustomTools: listAll } = await import('../modules/tools');
-    const { listTeamConnections, listPersonalConnectionsForUser, getToolAgentUsage } = await import('../modules/connections');
-    const { getSupportedOAuthIntegrations } = await import('../modules/connections/oauth');
-
-    const tools = await listAll(workspaceId);
-    const registeredNames = new Set(tools.map(t => t.name));
-    const toolByName = new Map(tools.map(t => [t.name, t]));
-
-    const teamConns = await listTeamConnections(workspaceId);
-    const personalConns = await listPersonalConnectionsForUser(workspaceId, userId);
-    const agentUsage = await getToolAgentUsage(workspaceId);
-    const oauthIntegrations = getSupportedOAuthIntegrations();
-
-    const teamConnByIntegration = new Map(teamConns.map(c => [c.integration_id, c]));
-    const personalConnByIntegration = new Map(personalConns.map(c => [c.integration_id, c]));
-
-    // Group agent usage by integration
-    const usageByIntegration = new Map<string, Array<{ agent_name: string; access_level: string; connection_mode: string | null }>>();
-    for (const u of agentUsage) {
-      const intId = findIntegrationForTool(u.tool_name);
-      if (intId) {
-        if (!usageByIntegration.has(intId)) usageByIntegration.set(intId, []);
-        const existing = usageByIntegration.get(intId)!;
-        if (!existing.some(e => e.agent_name === u.agent_name)) {
-          existing.push({ agent_name: u.agent_name, access_level: u.access_level, connection_mode: u.connection_mode });
-        }
-      }
-    }
-
-    const blocks: any[] = [
-      { type: 'header', text: { type: 'plain_text', text: `:toolbox: Tools` } },
-    ];
-
-    // ── Section 1: Shared Tools (team connections) ──
-    const sharedIntegrations: typeof TOOL_INTEGRATIONS = [];
-    const myIntegrations: typeof TOOL_INTEGRATIONS = [];
-    const availableIntegrations: typeof TOOL_INTEGRATIONS = [];
-
-    for (const integration of TOOL_INTEGRATIONS) {
-      const hasTeamConn = teamConnByIntegration.has(integration.id);
-      const hasPersonalConn = personalConnByIntegration.has(integration.id);
-      const hasConfig = integration.tools.some(t => {
-        const tool = toolByName.get(t);
-        if (!tool) return false;
-        const cfg = JSON.parse(tool.config_json || '{}');
-        return Object.keys(cfg).length > 0;
-      });
-
-      if (hasTeamConn || hasConfig) {
-        sharedIntegrations.push(integration);
-      }
-      if (hasPersonalConn) {
-        myIntegrations.push(integration);
-      }
-      if (!hasTeamConn && !hasConfig && !hasPersonalConn) {
-        availableIntegrations.push(integration);
-      }
-    }
-
-    // Format agent usage line
-    const formatUsage = (intId: string): string => {
-      const usage = usageByIntegration.get(intId);
-      if (!usage || usage.length === 0) return '';
-      const items = usage.slice(0, 3).map(u => {
-        const level = u.access_level === 'read-write' ? 'view+action' : 'view only';
-        const mode = u.connection_mode ? ` (${u.connection_mode})` : '';
-        return `${u.agent_name} [${level}${mode}]`;
-      });
-      const more = usage.length > 3 ? ` +${usage.length - 3} more` : '';
-      return `\nUsed by: ${items.join(', ')}${more}`;
-    };
-
-    if (sharedIntegrations.length > 0) {
-      blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `:white_check_mark: *Shared Tools (${sharedIntegrations.length})*` } });
-
-      for (const integration of sharedIntegrations) {
-        const firstTool = integration.tools.find(t => registeredNames.has(t)) || integration.tools[0];
-        const usageLine = formatUsage(integration.id);
-
-        if (isAdmin) {
-          blocks.push({
-            type: 'section',
-            text: {
-              type: 'mrkdwn',
-              text: `:large_green_circle: ${integration.icon} *${integration.label}* — ${integration.description}${usageLine}`,
-            },
-            accessory: {
-              type: 'overflow',
-              action_id: 'tool_overflow',
-              options: [
-                { text: { type: 'plain_text', text: ':gear: Configure' }, value: `configure:${firstTool}` },
-                { text: { type: 'plain_text', text: ':link: Add to Agent' }, value: `add_to_agent:${firstTool}` },
-                { text: { type: 'plain_text', text: ':wastebasket: Remove' }, value: `delete:${firstTool}` },
-              ],
-            },
-          });
-        } else {
-          blocks.push({
-            type: 'section',
-            text: {
-              type: 'mrkdwn',
-              text: `:large_green_circle: ${integration.icon} *${integration.label}* — ${integration.description}${usageLine}`,
-            },
-          });
-        }
-      }
-      blocks.push({ type: 'divider' });
-    }
-
-    // ── Section 2: My Connections (personal) ──
-    if (myIntegrations.length > 0) {
-      blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `:bust_in_silhouette: *My Connections (${myIntegrations.length})*` } });
-
-      for (const integration of myIntegrations) {
-        const usageLine = formatUsage(integration.id);
-        blocks.push({
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `:large_blue_circle: ${integration.icon} *${integration.label}* — ${integration.description}${usageLine}`,
-          },
-        });
-      }
-      blocks.push({ type: 'divider' });
-    }
-
-    // ── Section 3: Available ──
-    if (availableIntegrations.length > 0) {
-      blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `:heavy_plus_sign: *Available*` } });
-
-      for (const integration of availableIntegrations) {
-        const manifest = getIntegration(integration.id);
-        const connModel = manifest?.connectionModel;
-        const isOAuth = oauthIntegrations.includes(integration.id);
-
-        if (isAdmin && connModel !== 'personal') {
-          // Admin can set up team-wide or hybrid integrations
-          blocks.push({
-            type: 'section',
-            text: {
-              type: 'mrkdwn',
-              text: `${integration.icon} *${integration.label}* — ${integration.description}`,
-            },
-            accessory: {
-              type: 'button',
-              text: { type: 'plain_text', text: ':heavy_plus_sign: Set Up for Workspace' },
-              action_id: 'register_tool_integration',
-              value: integration.id,
-            },
-          });
-        } else if (connModel === 'hybrid' || connModel === 'personal') {
-          // Users can connect their own credentials for hybrid/personal integrations
-          blocks.push({
-            type: 'section',
-            text: {
-              type: 'mrkdwn',
-              text: `${integration.icon} *${integration.label}* — ${integration.description}`,
-            },
-            accessory: {
-              type: 'button',
-              text: { type: 'plain_text', text: isOAuth ? ':link: Connect' : ':key: Connect with API Key' },
-              action_id: isOAuth ? 'connect_personal_oauth' : 'connect_personal_apikey',
-              value: integration.id,
-            },
-          });
-        } else {
-          blocks.push({
-            type: 'section',
-            text: {
-              type: 'mrkdwn',
-              text: `${integration.icon} *${integration.label}* — ${integration.description}\n_Ask a workspace admin to set up_`,
-            },
-          });
-        }
-      }
-    }
-
-    if (sharedIntegrations.length === 0 && myIntegrations.length === 0 && availableIntegrations.length === 0) {
-      blocks.push({ type: 'section', text: { type: 'mrkdwn', text: '_No tools available._' } });
-    }
-
-    await postBlocks(command.channel_id, blocks, 'Tools');
+    const dashboardUrl = config.server.webDashboardUrl || config.oauth.redirectBaseUrl || `http://localhost:${config.server.port}`;
+    await respond({
+      response_type: 'ephemeral',
+      text: `Manage tools from the web dashboard: ${dashboardUrl}/tools`,
+    });
   });
 
-  // /audit — View audit log (platform admin only)
+  // /audit — Redirect to web dashboard
   app.command('/audit', async ({ command, ack, respond }) => {
-    if (!(await requireDM(command, ack, respond))) return;
     await ack();
-    const workspaceId = command.team_id || getDefaultWorkspaceId();
-    const { isPlatformAdmin } = await import('../modules/access-control');
-    if (!(await isPlatformAdmin(workspaceId, command.user_id))) {
-      await respond({ response_type: 'ephemeral', text: ':lock: Only platform admins can view the audit log.' });
-      return;
-    }
-    const { getAuditLog } = await import('../modules/audit');
-    const entries = await getAuditLog(workspaceId, { limit: 20 });
-
-    const blocks: any[] = [
-      { type: 'header', text: { type: 'plain_text', text: ':clipboard: Audit Log (recent 20)' } },
-    ];
-
-    if (entries.length === 0) {
-      blocks.push({ type: 'section', text: { type: 'mrkdwn', text: '_No audit events yet._' } });
-    } else {
-      for (const entry of entries) {
-        const time = new Date(entry.timestamp).toLocaleString();
-        const agent = entry.agent_name ? ` on *${entry.agent_name}*` : '';
-        const target = entry.target_user_id ? ` → <@${entry.target_user_id}>` : '';
-        blocks.push({
-          type: 'context',
-          elements: [{
-            type: 'mrkdwn',
-            text: `\`${entry.action_type}\` by <@${entry.actor_user_id}>${agent}${target} — ${time} — ${entry.status}`,
-          }],
-        });
-      }
-    }
-
-    await respond({ response_type: 'ephemeral', blocks, text: 'Audit Log' });
+    const dashboardUrl = config.server.webDashboardUrl || config.oauth.redirectBaseUrl || `http://localhost:${config.server.port}`;
+    await respond({
+      response_type: 'ephemeral',
+      text: `View the audit log on the web dashboard: ${dashboardUrl}/audit`,
+    });
   });
 
-  // /kb — Interactive knowledge base management
+  // /kb — Redirect to web dashboard
   app.command('/kb', async ({ command, ack, respond }) => {
-    if (!(await requireDM(command, ack, respond))) return;
     await ack();
-    const workspaceId = command.team_id || getDefaultWorkspaceId();
-    const userId = command.user_id;
-    const subcommand = command.text.trim().split(/\s+/)[0]?.toLowerCase() || '';
-    const { isPlatformAdmin } = await import('../modules/access-control');
-    const isAdmin = await isPlatformAdmin(workspaceId, userId);
-
-    if (subcommand === 'search') {
-      const queryText = command.text.trim().slice('search'.length).trim();
-      if (!queryText) {
-        await respond({ text: 'Usage: `/kb search <query>`' });
-        return;
-      }
-      const { searchKB } = await import('../modules/knowledge-base');
-      const results = await searchKB(workspaceId, queryText);
-      if (results.length === 0) {
-        await respond({ text: ':mag: No KB entries found.' });
-        return;
-      }
-      const blocks: any[] = [
-        { type: 'header', text: { type: 'plain_text', text: `:mag: KB Results (${results.length})` } },
-      ];
-      for (const r of results.slice(0, 10)) {
-        blocks.push({
-          type: 'section',
-          text: { type: 'mrkdwn', text: `*${r.title}* (${r.category})\n${r.summary.slice(0, 200)}` },
-          ...(isAdmin ? {
-            accessory: {
-              type: 'overflow',
-              action_id: 'kb_entry_overflow',
-              options: [
-                { text: { type: 'plain_text', text: ':eyes: View' }, value: `view:${r.id}` },
-                { text: { type: 'plain_text', text: ':wastebasket: Delete' }, value: `delete:${r.id}` },
-              ],
-            },
-          } : {}),
-        });
-      }
-      await respond({ blocks, text: 'KB search results' });
-      return;
-    }
-
-    if (subcommand === 'add') {
-      await openModal(command.trigger_id, {
-        type: 'modal',
-        callback_id: 'kb_add_modal',
-        title: { type: 'plain_text', text: 'Add KB Entry' },
-        submit: { type: 'plain_text', text: 'Add' },
-        blocks: [
-          {
-            type: 'input', block_id: 'title_block',
-            label: { type: 'plain_text', text: 'Title' },
-            element: { type: 'plain_text_input', action_id: 'title_input', placeholder: { type: 'plain_text', text: 'e.g. Zendesk API Rate Limits' } },
-          },
-          {
-            type: 'input', block_id: 'category_block',
-            label: { type: 'plain_text', text: 'Category' },
-            element: {
-              type: 'static_select', action_id: 'category_input',
-              options: ['General', 'Engineering', 'Product', 'Support', 'Sales', 'HR', 'Legal', 'Finance', 'Operations'].map(c => ({
-                text: { type: 'plain_text' as const, text: c }, value: c.toLowerCase(),
-              })),
-            },
-          },
-          {
-            type: 'input', block_id: 'content_block',
-            label: { type: 'plain_text', text: 'Content' },
-            element: { type: 'plain_text_input', action_id: 'content_input', multiline: true, placeholder: { type: 'plain_text', text: 'Paste the knowledge content here...' } },
-          },
-          {
-            type: 'input', block_id: 'tags_block', optional: true,
-            label: { type: 'plain_text', text: 'Tags (comma-separated)' },
-            element: { type: 'plain_text_input', action_id: 'tags_input', placeholder: { type: 'plain_text', text: 'e.g. zendesk, api, limits' } },
-          },
-        ],
-      });
-      return;
-    }
-
-    // Default: show KB dashboard (admin gets full view with sources)
-    if (!isAdmin) {
-      await respond({ text: 'Usage: `/kb search <query>` or `/kb add`' });
-      return;
-    }
-
-    const { listKBEntries, listPendingEntries, getCategories } = await import('../modules/knowledge-base');
-    const { listSources } = await import('../modules/kb-sources');
-    const [entries, pending, categories, sources] = await Promise.all([
-      listKBEntries(workspaceId, 10), listPendingEntries(workspaceId), getCategories(workspaceId), listSources(workspaceId),
-    ]);
-
-    const blocks: any[] = [
-      { type: 'header', text: { type: 'plain_text', text: ':books: Knowledge Base' } },
-      {
-        type: 'section',
-        text: {
-          type: 'mrkdwn',
-          text: `*${entries.length}+ entries* | *${pending.length} pending* | *${categories.length} categories* | *${sources.length} sources*`,
-        },
-      },
-    ];
-
-    // ── Sources Section ──
-    blocks.push({ type: 'divider' });
-    blocks.push({ type: 'section', text: { type: 'mrkdwn', text: ':link: *Connected Sources*' } });
-
-    if (sources.length === 0) {
-      blocks.push({ type: 'section', text: { type: 'mrkdwn', text: '_No sources connected yet. Add one below._' } });
-    } else {
-      for (const s of sources) {
-        const statusIcon = s.status === 'active' ? ':large_green_circle:' :
-          s.status === 'syncing' ? ':arrows_counterclockwise:' :
-          s.status === 'needs_setup' ? ':warning:' : ':red_circle:';
-        const syncNote = s.auto_sync ? 'auto-sync on' : 'auto-sync off';
-        const lastSync = s.last_sync_at ? `last sync ${timeAgo(s.last_sync_at)}` : 'never synced';
-
-        const overflowOpts: any[] = [
-          { text: { type: 'plain_text', text: ':gear: Configure' }, value: `configure:${s.id}` },
-          { text: { type: 'plain_text', text: ':arrows_counterclockwise: Sync Now' }, value: `sync:${s.id}` },
-          { text: { type: 'plain_text', text: ':put_litter_in_its_place: Flush & Re-sync' }, value: `flush:${s.id}` },
-          { text: { type: 'plain_text', text: s.auto_sync ? ':no_bell: Disable Auto-sync' : ':bell: Enable Auto-sync' }, value: `toggle_sync:${s.id}` },
-          { text: { type: 'plain_text', text: ':wastebasket: Remove' }, value: `remove:${s.id}` },
-        ];
-
-        blocks.push({
-          type: 'section',
-          text: {
-            type: 'mrkdwn',
-            text: `${statusIcon} *${s.name}* (\`${s.source_type}\`)\n${s.entry_count} entries · ${syncNote} · ${lastSync}${s.error_message ? `\n:x: ${s.error_message.slice(0, 100)}` : ''}`,
-          },
-          accessory: {
-            type: 'overflow',
-            action_id: 'kb_source_overflow',
-            options: overflowOpts,
-          },
-        });
-      }
-    }
-
-    blocks.push({
-      type: 'actions',
-      elements: [
-        {
-          type: 'button',
-          text: { type: 'plain_text', text: ':heavy_plus_sign: Add Source' },
-          action_id: 'kb_add_source',
-        },
-        {
-          type: 'button',
-          text: { type: 'plain_text', text: ':key: API Keys' },
-          action_id: 'kb_manage_api_keys',
-        },
-      ],
+    const dashboardUrl = config.server.webDashboardUrl || config.oauth.redirectBaseUrl || `http://localhost:${config.server.port}`;
+    await respond({
+      response_type: 'ephemeral',
+      text: `Manage the knowledge base from the web dashboard: ${dashboardUrl}/kb`,
     });
-
-    // ── Pending Section ──
-    if (pending.length > 0) {
-      blocks.push({ type: 'divider' });
-      blocks.push({ type: 'section', text: { type: 'mrkdwn', text: `:hourglass: *Pending Approval (${pending.length})*` } });
-
-      for (const p of pending.slice(0, 5)) {
-        blocks.push({
-          type: 'section',
-          text: { type: 'mrkdwn', text: `*${p.title}* (${p.category})\n${p.summary.slice(0, 150)}${p.contributed_by ? ` — by ${p.contributed_by.slice(0, 8)}` : ''}` },
-          accessory: {
-            type: 'overflow',
-            action_id: 'kb_entry_overflow',
-            options: [
-              { text: { type: 'plain_text', text: ':white_check_mark: Approve' }, value: `approve:${p.id}` },
-              { text: { type: 'plain_text', text: ':eyes: View' }, value: `view:${p.id}` },
-              { text: { type: 'plain_text', text: ':wastebasket: Delete' }, value: `delete:${p.id}` },
-            ],
-          },
-        });
-      }
-    }
-
-    blocks.push({ type: 'divider' });
-    blocks.push({
-      type: 'actions',
-      elements: [
-        {
-          type: 'button',
-          text: { type: 'plain_text', text: ':heavy_plus_sign: Add Entry' },
-          action_id: 'kb_add_entry_btn',
-        },
-      ],
-    });
-
-    await respond({ blocks, text: 'Knowledge Base' });
   });
 
-  // /templates — Browse and activate agent templates
+  // /templates — Redirect to web dashboard
   app.command('/templates', async ({ command, ack, respond }) => {
-    if (!(await requireDM(command, ack, respond))) return;
     await ack();
-
-    const templateBlocks = buildTemplateListingBlocks();
-    await respond({ response_type: 'in_channel', blocks: templateBlocks, text: 'Agent Templates' });
+    const dashboardUrl = config.server.webDashboardUrl || config.oauth.redirectBaseUrl || `http://localhost:${config.server.port}`;
+    await respond({
+      response_type: 'ephemeral',
+      text: `Browse agent templates on the web dashboard: ${dashboardUrl}/agents/templates`,
+    });
   });
 }
 
