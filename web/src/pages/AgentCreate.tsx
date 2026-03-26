@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Sparkles, Loader2 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -12,7 +12,6 @@ import { Switch } from '@/components/ui/switch';
 import { useCreateAgent, useAnalyzeGoal } from '@/api/agents';
 import { useAvailableTools } from '@/api/tools';
 import { toast } from '@/components/ui/use-toast';
-import { useAuthStore } from '@/store/auth';
 import { cn } from '@/lib/utils';
 
 const BUILTIN_FRIENDLY_NAMES: Record<string, string> = {
@@ -53,14 +52,9 @@ const steps = ['Describe', 'Identity', 'Settings', 'Tools'];
 
 export function AgentCreate() {
   const navigate = useNavigate();
-  const isAdmin = useAuthStore((s) => s.user?.platformRole === 'superadmin' || s.user?.platformRole === 'admin');
   const createAgent = useCreateAgent();
   const analyzeGoal = useAnalyzeGoal();
   const { data: availableTools } = useAvailableTools();
-
-  useEffect(() => {
-    if (!isAdmin) navigate('/agents', { replace: true });
-  }, [isAdmin, navigate]);
 
   const [step, setStep] = useState(1);
   const [, setAnalyzed] = useState(false);
