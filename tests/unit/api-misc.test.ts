@@ -1124,24 +1124,31 @@ describe('Slack Helper Routes', () => {
     it('lists Slack users (filters bots and deleted)', async () => {
       const mockClient = {
         users: {
-          list: vi.fn().mockResolvedValueOnce({
-            members: [
-              {
-                id: 'U1',
-                name: 'alice',
-                real_name: 'Alice',
-                is_bot: false,
-                deleted: false,
-                is_admin: true,
-                is_owner: false,
-                profile: { display_name: 'Alice D', image_72: 'https://img.com/a.png', real_name: 'Alice R' },
-              },
-              { id: 'U2', name: 'bot', is_bot: true, deleted: false, profile: {} },
-              { id: 'U3', name: 'gone', is_bot: false, deleted: true, profile: {} },
-              { id: 'USLACKBOT', name: 'slackbot', is_bot: false, deleted: false, profile: {} },
-            ],
-            response_metadata: { next_cursor: 'abc' },
-          }),
+          list: vi.fn()
+            .mockResolvedValueOnce({
+              members: [
+                {
+                  id: 'U1',
+                  name: 'alice',
+                  real_name: 'Alice',
+                  is_bot: false,
+                  deleted: false,
+                  is_admin: true,
+                  is_owner: false,
+                  profile: { display_name: 'Alice D', image_72: 'https://img.com/a.png', real_name: 'Alice R' },
+                },
+                { id: 'U2', name: 'bot', is_bot: true, deleted: false, profile: {} },
+                { id: 'U3', name: 'gone', is_bot: false, deleted: true, profile: {} },
+                { id: 'USLACKBOT', name: 'slackbot', is_bot: false, deleted: false, profile: {} },
+              ],
+              response_metadata: { next_cursor: 'abc' },
+            })
+            .mockResolvedValueOnce({
+              members: [
+                { id: 'U4', name: 'bob', real_name: 'Bob', is_bot: false, deleted: false, is_admin: false, is_owner: false, profile: { display_name: 'Bob B', image_72: '' } },
+              ],
+              response_metadata: { next_cursor: '' },
+            }),
         },
       };
       mockGetSlackApp.mockReturnValueOnce({ client: mockClient });
@@ -1149,7 +1156,7 @@ describe('Slack Helper Routes', () => {
       const res = await makeRequest(app, 'GET', '/slack/users');
 
       expect(res.status).toBe(200);
-      expect(res.body.users).toHaveLength(1);
+      expect(res.body.users).toHaveLength(2); // Alice from page 1 + Bob from page 2
       expect(res.body.users[0]).toEqual({
         id: 'U1',
         name: 'alice',
@@ -1159,7 +1166,7 @@ describe('Slack Helper Routes', () => {
         isAdmin: true,
         isOwner: false,
       });
-      expect(res.body.nextCursor).toBe('abc');
+      expect(res.body.nextCursor).toBeNull();
     });
 
     it('returns 500 on error', async () => {

@@ -606,54 +606,16 @@ async function enqueueAgentRun(
   msg: any,
   isThreadReply: boolean,
 ): Promise<void> {
-  // ── Viewer write interception ──
+  // ── Viewer access: run the agent in read-only mode (no write tools) ──
+  let isViewerRun = false;
   try {
-    const { getAgentRole, requestUpgrade, getAgentOwners, getPendingUpgradeRequest } = await import('../modules/access-control');
-    const { sendDMBlocks } = await import('./index');
+    const { getAgentRole } = await import('../modules/access-control');
     const userRole = await getAgentRole(workspaceId, agent.id, userId);
     if (userRole === 'viewer') {
-      if (agent.write_policy === 'deny') {
-        await postMessage(channelId, 'Write operations are disabled for this agent.', threadTs);
-        return;
-      }
-      // auto policy — request upgrade
-      const pending = await getPendingUpgradeRequest(workspaceId, agent.id, userId);
-      if (!pending) {
-        const reqId = await requestUpgrade(workspaceId, agent.id, userId);
-        const owners = await getAgentOwners(workspaceId, agent.id);
-        for (const owner of owners) {
-          await sendDMBlocks(owner.user_id, [{
-            type: 'section',
-            text: {
-              type: 'mrkdwn',
-              text: `:raising_hand: <@${userId}> is requesting *member* access to *${agent.name}*.`,
-            },
-          }, {
-            type: 'actions',
-            elements: [
-              {
-                type: 'button',
-                text: { type: 'plain_text', text: 'Approve' },
-                style: 'primary',
-                action_id: 'approve_upgrade',
-                value: reqId,
-              },
-              {
-                type: 'button',
-                text: { type: 'plain_text', text: 'Deny' },
-                style: 'danger',
-                action_id: 'deny_upgrade',
-                value: reqId,
-              },
-            ],
-          }], 'Upgrade request');
-        }
-      }
-      await postMessage(channelId, "I'd need member access to help with changes. A request has been sent to the agent owners.", threadTs);
-      return;
+      isViewerRun = true;
     }
   } catch (err: any) {
-    logger.warn('Viewer write interception failed, proceeding', { error: err.message });
+    logger.warn('Viewer check failed, proceeding with full access', { error: err.message });
   }
 
   const traceId = uuid();
@@ -676,6 +638,7 @@ async function enqueueAgentRun(
     userId,
     traceId,
     modelOverride: modelOverride || undefined,
+    readOnly: isViewerRun || undefined,
   };
 
   // Post temporary status message with agent identity

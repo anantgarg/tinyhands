@@ -37,20 +37,22 @@ router.get('/channels', async (req, res: Response) => {
   }
 });
 
-// GET /slack/users — List Slack users
+// GET /slack/users — List all Slack users (auto-paginates)
 router.get('/users', async (req, res: Response) => {
   try {
     const client = getSlackApp().client;
-    const limit = parseInt(req.query.limit as string) || 200;
-    const cursor = req.query.cursor as string | undefined;
+    const allMembers: any[] = [];
+    let cursor: string | undefined;
 
-    const result = await client.users.list({
-      limit,
-      cursor,
-    });
+    // Paginate through all users — Slack returns as few as 13 per page
+    do {
+      const result = await client.users.list({ limit: 200, cursor });
+      allMembers.push(...(result.members || []));
+      cursor = result.response_metadata?.next_cursor || undefined;
+    } while (cursor);
 
     res.json({
-      users: (result.members || [])
+      users: allMembers
         .filter(m => !m.is_bot && !m.deleted && m.id !== 'USLACKBOT')
         .map(m => ({
           id: m.id,
@@ -61,7 +63,7 @@ router.get('/users', async (req, res: Response) => {
           isAdmin: m.is_admin,
           isOwner: m.is_owner,
         })),
-      nextCursor: result.response_metadata?.next_cursor || null,
+      nextCursor: null,
     });
   } catch (err: any) {
     logger.error('List Slack users error', { error: err.message });

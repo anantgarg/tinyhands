@@ -235,10 +235,16 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
       permission_level: s.permission_level,
     })));
     let customTools = await listCustomTools(workspaceId);
-    let agentCustomTools = customTools.filter(t => agent.tools.includes(t.name));
+    // For viewer (read-only) runs, strip write tools so the agent can only read data
+    let agentTools: string[] = agent.tools;
+    if (data.readOnly) {
+      agentTools = agentTools.filter((t: string) => !t.endsWith('-write'));
+      logger.info('Read-only run: stripped write tools', { agentId: agent.id, userId: data.userId });
+    }
+    let agentCustomTools = customTools.filter(t => agentTools.includes(t.name));
 
     // Auto-recovery: if agent references tools not in custom_tools, try registering from integration manifests
-    const missingTools = (agent.tools as string[]).filter(name => !customTools.find(t => t.name === name));
+    const missingTools = agentTools.filter((name: string) => !customTools.find(t => t.name === name));
     if (missingTools.length > 0) {
       try {
         const { getIntegrations, getIntegration: getInteg } = await import('../tools/integrations');
@@ -252,7 +258,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
         }
         // Re-fetch after registration
         customTools = await listCustomTools(workspaceId);
-        agentCustomTools = customTools.filter(t => agent.tools.includes(t.name));
+        agentCustomTools = customTools.filter(t => agentTools.includes(t.name));
       } catch (autoRegErr: any) {
         logger.warn('Auto-registration of missing tools failed', { error: autoRegErr.message, missingTools });
       }

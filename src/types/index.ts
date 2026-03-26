@@ -116,6 +116,8 @@ export interface JobData {
   workflowRunId?: string;
   workflowStepIndex?: number;
   statusMessageTs?: string;
+  /** When true, strip write tools from the agent — used for viewer-level access */
+  readOnly?: boolean;
 }
 
 // ── Source Connection Types ──

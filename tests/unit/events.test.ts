@@ -4095,15 +4095,15 @@ describe('Slack Events -- registerEvents', () => {
   // ── Viewer Write Interception ──
 
   describe('Viewer write interception', () => {
-    it('should block viewer with write_policy=deny', async () => {
+    it('should allow viewer to run agent in read-only mode', async () => {
       mockGetAgentRole.mockResolvedValue('viewer');
       mockGetAgentsByChannel.mockResolvedValue([
-        makeAgent({ id: 'a1', name: 'Agent1', write_policy: 'deny', mentions_only: false, respond_to_all_messages: true }),
+        makeAgent({ id: 'a1', name: 'Agent1', mentions_only: false, respond_to_all_messages: true }),
       ]);
       mockCanAccessAgent.mockResolvedValue(true);
       mockParseModelOverride.mockReturnValue(null);
       mockCheckMessageRelevance.mockResolvedValue(true);
-      mockPostMessage.mockResolvedValue(undefined);
+      mockPostBlocks.mockResolvedValue('status-ts');
 
       registerEvents(mockApp as any);
       await mockApp._trigger('message', {
@@ -4111,42 +4111,11 @@ describe('Slack Events -- registerEvents', () => {
         context: { teamId: 'W_TEST_123' },
       });
 
-      expect(mockPostMessage).toHaveBeenCalledWith(
-        'C123',
-        'Write operations are disabled for this agent.',
+      // Viewer runs should be enqueued with readOnly flag
+      expect(mockEnqueueRun).toHaveBeenCalledWith(
+        expect.objectContaining({ readOnly: true }),
         expect.any(String)
       );
-      expect(mockEnqueueRun).not.toHaveBeenCalled();
-    });
-
-    it('should trigger upgrade request for viewer with auto policy', async () => {
-      mockGetAgentRole.mockResolvedValue('viewer');
-      mockGetPendingUpgradeRequest.mockResolvedValue(null);
-      mockRequestUpgrade.mockResolvedValue('req-id-new');
-      mockGetAgentOwners.mockResolvedValue([{ user_id: 'U_OWNER' }]);
-      mockGetAgentsByChannel.mockResolvedValue([
-        makeAgent({ id: 'a1', name: 'Agent1', mentions_only: false, respond_to_all_messages: true }),
-      ]);
-      mockCanAccessAgent.mockResolvedValue(true);
-      mockParseModelOverride.mockReturnValue(null);
-      mockCheckMessageRelevance.mockResolvedValue(true);
-      mockPostMessage.mockResolvedValue(undefined);
-      mockSendDMBlocks.mockResolvedValue(undefined);
-
-      registerEvents(mockApp as any);
-      await mockApp._trigger('message', {
-        event: { channel: 'C123', user: 'U_VIEWER', text: '<@U_BOT> help me', ts: '1.1', channel_type: 'channel' },
-        context: { teamId: 'W_TEST_123' },
-      });
-
-      expect(mockRequestUpgrade).toHaveBeenCalled();
-      expect(mockSendDMBlocks).toHaveBeenCalledWith('U_OWNER', expect.any(Array), 'Upgrade request');
-      expect(mockPostMessage).toHaveBeenCalledWith(
-        'C123',
-        expect.stringContaining('member access'),
-        expect.any(String)
-      );
-      expect(mockEnqueueRun).not.toHaveBeenCalled();
     });
 
     it('should bypass viewer check for member role', async () => {
