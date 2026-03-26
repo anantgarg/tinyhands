@@ -56,12 +56,13 @@ export async function handleDeploy(payload: any): Promise<DeployResult> {
     execSync('git pull origin main', { cwd: process.cwd(), timeout: 30000 });
 
     // 2. npm install if package.json changed or pull-based (no changedFiles info)
-    // --include=dev is required because NODE_ENV=production (from .env) causes npm
-    // to skip devDependencies, but tsc needs @types/* packages to compile
+    // Build steps need devDependencies (tsc, @types/*, vite, etc.) so we run
+    // install/build with NODE_ENV=development. PM2 sets NODE_ENV=production at runtime.
     const isPullBased = changedFiles.length === 0;
+    const buildEnv = { ...process.env, NODE_ENV: 'development' };
     if (packageJsonChanged || isPullBased) {
       logger.info('Deploy: installing dependencies');
-      execSync('npm install --include=dev', { cwd: process.cwd(), timeout: 120000 });
+      execSync('npm install', { cwd: process.cwd(), timeout: 120000, env: buildEnv });
     }
 
     // 2.1. Install web dependencies if web files changed (not just package.json — new components may need existing deps)
@@ -70,7 +71,7 @@ export async function handleDeploy(payload: any): Promise<DeployResult> {
     if (webPackageChanged || webFilesChanged || isPullBased) {
       logger.info('Deploy: installing web dependencies');
       try {
-        execSync('cd web && npm install --include=dev', { cwd: process.cwd(), timeout: 120000 });
+        execSync('cd web && npm install', { cwd: process.cwd(), timeout: 120000, env: buildEnv });
       } catch (webErr: any) {
         logger.warn('Web dependency install failed', { error: webErr.message });
       }
@@ -87,14 +88,14 @@ export async function handleDeploy(payload: any): Promise<DeployResult> {
 
     // 4. Build TypeScript
     logger.info('Deploy: building TypeScript');
-    execSync('npm run build', { cwd: process.cwd(), timeout: 60000 });
+    execSync('npm run build', { cwd: process.cwd(), timeout: 60000, env: buildEnv });
 
     // 4.1. Build web frontend if web/ files changed
     const webChanged = changedFiles.some((f: string) => f.startsWith('web/')) || isPullBased;
     if (webChanged) {
       logger.info('Deploy: building web frontend');
       try {
-        execSync('npm run build:web', { cwd: process.cwd(), timeout: 120000 });
+        execSync('npm run build:web', { cwd: process.cwd(), timeout: 120000, env: buildEnv });
       } catch (webErr: any) {
         logger.warn('Web frontend build failed, continuing deploy', { error: webErr.message });
       }

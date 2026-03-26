@@ -181,7 +181,7 @@ describe('Auto-Update Module', () => {
       expect(result.packageJsonChanged).toBe(true);
 
       const calls = mockExecSync.mock.calls.map((c: any[]) => c[0]);
-      expect(calls).toContainEqual('npm install --include=dev');
+      expect(calls).toContainEqual('npm install');
     });
 
     it('should run npm install when package-lock.json changes', async () => {
@@ -760,7 +760,7 @@ describe('Auto-Update Module', () => {
       expect(result.success).toBe(true);
       // Should install deps because isPullBased is true
       const calls = mockExecSync.mock.calls.map((c: any[]) => c[0]);
-      expect(calls).toContainEqual('npm install --include=dev');
+      expect(calls).toContainEqual('npm install');
     });
   });
 });
