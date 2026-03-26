@@ -275,6 +275,22 @@ router.post('/:id/tools', async (req: Request, res: Response) => {
       return;
     }
     const tools = await addToolToAgent(workspaceId, id, toolName, userId);
+
+    // If a sibling tool from the same integration already has a credential mode,
+    // inherit it for the newly added tool. This ensures that adding -write after
+    // -read was already set to delegated doesn't leave -write without a mode.
+    try {
+      const { getIntegrationIdForTool, listAgentToolConnections, setAgentToolConnection } = await import('../../modules/connections');
+      const integrationId = getIntegrationIdForTool(toolName);
+      const existingAtcs = await listAgentToolConnections(workspaceId, id);
+      const siblingAtc = existingAtcs.find(
+        (atc: any) => atc.tool_name !== toolName && getIntegrationIdForTool(atc.tool_name) === integrationId
+      );
+      if (siblingAtc) {
+        await setAgentToolConnection(workspaceId, id, toolName, siblingAtc.connection_mode, siblingAtc.connection_id, userId);
+      }
+    } catch { /* best-effort */ }
+
     res.json({ tools });
   } catch (err: any) {
     logger.error('Add tool to agent error', { error: err.message });
