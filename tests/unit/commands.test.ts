@@ -736,8 +736,8 @@ describe('Commands Module', () => {
       await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
 
       const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
-      expect(allText).toContain('agents_new_agent');
-      expect(allText).toContain('New Agent');
+      expect(allText).toContain('Create New Agent');
+      expect(allText).toContain('/agents/new');
     });
 
     it('should include a Templates button in the dashboard', async () => {
@@ -997,68 +997,23 @@ describe('Commands Module', () => {
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   describe('/new-agent command handler', () => {
-    it('should ack and start the new agent flow', async () => {
+    it('should redirect to the web dashboard', async () => {
       const app = createMockApp();
       registerCommands(app as any);
 
       const ack = vi.fn();
+      const respond = vi.fn();
       const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
-      await app.handlers.command['/new-agent']({ command, ack });
+      await app.handlers.command['/new-agent']({ command, ack, respond });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockInitSuperadmin).toHaveBeenCalledWith('W_TEST_123', 'U123');
-      // Should post the intro blocks
-      expect(mockPostBlocks).toHaveBeenCalledWith(
-        'C_CHAN',
-        expect.arrayContaining([
-          expect.objectContaining({
-            type: 'section',
-            text: expect.objectContaining({
-              text: expect.stringContaining('build a new hand'),
-            }),
-          }),
-        ]),
-        'New agent',
-      );
-    });
-
-    it('should post follow-up message in thread and insert pending confirmation', async () => {
-      const app = createMockApp();
-      registerCommands(app as any);
-
-      mockPostBlocks.mockResolvedValue('thread-ts-abc');
-      const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
-
-      await app.handlers.command['/new-agent']({ command, ack });
-
-      expect(mockPostMessage).toHaveBeenCalledWith(
-        'C_CHAN',
-        expect.stringContaining('Step 1'),
-        'thread-ts-abc',
-      );
-      expect(mockExecute).toHaveBeenCalledWith(
-        expect.stringContaining('INSERT INTO pending_confirmations'),
-        expect.arrayContaining([
-          'test-uuid-1234',
-          expect.stringContaining('awaiting_goal'),
-        ]),
-      );
-    });
-
-    it('should skip thread message and DB insert when postBlocks returns null', async () => {
-      const app = createMockApp();
-      registerCommands(app as any);
-
-      mockPostBlocks.mockResolvedValue(null);
-      const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
-
-      await app.handlers.command['/new-agent']({ command, ack });
-
-      expect(mockPostMessage).not.toHaveBeenCalled();
-      expect(mockExecute).not.toHaveBeenCalled();
+      expect(respond).toHaveBeenCalledWith(expect.objectContaining({
+        response_type: 'ephemeral',
+        text: expect.stringContaining('/agents/new'),
+      }));
+      // Should NOT start the conversational flow
+      expect(mockPostBlocks).not.toHaveBeenCalled();
     });
   });
 
@@ -1067,66 +1022,21 @@ describe('Commands Module', () => {
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   describe('/update-agent command handler', () => {
-    it('should show message when no agents exist', async () => {
+    it('should redirect to the web dashboard', async () => {
       const app = createMockApp();
       registerCommands(app as any);
 
-      mockListAgents.mockResolvedValue([]);
       const ack = vi.fn();
+      const respond = vi.fn();
       const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
-      await app.handlers.command['/update-agent']({ command, ack });
+      await app.handlers.command['/update-agent']({ command, ack, respond });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockPostMessage).toHaveBeenCalledWith('C_CHAN', expect.stringContaining('No agents'));
-    });
-
-    it('should show message when user has no permission on any agents', async () => {
-      const app = createMockApp();
-      registerCommands(app as any);
-
-      mockListAgents.mockResolvedValue([makeFakeAgent()]);
-      mockCanModifyAgent.mockResolvedValue(false);
-      const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
-
-      await app.handlers.command['/update-agent']({ command, ack });
-
-      expect(mockPostMessage).toHaveBeenCalledWith('C_CHAN', expect.stringContaining('permission'));
-    });
-
-    it('should show agent selector when user has editable agents', async () => {
-      const app = createMockApp();
-      registerCommands(app as any);
-
-      mockListAgents.mockResolvedValue([makeFakeAgent()]);
-      mockCanModifyAgent.mockResolvedValue(true);
-      mockPostBlocks.mockResolvedValue('update-ts');
-      const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
-
-      await app.handlers.command['/update-agent']({ command, ack });
-
-      expect(ack).toHaveBeenCalled();
-      expect(mockPostBlocks).toHaveBeenCalledWith(
-        'C_CHAN',
-        expect.arrayContaining([
-          expect.objectContaining({
-            type: 'section',
-            text: expect.objectContaining({
-              text: expect.stringContaining('Which agent'),
-            }),
-          }),
-        ]),
-        expect.any(String),
-      );
-      expect(mockExecute).toHaveBeenCalledWith(
-        expect.stringContaining('INSERT INTO pending_confirmations'),
-        expect.arrayContaining([
-          'test-uuid-1234',
-          expect.stringContaining('awaiting_agent_select'),
-        ]),
-      );
+      expect(respond).toHaveBeenCalledWith(expect.objectContaining({
+        response_type: 'ephemeral',
+        text: expect.stringContaining('/agents'),
+      }));
     });
   });
 
@@ -1135,108 +1045,23 @@ describe('Commands Module', () => {
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   describe('/tools command handler', () => {
-    it('should block non-admins', async () => {
+    it('should redirect to the web dashboard', async () => {
       const app = createMockApp();
       registerCommands(app as any);
 
-      mockIsPlatformAdmin.mockResolvedValue(false);
       const ack = vi.fn();
+      const respond = vi.fn();
       const command = { user_id: 'U_REGULAR', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
-      await app.handlers.command['/tools']({ command, ack, respond: mockRespond });
+      await app.handlers.command['/tools']({ command, ack, respond });
 
       expect(ack).toHaveBeenCalled();
-      // Non-admins can now access /tools — they see available tools without admin buttons
-      expect(mockPostBlocks).toHaveBeenCalled();
+      expect(respond).toHaveBeenCalledWith(expect.objectContaining({
+        response_type: 'ephemeral',
+        text: expect.stringContaining('/tools'),
+      }));
     });
 
-    it('should show empty state when no tools or integrations exist', async () => {
-      const app = createMockApp();
-      registerCommands(app as any);
-
-      mockIsPlatformAdmin.mockResolvedValue(true);
-      mockListCustomTools.mockResolvedValue([]);
-      const ack = vi.fn();
-      const command = { user_id: 'U_ADMIN', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
-
-      await app.handlers.command['/tools']({ command, ack, respond: mockRespond });
-
-      expect(ack).toHaveBeenCalled();
-      // Now posts via postBlocks instead of ephemeral respond
-      expect(mockPostBlocks).toHaveBeenCalledWith('C_CHAN', expect.any(Array), 'Tools');
-    });
-
-    it('should list registered tools with overflow menus', async () => {
-      const app = createMockApp();
-      registerCommands(app as any);
-
-      mockIsPlatformAdmin.mockResolvedValue(true);
-      mockListCustomTools.mockResolvedValue([
-        {
-          name: 'test-tool-read',
-          access_level: 'read-only',
-          language: 'docker',
-          config_json: JSON.stringify({ api_key: 'sk-123' }),
-          schema_json: JSON.stringify({ description: 'Read test data' }),
-          approved: true,
-        },
-      ]);
-      const ack = vi.fn();
-      const command = { user_id: 'U_ADMIN', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
-
-      await app.handlers.command['/tools']({ command, ack, respond: mockRespond });
-
-      // Now uses postBlocks and groups by integration
-      const allText = JSON.stringify(mockPostBlocks.mock.calls[0]);
-      expect(allText).toContain('Test Integration');
-      expect(allText).toContain('tool_overflow');
-      expect(allText).toContain('large_green_circle');
-      expect(allText).toContain('configure:test-tool-read');
-    });
-
-    it('should show unconfigured tools in Available section', async () => {
-      const app = createMockApp();
-      registerCommands(app as any);
-
-      mockIsPlatformAdmin.mockResolvedValue(true);
-      // Registered tool with no config and no team connection shows as available
-      mockListCustomTools.mockResolvedValue([
-        {
-          name: 'test-tool-read',
-          access_level: 'read-write',
-          language: 'python',
-          config_json: '{}',
-          schema_json: '{}',
-          approved: false,
-        },
-      ]);
-      const ack = vi.fn();
-      const command = { user_id: 'U_ADMIN', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
-
-      await app.handlers.command['/tools']({ command, ack, respond: mockRespond });
-
-      // Unconfigured tools show in Available section with Set Up button
-      const allText = JSON.stringify(mockPostBlocks.mock.calls[0]);
-      expect(allText).toContain('Available');
-      expect(allText).toContain('Set Up for Workspace');
-    });
-
-    it('should show available integrations not yet registered', async () => {
-      const app = createMockApp();
-      registerCommands(app as any);
-
-      mockIsPlatformAdmin.mockResolvedValue(true);
-      mockListCustomTools.mockResolvedValue([]);
-      const ack = vi.fn();
-      const command = { user_id: 'U_ADMIN', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
-
-      await app.handlers.command['/tools']({ command, ack, respond: mockRespond });
-
-      // Now uses postBlocks
-      const allText = JSON.stringify(mockPostBlocks.mock.calls[0]);
-      expect(allText).toContain('Available');
-      expect(allText).toContain('register_tool_integration');
-    });
   });
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -1244,207 +1069,23 @@ describe('Commands Module', () => {
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   describe('/kb command handler', () => {
-    it('/kb search should search knowledge base', async () => {
+    it('should redirect to the web dashboard', async () => {
       const app = createMockApp();
       registerCommands(app as any);
 
-      mockSearchKB.mockResolvedValue([
-        { id: 'kb-1', title: 'Result', category: 'general', summary: 'A summary' },
-      ]);
-
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: 'search test query', trigger_id: 'trig-1' };
+      const respond = vi.fn();
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '', trigger_id: 'trig-1' };
 
-      await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
+      await app.handlers.command['/kb']({ command, ack, respond });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockSearchKB).toHaveBeenCalledWith('W_TEST_123', 'test query');
+      expect(respond).toHaveBeenCalledWith(expect.objectContaining({
+        response_type: 'ephemeral',
+        text: expect.stringContaining('/kb'),
+      }));
     });
 
-    it('/kb search with empty query should show usage message', async () => {
-      const app = createMockApp();
-      registerCommands(app as any);
-
-      const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: 'search   ', trigger_id: 'trig-1' };
-
-      await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
-
-      expect(mockRespond).toHaveBeenCalledWith({ text: expect.stringContaining('Usage') });
-    });
-
-    it('/kb search with no results should show no-results message', async () => {
-      const app = createMockApp();
-      registerCommands(app as any);
-
-      mockSearchKB.mockResolvedValue([]);
-      const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: 'search unicorns', trigger_id: 'trig-1' };
-
-      await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
-
-      expect(mockRespond).toHaveBeenCalledWith({ text: expect.stringContaining('No KB entries') });
-    });
-
-    it('/kb search results should include admin overflow menus when user is admin', async () => {
-      const app = createMockApp();
-      registerCommands(app as any);
-
-      mockIsPlatformAdmin.mockResolvedValue(true);
-      mockSearchKB.mockResolvedValue([
-        { id: 'kb-1', title: 'Result', category: 'general', summary: 'A summary' },
-      ]);
-
-      const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: 'search test', trigger_id: 'trig-1' };
-
-      await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
-
-      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
-      expect(allText).toContain('kb_entry_overflow');
-    });
-
-    it('/kb add should open a modal', async () => {
-      const app = createMockApp();
-      registerCommands(app as any);
-
-      const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: 'add', trigger_id: 'trig-1' };
-
-      await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
-
-      expect(ack).toHaveBeenCalled();
-      expect(mockOpenModal).toHaveBeenCalledWith(
-        'trig-1',
-        expect.objectContaining({ callback_id: 'kb_add_modal' }),
-      );
-    });
-
-    it('/kb default for non-admin should show usage', async () => {
-      const app = createMockApp();
-      registerCommands(app as any);
-
-      mockIsPlatformAdmin.mockResolvedValue(false);
-      const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '', trigger_id: 'trig-1' };
-
-      await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
-
-      expect(mockRespond).toHaveBeenCalledWith({ text: expect.stringContaining('Usage') });
-    });
-
-    it('/kb default for admin should show full dashboard with sources section', async () => {
-      const app = createMockApp();
-      registerCommands(app as any);
-
-      mockIsPlatformAdmin.mockResolvedValue(true);
-      mockListKBEntries.mockResolvedValue([]);
-      mockListPendingEntries.mockResolvedValue([]);
-      mockGetCategories.mockResolvedValue([]);
-      mockListSources.mockResolvedValue([]);
-      const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '', trigger_id: 'trig-1' };
-
-      await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
-
-      expect(mockRespond).toHaveBeenCalledWith({
-        blocks: expect.arrayContaining([
-          expect.objectContaining({
-            type: 'header',
-            text: expect.objectContaining({ text: expect.stringContaining('Knowledge Base') }),
-          }),
-        ]),
-        text: 'Knowledge Base',
-      });
-    });
-
-    it('/kb dashboard should show connected sources', async () => {
-      const app = createMockApp();
-      registerCommands(app as any);
-
-      mockIsPlatformAdmin.mockResolvedValue(true);
-      mockListKBEntries.mockResolvedValue([]);
-      mockListPendingEntries.mockResolvedValue([]);
-      mockGetCategories.mockResolvedValue([]);
-      mockListSources.mockResolvedValue([
-        {
-          id: 'src-1', name: 'Google Drive Docs', source_type: 'google_drive',
-          status: 'active', auto_sync: true, last_sync_at: new Date().toISOString(),
-          entry_count: 42, error_message: null,
-        },
-      ]);
-      const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '', trigger_id: 'trig-1' };
-
-      await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
-
-      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
-      expect(allText).toContain('Google Drive Docs');
-      expect(allText).toContain('kb_source_overflow');
-      expect(allText).toContain('42 entries');
-    });
-
-    it('/kb dashboard should show pending entries when they exist', async () => {
-      const app = createMockApp();
-      registerCommands(app as any);
-
-      mockIsPlatformAdmin.mockResolvedValue(true);
-      mockListKBEntries.mockResolvedValue([]);
-      mockListPendingEntries.mockResolvedValue([
-        { id: 'pend-1', title: 'Pending Doc', category: 'support', summary: 'Needs review', contributed_by: 'U_CONTRIBUTOR' },
-      ]);
-      mockGetCategories.mockResolvedValue([]);
-      mockListSources.mockResolvedValue([]);
-      const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '', trigger_id: 'trig-1' };
-
-      await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
-
-      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
-      expect(allText).toContain('Pending Doc');
-      expect(allText).toContain('Pending Approval');
-      expect(allText).toContain('approve:pend-1');
-    });
-
-    it('/kb dashboard should not include recent entries section', async () => {
-      const app = createMockApp();
-      registerCommands(app as any);
-
-      mockIsPlatformAdmin.mockResolvedValue(true);
-      mockListKBEntries.mockResolvedValue([
-        { id: 'e-1', title: 'API Guide', category: 'engineering', summary: 'How to use our API', tags: ['api', 'guide'] },
-      ]);
-      mockListPendingEntries.mockResolvedValue([]);
-      mockGetCategories.mockResolvedValue([]);
-      mockListSources.mockResolvedValue([]);
-      const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '', trigger_id: 'trig-1' };
-
-      await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
-
-      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
-      expect(allText).not.toContain('Recent Entries');
-    });
-
-    it('/kb dashboard should include Add Source and API Keys buttons', async () => {
-      const app = createMockApp();
-      registerCommands(app as any);
-
-      mockIsPlatformAdmin.mockResolvedValue(true);
-      mockListKBEntries.mockResolvedValue([]);
-      mockListPendingEntries.mockResolvedValue([]);
-      mockGetCategories.mockResolvedValue([]);
-      mockListSources.mockResolvedValue([]);
-      const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '', trigger_id: 'trig-1' };
-
-      await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
-
-      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
-      expect(allText).toContain('kb_add_source');
-      expect(allText).toContain('kb_manage_api_keys');
-      expect(allText).toContain('kb_add_entry_btn');
-    });
   });
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -2322,17 +1963,16 @@ describe('Commands Module', () => {
       expect(allText).toContain('Are you sure');
     });
 
-    it('agents_new_agent button should start new agent flow', async () => {
+    it('agents_new_agent button should ack (no-op, creation is via web dashboard)', async () => {
       const app = createMockApp();
       await safeRegisterInlineActions(app);
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' }, channel: { id: 'C_CHAN' }, team: { id: 'W_TEST_123' } };
 
       if (app.handlers.action['agents_new_agent']) {
-        await app.handlers.action['agents_new_agent']({ ack, body });
+        await app.handlers.action['agents_new_agent']({ ack });
         expect(ack).toHaveBeenCalled();
-        expect(mockPostBlocks).toHaveBeenCalled();
+        expect(mockPostBlocks).not.toHaveBeenCalled();
       }
     });
 
@@ -4172,24 +3812,21 @@ describe('Commands Module', () => {
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   describe('/tools command - no tools and no integrations', () => {
-    it('should show registered but unconfigured tools in Available section', async () => {
+    it('should redirect to the web dashboard', async () => {
       const app = createMockApp();
       registerCommands(app as any);
 
-      mockIsPlatformAdmin.mockResolvedValue(true);
-      // All integration tools are already registered but without config (unconfigured)
-      mockListCustomTools.mockResolvedValue([
-        { name: 'test-tool-read', access_level: 'read-only', language: 'docker', config_json: '{}', schema_json: '{}', approved: true },
-        { name: 'test-tool-write', access_level: 'read-write', language: 'docker', config_json: '{}', schema_json: '{}', approved: true },
-      ]);
       const ack = vi.fn();
+      const respond = vi.fn();
       const command = { user_id: 'U_ADMIN', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
-      await app.handlers.command['/tools']({ command, ack, respond: mockRespond });
+      await app.handlers.command['/tools']({ command, ack, respond });
 
-      // Registered but unconfigured tools show in Available section
-      const allText = JSON.stringify(mockPostBlocks.mock.calls[0]);
-      expect(allText).toContain('Available');
+      expect(ack).toHaveBeenCalled();
+      expect(respond).toHaveBeenCalledWith(expect.objectContaining({
+        response_type: 'ephemeral',
+        text: expect.stringContaining('/tools'),
+      }));
     });
   });
 
@@ -4198,60 +3835,21 @@ describe('Commands Module', () => {
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   describe('/kb dashboard - source status variants', () => {
-    it('should show syncing and needs_setup status icons', async () => {
+    it('should redirect to the web dashboard', async () => {
       const app = createMockApp();
       registerCommands(app as any);
 
-      mockIsPlatformAdmin.mockResolvedValue(true);
-      mockListKBEntries.mockResolvedValue([]);
-      mockListPendingEntries.mockResolvedValue([]);
-      mockGetCategories.mockResolvedValue([]);
-      mockListSources.mockResolvedValue([
-        {
-          id: 'src-syncing', name: 'Syncing Source', source_type: 'google_drive',
-          status: 'syncing', auto_sync: false, last_sync_at: null,
-          entry_count: 0, error_message: null,
-        },
-        {
-          id: 'src-setup', name: 'Setup Source', source_type: 'zendesk_help_center',
-          status: 'needs_setup', auto_sync: true, last_sync_at: null,
-          entry_count: 0, error_message: 'Missing config',
-        },
-      ]);
       const ack = vi.fn();
+      const respond = vi.fn();
       const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '', trigger_id: 'trig-1' };
 
-      await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
+      await app.handlers.command['/kb']({ command, ack, respond });
 
-      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
-      expect(allText).toContain('arrows_counterclockwise');
-      expect(allText).toContain('warning');
-      expect(allText).toContain('Missing config');
-      expect(allText).toContain('never synced');
-    });
-
-    it('should show error status icon for error sources', async () => {
-      const app = createMockApp();
-      registerCommands(app as any);
-
-      mockIsPlatformAdmin.mockResolvedValue(true);
-      mockListKBEntries.mockResolvedValue([]);
-      mockListPendingEntries.mockResolvedValue([]);
-      mockGetCategories.mockResolvedValue([]);
-      mockListSources.mockResolvedValue([
-        {
-          id: 'src-err', name: 'Error Source', source_type: 'google_drive',
-          status: 'error', auto_sync: false, last_sync_at: null,
-          entry_count: 0, error_message: null,
-        },
-      ]);
-      const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '', trigger_id: 'trig-1' };
-
-      await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
-
-      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
-      expect(allText).toContain('red_circle');
+      expect(ack).toHaveBeenCalled();
+      expect(respond).toHaveBeenCalledWith(expect.objectContaining({
+        response_type: 'ephemeral',
+        text: expect.stringContaining('/kb'),
+      }));
     });
   });
 
@@ -4260,55 +3858,38 @@ describe('Commands Module', () => {
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   describe('DM-only restriction', () => {
-    it.skip('/agents should reject commands not sent from a DM (now redirects to dashboard)', async () => {
+    it('/tools should redirect to dashboard from any channel', async () => {
       const app = createMockApp();
       registerCommands(app as any);
 
       const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'general', text: '' };
+      const respond = vi.fn();
+      const command = { user_id: 'U_ADMIN', channel_id: 'C_CHAN', channel_name: 'general', team_id: 'W_TEST_123', text: '' };
 
-      await app.handlers.command['/agents']({ command, ack, respond: mockRespond });
+      await app.handlers.command['/tools']({ command, ack, respond });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockRespond).toHaveBeenCalledWith({
+      expect(respond).toHaveBeenCalledWith(expect.objectContaining({
         response_type: 'ephemeral',
-        text: expect.stringContaining('Please use this command in a DM'),
-      });
-      expect(mockListAgents).not.toHaveBeenCalled();
+        text: expect.stringContaining('/tools'),
+      }));
     });
 
-    it('/tools should reject commands not sent from a DM', async () => {
+    it('/kb should redirect to dashboard from any channel', async () => {
       const app = createMockApp();
       registerCommands(app as any);
 
       const ack = vi.fn();
-      const command = { user_id: 'U_ADMIN', channel_id: 'C_CHAN', channel_name: 'general', text: '' };
+      const respond = vi.fn();
+      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'general', team_id: 'W_TEST_123', text: '', trigger_id: 'trig-1' };
 
-      await app.handlers.command['/tools']({ command, ack, respond: mockRespond });
-
-      expect(ack).toHaveBeenCalled();
-      expect(mockRespond).toHaveBeenCalledWith({
-        response_type: 'ephemeral',
-        text: expect.stringContaining('Please use this command in a DM'),
-      });
-      expect(mockIsPlatformAdmin).not.toHaveBeenCalled();
-    });
-
-    it('/kb should reject commands not sent from a DM', async () => {
-      const app = createMockApp();
-      registerCommands(app as any);
-
-      const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C_CHAN', channel_name: 'general', text: '', trigger_id: 'trig-1' };
-
-      await app.handlers.command['/kb']({ command, ack, respond: mockRespond });
+      await app.handlers.command['/kb']({ command, ack, respond });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockRespond).toHaveBeenCalledWith({
+      expect(respond).toHaveBeenCalledWith(expect.objectContaining({
         response_type: 'ephemeral',
-        text: expect.stringContaining('Please use this command in a DM'),
-      });
-      expect(mockSearchKB).not.toHaveBeenCalled();
+        text: expect.stringContaining('/kb'),
+      }));
     });
   });
 
@@ -6676,17 +6257,16 @@ describe('Commands Module', () => {
   // Additional coverage: replyToAction edge cases
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-  describe('agents_new_agent - no channel', () => {
-    it('should no-op when channelId is missing', async () => {
+  describe('agents_new_agent - no-op handler', () => {
+    it('should just ack without starting any flow', async () => {
       const app = createMockApp();
       await safeRegisterInlineActions(app);
 
       if (!app.handlers.action['agents_new_agent']) return;
 
       const ack = vi.fn();
-      const body = { user: { id: 'U1' }, team: { id: 'W_TEST_123' } }; // no channel
 
-      await app.handlers.action['agents_new_agent']({ ack, body });
+      await app.handlers.action['agents_new_agent']({ ack });
 
       expect(ack).toHaveBeenCalled();
       expect(mockPostBlocks).not.toHaveBeenCalled();
@@ -6861,45 +6441,36 @@ describe('Commands Module', () => {
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   describe('/tools empty state', () => {
-    it('should show no tools message when both custom and integration tools empty', async () => {
+    it('should redirect to the web dashboard', async () => {
       const app = createMockApp();
       registerCommands(app as any);
 
-      mockListCustomTools.mockResolvedValue([]);
-      mockGetToolIntegrations.mockReturnValue([]);
-
+      const ack = vi.fn();
       const respond = vi.fn();
-      await app.handlers.command['/tools']({ ack: vi.fn(), command: { user_id: 'U1', channel_id: 'C_CHAN', channel_name: 'directmessage' }, respond });
+      await app.handlers.command['/tools']({ ack, command: { user_id: 'U1', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' }, respond });
 
-      // Now uses postBlocks instead of ephemeral respond
-      expect(mockPostBlocks).toHaveBeenCalledWith('C_CHAN', expect.any(Array), 'Tools');
+      expect(ack).toHaveBeenCalled();
+      expect(respond).toHaveBeenCalledWith(expect.objectContaining({
+        response_type: 'ephemeral',
+        text: expect.stringContaining('/tools'),
+      }));
     });
   });
 
   describe('timeAgo branches', () => {
-    it('should cover minutes, hours, and days branches via /kb with sources', async () => {
+    it('should redirect to the web dashboard instead of showing sources', async () => {
       const app = createMockApp();
       registerCommands(app as any);
 
-      // Create timestamps for different time ranges
-      const now = Date.now();
-      const fiveMinAgo = new Date(now - 5 * 60 * 1000).toISOString();  // minutes
-      const threeHoursAgo = new Date(now - 3 * 60 * 60 * 1000).toISOString();  // hours
-      const twoDaysAgo = new Date(now - 2 * 24 * 60 * 60 * 1000).toISOString();  // days
-
-      mockListSources.mockResolvedValue([
-        { id: 's1', name: 'Source A', source_type: 'google_drive', status: 'active', auto_sync: true, last_sync_at: fiveMinAgo, config_json: '{}' },
-        { id: 's2', name: 'Source B', source_type: 'zendesk_help_center', status: 'active', auto_sync: true, last_sync_at: threeHoursAgo, config_json: '{}' },
-        { id: 's3', name: 'Source C', source_type: 'website', status: 'active', auto_sync: true, last_sync_at: twoDaysAgo, config_json: '{}' },
-      ]);
-
+      const ack = vi.fn();
       const respond = vi.fn();
-      await app.handlers.command['/kb']({ ack: vi.fn(), command: { user_id: 'U1', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' }, respond });
+      await app.handlers.command['/kb']({ ack, command: { user_id: 'U1', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' }, respond });
 
-      const responseText = JSON.stringify(respond.mock.calls[0][0]);
-      expect(responseText).toContain('m ago');
-      expect(responseText).toContain('h ago');
-      expect(responseText).toContain('d ago');
+      expect(ack).toHaveBeenCalled();
+      expect(respond).toHaveBeenCalledWith(expect.objectContaining({
+        response_type: 'ephemeral',
+        text: expect.stringContaining('/kb'),
+      }));
     });
   });
 
@@ -7673,20 +7244,19 @@ describe('Commands Module', () => {
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   describe('/tools - completely empty state', () => {
-    it('should show no tools message when custom tools empty and all integrations fully registered', async () => {
+    it('should redirect to the web dashboard', async () => {
       const app = createMockApp();
       registerCommands(app as any);
 
-      mockListCustomTools.mockResolvedValue([]);
-
+      const ack = vi.fn();
       const respond = vi.fn();
-      await app.handlers.command['/tools']({ ack: vi.fn(), command: { user_id: 'U1', channel_id: 'C_CHAN', channel_name: 'directmessage' }, respond });
+      await app.handlers.command['/tools']({ ack, command: { user_id: 'U1', channel_id: 'C_CHAN', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' }, respond });
 
-      // Now uses postBlocks instead of ephemeral respond
-      expect(mockPostBlocks).toHaveBeenCalledWith('C_CHAN', expect.any(Array), 'Tools');
-      // Verify the response includes Available section
-      const responseText = JSON.stringify(mockPostBlocks.mock.calls[0]);
-      expect(responseText).toContain('Available');
+      expect(ack).toHaveBeenCalled();
+      expect(respond).toHaveBeenCalledWith(expect.objectContaining({
+        response_type: 'ephemeral',
+        text: expect.stringContaining('/tools'),
+      }));
     });
   });
 
@@ -8380,64 +7950,23 @@ describe('Commands Module', () => {
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   describe('/templates command', () => {
-    it('should render template listing blocks', async () => {
+    it('should redirect to the web dashboard', async () => {
       const app = createMockApp();
       registerCommands(app as any);
 
-      mockGetTemplatesByCategory.mockReturnValue({
-        'Content & SEO': [
-          { id: 'seo-monitor', name: 'SEO Monitor', emoji: ':mag:', description: 'Tracks SEO', tools: [], custom_tools: [], skills: [], relevance_keywords: [] },
-        ],
-        'Social Media': [],
-        'Competitive Intelligence': [],
-        'Analytics & Reporting': [],
-        'Customer & Community': [],
-      });
-      mockGetAllTemplates.mockReturnValue([
-        { id: 'seo-monitor', name: 'SEO Monitor', emoji: ':mag:', description: 'Tracks SEO' },
-      ]);
-
       const ack = vi.fn();
+      const respond = vi.fn();
       const command = { user_id: 'U123', channel_id: 'C1', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
 
-      await app.handlers.command['/templates']({ command, ack, respond: mockRespond });
+      await app.handlers.command['/templates']({ command, ack, respond });
 
       expect(ack).toHaveBeenCalled();
-      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
-      expect(allText).toContain('Agent Templates');
-      expect(allText).toContain('SEO Monitor');
-      expect(allText).toContain('template_activate');
-      expect(allText).toContain('seo-monitor');
+      expect(respond).toHaveBeenCalledWith(expect.objectContaining({
+        response_type: 'ephemeral',
+        text: expect.stringContaining('/agents/templates'),
+      }));
     });
 
-    it('should reject non-DM usage', async () => {
-      const app = createMockApp();
-      registerCommands(app as any);
-
-      const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C1', channel_name: 'general', text: '' };
-
-      await app.handlers.command['/templates']({ command, ack, respond: mockRespond });
-
-      expect(ack).toHaveBeenCalled();
-      const text = mockRespond.mock.calls[0][0].text;
-      expect(text).toContain('DM');
-    });
-
-    it('should show empty state when no templates exist', async () => {
-      const app = createMockApp();
-      registerCommands(app as any);
-
-      mockGetAllTemplates.mockReturnValue([]);
-
-      const ack = vi.fn();
-      const command = { user_id: 'U123', channel_id: 'C1', channel_name: 'directmessage', team_id: 'W_TEST_123', text: '' };
-
-      await app.handlers.command['/templates']({ command, ack, respond: mockRespond });
-
-      const allText = JSON.stringify(mockRespond.mock.calls[0][0].blocks);
-      expect(allText).toContain('No templates available');
-    });
   });
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -8960,62 +8489,9 @@ describe('Commands Module', () => {
   // ── /audit Command ──
 
   describe('/audit command', () => {
-    it('should show audit log for platform admin', async () => {
+    it('should redirect to the web dashboard', async () => {
       const app = createMockApp();
       registerCommands(app as any);
-
-      mockIsPlatformAdmin.mockResolvedValue(true);
-      mockGetAuditLog.mockResolvedValue([
-        {
-          id: '1',
-          action_type: 'agent_created',
-          actor_user_id: 'U001',
-          agent_name: 'TestAgent',
-          target_user_id: null,
-          timestamp: '2025-01-01T00:00:00Z',
-          status: 'success',
-        },
-      ]);
-
-      const respond = vi.fn();
-      await app.handlers.command['/audit']({
-        command: { team_id: 'W_TEST_123', user_id: 'UADMIN', channel_name: 'directmessage' },
-        ack: vi.fn(),
-        respond,
-      });
-
-      expect(mockGetAuditLog).toHaveBeenCalledWith('W_TEST_123', { limit: 20 });
-      expect(respond).toHaveBeenCalledWith(expect.objectContaining({
-        blocks: expect.arrayContaining([
-          expect.objectContaining({ type: 'header' }),
-        ]),
-      }));
-    });
-
-    it('should deny non-platform admin', async () => {
-      const app = createMockApp();
-      registerCommands(app as any);
-
-      mockIsPlatformAdmin.mockResolvedValue(false);
-
-      const respond = vi.fn();
-      await app.handlers.command['/audit']({
-        command: { team_id: 'W_TEST_123', user_id: 'U_NONADMIN', channel_name: 'directmessage' },
-        ack: vi.fn(),
-        respond,
-      });
-
-      expect(respond).toHaveBeenCalledWith(expect.objectContaining({
-        text: expect.stringContaining('Only platform admins'),
-      }));
-    });
-
-    it('should show empty state when no audit events', async () => {
-      const app = createMockApp();
-      registerCommands(app as any);
-
-      mockIsPlatformAdmin.mockResolvedValue(true);
-      mockGetAuditLog.mockResolvedValue([]);
 
       const respond = vi.fn();
       await app.handlers.command['/audit']({
@@ -9025,14 +8501,11 @@ describe('Commands Module', () => {
       });
 
       expect(respond).toHaveBeenCalledWith(expect.objectContaining({
-        blocks: expect.arrayContaining([
-          expect.objectContaining({
-            type: 'section',
-            text: expect.objectContaining({ text: expect.stringContaining('No audit events') }),
-          }),
-        ]),
+        response_type: 'ephemeral',
+        text: expect.stringContaining('/audit'),
       }));
     });
+
   });
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -9040,150 +8513,24 @@ describe('Commands Module', () => {
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
   describe('/tools command — Tool Connections UX', () => {
-    it('should be accessible by non-admins and show 3 sections', async () => {
+    it('should redirect to the web dashboard', async () => {
       const app = createMockApp();
       registerCommands(app as any);
 
-      mockIsPlatformAdmin.mockResolvedValue(false);
-      mockListCustomTools.mockResolvedValue([
-        { name: 'test-tool-read', config_json: '{"api_key":"sk"}' },
-      ]);
-      mockListTeamConnections.mockResolvedValue([
-        { integration_id: 'test-integration', connection_type: 'team' },
-      ]);
-      mockListPersonalConnectionsForUser.mockResolvedValue([]);
-      mockGetToolAgentUsage.mockResolvedValue([]);
+      const ack = vi.fn();
+      const respond = vi.fn();
 
       await app.handlers.command['/tools']({
-        command: { team_id: 'W_TEST_123', user_id: 'U_REGULAR', channel_id: 'C_DM', channel_name: 'directmessage' },
-        ack: vi.fn(),
-        respond: vi.fn(),
+        command: { team_id: 'W_TEST_123', user_id: 'U_REGULAR', channel_id: 'C_DM', channel_name: 'directmessage', text: '' },
+        ack,
+        respond,
       });
 
-      expect(mockPostBlocks).toHaveBeenCalled();
-      const blocks = mockPostBlocks.mock.calls[0][1];
-      const allText = JSON.stringify(blocks);
-      // Header section
-      expect(allText).toContain('Tools');
-      // Shared Tools section
-      expect(allText).toContain('Shared Tools');
-    });
-
-    it('admin should see admin buttons (overflow), non-admin should not', async () => {
-      // Admin case
-      const app1 = createMockApp();
-      registerCommands(app1 as any);
-
-      mockIsPlatformAdmin.mockResolvedValue(true);
-      mockListCustomTools.mockResolvedValue([
-        { name: 'test-tool-read', config_json: '{"api_key":"sk"}' },
-      ]);
-      mockListTeamConnections.mockResolvedValue([
-        { integration_id: 'test-integration', connection_type: 'team' },
-      ]);
-      mockListPersonalConnectionsForUser.mockResolvedValue([]);
-      mockGetToolAgentUsage.mockResolvedValue([]);
-
-      await app1.handlers.command['/tools']({
-        command: { team_id: 'W_TEST_123', user_id: 'UADMIN', channel_id: 'C_DM', channel_name: 'directmessage' },
-        ack: vi.fn(),
-        respond: vi.fn(),
-      });
-
-      const adminBlocks = mockPostBlocks.mock.calls[0][1];
-      const adminText = JSON.stringify(adminBlocks);
-      expect(adminText).toContain('tool_overflow');
-
-      // Non-admin case
-      vi.clearAllMocks();
-      // Re-set mocks after clearAllMocks
-      mockPostBlocks.mockResolvedValue('msg-ts-456');
-      mockIsPlatformAdmin.mockResolvedValue(false);
-      mockListCustomTools.mockResolvedValue([
-        { name: 'test-tool-read', config_json: '{"api_key":"sk"}' },
-      ]);
-      mockListTeamConnections.mockResolvedValue([
-        { integration_id: 'test-integration', connection_type: 'team' },
-      ]);
-      mockListPersonalConnectionsForUser.mockResolvedValue([]);
-      mockGetToolAgentUsage.mockResolvedValue([]);
-      mockGetToolIntegrations.mockReturnValue([
-        {
-          id: 'test-integration',
-          label: 'Test Integration',
-          icon: ':test:',
-          description: 'A test integration',
-          tools: ['test-tool-read', 'test-tool-write'],
-          requiredConfigKeys: ['api_key', 'site'],
-          configPlaceholders: { api_key: 'Enter API key', site: 'Enter site' },
-        },
-      ]);
-      mockGetSupportedOAuthIntegrations.mockReturnValue([]);
-      mockGetIntegration.mockReturnValue({
-        id: 'test-integration',
-        label: 'Test Integration',
-        icon: ':test:',
-        description: 'A test integration',
-        tools: [{ name: 'test-tool-read' }, { name: 'test-tool-write' }],
-        configKeys: ['api_key', 'site'],
-        configPlaceholders: { api_key: 'Enter API key', site: 'Enter site' },
-        register: (...args: any[]) => mockRegister(...args),
-      });
-      mockGetIntegrations.mockReturnValue([
-        {
-          id: 'test-integration',
-          tools: [{ name: 'test-tool-read' }, { name: 'test-tool-write' }],
-        },
-      ]);
-
-      const app2 = createMockApp();
-      registerCommands(app2 as any);
-
-      await app2.handlers.command['/tools']({
-        command: { team_id: 'W_TEST_123', user_id: 'U_REGULAR', channel_id: 'C_DM', channel_name: 'directmessage' },
-        ack: vi.fn(),
-        respond: vi.fn(),
-      });
-
-      const regularBlocks = mockPostBlocks.mock.calls[0][1];
-      const regularText = JSON.stringify(regularBlocks);
-      // Non-admin should NOT see tool_overflow for shared tools
-      // They see plain text without overflow accessory
-      expect(regularText).not.toContain('tool_overflow');
-    });
-
-    it('non-admin should see connect buttons for available hybrid/personal integrations', async () => {
-      const app = createMockApp();
-      registerCommands(app as any);
-
-      mockIsPlatformAdmin.mockResolvedValue(false);
-      mockListCustomTools.mockResolvedValue([]);
-      mockListTeamConnections.mockResolvedValue([]);
-      mockListPersonalConnectionsForUser.mockResolvedValue([]);
-      mockGetToolAgentUsage.mockResolvedValue([]);
-      // Mark integration as hybrid so non-admin sees Connect button
-      mockGetIntegration.mockReturnValue({
-        id: 'test-integration',
-        label: 'Test Integration',
-        icon: ':test:',
-        description: 'A test integration',
-        tools: [{ name: 'test-tool-read' }, { name: 'test-tool-write' }],
-        configKeys: ['api_key'],
-        connectionModel: 'hybrid',
-        configPlaceholders: { api_key: 'Enter API key' },
-        register: (...args: any[]) => mockRegister(...args),
-      });
-      mockGetSupportedOAuthIntegrations.mockReturnValue([]);
-
-      await app.handlers.command['/tools']({
-        command: { team_id: 'W_TEST_123', user_id: 'U_REGULAR', channel_id: 'C_DM', channel_name: 'directmessage' },
-        ack: vi.fn(),
-        respond: vi.fn(),
-      });
-
-      const blocks = mockPostBlocks.mock.calls[0][1];
-      const allText = JSON.stringify(blocks);
-      expect(allText).toContain('connect_personal_apikey');
+      expect(ack).toHaveBeenCalled();
+      expect(respond).toHaveBeenCalledWith(expect.objectContaining({
+        response_type: 'ephemeral',
+        text: expect.stringContaining('/tools'),
+      }));
     });
   });
 

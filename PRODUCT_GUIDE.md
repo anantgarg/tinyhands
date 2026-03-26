@@ -35,7 +35,7 @@ Open the TinyHands web dashboard and go to the **Agents** page. Click **New Agen
 
 After completing all steps, click **Create Agent** and you will be taken to the agent's detail page.
 
-Note: Only admins and superadmins can create agents. Non-admin users can view and interact with agents they have access to, but cannot create new ones.
+Any user in the workspace can create agents.
 
 ### Step 2: Talk to Your Agent
 

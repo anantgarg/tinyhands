@@ -194,7 +194,7 @@ The Sources page also manages API keys for external KB access. Click **New API K
 
 ### Creating Agents
 
-Open the **Agents** page in the dashboard and click **New Agent**. Only admins and superadmins see this button.
+Open the **Agents** page in the dashboard and click **New Agent**. Any workspace user can create agents.
 
 The four-step wizard works as follows:
 
@@ -456,7 +456,7 @@ Triggers can be paused and resumed from the Triggers tab.
 
 ## Audit Log
 
-Platform admins can view a comprehensive audit trail of all actions via `/audit`. The audit log tracks:
+Platform admins can view a comprehensive audit trail of all actions via the web dashboard audit log. The `/audit` Slack command redirects to the dashboard. The audit log tracks:
 
 - Role changes (platform and agent level)
 - Agent creation, updates, and deletion
@@ -468,7 +468,7 @@ The audit log has forever retention and is indexed by workspace, agent, user, an
 
 ### Viewing the Audit Log
 
-1. Run `/audit` in a bot DM (platform admin only)
+1. Open the **Audit Log** page in the web dashboard (or run `/audit` in Slack to get a link)
 2. Filter by agent, user, action type, or date range
 3. Results show actor, action, target, and timestamp
 
@@ -518,11 +518,14 @@ Migration `020_version_history_fields.sql` expands the `agent_versions` table to
 
 | Command | Where | Who | What it does |
 |---------|-------|-----|--------------|
-| `/agents` | Bot DM | All users | Get a link to the web dashboard |
-| `/kb search <query>` | Bot DM | All users | Search the knowledge base |
-| `/kb add` | Bot DM | All users | Submit a KB entry (pending approval if non-admin) |
+| `/agents` | Anywhere | All users | Get a link to the web dashboard |
+| `/new-agent` | Anywhere | All users | Redirects to agent creation on the web dashboard |
+| `/update-agent` | Anywhere | All users | Redirects to agent management on the web dashboard |
+| `/tools` | Anywhere | All users | Redirects to tools page on the web dashboard |
+| `/kb` | Anywhere | All users | Redirects to knowledge base on the web dashboard |
+| `/audit` | Anywhere | All users | Redirects to audit log on the web dashboard |
+| `/templates` | Anywhere | All users | Redirects to agent templates on the web dashboard |
 | `/connect` | Bot DM | All users | Manage personal tool connections |
-| `/audit` | Bot DM | Platform admins | View action audit log |
 | `add @user as superadmin` | Bot DM | Superadmins | Grant superadmin access |
 
 ---

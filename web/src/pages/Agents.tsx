@@ -186,19 +186,15 @@ export function Agents() {
   return (
     <div>
       <PageHeader title="Agents" description={`${agents?.length ?? 0} agents`}>
-        {isAdmin && (
-          <>
-            <Button variant="outline" asChild>
-              <Link to="/agents/templates">Templates</Link>
-            </Button>
-            <Button asChild>
-              <Link to="/agents/new">
-                <Plus className="mr-2 h-4 w-4" />
-                New Agent
-              </Link>
-            </Button>
-          </>
-        )}
+        <Button variant="outline" asChild>
+          <Link to="/agents/templates">Templates</Link>
+        </Button>
+        <Button asChild>
+          <Link to="/agents/new">
+            <Plus className="mr-2 h-4 w-4" />
+            New Agent
+          </Link>
+        </Button>
       </PageHeader>
 
       {/* Filters */}
@@ -247,7 +243,7 @@ export function Agents() {
           icon={Bot}
           title="No agents found"
           description={search || statusFilter !== 'all' || modelFilter !== 'all' ? 'Try adjusting your filters' : 'Create your first agent to get started'}
-          action={isAdmin && !search && statusFilter === 'all' && modelFilter === 'all' ? { label: 'Create Agent', onClick: () => navigate('/agents/new') } : undefined}
+          action={!search && statusFilter === 'all' && modelFilter === 'all' ? { label: 'Create Agent', onClick: () => navigate('/agents/new') } : undefined}
         />
       ) : (
         <div className="space-y-8">
