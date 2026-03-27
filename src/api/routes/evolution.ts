@@ -94,7 +94,7 @@ router.post('/proposals/:id/approve', async (req: Request, res: Response) => {
     res.json(result);
   } catch (err: any) {
     logger.error('Approve proposal error', { error: err.message });
-    res.status(400).json({ error: "Couldn\'t approve the proposal. Please try again." });
+    res.status(400).json({ error: "Couldn't approve the proposal. Please try again." });
   }
 });
 
@@ -107,7 +107,7 @@ router.post('/proposals/:id/reject', async (req: Request, res: Response) => {
     res.json({ ok: true });
   } catch (err: any) {
     logger.error('Reject proposal error', { error: err.message });
-    res.status(400).json({ error: "Couldn\'t reject the proposal. Please try again." });
+    res.status(400).json({ error: "Couldn't reject the proposal. Please try again." });
   }
 });
 

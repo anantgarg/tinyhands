@@ -37,7 +37,7 @@ router.put('/:key', requireAdmin, async (req: Request, res: Response) => {
     res.json({ ok: true });
   } catch (err: any) {
     logger.error('Set setting error', { error: err.message });
-    res.status(400).json({ error: "Couldn\'t update the setting. Please try again." });
+    res.status(400).json({ error: "Couldn't update the setting. Please try again." });
   }
 });
 

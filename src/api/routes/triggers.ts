@@ -84,7 +84,7 @@ router.post('/', async (req: Request, res: Response) => {
     res.status(201).json(trigger);
   } catch (err: any) {
     logger.error('Create trigger error', { error: err.message });
-    res.status(400).json({ error: "Couldn\'t create the trigger. Please try again." });
+    res.status(400).json({ error: "Couldn't create the trigger. Please try again." });
   }
 });
 
@@ -104,7 +104,7 @@ router.patch('/:id', async (req: Request, res: Response) => {
     res.json({ ok: true });
   } catch (err: any) {
     logger.error('Update trigger error', { error: err.message });
-    res.status(400).json({ error: "Couldn\'t update the trigger. Please try again." });
+    res.status(400).json({ error: "Couldn't update the trigger. Please try again." });
   }
 });
 
@@ -117,7 +117,7 @@ router.post('/:id/pause', async (req: Request, res: Response) => {
     res.json({ ok: true });
   } catch (err: any) {
     logger.error('Pause trigger error', { error: err.message });
-    res.status(400).json({ error: "Couldn\'t pause the trigger. Please try again." });
+    res.status(400).json({ error: "Couldn't pause the trigger. Please try again." });
   }
 });
 
@@ -130,7 +130,7 @@ router.post('/:id/resume', async (req: Request, res: Response) => {
     res.json({ ok: true });
   } catch (err: any) {
     logger.error('Resume trigger error', { error: err.message });
-    res.status(400).json({ error: "Couldn\'t resume the trigger. Please try again." });
+    res.status(400).json({ error: "Couldn't resume the trigger. Please try again." });
   }
 });
 
@@ -143,7 +143,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
     res.json({ ok: true });
   } catch (err: any) {
     logger.error('Delete trigger error', { error: err.message });
-    res.status(400).json({ error: "Couldn\'t delete the trigger. Please try again." });
+    res.status(400).json({ error: "Couldn't delete the trigger. Please try again." });
   }
 });
 

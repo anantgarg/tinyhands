@@ -108,7 +108,7 @@ router.post('/team', requireAdmin, async (req: Request, res: Response) => {
     res.status(201).json(connection);
   } catch (err: any) {
     logger.error('Create team connection error', { error: err.message });
-    res.status(400).json({ error: "Couldn\'t save the connection. Please check your credentials and try again." });
+    res.status(400).json({ error: "Couldn't save the connection. Please check your credentials and try again." });
   }
 });
 
@@ -125,7 +125,7 @@ router.post('/personal', async (req: Request, res: Response) => {
     res.status(201).json(connection);
   } catch (err: any) {
     logger.error('Create personal connection error', { error: err.message });
-    res.status(400).json({ error: "Couldn\'t save the connection. Please check your credentials and try again." });
+    res.status(400).json({ error: "Couldn't save the connection. Please check your credentials and try again." });
   }
 });
 
@@ -171,7 +171,7 @@ router.patch('/:id/settings', async (req: Request, res: Response) => {
     res.json({ ok: true });
   } catch (err: any) {
     logger.error('Update connection settings error', { error: err.message });
-    res.status(400).json({ error: "Couldn\'t update the connection settings. Please try again." });
+    res.status(400).json({ error: "Couldn't update the connection settings. Please try again." });
   }
 });
 
@@ -184,7 +184,7 @@ router.delete('/:id', async (req: Request, res: Response) => {
     res.json({ ok: true });
   } catch (err: any) {
     logger.error('Delete connection error', { error: err.message });
-    res.status(400).json({ error: "Couldn\'t delete the connection. Please try again." });
+    res.status(400).json({ error: "Couldn't delete the connection. Please try again." });
   }
 });
 
@@ -261,7 +261,7 @@ router.put('/agent/:agentId/:toolName', async (req: Request, res: Response) => {
     res.json(result);
   } catch (err: any) {
     logger.error('Set agent tool connection error', { error: err.message });
-    res.status(400).json({ error: "Couldn\'t update the tool connection. Please try again." });
+    res.status(400).json({ error: "Couldn't update the tool connection. Please try again." });
   }
 });
 
@@ -275,7 +275,7 @@ router.get('/oauth/:integration/start', async (req: Request, res: Response) => {
     res.redirect(url);
   } catch (err: any) {
     logger.error('OAuth start error', { error: err.message });
-    res.status(400).json({ error: "Couldn\'t start the connection process. Please try again." });
+    res.status(400).json({ error: "Couldn't start the connection process. Please try again." });
   }
 });
 
@@ -343,7 +343,7 @@ router.put('/agent-tool-modes/:agentId/:toolName', async (req: Request, res: Res
     res.json(result);
   } catch (err: any) {
     logger.error('Set agent tool mode error', { error: err.message });
-    res.status(400).json({ error: "Couldn\'t update the tool mode. Please try again." });
+    res.status(400).json({ error: "Couldn't update the tool mode. Please try again." });
   }
 });
 
