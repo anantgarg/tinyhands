@@ -612,7 +612,8 @@ export function registerInlineActions(app: App): void {
           const agent = await getAgent(workspaceId, agentId);
           if (channelId) await postMessage(channelId, `:double_vertical_bar: Agent *${agent?.name || agentId}* paused.`);
         } catch (err: any) {
-          if (channelId) await postMessage(channelId, `:x: ${err.message}`);
+          logger.error('Pause agent failed', { error: err.message });
+          if (channelId) await postMessage(channelId, ':x: Couldn\'t pause the agent. Please try again.');
         }
         break;
       }
@@ -623,7 +624,8 @@ export function registerInlineActions(app: App): void {
           const agent = await getAgent(workspaceId, agentId);
           if (channelId) await postMessage(channelId, `:arrow_forward: Agent *${agent?.name || agentId}* resumed.`);
         } catch (err: any) {
-          if (channelId) await postMessage(channelId, `:x: ${err.message}`);
+          logger.error('Resume agent failed', { error: err.message });
+          if (channelId) await postMessage(channelId, ':x: Couldn\'t resume the agent. Please try again.');
         }
         break;
       }
@@ -873,7 +875,7 @@ export function registerInlineActions(app: App): void {
       await replyToAction(body, `${template.emoji} *${agentName}* is live in <#${selectedChannelId}>!`);
     } catch (err: any) {
       logger.error('Template activation failed', { templateId, error: err.message, stack: err.stack });
-      await replyToAction(body, `:x: Failed to activate template: ${err.message}`);
+      await replyToAction(body, ':x: Couldn\'t activate the template. Please try again.');
     }
   });
 
@@ -895,7 +897,8 @@ export function registerInlineActions(app: App): void {
       await execute('DELETE FROM agents WHERE id = $1', [agentId]);
       await replyToAction(body, `:wastebasket: Agent *${agent?.name || agentId}* deleted.`);
     } catch (err: any) {
-      await replyToAction(body, `:x: ${err.message}`);
+      logger.error('Delete agent failed', { error: err.message });
+      await replyToAction(body, ':x: Couldn\'t delete the agent. Please try again.');
     }
   });
 
@@ -965,12 +968,9 @@ export function registerInlineActions(app: App): void {
           await startSync(workspaceId, sourceId);
           if (channelId) await postMessage(channelId, `:arrows_counterclockwise: Sync started for *${source.name}*`);
         } catch (err: any) {
+          logger.error('Source sync failed', { error: err.message });
           if (channelId) {
-            if (err.message.includes('not configured')) {
-              await postMessage(channelId, `:warning: ${err.message}\n\nUse the :key: *API Keys* button to set up credentials.`);
-            } else {
-              await postMessage(channelId, `:x: ${err.message}`);
-            }
+            await postMessage(channelId, ':x: Couldn\'t sync the source. Please check your API keys and try again.');
           }
         }
         break;
@@ -981,7 +981,8 @@ export function registerInlineActions(app: App): void {
           await flushAndResync(workspaceId, sourceId, userId);
           if (channelId) await postMessage(channelId, `:put_litter_in_its_place: Flushed & re-syncing *${source.name}*`);
         } catch (err: any) {
-          if (channelId) await postMessage(channelId, `:x: ${err.message}`);
+          logger.error('Flush and resync failed', { error: err.message });
+          if (channelId) await postMessage(channelId, ':x: Couldn\'t resync the source. Please try again.');
         }
         break;
       }
@@ -1208,7 +1209,7 @@ export function registerInlineActions(app: App): void {
     } catch (err: any) {
       logger.error('register_tool_integration failed', { integrationId, error: err.message, stack: err.stack });
       await sendDMBlocks(userId, [
-        { type: 'section', text: { type: 'mrkdwn', text: `:x: Failed to open registration modal for *${integrationId}*: ${err.message}` } },
+        { type: 'section', text: { type: 'mrkdwn', text: ':x: Couldn\'t open the registration form. Please try again.' } },
       ], 'Registration error').catch(() => {});
     }
   });
@@ -1241,7 +1242,7 @@ export function registerInlineActions(app: App): void {
       ], `Connect ${integrationId}`);
     } catch (err: any) {
       await sendDMBlocks(userId, [
-        { type: 'section', text: { type: 'mrkdwn', text: `:x: Failed to start OAuth for *${integrationId}*: ${err.message}` } },
+        { type: 'section', text: { type: 'mrkdwn', text: ':x: Couldn\'t start the connection process. Please try again.' } },
       ], 'OAuth error');
     }
   });
@@ -1650,7 +1651,8 @@ export function registerInlineActions(app: App): void {
           await approveCustomTool(workspaceId, toolName, userId);
           if (channelId) await postMessage(channelId, `:white_check_mark: Tool *${toolName}* approved.`);
         } catch (err: any) {
-          if (channelId) await postMessage(channelId, `:x: ${err.message}`);
+          logger.error('Approve tool failed', { error: err.message });
+          if (channelId) await postMessage(channelId, ':x: Couldn\'t approve the tool. Please try again.');
         }
         break;
       }
@@ -1660,7 +1662,8 @@ export function registerInlineActions(app: App): void {
           await deleteCustomTool(workspaceId, toolName, userId);
           if (channelId) await postMessage(channelId, `:wastebasket: Tool *${toolName}* deleted.`);
         } catch (err: any) {
-          if (channelId) await postMessage(channelId, `:x: ${err.message}`);
+          logger.error('Delete tool failed', { error: err.message });
+          if (channelId) await postMessage(channelId, ':x: Couldn\'t delete the tool. Please try again.');
         }
         break;
       }
@@ -1699,7 +1702,8 @@ export function registerInlineActions(app: App): void {
           const entry = await approveKBEntry(workspaceId, entryId);
           if (channelId) await postMessage(channelId, `:white_check_mark: KB entry *${entry.title}* approved and indexed.`);
         } catch (err: any) {
-          if (channelId) await postMessage(channelId, `:x: ${err.message}`);
+          logger.error('Approve KB entry failed', { error: err.message });
+          if (channelId) await postMessage(channelId, ':x: Couldn\'t approve the entry. Please try again.');
         }
         break;
       }
@@ -1709,7 +1713,8 @@ export function registerInlineActions(app: App): void {
           await deleteKBEntry(workspaceId, entryId);
           if (channelId) await postMessage(channelId, `:wastebasket: KB entry${entry ? ` *${entry.title}*` : ''} deleted.`);
         } catch (err: any) {
-          if (channelId) await postMessage(channelId, `:x: ${err.message}`);
+          logger.error('Delete KB entry failed', { error: err.message });
+          if (channelId) await postMessage(channelId, ':x: Couldn\'t delete the entry. Please try again.');
         }
         break;
       }
@@ -1763,7 +1768,7 @@ export function registerToolAndKBModals(app: App): void {
       ], `Tool config updated: ${toolName}`);
     } catch (err: any) {
       await sendDMBlocks(userId, [
-        { type: 'section', text: { type: 'mrkdwn', text: `:x: Failed to update *${toolName}* config: ${err.message}` } },
+        { type: 'section', text: { type: 'mrkdwn', text: ':x: Couldn\'t update the tool configuration. Please try again.' } },
       ], 'Config update failed');
     }
   });
@@ -1784,8 +1789,9 @@ export function registerToolAndKBModals(app: App): void {
           { type: 'section', text: { type: 'mrkdwn', text: `:white_check_mark: *${toolName}* access level set to \`${accessLevel}\`` } },
         ], 'Access level updated');
       } catch (err: any) {
+        logger.error('Access level update failed', { error: err.message });
         await sendDMBlocks(userId, [
-          { type: 'section', text: { type: 'mrkdwn', text: `:x: ${err.message}` } },
+          { type: 'section', text: { type: 'mrkdwn', text: ':x: Couldn\'t update the access level. Please try again.' } },
         ], 'Access update failed');
       }
     }
@@ -1808,8 +1814,9 @@ export function registerToolAndKBModals(app: App): void {
           { type: 'section', text: { type: 'mrkdwn', text: `:white_check_mark: *${toolName}* added to agent *${agent?.name || agentId}*` } },
         ], 'Tool added to agent');
       } catch (err: any) {
+        logger.error('Add tool to agent failed', { error: err.message });
         await sendDMBlocks(userId, [
-          { type: 'section', text: { type: 'mrkdwn', text: `:x: ${err.message}` } },
+          { type: 'section', text: { type: 'mrkdwn', text: ':x: Couldn\'t add the tool to the agent. Please try again.' } },
         ], 'Add to agent failed');
       }
     }
@@ -1848,7 +1855,7 @@ export function registerToolAndKBModals(app: App): void {
       ], `${manifest?.label || integrationId} connected`);
     } catch (err: any) {
       await sendDMBlocks(userId, [
-        { type: 'section', text: { type: 'mrkdwn', text: `:x: Failed to save credentials: ${err.message}` } },
+        { type: 'section', text: { type: 'mrkdwn', text: ':x: Couldn\'t save the credentials. Please try again.' } },
       ], 'Connection failed');
     }
   });
@@ -1888,7 +1895,7 @@ export function registerToolAndKBModals(app: App): void {
       ], 'Tool connections updated');
     } catch (err: any) {
       await sendDMBlocks(userId, [
-        { type: 'section', text: { type: 'mrkdwn', text: `:x: Failed to update tool connections: ${err.message}` } },
+        { type: 'section', text: { type: 'mrkdwn', text: ':x: Couldn\'t update the tool connections. Please try again.' } },
       ], 'Update failed');
     }
   });
@@ -1933,7 +1940,7 @@ export function registerToolAndKBModals(app: App): void {
       ], 'KB entry created');
     } catch (err: any) {
       await sendDMBlocks(userId, [
-        { type: 'section', text: { type: 'mrkdwn', text: `:x: Failed to create KB entry: ${err.message}` } },
+        { type: 'section', text: { type: 'mrkdwn', text: ':x: Couldn\'t create the knowledge base entry. Please try again.' } },
       ], 'KB add failed');
     }
   });
@@ -1987,7 +1994,7 @@ export function registerToolAndKBModals(app: App): void {
       }
     } catch (err: any) {
       await sendDMBlocks(userId, [
-        { type: 'section', text: { type: 'mrkdwn', text: `:x: Failed to create source: ${err.message}` } },
+        { type: 'section', text: { type: 'mrkdwn', text: ':x: Couldn\'t create the source. Please try again.' } },
       ], 'Source add failed');
     }
   });
@@ -2019,7 +2026,7 @@ export function registerToolAndKBModals(app: App): void {
       ], 'Source config updated');
     } catch (err: any) {
       await sendDMBlocks(userId, [
-        { type: 'section', text: { type: 'mrkdwn', text: `:x: Failed to update source config: ${err.message}` } },
+        { type: 'section', text: { type: 'mrkdwn', text: ':x: Couldn\'t update the source configuration. Please try again.' } },
       ], 'Source config failed');
     }
   });
@@ -2058,7 +2065,7 @@ export function registerToolAndKBModals(app: App): void {
       ], `API key ${allSet ? 'saved' : 'partially saved'}: ${provider}`);
     } catch (err: any) {
       await sendDMBlocks(userId, [
-        { type: 'section', text: { type: 'mrkdwn', text: `:x: Failed to save API key: ${err.message}` } },
+        { type: 'section', text: { type: 'mrkdwn', text: ':x: Couldn\'t save the API key. Please try again.' } },
       ], 'API key save failed');
     }
   });
@@ -2102,7 +2109,7 @@ export function registerToolAndKBModals(app: App): void {
       await askForSourceDetails(connector, sourceType, userId, channelId, threadTs);
     } catch (err: any) {
       await sendDMBlocks(userId, [
-        { type: 'section', text: { type: 'mrkdwn', text: `:x: Failed to save API keys: ${err.message}` } },
+        { type: 'section', text: { type: 'mrkdwn', text: ':x: Couldn\'t save the API keys. Please try again.' } },
       ], 'API key save failed');
     }
   });
@@ -2159,13 +2166,15 @@ export function registerToolAndKBModals(app: App): void {
           await startSync(workspaceId, source.id);
           msg += '\n:arrows_counterclockwise: Sync started in background!';
         } catch (syncErr: any) {
-          msg += `\n:warning: Sync failed to start: ${syncErr.message}`;
+          logger.error('Sync failed to start after source creation', { error: syncErr.message });
+          msg += '\n:warning: Sync couldn\'t start automatically. Please try syncing manually.';
         }
       }
 
       await postMessage(channelId, msg, threadTs);
     } catch (err: any) {
-      await postMessage(channelId, `:x: Failed to create source: ${err.message}`, threadTs);
+      logger.error('Create source failed', { error: err.message });
+    await postMessage(channelId, ':x: Couldn\'t create the source. Please try again.', threadTs);
     }
   });
 
@@ -2217,7 +2226,7 @@ export function registerToolAndKBModals(app: App): void {
 
     } catch (err: any) {
       await sendDMBlocks(userId, [
-        { type: 'section', text: { type: 'mrkdwn', text: `:x: Failed to register ${integration.label}: ${err.message}` } },
+        { type: 'section', text: { type: 'mrkdwn', text: ':x: Couldn\'t connect the service. Please check your configuration and try again.' } },
       ], 'Registration failed');
     }
   });
@@ -2382,7 +2391,7 @@ async function handleNewAgentWhen(workspaceId: string, goal: string, whenInput: 
     ], 'Choose channels for the agent', threadTs);
   } catch (err: any) {
     logger.error('Agent creation flow failed', { error: err.message, stack: err.stack, userId });
-    await postMessage(channelId, `:x: Failed to analyze goal: ${err.message}`, threadTs);
+    await postMessage(channelId, ':x: Couldn\'t analyze the goal. Please try again.', threadTs);
   }
 }
 
@@ -2839,7 +2848,8 @@ Rules:
         const newLabels = newChannelIds.map(c => `<#${c}>`).join(', ');
         await postMessage(channelId, `:white_check_mark: Agent *${agent.name}* channels updated to ${newLabels}`, threadTs);
       } catch (err: any) {
-        await postMessage(channelId, `:x: Failed to update channels: ${err.message}`, threadTs);
+        logger.error('Update channels failed', { error: err.message });
+        await postMessage(channelId, ':x: Couldn\'t update the channels. Please try again.', threadTs);
       }
       // Re-insert so the user can make more changes in the same thread
       await execute(
@@ -2900,7 +2910,7 @@ async function handleUpdateAgentGoalWithChannels(workspaceId: string, agentId: s
     await showUpdateAgentConfirmation(workspaceId, analysis, agentId, newGoal, userId, channelId, threadTs, newChannelIds);
   } catch (err: any) {
     logger.error('Update goal analysis failed', { error: err.message, agentId, userId });
-    await postMessage(channelId, `:x: Failed to analyze updated goal: ${err.message}`, threadTs);
+    await postMessage(channelId, ':x: Couldn\'t analyze the updated goal. Please try again.', threadTs);
   }
 }
 
@@ -2919,7 +2929,7 @@ async function handleUpdateAgentGoal(workspaceId: string, agentId: string, newGo
     await showUpdateAgentConfirmation(workspaceId, analysis, agentId, newGoal, userId, channelId, threadTs, currentChannels);
   } catch (err: any) {
     logger.error('Update goal analysis failed', { error: err.message, agentId, userId });
-    await postMessage(channelId, `:x: Failed to analyze updated goal: ${err.message}`, threadTs);
+    await postMessage(channelId, ':x: Couldn\'t analyze the updated goal. Please try again.', threadTs);
   }
 }
 
@@ -3172,7 +3182,7 @@ export function registerConfirmationActions(app: App): void {
 
     } catch (err: any) {
       logger.error('Agent creation failed', { error: err.message });
-      await replyToAction(body, `:x: Failed to create agent: ${err.message}`);
+      await replyToAction(body, ':x: Couldn\'t create the agent. Please try again.');
     }
   });
 
@@ -3309,9 +3319,9 @@ export function registerConfirmationActions(app: App): void {
     } catch (err: any) {
       logger.error('Agent update failed', { error: err.message });
       if (confirmChannelId && confirmThreadTs) {
-        await postMessage(confirmChannelId, `:x: Failed to update agent: ${err.message}`, confirmThreadTs);
+        await postMessage(confirmChannelId, ':x: Couldn\'t update the agent. Please try again.', confirmThreadTs);
       } else {
-        await respond({ text: `:x: Failed to update agent: ${err.message}`, replace_original: false });
+        await respond({ text: ':x: Couldn\'t update the agent. Please try again.', replace_original: false });
       }
     }
   });
@@ -3539,7 +3549,7 @@ export function registerConfirmationActions(app: App): void {
       logger.info('Feature request fulfilled', { requestId, agentId: agent.id, agentName });
     } catch (err: any) {
       logger.error('Feature request retry failed', { error: err.message, requestId });
-      await replyToAction(body, `:x: Failed to create agent: ${err.message}`);
+      await replyToAction(body, ':x: Couldn\'t create the agent. Please try again.');
     }
   });
 
@@ -3587,7 +3597,8 @@ export function registerConfirmationActions(app: App): void {
         );
       }
     } catch (err: any) {
-      await replyToAction(body, `:x: Failed to approve: ${err.message}`);
+      logger.error('Approve write tools failed', { error: err.message });
+      await replyToAction(body, ':x: Couldn\'t complete the approval. Please try again.');
     }
   });
 
@@ -3691,7 +3702,8 @@ export function registerConfirmationActions(app: App): void {
         await replyToAction(body, `:white_check_mark: Approved. Continuing...`);
       }
     } catch (err: any) {
-      await replyToAction(body, `:x: Failed to approve: ${err.message}`);
+      logger.error('Write approve failed', { error: err.message });
+      await replyToAction(body, ':x: Couldn\'t complete the approval. Please try again.');
     }
   });
 
@@ -3708,7 +3720,8 @@ export function registerConfirmationActions(app: App): void {
         await replyToAction(body, `:no_entry: Denied. Skipping this action.`);
       }
     } catch (err: any) {
-      await replyToAction(body, `:x: Failed to deny: ${err.message}`);
+      logger.error('Write deny failed', { error: err.message });
+      await replyToAction(body, ':x: Couldn\'t complete the denial. Please try again.');
     }
   });
 
@@ -4519,7 +4532,8 @@ async function handleSourceApiKeys(
     // Now ask for source details
     await askForSourceDetails(connector, sourceType, userId, channelId, threadTs);
   } catch (err: any) {
-    await postMessage(channelId, `:x: Failed to save API keys: ${err.message}`, threadTs);
+    logger.error('Save API keys failed', { error: err.message });
+    await postMessage(channelId, ':x: Couldn\'t save the API keys. Please try again.', threadTs);
   }
 }
 
@@ -4598,13 +4612,15 @@ async function handleSourceDetails(
         await startSync(workspaceId, source.id);
         msg += '\n:arrows_counterclockwise: Sync started in background!';
       } catch (syncErr: any) {
-        msg += `\n:warning: Sync failed to start: ${syncErr.message}`;
+        logger.error('Sync failed to start after source creation', { error: syncErr.message });
+        msg += '\n:warning: Sync couldn\'t start automatically. Please try syncing manually.';
       }
     }
 
     await postMessage(channelId, msg, threadTs);
   } catch (err: any) {
-    await postMessage(channelId, `:x: Failed to create source: ${err.message}`, threadTs);
+    logger.error('Create source failed', { error: err.message });
+    await postMessage(channelId, ':x: Couldn\'t create the source. Please try again.', threadTs);
   }
 }
 
@@ -4747,7 +4763,8 @@ async function handleApiKeysInput(
       threadTs,
     );
   } catch (err: any) {
-    await postMessage(channelId, `:x: Failed to save: ${err.message}`, threadTs);
+    logger.error('Save failed', { error: err.message });
+    await postMessage(channelId, ':x: Couldn\'t save the API keys. Please try again.', threadTs);
   }
 }
 

@@ -746,7 +746,7 @@ describe('Execution Module – executeAgentRun', () => {
     const job = makeFakeJob(makeJobData());
     const result = await executeAgentRun(job);
 
-    expect(result).toContain('Task failed with exit code 1');
+    expect(result).toContain('Task failed (exit code 1)');
     expect(result).toContain('Error occurred');
 
     // Should clean up status message and post error to Slack
@@ -767,7 +767,7 @@ describe('Execution Module – executeAgentRun', () => {
     const job = makeFakeJob(makeJobData());
     const result = await executeAgentRun(job);
 
-    expect(result).toContain('Task failed with exit code 137');
+    expect(result).toContain('Task failed (exit code 137)');
 
     // Should await cleanupStatusMessage before posting error
     expect(mockCleanupStatusMessage).toHaveBeenCalledWith('C123', '1700000000.000000', 'agent-1');
@@ -1013,7 +1013,7 @@ describe('Execution Module – executeAgentRun', () => {
 
     const errorCalls = mockBufferEvent.mock.calls.filter((c: any[]) => c[2] === 'error');
     expect(errorCalls.length).toBe(1);
-    expect(errorCalls[0][3]).toBe('Crash');
+    expect(errorCalls[0][3]).toBe('Something went wrong while running this task. Please try again.');
   });
 
   it('should clean up status message and buffer timeout-specific error on timeout', async () => {
@@ -1651,11 +1651,11 @@ describe('Execution Module – executeAgentRun', () => {
     const job = makeFakeJob(makeJobData());
     const result = await executeAgentRun(job);
 
-    expect(result).toContain('Task failed with exit code 1');
+    expect(result).toContain('Task failed (exit code 1)');
     // Error event should use the fallback message
     const errorCalls = mockBufferEvent.mock.calls.filter((c: any[]) => c[2] === 'error');
     expect(errorCalls.length).toBe(1);
-    expect(errorCalls[0][3]).toContain('Task failed with exit code 1');
+    expect(errorCalls[0][3]).toContain('Something went wrong while running this task');
   });
 
   // ── Job with no id ──

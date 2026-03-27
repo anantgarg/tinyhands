@@ -55,7 +55,7 @@ router.post('/definitions', async (req: Request, res: Response) => {
     res.status(201).json(definition);
   } catch (err: any) {
     logger.error('Create workflow definition error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: "Couldn\'t create the workflow. Please try again." });
   }
 });
 
@@ -101,7 +101,7 @@ router.post('/definitions/:id/start', async (req: Request, res: Response) => {
     res.status(201).json(run);
   } catch (err: any) {
     logger.error('Start workflow error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: "Couldn\'t start the workflow. Please try again." });
   }
 });
 
@@ -119,7 +119,7 @@ router.post('/runs/:id/resolve', async (req: Request, res: Response) => {
     res.json({ ok: true });
   } catch (err: any) {
     logger.error('Resolve human action error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: "Couldn\'t complete the action. Please try again." });
   }
 });
 

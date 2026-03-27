@@ -253,7 +253,7 @@ describe('Tool Routes', () => {
       });
 
       expect(res.status).toBe(400);
-      expect(res.body).toEqual({ error: 'Duplicate name' });
+      expect(res.body).toEqual({ error: "Couldn't register the tool. Please try again." });
     });
   });
 
@@ -302,7 +302,7 @@ describe('Tool Routes', () => {
       const res = await makeRequest(app, 'DELETE', '/tools/custom/my-tool');
 
       expect(res.status).toBe(400);
-      expect(res.body).toEqual({ error: 'Tool in use' });
+      expect(res.body).toEqual({ error: "Couldn't delete the tool. Please try again." });
     });
   });
 

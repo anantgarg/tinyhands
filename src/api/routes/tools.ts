@@ -78,7 +78,7 @@ router.post('/custom', requireAdmin, async (req: Request, res: Response) => {
     res.status(201).json(tool);
   } catch (err: any) {
     logger.error('Register custom tool error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: "Couldn\'t register the tool. Please try again." });
   }
 });
 
@@ -91,7 +91,7 @@ router.post('/custom/:name/approve', requireAdmin, async (req: Request, res: Res
     res.json({ ok: true });
   } catch (err: any) {
     logger.error('Approve custom tool error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: "Couldn\'t approve the tool. Please try again." });
   }
 });
 
@@ -104,7 +104,7 @@ router.delete('/custom/:name', requireAdmin, async (req: Request, res: Response)
     res.json({ ok: true });
   } catch (err: any) {
     logger.error('Delete custom tool error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: "Couldn\'t delete the tool. Please try again." });
   }
 });
 
@@ -117,7 +117,7 @@ router.get('/custom/:name/config', requireAdmin, async (req: Request, res: Respo
     res.json(toolConfig);
   } catch (err: any) {
     logger.error('Get tool config error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: "Couldn\'t get the tool configuration. Please try again." });
   }
 });
 
@@ -135,7 +135,7 @@ router.put('/custom/:name/config', requireAdmin, async (req: Request, res: Respo
     res.json({ ok: true });
   } catch (err: any) {
     logger.error('Update tool config error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: "Couldn\'t update the tool configuration. Please try again." });
   }
 });
 
@@ -158,7 +158,7 @@ router.patch('/custom/:name/config', requireAdmin, async (req: Request, res: Res
     }
   } catch (err: any) {
     logger.error('Patch tool config error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: "Couldn\'t update the tool configuration. Please try again." });
   }
 });
 
@@ -176,7 +176,7 @@ router.put('/custom/:name/access-level', requireAdmin, async (req: Request, res:
     res.json({ ok: true });
   } catch (err: any) {
     logger.error('Update tool access level error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: "Couldn\'t update the access level. Please try again." });
   }
 });
 
@@ -289,7 +289,7 @@ router.post('/integrations/register', requireAdmin, async (req: Request, res: Re
     res.status(201).json(connection);
   } catch (err: any) {
     logger.error('Register integration error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: "Couldn\'t connect the service. Please check your configuration and try again." });
   }
 });
 
@@ -310,7 +310,7 @@ router.delete('/integrations/:id/disconnect', requireAdmin, async (req: Request,
     res.json({ ok: true });
   } catch (err: any) {
     logger.error('Disconnect integration error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: "Couldn\'t disconnect the service. Please try again." });
   }
 });
 
@@ -358,7 +358,7 @@ Return ONLY valid JSON, no markdown fences.`,
     });
   } catch (err: any) {
     logger.error('Generate tool error', { error: err.message });
-    res.status(500).json({ error: 'Failed to generate tool: ' + err.message });
+    res.status(500).json({ error: "Couldn\'t generate the tool. Please try again." });
   }
 });
 
@@ -391,7 +391,7 @@ router.post('/custom/:name/test', requireAdmin, async (req: Request, res: Respon
     }
   } catch (err: any) {
     logger.error('Test tool error', { error: err.message });
-    res.status(500).json({ error: 'Failed to test tool: ' + err.message });
+    res.status(500).json({ error: "Couldn\'t test the tool. Please try again." });
   }
 });
 
@@ -424,7 +424,7 @@ router.post('/custom/:name/rollback', requireAdmin, async (req: Request, res: Re
     res.json({ ok: true });
   } catch (err: any) {
     logger.error('Rollback tool error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: "Couldn\'t rollback the tool. Please try again." });
   }
 });
 

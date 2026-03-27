@@ -55,7 +55,7 @@ router.put('/platform-roles/:userId', requireAdmin, async (req: Request, res: Re
     res.json({ ok: true });
   } catch (err: any) {
     logger.error('Set platform role error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: "Couldn\'t update the role. Please try again." });
   }
 });
 
@@ -68,7 +68,7 @@ router.delete('/platform-roles/:userId', requireAdmin, async (req: Request, res:
     res.json({ ok: true });
   } catch (err: any) {
     logger.error('Remove platform role error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: "Couldn\'t remove the role. Please try again." });
   }
 });
 

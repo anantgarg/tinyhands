@@ -325,7 +325,7 @@ describe('Chat Routes', () => {
       });
 
       expect(res.status).toBe(200);
-      expect(res.body.response).toContain('API timeout');
+      expect(res.body.response).toContain('I had trouble processing your request');
     });
 
     it('returns 500 on unexpected error', async () => {

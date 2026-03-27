@@ -237,7 +237,7 @@ export function createWebhookServer(): express.Application {
       res.status(400).send(`
         <html><body style="font-family: sans-serif; text-align: center; padding: 40px;">
           <h2>Connection Failed</h2>
-          <p>${err.message}</p>
+          <p>Something went wrong while connecting your account. Please close this window and try again.</p>
         </body></html>
       `);
     }

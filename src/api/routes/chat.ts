@@ -79,7 +79,7 @@ router.post('/', async (req: Request, res: Response) => {
       } catch (err: any) {
         logger.error('Chat goal analysis failed', { error: err.message, agentId });
         res.json({
-          response: `I encountered an issue analyzing your request: ${err.message}. Please try rephrasing your message.`,
+          response: 'I had trouble processing your request. Could you try rephrasing?',
         });
       }
       return;

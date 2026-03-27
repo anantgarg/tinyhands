@@ -322,7 +322,7 @@ describe('KB Routes', () => {
       const res = await makeRequest(app, 'POST', '/kb/entries', {});
 
       expect(res.status).toBe(400);
-      expect(res.body).toEqual({ error: 'Title required' });
+      expect(res.body).toEqual({ error: "Couldn't create the knowledge base entry. Please try again." });
     });
   });
 
@@ -351,7 +351,7 @@ describe('KB Routes', () => {
       const res = await makeRequest(app, 'POST', '/kb/entries/e1/approve');
 
       expect(res.status).toBe(400);
-      expect(res.body).toEqual({ error: 'Already approved' });
+      expect(res.body).toEqual({ error: "Couldn't approve the entry. Please try again." });
     });
   });
 
@@ -496,7 +496,7 @@ describe('KB Routes', () => {
       const res = await makeRequest(app, 'POST', '/kb/sources/s1/sync');
 
       expect(res.status).toBe(400);
-      expect(res.body).toEqual({ error: 'Sync already running' });
+      expect(res.body).toEqual({ error: "Couldn't start the sync. Please try again." });
     });
   });
 

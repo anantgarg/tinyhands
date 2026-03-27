@@ -213,7 +213,7 @@ describe('Access Control Routes', () => {
       });
 
       expect(res.status).toBe(400);
-      expect(res.body).toEqual({ error: 'Cannot change own role' });
+      expect(res.body).toEqual({ error: "Couldn't update the role. Please try again." });
     });
   });
 
@@ -242,7 +242,7 @@ describe('Access Control Routes', () => {
       const res = await makeRequest(app, 'DELETE', '/access/platform-roles/U456');
 
       expect(res.status).toBe(400);
-      expect(res.body).toEqual({ error: 'Cannot remove self' });
+      expect(res.body).toEqual({ error: "Couldn't remove the role. Please try again." });
     });
   });
 

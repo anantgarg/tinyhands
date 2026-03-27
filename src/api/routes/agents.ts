@@ -52,7 +52,7 @@ router.post('/', async (req: Request, res: Response) => {
     res.status(201).json(agent);
   } catch (err: any) {
     logger.error('Create agent error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: 'Couldn\'t create the agent. Please try again.' });
   }
 });
 
@@ -70,7 +70,7 @@ router.post('/analyze-goal', async (req: Request, res: Response) => {
     res.json(result);
   } catch (err: any) {
     logger.error('Analyze goal error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: 'Couldn\'t analyze the goal. Please try again.' });
   }
 });
 
@@ -168,7 +168,7 @@ router.patch('/:id', async (req: Request, res: Response) => {
     res.json(agent);
   } catch (err: any) {
     logger.error('Update agent error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: 'Couldn\'t update the agent. Please try again.' });
   }
 });
 
@@ -243,7 +243,7 @@ router.post('/:id/revert', async (req: Request, res: Response) => {
     res.json(agent);
   } catch (err: any) {
     logger.error('Revert agent error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: 'Couldn\'t revert the agent. Please try again.' });
   }
 });
 
@@ -294,7 +294,7 @@ router.post('/:id/tools', async (req: Request, res: Response) => {
     res.json({ tools });
   } catch (err: any) {
     logger.error('Add tool to agent error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: 'Couldn\'t add the tool. Please try again.' });
   }
 });
 
@@ -308,7 +308,7 @@ router.delete('/:id/tools/:toolName', async (req: Request, res: Response) => {
     res.json({ tools });
   } catch (err: any) {
     logger.error('Remove tool from agent error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: 'Couldn\'t remove the tool. Please try again.' });
   }
 });
 
@@ -346,7 +346,7 @@ router.post('/:id/skills', async (req: Request, res: Response) => {
     res.json(agentSkill);
   } catch (err: any) {
     logger.error('Attach skill error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: 'Couldn\'t attach the skill. Please try again.' });
   }
 });
 
@@ -360,7 +360,7 @@ router.delete('/:id/skills/:skillId', async (req: Request, res: Response) => {
     res.json({ ok: true });
   } catch (err: any) {
     logger.error('Detach skill error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: 'Couldn\'t remove the skill. Please try again.' });
   }
 });
 
@@ -476,7 +476,7 @@ router.post('/:id/roles', async (req: Request, res: Response) => {
     res.json({ ok: true });
   } catch (err: any) {
     logger.error('Set agent role error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: 'Couldn\'t update the role. Please try again.' });
   }
 });
 
@@ -494,7 +494,7 @@ router.delete('/:id/roles/:targetUserId', async (req: Request, res: Response) =>
     res.json({ ok: true });
   } catch (err: any) {
     logger.error('Remove agent role error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: 'Couldn\'t remove the role. Please try again.' });
   }
 });
 
@@ -521,7 +521,7 @@ router.post('/:id/upgrade-requests', async (req: Request, res: Response) => {
     res.status(201).json({ id });
   } catch (err: any) {
     logger.error('Request upgrade error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: 'Couldn\'t submit the upgrade request. Please try again.' });
   }
 });
 
@@ -539,7 +539,7 @@ router.post('/:id/upgrade-requests/:requestId/approve', async (req: Request, res
     res.json(result);
   } catch (err: any) {
     logger.error('Approve upgrade error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: 'Couldn\'t approve the upgrade. Please try again.' });
   }
 });
 
@@ -557,7 +557,7 @@ router.post('/:id/upgrade-requests/:requestId/deny', async (req: Request, res: R
     res.json({ ok: true });
   } catch (err: any) {
     logger.error('Deny upgrade error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: 'Couldn\'t deny the upgrade. Please try again.' });
   }
 });
 
@@ -616,7 +616,7 @@ router.post('/:id/tool-requests', async (req: Request, res: Response) => {
     res.status(201).json({ id });
   } catch (err: any) {
     logger.error('Create tool request error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: 'Couldn\'t submit the tool request. Please try again.' });
   }
 });
 
@@ -633,7 +633,7 @@ router.post('/:id/tool-requests/:requestId/approve', async (req: Request, res: R
     res.json(result);
   } catch (err: any) {
     logger.error('Approve tool request error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: 'Couldn\'t approve the tool request. Please try again.' });
   }
 });
 
@@ -650,7 +650,7 @@ router.post('/:id/tool-requests/:requestId/deny', async (req: Request, res: Resp
     res.json({ ok: true });
   } catch (err: any) {
     logger.error('Deny tool request error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: 'Couldn\'t deny the tool request. Please try again.' });
   }
 });
 
@@ -697,7 +697,7 @@ router.delete('/feature-requests/:requestId', async (req: Request, res: Response
     res.json({ ok: true });
   } catch (err: any) {
     logger.error('Dismiss feature request error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: 'Couldn\'t dismiss the request. Please try again.' });
   }
 });
 
@@ -727,7 +727,7 @@ router.post('/:id/suggest-improvement', async (req: Request, res: Response) => {
     res.json(diff);
   } catch (err: any) {
     logger.error('Suggest improvement error', { error: err.message });
-    res.status(500).json({ error: 'Failed to generate improvement: ' + err.message });
+    res.status(500).json({ error: 'Couldn\'t generate the improvement. Please try again.' });
   }
 });
 
@@ -750,7 +750,7 @@ router.post('/:id/apply-improvement', async (req: Request, res: Response) => {
     res.json(result);
   } catch (err: any) {
     logger.error('Apply improvement error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: 'Couldn\'t apply the improvement. Please try again.' });
   }
 });
 
@@ -768,7 +768,7 @@ router.get('/:id/prompt-size', async (req: Request, res: Response) => {
     res.json(result);
   } catch (err: any) {
     logger.error('Check prompt size error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: 'Couldn\'t check the prompt size. Please try again.' });
   }
 });
 

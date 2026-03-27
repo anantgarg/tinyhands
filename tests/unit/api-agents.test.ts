@@ -307,7 +307,7 @@ describe('Agent Routes', () => {
       const res = await makeRequest(app, 'POST', '/agents', { name: 'Dup' });
 
       expect(res.status).toBe(400);
-      expect(res.body).toEqual({ error: 'Agent name already exists' });
+      expect(res.body).toEqual({ error: "Couldn't create the agent. Please try again." });
     });
   });
 
@@ -342,7 +342,7 @@ describe('Agent Routes', () => {
       const res = await makeRequest(app, 'PATCH', '/agents/a1', { bad: true });
 
       expect(res.status).toBe(400);
-      expect(res.body).toEqual({ error: 'Invalid field' });
+      expect(res.body).toEqual({ error: "Couldn't update the agent. Please try again." });
     });
   });
 
@@ -454,7 +454,7 @@ describe('Agent Routes', () => {
       const res = await makeRequest(app, 'POST', '/agents/a1/revert', { version: 99 });
 
       expect(res.status).toBe(400);
-      expect(res.body).toEqual({ error: 'Version not found' });
+      expect(res.body).toEqual({ error: "Couldn't revert the agent. Please try again." });
     });
   });
 
@@ -630,7 +630,7 @@ describe('Agent Routes', () => {
       });
 
       expect(res.status).toBe(400);
-      expect(res.body).toEqual({ error: 'Invalid role' });
+      expect(res.body).toEqual({ error: "Couldn't update the role. Please try again." });
     });
   });
 
@@ -663,7 +663,7 @@ describe('Agent Routes', () => {
       const res = await makeRequest(app, 'DELETE', '/agents/a1/roles/U456');
 
       expect(res.status).toBe(400);
-      expect(res.body).toEqual({ error: 'Role not found' });
+      expect(res.body).toEqual({ error: "Couldn't remove the role. Please try again." });
     });
   });
 
@@ -727,7 +727,7 @@ describe('Agent Routes', () => {
       const res = await makeRequest(app, 'POST', '/agents/a1/tools', { toolName: 'bad' });
 
       expect(res.status).toBe(400);
-      expect(res.body).toEqual({ error: 'Tool not found' });
+      expect(res.body).toEqual({ error: "Couldn't add the tool. Please try again." });
     });
   });
 
@@ -751,7 +751,7 @@ describe('Agent Routes', () => {
       const res = await makeRequest(app, 'DELETE', '/agents/a1/tools/bad');
 
       expect(res.status).toBe(400);
-      expect(res.body).toEqual({ error: 'Tool not on agent' });
+      expect(res.body).toEqual({ error: "Couldn't remove the tool. Please try again." });
     });
   });
 
@@ -826,7 +826,7 @@ describe('Agent Routes', () => {
       const res = await makeRequest(app, 'POST', '/agents/a1/skills', { skillName: 'bad' });
 
       expect(res.status).toBe(400);
-      expect(res.body).toEqual({ error: 'Skill not found' });
+      expect(res.body).toEqual({ error: "Couldn't attach the skill. Please try again." });
     });
   });
 
@@ -849,7 +849,7 @@ describe('Agent Routes', () => {
       const res = await makeRequest(app, 'DELETE', '/agents/a1/skills/bad');
 
       expect(res.status).toBe(400);
-      expect(res.body).toEqual({ error: 'Skill not attached' });
+      expect(res.body).toEqual({ error: "Couldn't remove the skill. Please try again." });
     });
   });
 
@@ -895,7 +895,7 @@ describe('Agent Routes', () => {
       const res = await makeRequest(app, 'POST', '/agents/a1/upgrade-requests', {});
 
       expect(res.status).toBe(400);
-      expect(res.body).toEqual({ error: 'Already requested' });
+      expect(res.body).toEqual({ error: "Couldn't submit the upgrade request. Please try again." });
     });
   });
 

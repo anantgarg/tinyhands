@@ -1150,7 +1150,7 @@ describe('Slack Events -- registerEvents', () => {
         context: { teamId: 'W_TEST_123' },
       });
 
-      expect(mockPostMessage).toHaveBeenCalledWith('D_DM_CHAN', expect.stringContaining('Not authorized'));
+      expect(mockPostMessage).toHaveBeenCalledWith('D_DM_CHAN', expect.stringContaining("Couldn't update permissions"));
     });
 
     it('should ignore DM text that does not match superadmin pattern', async () => {
@@ -1380,7 +1380,7 @@ describe('Slack Events -- registerEvents', () => {
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
-        expect.stringContaining('Failed to connect'),
+        expect.stringContaining("Couldn't connect to the repository"),
         expect.any(String),
       );
     });
@@ -1396,7 +1396,7 @@ describe('Slack Events -- registerEvents', () => {
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
-        expect.stringContaining('Not authorized'),
+        expect.stringContaining("Couldn't approve the tool"),
         expect.any(String),
       );
       expect(mockEnqueueRun).not.toHaveBeenCalled();
@@ -1413,7 +1413,7 @@ describe('Slack Events -- registerEvents', () => {
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
-        expect.stringContaining('Skill not found'),
+        expect.stringContaining("Couldn't add the skill"),
         expect.any(String),
       );
       expect(mockEnqueueRun).not.toHaveBeenCalled();
@@ -1684,7 +1684,7 @@ describe('Slack Events -- registerEvents', () => {
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
-        expect.stringContaining('Version not found'),
+        expect.stringContaining("Couldn't rollback the tool"),
         expect.any(String),
       );
     });
@@ -1700,7 +1700,7 @@ describe('Slack Events -- registerEvents', () => {
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
-        expect.stringContaining('Tool not found'),
+        expect.stringContaining("Couldn't share the tool"),
         expect.any(String),
       );
     });
@@ -1716,7 +1716,7 @@ describe('Slack Events -- registerEvents', () => {
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
-        expect.stringContaining('Permission denied'),
+        expect.stringContaining("Couldn't update permissions"),
         expect.any(String),
       );
     });
@@ -1732,7 +1732,7 @@ describe('Slack Events -- registerEvents', () => {
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
-        expect.stringContaining('Failed to create trigger'),
+        expect.stringContaining("Couldn't create the trigger"),
         expect.any(String),
       );
     });
@@ -1776,7 +1776,7 @@ describe('Slack Events -- registerEvents', () => {
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
-        expect.stringContaining('Memory DB error'),
+        expect.stringContaining("Couldn't forget that memory"),
         expect.any(String),
       );
     });
@@ -1827,7 +1827,7 @@ describe('Slack Events -- registerEvents', () => {
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
-        expect.stringContaining('DB error'),
+        expect.stringContaining("Couldn't list tools"),
         expect.any(String),
       );
     });
@@ -1843,7 +1843,7 @@ describe('Slack Events -- registerEvents', () => {
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
-        expect.stringContaining('Analytics unavailable'),
+        expect.stringContaining("Couldn't load tool stats"),
         expect.any(String),
       );
     });
@@ -1859,7 +1859,7 @@ describe('Slack Events -- registerEvents', () => {
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
-        expect.stringContaining('Search index unavailable'),
+        expect.stringContaining("Couldn't search for tools"),
         expect.any(String),
       );
     });
@@ -1875,7 +1875,7 @@ describe('Slack Events -- registerEvents', () => {
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
-        expect.stringContaining('Version DB error'),
+        expect.stringContaining("Couldn't load tool versions"),
         expect.any(String),
       );
     });
@@ -3323,7 +3323,7 @@ describe('Slack Events -- registerEvents', () => {
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
-        expect.stringContaining('Failed to connect'),
+        expect.stringContaining("Couldn't connect"),
         expect.any(String),
       );
     });
@@ -3381,7 +3381,7 @@ describe('Slack Events -- registerEvents', () => {
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
-        expect.stringContaining('Already a member'),
+        expect.stringContaining("Couldn't add the member"),
         expect.any(String),
       );
     });
@@ -3435,7 +3435,7 @@ describe('Slack Events -- registerEvents', () => {
 
       expect(mockPostMessage).toHaveBeenCalledWith(
         'C_AGENT',
-        expect.stringContaining('Not a member'),
+        expect.stringContaining("Couldn't remove the member"),
         expect.any(String),
       );
     });

@@ -364,7 +364,7 @@ describe('Connection Routes', () => {
       const res = await makeRequest(app, 'DELETE', '/connections/bad');
 
       expect(res.status).toBe(400);
-      expect(res.body).toEqual({ error: 'Not found' });
+      expect(res.body).toEqual({ error: "Couldn't delete the connection. Please try again." });
     });
   });
 
@@ -572,7 +572,7 @@ describe('Trigger Routes', () => {
       });
 
       expect(res.status).toBe(400);
-      expect(res.body).toEqual({ error: 'Invalid type' });
+      expect(res.body).toEqual({ error: "Couldn't create the trigger. Please try again." });
     });
   });
 
@@ -603,7 +603,7 @@ describe('Trigger Routes', () => {
       const res = await makeRequest(app, 'PATCH', '/triggers/t1', { enabled: true });
 
       expect(res.status).toBe(400);
-      expect(res.body).toEqual({ error: 'Not found' });
+      expect(res.body).toEqual({ error: "Couldn't update the trigger. Please try again." });
     });
   });
 
@@ -776,7 +776,7 @@ describe('Workflow Routes', () => {
       const res = await makeRequest(app, 'POST', '/workflows/definitions/bad/start');
 
       expect(res.status).toBe(400);
-      expect(res.body).toEqual({ error: 'Not found' });
+      expect(res.body).toEqual({ error: "Couldn't start the workflow. Please try again." });
     });
   });
 
@@ -891,7 +891,7 @@ describe('Evolution Routes', () => {
       const res = await makeRequest(app, 'POST', '/evolution/proposals/bad/approve');
 
       expect(res.status).toBe(400);
-      expect(res.body).toEqual({ error: 'Not found' });
+      expect(res.body).toEqual({ error: "Couldn't approve the proposal. Please try again." });
     });
   });
 
@@ -1049,7 +1049,7 @@ describe('Settings Routes', () => {
       });
 
       expect(res.status).toBe(400);
-      expect(res.body).toEqual({ error: 'Invalid key' });
+      expect(res.body).toEqual({ error: "Couldn't update the setting. Please try again." });
     });
   });
 });

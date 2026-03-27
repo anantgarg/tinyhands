@@ -205,7 +205,7 @@ describe('Auth Routes', () => {
       const res = await makeRequest(app, 'GET', '/auth/slack');
 
       expect(res.status).toBe(500);
-      expect(res.body).toEqual({ error: 'SLACK_CLIENT_ID not configured' });
+      expect(res.body).toEqual({ error: 'Something went wrong. Please try again.' });
 
       appConfig.slack.clientId = origClientId;
     });
@@ -228,7 +228,7 @@ describe('Auth Routes', () => {
       const res = await makeRequest(app, 'GET', '/auth/slack/callback?code=bad-code');
 
       expect(res.status).toBe(400);
-      expect(res.body.error).toContain('Slack OAuth failed');
+      expect(res.body.error).toContain('Authentication failed');
 
       globalThis.fetch = originalFetch;
     });
@@ -263,7 +263,7 @@ describe('Auth Routes', () => {
       const res = await makeRequest(app, 'GET', '/auth/slack/callback?code=valid-code');
 
       expect(res.status).toBe(400);
-      expect(res.body.error).toContain('Failed to fetch user identity');
+      expect(res.body.error).toContain('Authentication failed');
 
       globalThis.fetch = originalFetch;
     });
@@ -333,7 +333,7 @@ describe('Auth Routes', () => {
       const res = await makeRequest(app, 'GET', '/auth/slack/callback?code=valid-code');
 
       expect(res.status).toBe(500);
-      expect(res.body).toEqual({ error: 'Authentication failed. Please try again.' });
+      expect(res.body).toEqual({ error: 'Something went wrong. Please try again in a moment.' });
 
       globalThis.fetch = originalFetch;
     });

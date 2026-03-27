@@ -148,7 +148,7 @@ router.post('/entries', async (req: Request, res: Response) => {
     res.status(201).json(entry);
   } catch (err: any) {
     logger.error('Create KB entry error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: "Couldn\'t create the knowledge base entry. Please try again." });
   }
 });
 
@@ -161,7 +161,7 @@ router.post('/entries/:id/approve', requireAdmin, async (req: Request, res: Resp
     res.json(entry);
   } catch (err: any) {
     logger.error('Approve KB entry error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: "Couldn\'t approve the entry. Please try again." });
   }
 });
 
@@ -174,7 +174,7 @@ router.delete('/entries/:id', requireAdmin, async (req: Request, res: Response) 
     res.json({ ok: true });
   } catch (err: any) {
     logger.error('Delete KB entry error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: "Couldn\'t delete the entry. Please try again." });
   }
 });
 
@@ -200,7 +200,7 @@ router.patch('/entries/:id', requireAdmin, async (req: Request, res: Response) =
     res.json(entry);
   } catch (err: any) {
     logger.error('Update KB entry error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: "Couldn\'t update the entry. Please try again." });
   }
 });
 
@@ -245,7 +245,7 @@ router.post('/sources', requireAdmin, async (req: Request, res: Response) => {
     res.status(201).json(source);
   } catch (err: any) {
     logger.error('Create KB source error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: "Couldn\'t create the source. Please try again." });
   }
 });
 
@@ -261,7 +261,7 @@ router.patch('/sources/:id', requireAdmin, async (req: Request, res: Response) =
     res.json({ ok: true });
   } catch (err: any) {
     logger.error('Update KB source error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: "Couldn\'t update the source. Please try again." });
   }
 });
 
@@ -274,7 +274,7 @@ router.delete('/sources/:id', requireAdmin, async (req: Request, res: Response) 
     res.json({ ok: true });
   } catch (err: any) {
     logger.error('Delete KB source error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: "Couldn\'t delete the source. Please try again." });
   }
 });
 
@@ -287,7 +287,7 @@ router.post('/sources/:id/sync', requireAdmin, async (req: Request, res: Respons
     res.json({ ok: true, message: 'Sync started' });
   } catch (err: any) {
     logger.error('Sync KB source error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: "Couldn\'t start the sync. Please try again." });
   }
 });
 
@@ -300,7 +300,7 @@ router.post('/sources/:id/flush-and-resync', requireAdmin, async (req: Request, 
     res.json({ ok: true, message: 'Flush and resync started' });
   } catch (err: any) {
     logger.error('Flush and resync error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: "Couldn\'t resync the source. Please try again." });
   }
 });
 
@@ -332,7 +332,7 @@ router.put('/api-keys/:provider', requireAdmin, async (req: Request, res: Respon
     res.json(key);
   } catch (err: any) {
     logger.error('Set API key error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: "Couldn\'t save the API key. Please try again." });
   }
 });
 
@@ -345,7 +345,7 @@ router.delete('/api-keys/:provider', requireAdmin, async (req: Request, res: Res
     res.json({ ok: true });
   } catch (err: any) {
     logger.error('Delete API key error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: "Couldn\'t delete the API key. Please try again." });
   }
 });
 
@@ -381,7 +381,7 @@ router.get('/drive-folders', requireAdmin, async (req: Request, res: Response) =
     res.json({ parentId, folders });
   } catch (err: any) {
     logger.error('Drive folders error', { error: err.message });
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: "Couldn\'t load Drive folders. Please try again." });
   }
 });
 

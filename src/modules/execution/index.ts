@@ -530,7 +530,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
     const agentProducedOutput = exitCode === 0 && !isEmptyOutput;
     const output = exitCode === 0
       ? trimmedOutput || 'Task completed successfully'
-      : `Task failed with exit code ${exitCode}: ${outputData.output}`;
+      : `Task failed (exit code ${exitCode}): ${outputData.output}`;
 
     await updateRunRecord(workspaceId, runRecord.id, {
       status,
@@ -583,7 +583,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
         await cleanupStatusMessage(data.channelId, data.threadTs, data.agentId);
         const errorMessage = exitCode === 137
           ? `Task was interrupted after ${(durationMs / 1000 / 60).toFixed(0)} minutes — the agent ran out of time or resources. Try simplifying the request or breaking it into smaller steps.`
-          : (outputData.output || `Task failed with exit code ${exitCode}`);
+          : (outputData.output || 'Something went wrong while running this task. Please try again.');
         bufferEvent(
           data.channelId,
           data.threadTs,
@@ -645,7 +645,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
         'error',
         isTimeout
           ? `Task timed out after ${(durationMs / 1000).toFixed(0)}s`
-          : err.message,
+          : 'Something went wrong while running this task. Please try again.',
         agent.name,
         agent.avatar_emoji,
         false,

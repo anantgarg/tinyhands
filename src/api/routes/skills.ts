@@ -49,7 +49,7 @@ router.post('/', requireAdmin, async (req: Request, res: Response) => {
     res.status(201).json(skill);
   } catch (err: any) {
     logger.error('Create skill error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: "Couldn\'t create the skill. Please try again." });
   }
 });
 
@@ -68,7 +68,7 @@ router.put('/:id', requireAdmin, async (req: Request, res: Response) => {
     res.json(skill);
   } catch (err: any) {
     logger.error('Update skill error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: "Couldn\'t update the skill. Please try again." });
   }
 });
 
@@ -81,7 +81,7 @@ router.delete('/:id', requireAdmin, async (req: Request, res: Response) => {
     res.json({ ok: true });
   } catch (err: any) {
     logger.error('Delete skill error', { error: err.message });
-    res.status(400).json({ error: err.message });
+    res.status(400).json({ error: "Couldn\'t delete the skill. Please try again." });
   }
 });
 
@@ -123,7 +123,7 @@ Return ONLY valid JSON, no markdown fences.`,
     });
   } catch (err: any) {
     logger.error('Generate skill error', { error: err.message });
-    res.status(500).json({ error: 'Failed to generate skill: ' + err.message });
+    res.status(500).json({ error: "Couldn\'t generate the skill. Please try again." });
   }
 });
 

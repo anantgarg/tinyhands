@@ -1359,7 +1359,7 @@ describe('Commands Module', () => {
 
       await app.handlers.action['confirm_new_agent']({ action, ack, body });
 
-      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('DB write failed'), 'msg-ts');
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining("Couldn't create the agent"), 'msg-ts');
     });
 
     it('confirm_new_agent should auto-invite bot to private channel when conversations.info fails', async () => {
@@ -1442,7 +1442,7 @@ describe('Commands Module', () => {
       await app.handlers.action['confirm_new_agent']({ action, ack, body });
 
       expect(mockCreateAgent).not.toHaveBeenCalled();
-      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('invite'), 'msg-ts');
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining("Couldn't create the agent"), 'msg-ts');
     });
 
     it('dismiss_feature_request should delete confirmation', async () => {
@@ -1888,7 +1888,7 @@ describe('Commands Module', () => {
 
       await app.handlers.action['agent_overflow']({ action, ack, body });
 
-      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('Permission denied'));
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining("Couldn't pause the agent"));
     });
 
     it('agent_overflow update should deny unpermitted users', async () => {
@@ -2104,7 +2104,7 @@ describe('Commands Module', () => {
       expect(mockSendDMBlocks).toHaveBeenCalledWith(
         'U1',
         expect.arrayContaining([
-          expect.objectContaining({ text: expect.objectContaining({ text: expect.stringContaining('Failed') }) }),
+          expect.objectContaining({ text: expect.objectContaining({ text: expect.stringContaining("Couldn't update the tool configuration") }) }),
         ]),
         expect.any(String),
       );
@@ -2402,7 +2402,7 @@ describe('Commands Module', () => {
 
       await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'daily');
 
-      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('API timeout'), 'thread-1');
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining("Couldn't analyze the goal"), 'thread-1');
     });
 
     // ── awaiting_update_request step ──
@@ -2860,7 +2860,7 @@ describe('Commands Module', () => {
 
       await app.handlers.action['tool_overflow']({ action, ack, body });
 
-      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('Already approved'));
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining("Couldn't approve the tool"));
     });
 
     it('should handle delete action', async () => {
@@ -2896,7 +2896,7 @@ describe('Commands Module', () => {
 
       await app.handlers.action['tool_overflow']({ action, ack, body });
 
-      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('Tool in use'));
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining("Couldn't delete the tool"));
     });
   });
 
@@ -2992,7 +2992,7 @@ describe('Commands Module', () => {
 
       await app.handlers.action['kb_source_overflow']({ action, ack, body });
 
-      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('API Keys'));
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining("Couldn't sync the source"));
     });
 
     it('should handle sync action with generic error', async () => {
@@ -3011,7 +3011,7 @@ describe('Commands Module', () => {
 
       await app.handlers.action['kb_source_overflow']({ action, ack, body });
 
-      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('Network error'));
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining("Couldn't sync the source"));
     });
 
     it('should handle flush action success', async () => {
@@ -3193,7 +3193,7 @@ describe('Commands Module', () => {
 
       await app.handlers.action['kb_entry_overflow']({ action, ack, body });
 
-      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('Already approved'));
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining("Couldn't approve the entry"));
     });
 
     it('should handle delete action', async () => {
@@ -3229,7 +3229,7 @@ describe('Commands Module', () => {
 
       await app.handlers.action['kb_entry_overflow']({ action, ack, body });
 
-      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('Cannot delete'));
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining("Couldn't delete the entry"));
     });
   });
 
@@ -3347,7 +3347,7 @@ describe('Commands Module', () => {
       expect(mockSendDMBlocks).toHaveBeenCalledWith(
         'U1',
         expect.arrayContaining([
-          expect.objectContaining({ text: expect.objectContaining({ text: expect.stringContaining('Failed to create source') }) }),
+          expect.objectContaining({ text: expect.objectContaining({ text: expect.stringContaining("Couldn't create the source") }) }),
         ]),
         expect.any(String),
       );
@@ -3456,7 +3456,7 @@ describe('Commands Module', () => {
       expect(mockSendDMBlocks).toHaveBeenCalledWith(
         'U1',
         expect.arrayContaining([
-          expect.objectContaining({ text: expect.objectContaining({ text: expect.stringContaining('Failed to save API key') }) }),
+          expect.objectContaining({ text: expect.objectContaining({ text: expect.stringContaining("Couldn't save the API key") }) }),
         ]),
         expect.any(String),
       );
@@ -3559,7 +3559,7 @@ describe('Commands Module', () => {
       expect(mockSendDMBlocks).toHaveBeenCalledWith(
         'U1',
         expect.arrayContaining([
-          expect.objectContaining({ text: expect.objectContaining({ text: expect.stringContaining('Failed to save API keys') }) }),
+          expect.objectContaining({ text: expect.objectContaining({ text: expect.stringContaining("Couldn't save the API keys") }) }),
         ]),
         expect.any(String),
       );
@@ -3685,7 +3685,7 @@ describe('Commands Module', () => {
 
       await app.handlers.view['kb_source_details_modal']({ ack, body, view });
 
-      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('Failed to create source'), 'ts-1');
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining("Couldn't create the source"), 'ts-1');
     });
   });
 
@@ -4114,7 +4114,7 @@ describe('Commands Module', () => {
 
       await app.handlers.action['agent_overflow']({ action, ack, body });
 
-      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('Agent locked'));
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining("Couldn't resume the agent"));
     });
   });
 
@@ -4139,7 +4139,7 @@ describe('Commands Module', () => {
       await app.handlers.action['confirm_delete_agent']({ action, ack, body });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('FK constraint'), 'msg-ts');
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining("Couldn't delete the agent"), 'msg-ts');
     });
   });
 
@@ -4164,7 +4164,7 @@ describe('Commands Module', () => {
 
       await app.handlers.action['kb_source_overflow']({ action, ack, body });
 
-      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('Flush failed'));
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining("Couldn't resync the source"));
     });
   });
 
@@ -4581,8 +4581,10 @@ describe('Commands Module', () => {
       expect(ack).toHaveBeenCalled();
       expect(mockSendDMBlocks).toHaveBeenCalledWith(
         'U1',
-        expect.any(Array),
-        expect.stringContaining('Registration error'),
+        expect.arrayContaining([
+          expect.objectContaining({ text: expect.objectContaining({ text: expect.stringContaining("Couldn't open the registration form") }) }),
+        ]),
+        expect.any(String),
       );
     });
   });
@@ -4677,7 +4679,7 @@ describe('Commands Module', () => {
       expect(mockSendDMBlocks).toHaveBeenCalledWith(
         'U1',
         expect.arrayContaining([
-          expect.objectContaining({ text: expect.objectContaining({ text: expect.stringContaining('Failed to register') }) }),
+          expect.objectContaining({ text: expect.objectContaining({ text: expect.stringContaining("Couldn't connect the service") }) }),
         ]),
         expect.any(String),
       );
@@ -4789,7 +4791,7 @@ describe('Commands Module', () => {
 
       await app.handlers.action['confirm_update_agent']({ action, ack, body, respond });
 
-      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('Agent vanished'), 'thread-ts-1');
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining("Couldn't update the agent"), 'thread-ts-1');
     });
 
     it('should handle update error without thread (fallback to respond)', async () => {
@@ -4817,7 +4819,7 @@ describe('Commands Module', () => {
 
       await app.handlers.action['confirm_update_agent']({ action, ack, body, respond });
 
-      expect(respond).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining('Agent vanished') }));
+      expect(respond).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining("Couldn't update the agent") }));
     });
 
     it('should use respond when no channelId/threadTs in data', async () => {
@@ -5233,7 +5235,7 @@ describe('Commands Module', () => {
       const result = await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'service_account_json: bad_value');
 
       expect(result).toBe(true);
-      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('Failed to save'), 'thread-1');
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining("Couldn't save the API keys"), 'thread-1');
     });
   });
 
@@ -5257,7 +5259,7 @@ describe('Commands Module', () => {
       const result = await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'name: Duplicate Source');
 
       expect(result).toBe(true);
-      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('Failed to create source'), 'thread-1');
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining("Couldn't create the source"), 'thread-1');
     });
 
     it('should handle sync failure after source creation', async () => {
@@ -5280,7 +5282,7 @@ describe('Commands Module', () => {
       const result = await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'name: My Source');
 
       expect(result).toBe(true);
-      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('Sync failed to start'), 'thread-1');
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining("Sync couldn't start automatically"), 'thread-1');
     });
 
     it('should re-insert state when name is missing', async () => {
@@ -5326,7 +5328,7 @@ describe('Commands Module', () => {
       const result = await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'service_account_json: bad');
 
       expect(result).toBe(true);
-      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('Failed to save'), 'thread-1');
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining("Couldn't save the API keys"), 'thread-1');
     });
   });
 
@@ -5389,7 +5391,7 @@ describe('Commands Module', () => {
 
       await app.handlers.action['retry_agent_creation']({ action, ack, body });
 
-      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('Channel limit'), 'msg-ts');
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining("Couldn't create the agent"), 'msg-ts');
     });
   });
 
@@ -5525,7 +5527,7 @@ describe('Commands Module', () => {
       await app.handlers.action['approve_write_tools']({ action, ack, body });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('Failed to approve'), 'msg-ts');
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining("Couldn't complete the approval"), 'msg-ts');
     });
 
     it('should silently handle addToolToAgent failure and still succeed', async () => {
@@ -5901,7 +5903,7 @@ describe('Commands Module', () => {
       expect(mockSendDMBlocks).toHaveBeenCalledWith(
         'U1',
         expect.arrayContaining([
-          expect.objectContaining({ text: expect.objectContaining({ text: expect.stringContaining('Access update failed') }) }),
+          expect.objectContaining({ text: expect.objectContaining({ text: expect.stringContaining("Couldn't update the access level") }) }),
         ]),
         expect.any(String),
       );
@@ -5935,7 +5937,7 @@ describe('Commands Module', () => {
       expect(mockSendDMBlocks).toHaveBeenCalledWith(
         'U1',
         expect.arrayContaining([
-          expect.objectContaining({ text: expect.objectContaining({ text: expect.stringContaining('Tool already added') }) }),
+          expect.objectContaining({ text: expect.objectContaining({ text: expect.stringContaining("Couldn't add the tool to the agent") }) }),
         ]),
         expect.any(String),
       );
@@ -5972,7 +5974,7 @@ describe('Commands Module', () => {
       expect(mockSendDMBlocks).toHaveBeenCalledWith(
         'U1',
         expect.arrayContaining([
-          expect.objectContaining({ text: expect.objectContaining({ text: expect.stringContaining('Failed to create KB entry') }) }),
+          expect.objectContaining({ text: expect.objectContaining({ text: expect.stringContaining("Couldn't create the knowledge base entry") }) }),
         ]),
         expect.any(String),
       );
@@ -6006,7 +6008,7 @@ describe('Commands Module', () => {
       expect(mockSendDMBlocks).toHaveBeenCalledWith(
         'U1',
         expect.arrayContaining([
-          expect.objectContaining({ text: expect.objectContaining({ text: expect.stringContaining('Failed to update source config') }) }),
+          expect.objectContaining({ text: expect.objectContaining({ text: expect.stringContaining("Couldn't update the source configuration") }) }),
         ]),
         expect.any(String),
       );
@@ -6044,7 +6046,7 @@ describe('Commands Module', () => {
 
       await app.handlers.view['kb_source_details_modal']({ ack, body, view });
 
-      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('Sync failed to start'), 'ts-1');
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining("Sync couldn't start automatically"), 'ts-1');
     });
   });
 
@@ -6249,7 +6251,7 @@ describe('Commands Module', () => {
       const result = await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'set channels to <#CFAIL|fail>');
 
       expect(result).toBe(true);
-      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('Failed to update channels'), 'thread-1');
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining("Couldn't update the channels"), 'thread-1');
     });
   });
 
@@ -6297,7 +6299,7 @@ describe('Commands Module', () => {
       const result = await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'change to billing bot');
 
       expect(result).toBe(true);
-      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('Analysis timeout'), 'thread-1');
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining("Couldn't analyze the updated goal"), 'thread-1');
     });
 
     it('should handle missing agent in update agent goal', async () => {
@@ -7040,8 +7042,7 @@ describe('Commands Module', () => {
 
       const result = await handleConversationReply('W_TEST_123', 'U1', 'C1', 'thread-1', 'update behavior <#CNEW|ch>');
       expect(result).toBe(true);
-      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('Failed to analyze updated goal'), 'thread-1');
-      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('API rate limit'), 'thread-1');
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining("Couldn't analyze the updated goal"), 'thread-1');
     });
   });
 
@@ -8314,7 +8315,7 @@ describe('Commands Module', () => {
       await app.handlers.action['template_confirm']({ action, ack, body });
 
       expect(ack).toHaveBeenCalled();
-      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining('Failed to activate template'), 'msg-ts');
+      expect(mockPostMessage).toHaveBeenCalledWith('C1', expect.stringContaining("Couldn't activate the template"), 'msg-ts');
     });
   });
 

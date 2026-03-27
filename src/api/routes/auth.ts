@@ -9,7 +9,8 @@ const router = Router();
 router.get('/slack', (_req: Request, res: Response) => {
   const clientId = config.slack.clientId;
   if (!clientId) {
-    res.status(500).json({ error: 'SLACK_CLIENT_ID not configured' });
+    logger.error('SLACK_CLIENT_ID not configured');
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
     return;
   }
 
@@ -49,7 +50,7 @@ router.get('/slack/callback', async (req: Request, res: Response) => {
     const tokenData = await tokenResponse.json() as any;
     if (!tokenData.ok) {
       logger.error('Slack OAuth token exchange failed', { error: tokenData.error });
-      res.status(400).json({ error: `Slack OAuth failed: ${tokenData.error}` });
+      res.status(400).json({ error: 'Authentication failed. Please try again.' });
       return;
     }
 
@@ -67,7 +68,7 @@ router.get('/slack/callback', async (req: Request, res: Response) => {
     const identityData = await identityResponse.json() as any;
     if (!identityData.ok) {
       logger.error('Slack identity fetch failed', { error: identityData.error });
-      res.status(400).json({ error: `Failed to fetch user identity: ${identityData.error}` });
+      res.status(400).json({ error: 'Authentication failed. Please try again.' });
       return;
     }
 
@@ -104,9 +105,8 @@ router.get('/slack/callback', async (req: Request, res: Response) => {
       res.redirect('/');
     });
   } catch (err: any) {
-    const isDbError = err.message?.includes('connection') || err.message?.includes('ECONNREFUSED') || err.message?.includes('remaining connection slots');
-    logger.error('Slack OAuth callback error', { error: err.message, isDbError });
-    res.status(500).json({ error: isDbError ? 'Authentication failed: database temporarily unavailable. Please try again in a moment.' : 'Authentication failed. Please try again.' });
+    logger.error('Slack OAuth callback error', { error: err.message });
+    res.status(500).json({ error: 'Something went wrong. Please try again in a moment.' });
   }
 });
 

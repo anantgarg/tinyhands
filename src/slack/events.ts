@@ -324,7 +324,8 @@ export function registerEvents(app: App): void {
             await addSuperadmin(workspaceId, match[1], userId);
             await postMessage(channelId, `:white_check_mark: <@${match[1]}> added as superadmin`);
           } catch (err: any) {
-            await postMessage(channelId, `:x: ${err.message}`);
+            logger.error('Add superadmin failed', { error: err.message });
+            await postMessage(channelId, ':x: Couldn\'t update permissions. Please try again.');
           }
           return;
         }
@@ -760,7 +761,8 @@ async function handleAgentChannelCommand(
       }
       return true;
     } catch (err: any) {
-      await postMessage(channelId, `:x: Failed to connect: ${err.message}`, threadTs);
+      logger.error('GitHub connect failed', { error: err.message });
+      await postMessage(channelId, ':x: Couldn\'t connect to the repository. Please check your configuration and try again.', threadTs);
       return true;
     }
   }
@@ -790,7 +792,8 @@ async function handleAgentChannelCommand(
       );
       return true;
     } catch (err: any) {
-      await postMessage(channelId, `:x: Failed to connect: ${err.message}`, threadTs);
+      logger.error('Google Drive connect failed', { error: err.message });
+      await postMessage(channelId, ':x: Couldn\'t connect to Google Drive. Please check your configuration and try again.', threadTs);
       return true;
     }
   }
@@ -834,7 +837,8 @@ async function handleAgentChannelCommand(
       );
       return true;
     } catch (err: any) {
-      await postMessage(channelId, `:x: Failed to create trigger: ${err.message}`, threadTs);
+      logger.error('Create trigger failed', { error: err.message });
+      await postMessage(channelId, ':x: Couldn\'t create the trigger. Please try again.', threadTs);
       return true;
     }
   }
@@ -855,7 +859,8 @@ async function handleAgentChannelCommand(
       );
       return true;
     } catch (err: any) {
-      await postMessage(channelId, `:x: ${err.message}`, threadTs);
+      logger.error('Attach skill failed', { error: err.message });
+      await postMessage(channelId, ':x: Couldn\'t add the skill. Please try again.', threadTs);
       return true;
     }
   }
@@ -874,7 +879,8 @@ async function handleAgentChannelCommand(
       await postMessage(channelId, `:white_check_mark: <@${addMemberMatch[1]}> added as a member of *${agent.name}*`, threadTs);
       return true;
     } catch (err: any) {
-      await postMessage(channelId, `:x: ${err.message}`, threadTs);
+      logger.error('Add member failed', { error: err.message });
+      await postMessage(channelId, ':x: Couldn\'t add the member. Please try again.', threadTs);
       return true;
     }
   }
@@ -891,7 +897,8 @@ async function handleAgentChannelCommand(
       await postMessage(channelId, `:white_check_mark: <@${removeMemberMatch[1]}> removed from *${agent.name}*`, threadTs);
       return true;
     } catch (err: any) {
-      await postMessage(channelId, `:x: ${err.message}`, threadTs);
+      logger.error('Remove member failed', { error: err.message });
+      await postMessage(channelId, ':x: Couldn\'t remove the member. Please try again.', threadTs);
       return true;
     }
   }
@@ -905,7 +912,8 @@ async function handleAgentChannelCommand(
       await postMessage(channelId, `:white_check_mark: <@${adminMatch[1]}> is now an admin of *${agent.name}*`, threadTs);
       return true;
     } catch (err: any) {
-      await postMessage(channelId, `:x: ${err.message}`, threadTs);
+      logger.error('Add admin failed', { error: err.message });
+      await postMessage(channelId, ':x: Couldn\'t update permissions. Please try again.', threadTs);
       return true;
     }
   }
@@ -925,7 +933,8 @@ async function handleAgentChannelCommand(
       );
       return true;
     } catch (err: any) {
-      await postMessage(channelId, `:x: ${err.message}`, threadTs);
+      logger.error('Forget memory failed', { error: err.message });
+      await postMessage(channelId, ':x: Couldn\'t forget that memory. Please try again.', threadTs);
       return true;
     }
   }
@@ -961,7 +970,8 @@ async function handleAgentChannelCommand(
       await postMessage(channelId, `:white_check_mark: Tool *${approveToolMatch[1]}* approved.`, threadTs);
       return true;
     } catch (err: any) {
-      await postMessage(channelId, `:x: ${err.message}`, threadTs);
+      logger.error('Approve tool failed', { error: err.message });
+      await postMessage(channelId, ':x: Couldn\'t approve the tool. Please try again.', threadTs);
       return true;
     }
   }
@@ -975,7 +985,8 @@ async function handleAgentChannelCommand(
       await postMessage(channelId, `:handshake: Tool *${shareToolMatch[1]}* shared with *${shareToolMatch[2]}*.`, threadTs);
       return true;
     } catch (err: any) {
-      await postMessage(channelId, `:x: ${err.message}`, threadTs);
+      logger.error('Share tool failed', { error: err.message });
+      await postMessage(channelId, ':x: Couldn\'t share the tool. Please try again.', threadTs);
       return true;
     }
   }
@@ -989,7 +1000,8 @@ async function handleAgentChannelCommand(
       await postMessage(channelId, `:rewind: Tool *${rollbackMatch[1]}* rolled back to version ${rollbackMatch[2]}.`, threadTs);
       return true;
     } catch (err: any) {
-      await postMessage(channelId, `:x: ${err.message}`, threadTs);
+      logger.error('Rollback tool failed', { error: err.message });
+      await postMessage(channelId, ':x: Couldn\'t rollback the tool. Please try again.', threadTs);
       return true;
     }
   }
@@ -1011,7 +1023,8 @@ async function handleAgentChannelCommand(
       await postMessage(channelId, lines.join('\n'), threadTs);
       return true;
     } catch (err: any) {
-      await postMessage(channelId, `:x: ${err.message}`, threadTs);
+      logger.error('Tool stats failed', { error: err.message });
+      await postMessage(channelId, ':x: Couldn\'t load tool stats. Please try again.', threadTs);
       return true;
     }
   }
@@ -1033,7 +1046,8 @@ async function handleAgentChannelCommand(
       await postMessage(channelId, lines.join('\n'), threadTs);
       return true;
     } catch (err: any) {
-      await postMessage(channelId, `:x: ${err.message}`, threadTs);
+      logger.error('Tool versions failed', { error: err.message });
+      await postMessage(channelId, ':x: Couldn\'t load tool versions. Please try again.', threadTs);
       return true;
     }
   }
@@ -1055,7 +1069,8 @@ async function handleAgentChannelCommand(
       await postMessage(channelId, lines.join('\n'), threadTs);
       return true;
     } catch (err: any) {
-      await postMessage(channelId, `:x: ${err.message}`, threadTs);
+      logger.error('Find tool failed', { error: err.message });
+      await postMessage(channelId, ':x: Couldn\'t search for tools. Please try again.', threadTs);
       return true;
     }
   }
@@ -1091,7 +1106,8 @@ async function handleAgentChannelCommand(
       await postMessage(channelId, lines.join('\n'), threadTs);
       return true;
     } catch (err: any) {
-      await postMessage(channelId, `:x: ${err.message}`, threadTs);
+      logger.error('Show tools failed', { error: err.message });
+      await postMessage(channelId, ':x: Couldn\'t list tools. Please try again.', threadTs);
       return true;
     }
   }
