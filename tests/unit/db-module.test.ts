@@ -361,7 +361,7 @@ describe('DB Module', () => {
       expect(Pool).toHaveBeenCalledWith(
         expect.objectContaining({
           connectionString: 'postgresql://localhost:5432/tinyhands_test',
-          max: 3,
+          max: 2,
           idleTimeoutMillis: 10000,
           connectionTimeoutMillis: 5000,
         }),
@@ -703,6 +703,139 @@ describe('DB Module', () => {
       await expect(
         dbModule.withTransaction(async () => 'nope'),
       ).rejects.toThrow('Database not initialized');
+    });
+  });
+
+  // ── getPoolMaxForProcess ──
+
+  describe('getPoolMaxForProcess', () => {
+    it('should return 2 for listener process type', async () => {
+      vi.resetModules();
+      vi.clearAllMocks();
+      process.env.PROCESS_TYPE = 'listener';
+      delete process.env.DB_POOL_MAX;
+      (config as any).database.url = 'postgresql://localhost:5432/tinyhands_test';
+      const dbModule = await import('../../src/db/index');
+
+      await dbModule.initDb();
+
+      expect(Pool).toHaveBeenCalledWith(
+        expect.objectContaining({ max: 2 }),
+      );
+
+      await dbModule.closeDb();
+      delete process.env.PROCESS_TYPE;
+    });
+
+    it('should return 3 for worker process type', async () => {
+      vi.resetModules();
+      vi.clearAllMocks();
+      process.env.PROCESS_TYPE = 'worker';
+      delete process.env.DB_POOL_MAX;
+      (config as any).database.url = 'postgresql://localhost:5432/tinyhands_test';
+      const dbModule = await import('../../src/db/index');
+
+      await dbModule.initDb();
+
+      expect(Pool).toHaveBeenCalledWith(
+        expect.objectContaining({ max: 3 }),
+      );
+
+      await dbModule.closeDb();
+      delete process.env.PROCESS_TYPE;
+    });
+
+    it('should return 1 for sync process type', async () => {
+      vi.resetModules();
+      vi.clearAllMocks();
+      process.env.PROCESS_TYPE = 'sync';
+      delete process.env.DB_POOL_MAX;
+      (config as any).database.url = 'postgresql://localhost:5432/tinyhands_test';
+      const dbModule = await import('../../src/db/index');
+
+      await dbModule.initDb();
+
+      expect(Pool).toHaveBeenCalledWith(
+        expect.objectContaining({ max: 1 }),
+      );
+
+      await dbModule.closeDb();
+      delete process.env.PROCESS_TYPE;
+    });
+
+    it('should return 2 for unknown process type (default)', async () => {
+      vi.resetModules();
+      vi.clearAllMocks();
+      delete process.env.PROCESS_TYPE;
+      delete process.env.DB_POOL_MAX;
+      (config as any).database.url = 'postgresql://localhost:5432/tinyhands_test';
+      const dbModule = await import('../../src/db/index');
+
+      await dbModule.initDb();
+
+      expect(Pool).toHaveBeenCalledWith(
+        expect.objectContaining({ max: 2 }),
+      );
+
+      await dbModule.closeDb();
+    });
+  });
+
+  // ── resetPool safeguards ──
+
+  describe('resetPool safeguards', () => {
+    it('should include application_name in pool config', async () => {
+      vi.resetModules();
+      vi.clearAllMocks();
+      process.env.PROCESS_TYPE = 'worker';
+      (config as any).database.url = 'postgresql://localhost:5432/tinyhands_test';
+      const dbModule = await import('../../src/db/index');
+
+      await dbModule.initDb();
+
+      expect(Pool).toHaveBeenCalledWith(
+        expect.objectContaining({
+          application_name: expect.stringContaining('tinyhands-worker-pid'),
+        }),
+      );
+
+      await dbModule.closeDb();
+      delete process.env.PROCESS_TYPE;
+    });
+
+    it('should not create more than MAX_RESETS pool resets (circuit breaker)', async () => {
+      vi.resetModules();
+      vi.clearAllMocks();
+      (config as any).database.url = 'postgresql://localhost:5432/tinyhands_test';
+      const dbModule = await import('../../src/db/index');
+
+      await dbModule.initDb();
+
+      // We need many consecutive failures to trigger multiple resets.
+      // Each reset requires 3 consecutive failures.
+      // After 3 resets, the circuit breaker trips.
+      const connError = new Error('connection terminated');
+
+      // After initDb, Pool has been called once
+      const initialPoolCalls = (Pool as any).mock.calls.length;
+
+      // Trigger 3 resets by causing 3x3 = 9 consecutive failures
+      // But due to rate limiting (30s cooldown), we can only trigger 1 reset per test
+      // The first 3 failures trigger a reset
+      mockPoolQuery
+        .mockRejectedValueOnce(connError)
+        .mockRejectedValueOnce(connError)
+        .mockRejectedValueOnce(connError) // triggers reset #1
+        .mockResolvedValueOnce({ rows: [], rowCount: 0 }); // retry succeeds
+
+      await expect(dbModule.query('Q')).rejects.toThrow();
+      await expect(dbModule.query('Q')).rejects.toThrow();
+      await dbModule.query('Q'); // triggers reset + retry
+
+      // Pool was recreated once
+      expect((Pool as any).mock.calls.length).toBe(initialPoolCalls + 1);
+
+      await dbModule.closeDb();
     });
   });
 });

@@ -1,5 +1,5 @@
 process.env.PROCESS_TYPE = 'scheduler';
-import { initDb, upsertWorkspace, setDefaultWorkspaceId } from './db';
+import { initDb, upsertWorkspace, setDefaultWorkspaceId, closeDb } from './db';
 import { initSlackClient, getSlackApp } from './slack';
 import { config } from './config';
 import { getScheduledTriggersDue, fireTrigger, updateTriggerLastFired, getTriggerLastFiredAt } from './modules/triggers';
@@ -26,7 +26,7 @@ async function main(): Promise<void> {
   setDefaultWorkspaceId(authResult.team_id as string);
   logger.info('Scheduler workspace bootstrapped', { workspaceId: authResult.team_id });
 
-  setInterval(async () => {
+  const schedulerInterval = setInterval(async () => {
     try {
       const triggers = await getScheduledTriggersDue();
       if (triggers.length === 0) return;
@@ -87,8 +87,10 @@ async function main(): Promise<void> {
 
   logger.info('Scheduler process ready');
 
-  process.on('SIGTERM', () => {
+  process.on('SIGTERM', async () => {
     logger.info('Scheduler process shutting down...');
+    clearInterval(schedulerInterval);
+    await closeDb();
     process.exit(0);
   });
 }

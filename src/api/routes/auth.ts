@@ -104,8 +104,9 @@ router.get('/slack/callback', async (req: Request, res: Response) => {
       res.redirect('/');
     });
   } catch (err: any) {
-    logger.error('Slack OAuth callback error', { error: err.message });
-    res.status(500).json({ error: 'Authentication failed' });
+    const isDbError = err.message?.includes('connection') || err.message?.includes('ECONNREFUSED') || err.message?.includes('remaining connection slots');
+    logger.error('Slack OAuth callback error', { error: err.message, isDbError });
+    res.status(500).json({ error: isDbError ? 'Authentication failed: database temporarily unavailable. Please try again in a moment.' : 'Authentication failed. Please try again.' });
   }
 });
 

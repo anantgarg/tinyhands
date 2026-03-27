@@ -414,9 +414,10 @@ export function createWebhookServer(): express.Application {
   return app;
 }
 
-export function startWebhookServer(): void {
+export function startWebhookServer(): import('http').Server {
   const app = createWebhookServer();
-  app.listen(config.server.port, () => {
+  const server = app.listen(config.server.port, () => {
     logger.info(`Webhook server listening on port ${config.server.port}`);
   });
+  return server;
 }

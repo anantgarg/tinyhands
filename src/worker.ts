@@ -1,7 +1,7 @@
 process.env.PROCESS_TYPE = 'worker';
 import { createWorker } from './modules/execution';
 import { initSlackClient, getSlackApp } from './slack';
-import { initDb, upsertWorkspace, setDefaultWorkspaceId, execute, getDefaultWorkspaceId } from './db';
+import { initDb, upsertWorkspace, setDefaultWorkspaceId, execute, getDefaultWorkspaceId, closeDb } from './db';
 import { config } from './config';
 import { processExpiredTimers } from './modules/workflows';
 import { expireOldProposals } from './modules/self-evolution';
@@ -93,7 +93,7 @@ async function main(): Promise<void> {
   logger.info(`Worker ${workerId} ready, waiting for jobs...`);
 
   // Periodic tasks
-  setInterval(async () => {
+  const timerInterval = setInterval(async () => {
     try {
       const expired = await processExpiredTimers();
       if (expired > 0) {
@@ -104,7 +104,7 @@ async function main(): Promise<void> {
     }
   }, 10000); // Check every 10 seconds
 
-  setInterval(async () => {
+  const proposalInterval = setInterval(async () => {
     try {
       await expireOldProposals();
     } catch (err: any) {
@@ -113,7 +113,7 @@ async function main(): Promise<void> {
   }, 60000); // Check every minute
 
   // Periodic orphan cleanup (every 5 minutes)
-  setInterval(async () => {
+  const orphanInterval = setInterval(async () => {
     await cleanupOrphans();
   }, 5 * 60 * 1000);
 
@@ -128,6 +128,10 @@ async function main(): Promise<void> {
     } catch (err: any) {
       logger.warn(`Worker ${workerId} forced shutdown`, { error: err.message });
     }
+    clearInterval(timerInterval);
+    clearInterval(proposalInterval);
+    clearInterval(orphanInterval);
+    await closeDb();
     process.exit(0);
   };
 

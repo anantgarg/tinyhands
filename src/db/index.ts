@@ -4,9 +4,19 @@ import { config } from '../config';
 import { logger } from '../utils/logger';
 
 let pool: Pool | null = null;
-let poolConfig: { connectionString: string; ssl: any; max: number } | null = null;
+let poolConfig: { connectionString: string; ssl: any; max: number; application_name: string } | null = null;
 let consecutiveFailures = 0;
 const MAX_FAILURES_BEFORE_RESET = 3;
+
+// resetPool safeguards
+let resetInProgress = false;
+let lastResetTime = 0;
+let resetCount = 0;
+const RESET_COOLDOWN_MS = 30000; // 30 seconds
+const MAX_RESETS = 3;
+
+// Pool health logging interval handle
+let healthInterval: ReturnType<typeof setInterval> | undefined;
 
 function isConnectionError(err: any): boolean {
   const msg = (err.message || '').toLowerCase();
@@ -33,12 +43,48 @@ function createPool(): Pool {
 
 async function resetPool(): Promise<void> {
   if (!poolConfig) return;
-  const old = pool;
-  pool = createPool();
-  consecutiveFailures = 0;
-  logger.info('Database pool recreated');
-  if (old) {
-    old.end().catch(() => {});
+
+  // Mutex: prevent concurrent resets
+  if (resetInProgress) {
+    logger.warn('Pool reset already in progress, skipping');
+    return;
+  }
+
+  // Rate limit: no more than once per 30 seconds
+  const now = Date.now();
+  if (now - lastResetTime < RESET_COOLDOWN_MS) {
+    logger.warn('Pool reset rate limited, last reset was too recent');
+    return;
+  }
+
+  // Circuit breaker: stop after MAX_RESETS
+  if (resetCount >= MAX_RESETS) {
+    logger.error('Pool reset circuit breaker tripped — too many resets, giving up', { resetCount });
+    return;
+  }
+
+  resetInProgress = true;
+  try {
+    const old = pool;
+    // Set pool to null during reset so queries fail fast instead of hanging
+    pool = null;
+
+    // Close old pool first (with 5s timeout)
+    if (old) {
+      await Promise.race([
+        old.end().catch(() => {}),
+        new Promise<void>(resolve => setTimeout(resolve, 5000)),
+      ]);
+    }
+
+    // Create new pool
+    pool = createPool();
+    consecutiveFailures = 0;
+    resetCount++;
+    lastResetTime = Date.now();
+    logger.info('Database pool recreated', { resetCount });
+  } finally {
+    resetInProgress = false;
   }
 }
 
@@ -57,7 +103,7 @@ function getPoolMaxForProcess(): number {
     case 'sync': return 1;
     case 'listener': return 2;
     case 'worker': return 3;
-    default: return 3;
+    default: return 2;
   }
 }
 
@@ -65,24 +111,40 @@ export async function initDb(): Promise<void> {
   if (pool) return;
 
   // Use DATABASE_POOL_URL (PgBouncer) if available, otherwise direct connection
-  let connectionString = process.env.DATABASE_POOL_URL || config.database.url;
+  let connectionString = config.database.poolUrl || process.env.DATABASE_POOL_URL || config.database.url;
   const needsSsl = connectionString.includes('sslmode=');
   // Strip sslmode from connection string — pg v8.13+ treats it as verify-full
   connectionString = connectionString.replace(/[?&]sslmode=[^&]*/g, '').replace(/\?$/, '');
 
   const poolMax = getPoolMaxForProcess();
+  const processType = process.env.PROCESS_TYPE || 'unknown';
+  const appName = `tinyhands-${processType}-pid${process.pid}`;
 
   poolConfig = {
     connectionString,
     ssl: needsSsl ? { rejectUnauthorized: false } : undefined,
     max: poolMax,
+    application_name: appName,
   };
 
   pool = createPool();
 
+  // Pool health logging — every 5 minutes
+  healthInterval = setInterval(() => {
+    if (pool) {
+      logger.info('Pool health', {
+        totalCount: pool.totalCount,
+        idleCount: pool.idleCount,
+        waitingCount: pool.waitingCount,
+      });
+    }
+  }, 5 * 60 * 1000);
+  healthInterval.unref();
+
   // Run migrations (always against the direct URL, not PgBouncer — DDL needs direct)
   const migrationString = config.database.url.replace(/[?&]sslmode=[^&]*/g, '').replace(/\?$/, '');
-  if (process.env.DATABASE_POOL_URL && migrationString !== connectionString) {
+  const usingPoolUrl = !!(config.database.poolUrl || process.env.DATABASE_POOL_URL);
+  if (usingPoolUrl && migrationString !== connectionString) {
     const { Pool: PgPool } = await import('pg');
     const migrationPool = new PgPool({
       connectionString: migrationString,
@@ -185,6 +247,10 @@ export async function withTransaction<T>(fn: (client: PoolClient) => Promise<T>)
 }
 
 export async function closeDb(): Promise<void> {
+  if (healthInterval) {
+    clearInterval(healthInterval);
+    healthInterval = undefined;
+  }
   if (pool) {
     await pool.end();
     pool = null;

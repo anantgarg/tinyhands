@@ -1,5 +1,5 @@
 process.env.PROCESS_TYPE = 'sync';
-import { initDb, upsertWorkspace, setDefaultWorkspaceId, getDefaultWorkspaceId } from './db';
+import { initDb, upsertWorkspace, setDefaultWorkspaceId, getDefaultWorkspaceId, closeDb } from './db';
 import { getSourcesDueForSync, updateSourceStatus, ingestContent, getSource } from './modules/sources';
 import { checkAlerts } from './modules/observability';
 import { generateDailyDigest } from './modules/observability';
@@ -36,7 +36,7 @@ async function main(): Promise<void> {
   logger.info('Sync workspace bootstrapped', { workspaceId: authResult.team_id });
 
   // Source sync loop
-  setInterval(async () => {
+  const syncInterval = setInterval(async () => {
     try {
       const sources = await getSourcesDueForSync();
       logger.info(`Sync: ${sources.length} sources due for re-index`);
@@ -75,7 +75,7 @@ async function main(): Promise<void> {
   }, SYNC_INTERVAL_MS);
 
   // Alert check loop
-  setInterval(async () => {
+  const alertInterval = setInterval(async () => {
     try {
       const workspaceId = getDefaultWorkspaceId();
       const alerts = await checkAlerts(workspaceId);
@@ -102,7 +102,7 @@ async function main(): Promise<void> {
   }, ALERT_CHECK_INTERVAL_MS);
 
   // Daily digest (check every minute if it's digest time)
-  setInterval(async () => {
+  const digestInterval = setInterval(async () => {
     const now = new Date();
     const time = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
@@ -118,8 +118,9 @@ async function main(): Promise<void> {
   }, 60000);
 
   // Auto-update check (pull-based deployment)
+  let updateInterval: ReturnType<typeof setInterval> | undefined;
   if (config.autoUpdate.enabled) {
-    setInterval(async () => {
+    updateInterval = setInterval(async () => {
       try {
         await checkForUpdates();
       } catch (err: any) {
@@ -132,8 +133,13 @@ async function main(): Promise<void> {
   logger.info('Sync process ready');
 
   // Graceful shutdown
-  process.on('SIGTERM', () => {
+  process.on('SIGTERM', async () => {
     logger.info('Sync process shutting down...');
+    clearInterval(syncInterval);
+    clearInterval(alertInterval);
+    clearInterval(digestInterval);
+    if (updateInterval) clearInterval(updateInterval);
+    await closeDb();
     process.exit(0);
   });
 }

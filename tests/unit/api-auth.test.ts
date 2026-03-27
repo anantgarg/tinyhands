@@ -333,7 +333,7 @@ describe('Auth Routes', () => {
       const res = await makeRequest(app, 'GET', '/auth/slack/callback?code=valid-code');
 
       expect(res.status).toBe(500);
-      expect(res.body).toEqual({ error: 'Authentication failed' });
+      expect(res.body).toEqual({ error: 'Authentication failed. Please try again.' });
 
       globalThis.fetch = originalFetch;
     });

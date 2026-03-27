@@ -1,7 +1,7 @@
 process.env.PROCESS_TYPE = 'listener';
 import { createSlackApp } from './slack';
 import { startWebhookServer } from './server';
-import { initDb, upsertWorkspace, setDefaultWorkspaceId, execute } from './db';
+import { initDb, upsertWorkspace, setDefaultWorkspaceId, execute, closeDb } from './db';
 import { config } from './config';
 import { logger } from './utils/logger';
 import { startWatchdog } from './utils/watchdog';
@@ -77,12 +77,27 @@ async function main(): Promise<void> {
   }
 
   // Start webhook server (Express)
-  startWebhookServer();
+  const httpServer = startWebhookServer();
 
   // Start event loop watchdog — restarts process if main thread is blocked for >60s
   startWatchdog();
 
   logger.info('TinyHands listener ready');
+
+  // Graceful shutdown
+  const shutdown = async () => {
+    logger.info('Listener shutting down gracefully...');
+    try { await app.stop(); } catch {}
+    await new Promise<void>((resolve) => {
+      httpServer.close(() => resolve());
+      setTimeout(resolve, 5000);
+    });
+    await closeDb();
+    logger.info('Listener shutdown complete');
+    process.exit(0);
+  };
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);
 }
 
 main().catch(err => {

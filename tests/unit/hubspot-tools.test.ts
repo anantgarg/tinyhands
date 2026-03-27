@@ -59,7 +59,7 @@ describe('HubSpot Tools Module', () => {
       expect(readSchema.description).toContain('Read-only access to HubSpot CRM');
       expect(readSchema.properties.action.enum).toEqual([
         'search_contacts', 'filter_contacts', 'search_deals', 'get_contact', 'get_deal',
-        'list_pipelines', 'get_company', 'search_companies',
+        'list_pipelines', 'get_company', 'search_companies', 'get_contact_activity',
       ]);
       expect(readSchema.required).toEqual(['action']);
     });
@@ -350,6 +350,22 @@ describe('HubSpot Tools Module', () => {
       expect(code).toContain("case 'search_companies':");
       expect(code).toContain("if (!input.query) { result = { error: 'query is required for search_companies' }");
       expect(code).toContain('/crm/v3/objects/companies/search');
+    });
+
+    it('read tool handles get_contact_activity action', async () => {
+      mockGetCustomTool.mockResolvedValue(null);
+      mockRegisterCustomTool.mockResolvedValue(undefined);
+
+      await registerHubSpotTools('admin-1', HUBSPOT_CONFIG);
+
+      const code = mockRegisterCustomTool.mock.calls[0][5].code;
+      expect(code).toContain("case 'get_contact_activity':");
+      expect(code).toContain("if (!input.contact_id) { result = { error: 'contact_id is required for get_contact_activity' }");
+      expect(code).toContain('/associations/engagements');
+      expect(code).toContain('/associations/notes');
+      expect(code).toContain('/associations/tasks');
+      expect(code).toContain('contact_analytics');
+      expect(code).toContain('total_engagements');
     });
 
     it('read tool handles unknown action with error', async () => {

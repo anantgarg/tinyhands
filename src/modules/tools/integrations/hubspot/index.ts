@@ -12,8 +12,8 @@ const READ_SCHEMA = JSON.stringify({
   properties: {
     action: {
       type: 'string',
-      enum: ['search_contacts', 'filter_contacts', 'search_deals', 'get_contact', 'get_deal', 'list_pipelines', 'get_company', 'search_companies'],
-      description: 'The HubSpot action to perform. Use filter_contacts to find contacts by property filters (e.g. blank lead status).',
+      enum: ['search_contacts', 'filter_contacts', 'search_deals', 'get_contact', 'get_deal', 'list_pipelines', 'get_company', 'search_companies', 'get_contact_activity'],
+      description: 'The HubSpot action to perform. Use filter_contacts to find contacts by property filters (e.g. blank lead status). Use get_contact_activity to view engagements, notes, tasks, and analytics for a contact.',
     },
     query: { type: 'string', description: 'Search query text (for search_contacts, search_deals, search_companies)' },
     filters: { type: 'array', items: { type: 'object', properties: { propertyName: { type: 'string' }, operator: { type: 'string', description: 'HubSpot filter operator: EQ, NEQ, GT, LT, GTE, LTE, HAS_PROPERTY, NOT_HAS_PROPERTY, CONTAINS_TOKEN, NOT_CONTAINS_TOKEN' }, value: { type: 'string' } }, required: ['propertyName', 'operator'] }, description: 'Filters for filter_contacts. Use NOT_HAS_PROPERTY to find contacts where a property is blank/empty.' },
@@ -143,8 +143,41 @@ async function main() {
       result = await hubspotRequest('/crm/v3/objects/companies/search', 'POST', body);
       break;
     }
+    case 'get_contact_activity': {
+      if (!input.contact_id) { result = { error: 'contact_id is required for get_contact_activity' }; break; }
+      // Get engagements associated with this contact
+      var engResult = await hubspotRequest('/crm/v3/objects/contacts/' + input.contact_id + '/associations/engagements');
+      if (engResult.status >= 400) {
+        // Fallback: search for recent engagements with broader properties
+        var noteResult = await hubspotRequest('/crm/v3/objects/contacts/' + input.contact_id + '/associations/notes');
+        var taskResult = await hubspotRequest('/crm/v3/objects/contacts/' + input.contact_id + '/associations/tasks');
+        result = {
+          notes: noteResult.data,
+          tasks: taskResult.data,
+          hint: 'Enable crm.objects.contacts.read and timeline scope for full activity data'
+        };
+        break;
+      }
+      // Fetch details for each engagement
+      var engagements = (engResult.data && engResult.data.results) || [];
+      var details = [];
+      for (var i = 0; i < Math.min(engagements.length, 20); i++) {
+        var engId = engagements[i].toObjectId || engagements[i].id;
+        if (!engId) continue;
+        var detail = await hubspotRequest('/crm/v3/objects/engagements/' + engId + '?properties=hs_engagement_type,hs_timestamp,hs_body_preview,hs_title');
+        if (detail.status < 400) details.push(detail.data);
+      }
+      // Also get form submissions via contact properties
+      var contactProps = await hubspotRequest('/crm/v3/objects/contacts/' + input.contact_id + '?properties=hs_analytics_num_page_views,hs_analytics_num_visits,hs_analytics_source,hs_latest_source,first_conversion_event_name,first_conversion_date,recent_conversion_event_name,recent_conversion_date,num_conversion_events,hs_lifecyclestage_lead_date');
+      result = {
+        engagements: details,
+        contact_analytics: contactProps.status < 400 ? contactProps.data : null,
+        total_engagements: engagements.length
+      };
+      break;
+    }
     default:
-      result = { error: 'Unknown action: ' + a + '. Valid: search_contacts, filter_contacts, search_deals, get_contact, get_deal, list_pipelines, get_company, search_companies' };
+      result = { error: 'Unknown action: ' + a + '. Valid: search_contacts, filter_contacts, search_deals, get_contact, get_deal, list_pipelines, get_company, search_companies, get_contact_activity' };
   }
 
   console.log(JSON.stringify(result));
