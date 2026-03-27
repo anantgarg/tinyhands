@@ -1,5 +1,5 @@
 process.env.PROCESS_TYPE = 'scheduler';
-import { initDb, upsertWorkspace, setDefaultWorkspaceId, closeDb } from './db';
+import { initDb, upsertWorkspace, setDefaultWorkspaceId, closeDb, queryOne } from './db';
 import { initSlackClient, getSlackApp } from './slack';
 import { config } from './config';
 import { getScheduledTriggersDue, fireTrigger, updateTriggerLastFired, getTriggerLastFiredAt } from './modules/triggers';
@@ -60,9 +60,13 @@ async function main(): Promise<void> {
               prevTime: prevTime.toISOString(),
             });
 
+            // Look up agent's channel so scheduled runs post results to Slack
+            const agent = await queryOne<{ channel_id: string }>('SELECT channel_id FROM agents WHERE id = $1', [trigger.agent_id]);
+
             await fireTrigger(trigger.workspace_id, {
               triggerId: trigger.id,
               idempotencyKey,
+              sourceChannel: agent?.channel_id || '',
               payload: {
                 firedAt: new Date().toISOString(),
                 scheduledFor: prevTime.toISOString(),
