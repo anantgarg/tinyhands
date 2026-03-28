@@ -4269,16 +4269,9 @@ async function notifyAdminWriteToolRequest(
       elements: [
         {
           type: 'button',
-          text: { type: 'plain_text', text: ':white_check_mark: Approve' },
-          style: 'primary',
-          action_id: 'approve_write_tools',
-          value: requestId,
-        },
-        {
-          type: 'button',
-          text: { type: 'plain_text', text: ':x: Deny' },
-          action_id: 'deny_write_tools',
-          value: requestId,
+          text: { type: 'plain_text', text: 'Review in Dashboard' },
+          url: `${config.server.webDashboardUrl}/requests`,
+          action_id: 'open_dashboard_requests',
         },
       ],
     },
@@ -4324,9 +4317,9 @@ async function notifyAdminNewToolRequest(
       elements: [
         {
           type: 'button',
-          text: { type: 'plain_text', text: ':white_check_mark: Acknowledge' },
-          action_id: 'ack_new_tool_request',
-          value: requestId,
+          text: { type: 'plain_text', text: 'Review in Dashboard' },
+          url: `${config.server.webDashboardUrl}/requests`,
+          action_id: 'open_dashboard_requests',
         },
       ],
     },

@@ -146,6 +146,23 @@ export interface AnalyzeGoalResult {
   changes?: Record<string, { from: unknown; to: unknown }>;
 }
 
+export interface PendingCounts {
+  upgrades: number;
+  toolRequests: number;
+  evolutionProposals: number;
+  featureRequests: number;
+  kbContributions: number;
+  total: number;
+}
+
+export function usePendingCounts() {
+  return useQuery<PendingCounts>({
+    queryKey: ['pending-counts'],
+    queryFn: () => api.get('/agents/pending-counts'),
+    refetchInterval: 60_000,
+  });
+}
+
 export function useAgents() {
   return useQuery<Agent[]>({
     queryKey: ['agents'],
@@ -304,7 +321,7 @@ export function useUpdateAgentAccess() {
 }
 
 export function useUpgradeRequests(agentId?: string) {
-  const path = agentId ? `/agents/${agentId}/upgrade-requests` : '/upgrade-requests';
+  const path = agentId ? `/agents/${agentId}/upgrade-requests` : '/agents/upgrade-requests';
   return useQuery<UpgradeRequest[]>({
     queryKey: agentId ? ['agents', agentId, 'upgrade-requests'] : ['upgrade-requests'],
     queryFn: () => api.get(path),
@@ -321,6 +338,7 @@ export function useApproveUpgrade() {
       qc.invalidateQueries({ queryKey: ['agents', variables.agentId, 'upgrade-requests'] });
       qc.invalidateQueries({ queryKey: ['agents', variables.agentId, 'roles'] });
       qc.invalidateQueries({ queryKey: ['upgrade-requests'] });
+      qc.invalidateQueries({ queryKey: ['pending-counts'] });
     },
   });
 }
@@ -333,6 +351,7 @@ export function useDenyUpgrade() {
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: ['agents', variables.agentId, 'upgrade-requests'] });
       qc.invalidateQueries({ queryKey: ['upgrade-requests'] });
+      qc.invalidateQueries({ queryKey: ['pending-counts'] });
     },
   });
 }
@@ -489,6 +508,7 @@ export function useApproveToolRequest() {
       qc.invalidateQueries({ queryKey: ['agents', variables.agentId, 'tool-requests'] });
       qc.invalidateQueries({ queryKey: ['agents', variables.agentId] });
       qc.invalidateQueries({ queryKey: ['tool-requests'] });
+      qc.invalidateQueries({ queryKey: ['pending-counts'] });
     },
   });
 }
@@ -501,6 +521,7 @@ export function useDenyToolRequest() {
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: ['agents', variables.agentId, 'tool-requests'] });
       qc.invalidateQueries({ queryKey: ['tool-requests'] });
+      qc.invalidateQueries({ queryKey: ['pending-counts'] });
     },
   });
 }
@@ -529,7 +550,10 @@ export function useDismissFeatureRequest() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.del(`/agents/feature-requests/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['feature-requests'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['feature-requests'] });
+      qc.invalidateQueries({ queryKey: ['pending-counts'] });
+    },
   });
 }
 

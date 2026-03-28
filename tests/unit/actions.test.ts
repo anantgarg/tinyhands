@@ -104,10 +104,11 @@ describe('Slack actions module', () => {
       expect(handlers).toHaveProperty('workflow_action');
       expect(handlers).toHaveProperty('trigger_pause');
       expect(handlers).toHaveProperty('trigger_resume');
+      expect(handlers).toHaveProperty('open_dashboard_requests');
     });
 
-    it('should register exactly 7 action handlers', () => {
-      expect(Object.keys(handlers)).toHaveLength(7);
+    it('should register exactly 8 action handlers', () => {
+      expect(Object.keys(handlers)).toHaveLength(8);
     });
   });
 
@@ -388,6 +389,17 @@ describe('Slack actions module', () => {
         'Trigger resume failed',
         expect.objectContaining({ error: 'already running' }),
       );
+      expect(mockPostMessage).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── Dashboard CTA (no-op) ──
+
+  describe('open_dashboard_requests', () => {
+    it('should ack and do nothing else', async () => {
+      const ack = makeAck();
+      await handlers.open_dashboard_requests({ action: makeAction(''), ack, body: makeBody('U010', 'C010') });
+      expect(ack).toHaveBeenCalled();
       expect(mockPostMessage).not.toHaveBeenCalled();
     });
   });

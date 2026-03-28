@@ -12,6 +12,7 @@ import { getIntegrations } from '../../modules/tools/integrations';
 import { resolveUserNames } from '../helpers/user-resolver';
 import { query, execute } from '../../db';
 import { logger } from '../../utils/logger';
+import { config } from '../../config';
 
 const router = Router();
 
@@ -254,6 +255,15 @@ router.put('/agent/:agentId/:toolName', async (req: Request, res: Response) => {
           for (const admin of admins) {
             await sendDMBlocks(admin.user_id, [
               { type: 'section', text: { type: 'mrkdwn', text: `:lock: *Tool credential request*\n<@${userId}> wants to use *team credentials* for *${toolName}* on agent *${agent?.name || agentId}*.\nReview in the dashboard under Tool Requests.` } },
+              {
+                type: 'actions',
+                elements: [{
+                  type: 'button',
+                  text: { type: 'plain_text', text: 'View in Dashboard' },
+                  url: `${config.server.webDashboardUrl}/requests`,
+                  action_id: 'open_dashboard_requests',
+                }],
+              },
             ], 'Tool credential request pending approval');
           }
         } catch {}

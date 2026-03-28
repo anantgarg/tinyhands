@@ -97,7 +97,10 @@ export function useApproveKBEntry() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.post(`/kb/entries/${id}/approve`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['kb'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['kb'] });
+      qc.invalidateQueries({ queryKey: ['pending-counts'] });
+    },
   });
 }
 
@@ -105,7 +108,10 @@ export function useDeleteKBEntry() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.del(`/kb/entries/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['kb'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['kb'] });
+      qc.invalidateQueries({ queryKey: ['pending-counts'] });
+    },
   });
 }
 

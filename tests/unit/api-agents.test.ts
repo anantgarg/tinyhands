@@ -120,13 +120,19 @@ vi.mock('../../src/modules/self-improvement', () => ({
 }));
 
 const mockQuery = vi.fn();
+const mockQueryOne = vi.fn();
 
 vi.mock('../../src/db', () => ({
   query: (...args: any[]) => mockQuery(...args),
+  queryOne: (...args: any[]) => mockQueryOne(...args),
 }));
 
 vi.mock('../../src/utils/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
+}));
+
+vi.mock('../../src/config', () => ({
+  config: { server: { webDashboardUrl: 'https://dashboard.test' } },
 }));
 
 const mockResolveUserNames = vi.fn();
@@ -1118,6 +1124,91 @@ describe('Agent Routes', () => {
       const res = await makeRequest(app, 'GET', '/agents/a1/prompt-size');
 
       expect(res.status).toBe(403);
+    });
+  });
+
+  // ── GET /agents/pending-counts ──
+
+  describe('GET /agents/pending-counts', () => {
+    it('returns counts from all request types', async () => {
+      mockQueryOne
+        .mockResolvedValueOnce({ count: 2 })   // upgrades
+        .mockResolvedValueOnce({ count: 1 })   // toolRequests
+        .mockResolvedValueOnce({ count: 3 })   // evolutionProposals
+        .mockResolvedValueOnce({ count: 0 })   // featureRequests
+        .mockResolvedValueOnce({ count: 4 });  // kbContributions
+
+      const res = await makeRequest(app, 'GET', '/agents/pending-counts');
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({
+        upgrades: 2,
+        toolRequests: 1,
+        evolutionProposals: 3,
+        featureRequests: 0,
+        kbContributions: 4,
+        total: 10,
+      });
+    });
+
+    it('returns zeros when queries return null', async () => {
+      mockQueryOne.mockResolvedValue(null);
+
+      const res = await makeRequest(app, 'GET', '/agents/pending-counts');
+
+      expect(res.status).toBe(200);
+      expect(res.body.total).toBe(0);
+    });
+  });
+
+  // ── GET /agents/upgrade-requests ──
+
+  describe('GET /agents/upgrade-requests', () => {
+    it('returns pending upgrade requests with display names', async () => {
+      mockQuery.mockResolvedValueOnce([
+        { id: 'ur1', user_id: 'U100', agent_id: 'a1', agent_name: 'Bot1', requested_role: 'member', reason: 'Need access', status: 'pending', created_at: '2025-01-01' },
+      ]);
+      mockResolveUserNames.mockResolvedValueOnce({ U100: 'Alice' });
+
+      const res = await makeRequest(app, 'GET', '/agents/upgrade-requests');
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveLength(1);
+      expect(res.body[0].displayName).toBe('Alice');
+      expect(res.body[0].agentName).toBe('Bot1');
+    });
+  });
+
+  // ── GET /agents/feature-requests (includes new_tool_request) ──
+
+  describe('GET /agents/feature-requests', () => {
+    it('returns feature_request type entries', async () => {
+      mockQuery.mockResolvedValueOnce([
+        { id: 'fr1', data: { type: 'feature_request', goal: 'Build a report', requestedBy: 'U200', analysis: { blockers: ['No PDF tool'], summary: 'Needs PDF', agent_name: 'Report Bot' } }, created_at: '2025-01-01' },
+      ]);
+      mockResolveUserNames.mockResolvedValueOnce({ U200: 'Bob' });
+
+      const res = await makeRequest(app, 'GET', '/agents/feature-requests');
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveLength(1);
+      expect(res.body[0].goal).toBe('Build a report');
+      expect(res.body[0].suggestedName).toBe('Report Bot');
+      expect(res.body[0].blockers).toEqual(['No PDF tool']);
+    });
+
+    it('returns new_tool_request type entries', async () => {
+      mockQuery.mockResolvedValueOnce([
+        { id: 'ntr1', data: { type: 'new_tool_request', goal: 'Automate emails', agentName: 'Email Bot', newTools: [{ name: 'email-send', description: 'Send emails' }], requestedBy: 'U300' }, created_at: '2025-02-01' },
+      ]);
+      mockResolveUserNames.mockResolvedValueOnce({ U300: 'Charlie' });
+
+      const res = await makeRequest(app, 'GET', '/agents/feature-requests');
+
+      expect(res.status).toBe(200);
+      expect(res.body).toHaveLength(1);
+      expect(res.body[0].suggestedName).toBe('Email Bot');
+      expect(res.body[0].blockers).toEqual(['email-send: Send emails']);
     });
   });
 });

@@ -43,6 +43,11 @@ export async function createProposal(
     await executeProposal(workspaceId, proposal);
   }
 
+  // Notify admins for proposals that need review
+  if (proposal.status === 'pending') {
+    notifyAdminsOfProposal(workspaceId, agent.name, description).catch(() => {});
+  }
+
   logger.info('Evolution proposal created', {
     proposalId: id, agentId, action,
     mode: agent.self_evolution_mode,
@@ -241,6 +246,23 @@ async function executeAddToKb(workspaceId: string, proposal: EvolutionProposal):
     contributedBy: proposal.agent_id,
     approved: false,
   });
+}
+
+// ── Admin Notification for Pending Proposals ──
+
+async function notifyAdminsOfProposal(workspaceId: string, agentName: string, description: string): Promise<void> {
+  try {
+    const { listPlatformAdmins } = await import('../access-control');
+    const { sendDMBlocks } = await import('../../slack');
+    const { config } = await import('../../config');
+    const admins = await listPlatformAdmins(workspaceId);
+    for (const admin of admins) {
+      await sendDMBlocks(admin.user_id, [
+        { type: 'section', text: { type: 'mrkdwn', text: `:bulb: *Evolution Proposal* for agent *${agentName}*\n${description.slice(0, 500)}` } },
+        { type: 'actions', elements: [{ type: 'button', text: { type: 'plain_text', text: 'Review in Dashboard' }, url: `${config.server.webDashboardUrl}/requests`, action_id: 'open_dashboard_requests' }] },
+      ], `Evolution proposal for ${agentName}`).catch(() => {});
+    }
+  } catch {}
 }
 
 // ── Timeout for Approve-First ──

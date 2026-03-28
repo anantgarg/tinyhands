@@ -15,9 +15,10 @@ import { getRunsByAgent as _getRunsByAgent } from '../../modules/execution';
 import { addToolToAgent, removeToolFromAgent, getAgentToolSummary } from '../../modules/tools';
 import { attachSkillToAgent, detachSkillFromAgent, getAgentSkills } from '../../modules/skills';
 import { getAgentTriggers } from '../../modules/triggers';
-import { query } from '../../db';
+import { query, queryOne } from '../../db';
 import { resolveUserNames } from '../helpers/user-resolver';
 import { logger } from '../../utils/logger';
+import { config } from '../../config';
 
 const router = Router();
 
@@ -110,6 +111,52 @@ router.post('/analyze-goal', async (req: Request, res: Response) => {
   }
 });
 
+// GET /agents/pending-counts — Pending review counts across all request types (must be before /:id)
+router.get('/pending-counts', async (req: Request, res: Response) => {
+  try {
+    const { workspaceId } = getSessionUser(req);
+    const [upgrades, toolRequests, evolutionProposals, featureRequests, kbContributions] = await Promise.all([
+      queryOne<{count:number}>('SELECT count(*)::int as count FROM upgrade_requests WHERE workspace_id = $1 AND status = \'pending\'', [workspaceId]),
+      queryOne<{count:number}>('SELECT count(*)::int as count FROM tool_requests WHERE workspace_id = $1 AND status = \'pending\'', [workspaceId]),
+      queryOne<{count:number}>('SELECT count(*)::int as count FROM evolution_proposals WHERE workspace_id = $1 AND status = \'pending\'', [workspaceId]),
+      queryOne<{count:number}>('SELECT count(*)::int as count FROM pending_confirmations WHERE data->>\'type\' IN (\'feature_request\', \'new_tool_request\') AND expires_at > NOW()', []),
+      queryOne<{count:number}>('SELECT count(*)::int as count FROM kb_entries WHERE workspace_id = $1 AND approved = false', [workspaceId]),
+    ]);
+    const counts = {
+      upgrades: upgrades?.count || 0,
+      toolRequests: toolRequests?.count || 0,
+      evolutionProposals: evolutionProposals?.count || 0,
+      featureRequests: featureRequests?.count || 0,
+      kbContributions: kbContributions?.count || 0,
+      total: 0,
+    };
+    counts.total = counts.upgrades + counts.toolRequests + counts.evolutionProposals + counts.featureRequests + counts.kbContributions;
+    res.json(counts);
+  } catch (err: any) {
+    logger.error('Pending counts error', { error: err.message });
+    res.status(500).json({ error: 'Failed to get pending counts' });
+  }
+});
+
+// GET /agents/upgrade-requests — List all pending upgrade requests (must be before /:id)
+router.get('/upgrade-requests', async (req: Request, res: Response) => {
+  try {
+    const { workspaceId } = getSessionUser(req);
+    const rows = await query('SELECT ur.*, a.name as agent_name FROM upgrade_requests ur LEFT JOIN agents a ON ur.agent_id = a.id WHERE ur.workspace_id = $1 AND ur.status = \'pending\' ORDER BY ur.created_at DESC', [workspaceId]);
+    // Resolve user display names
+    const userIds = [...new Set((rows as any[]).map((r: any) => r.user_id))];
+    const names = await resolveUserNames(userIds);
+    res.json((rows as any[]).map((r: any) => ({
+      id: r.id, userId: r.user_id, displayName: names[r.user_id] || r.user_id,
+      agentId: r.agent_id, agentName: r.agent_name, requestedRole: r.requested_role,
+      reason: r.reason, status: r.status, createdAt: r.created_at,
+    })));
+  } catch (err: any) {
+    logger.error('List upgrade requests error', { error: err.message });
+    res.status(500).json({ error: 'Failed to list upgrade requests' });
+  }
+});
+
 // GET /agents/tool-requests — List all tool requests (workspace-wide, must be before /:id)
 router.get('/tool-requests', async (req: Request, res: Response) => {
   try {
@@ -132,6 +179,62 @@ router.get('/tool-requests', async (req: Request, res: Response) => {
   } catch (err: any) {
     logger.error('List tool requests error', { error: err.message });
     res.status(500).json({ error: 'Failed to list tool requests' });
+  }
+});
+
+// ── Feature Requests ──
+
+// GET /agents/feature-requests — List feature requests (must be before /:id)
+router.get('/feature-requests', async (req: Request, res: Response) => {
+  try {
+    const { workspaceId } = getSessionUser(req);
+    const rows = await query(
+      `SELECT id, data, created_at FROM pending_confirmations
+       WHERE data->>'type' IN ('feature_request', 'new_tool_request') AND expires_at > NOW()
+       AND (workspace_id = $1 OR workspace_id IS NULL)
+       ORDER BY created_at DESC`,
+      [workspaceId]
+    );
+    const userIds = (rows as any[]).map((r: any) => r.data?.requestedBy).filter(Boolean);
+    const names = await resolveUserNames(userIds);
+    res.json((rows as any[]).map((r: any) => {
+      const isNewToolRequest = r.data.type === 'new_tool_request';
+      return {
+        id: r.id,
+        goal: isNewToolRequest ? r.data.goal || '' : r.data.goal,
+        blockers: isNewToolRequest
+          ? (r.data.newTools || []).map((t: any) => `${t.name}: ${t.description}`)
+          : (r.data.analysis?.blockers || []),
+        summary: isNewToolRequest
+          ? `New tools needed for agent ${r.data.agentName || ''}`
+          : (r.data.analysis?.summary || ''),
+        suggestedName: isNewToolRequest
+          ? (r.data.agentName || '')
+          : (r.data.analysis?.agent_name || ''),
+        requestedBy: r.data.requestedBy,
+        requestedByName: names[r.data.requestedBy] || r.data.requestedBy,
+        createdAt: r.created_at,
+      };
+    }));
+  } catch (err: any) {
+    logger.error('List feature requests error', { error: err.message });
+    res.status(500).json({ error: 'Failed to list feature requests' });
+  }
+});
+
+// DELETE /agents/feature-requests/:id — Dismiss a feature request (must be before /:id)
+router.delete('/feature-requests/:requestId', async (req: Request, res: Response) => {
+  try {
+    const { workspaceId } = getSessionUser(req);
+    const requestId = req.params.requestId as string;
+    await query(
+      `DELETE FROM pending_confirmations WHERE id = $1 AND (workspace_id = $2 OR workspace_id IS NULL)`,
+      [requestId, workspaceId]
+    );
+    res.json({ ok: true });
+  } catch (err: any) {
+    logger.error('Dismiss feature request error', { error: err.message });
+    res.status(400).json({ error: 'Couldn\'t dismiss the request. Please try again.' });
   }
 });
 
@@ -722,53 +825,6 @@ router.post('/:id/tool-requests/:requestId/deny', async (req: Request, res: Resp
   }
 });
 
-// ── Feature Requests ──
-
-// GET /agents/feature-requests — List feature requests (must be before /:id)
-router.get('/feature-requests', async (req: Request, res: Response) => {
-  try {
-    const { workspaceId } = getSessionUser(req);
-    const rows = await query(
-      `SELECT id, data, created_at FROM pending_confirmations
-       WHERE data->>'type' = 'feature_request' AND expires_at > NOW()
-       AND (workspace_id = $1 OR workspace_id IS NULL)
-       ORDER BY created_at DESC`,
-      [workspaceId]
-    );
-    const userIds = (rows as any[]).map((r: any) => r.data?.requestedBy).filter(Boolean);
-    const names = await resolveUserNames(userIds);
-    res.json((rows as any[]).map((r: any) => ({
-      id: r.id,
-      goal: r.data.goal,
-      blockers: r.data.analysis?.blockers || [],
-      summary: r.data.analysis?.summary || '',
-      suggestedName: r.data.analysis?.agent_name || '',
-      requestedBy: r.data.requestedBy,
-      requestedByName: names[r.data.requestedBy] || r.data.requestedBy,
-      createdAt: r.created_at,
-    })));
-  } catch (err: any) {
-    logger.error('List feature requests error', { error: err.message });
-    res.status(500).json({ error: 'Failed to list feature requests' });
-  }
-});
-
-// DELETE /agents/feature-requests/:id — Dismiss a feature request (must be before /:id)
-router.delete('/feature-requests/:requestId', async (req: Request, res: Response) => {
-  try {
-    const { workspaceId } = getSessionUser(req);
-    const requestId = req.params.requestId as string;
-    await query(
-      `DELETE FROM pending_confirmations WHERE id = $1 AND (workspace_id = $2 OR workspace_id IS NULL)`,
-      [requestId, workspaceId]
-    );
-    res.json({ ok: true });
-  } catch (err: any) {
-    logger.error('Dismiss feature request error', { error: err.message });
-    res.status(400).json({ error: 'Couldn\'t dismiss the request. Please try again.' });
-  }
-});
-
 // ── Self-Improvement ──
 
 // POST /agents/:id/suggest-improvement — Submit critique, get AI-proposed prompt improvement
@@ -863,6 +919,15 @@ async function notifyAdminsOfToolRequests(
             type: 'mrkdwn',
             text: `:lock: <@${requestedBy}> requested to add write tool(s) ${toolList} to agent *${agentName}*. Review pending tool requests in the dashboard.`,
           },
+        },
+        {
+          type: 'actions',
+          elements: [{
+            type: 'button',
+            text: { type: 'plain_text', text: 'View in Dashboard' },
+            url: `${config.server.webDashboardUrl}/requests`,
+            action_id: 'open_dashboard_requests',
+          }],
         },
       ], `Write tool request for ${agentName}`).catch(() => {});
     }

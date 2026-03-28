@@ -39,7 +39,10 @@ export function useApproveProposal() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.post(`/evolution/proposals/${id}/approve`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['evolution'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['evolution'] });
+      qc.invalidateQueries({ queryKey: ['pending-counts'] });
+    },
   });
 }
 
@@ -47,6 +50,9 @@ export function useRejectProposal() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.post(`/evolution/proposals/${id}/reject`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['evolution'] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['evolution'] });
+      qc.invalidateQueries({ queryKey: ['pending-counts'] });
+    },
   });
 }

@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/store/auth';
 import { useSidebarStore } from '@/store/sidebar';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { usePendingCounts } from '@/api/agents';
 
 interface NavItem {
   label: string;
@@ -101,6 +102,14 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const { user, clearUser, isAdmin } = useAuthStore();
   const admin = isAdmin();
   const { collapsed, toggle } = useSidebarStore();
+  const { data: pendingCounts } = usePendingCounts();
+
+  // Inject badge count on the Requests nav item
+  const reviewNavWithBadge: NavItem[] = reviewNav.map((item) =>
+    item.to === '/requests' && pendingCounts?.total
+      ? { ...item, badge: pendingCounts.total }
+      : item
+  );
 
   const handleLogout = async () => {
     try {
@@ -112,7 +121,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
     navigate('/login');
   };
 
-  const allItems = [...mainNav, ...manageNav, ...reviewNav, ...settingsNav];
+  const allItems = [...mainNav, ...manageNav, ...reviewNavWithBadge, ...settingsNav];
   const visibleCollapsedItems = allItems.filter((item) => !item.adminOnly || admin);
 
   if (collapsed) {
@@ -172,7 +181,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
       <div className="flex-1 overflow-y-auto pt-1 pb-3">
         <NavSection items={mainNav} isAdmin={admin} onNavigate={onNavigate} />
         <NavSection title="Manage" items={manageNav} isAdmin={admin} onNavigate={onNavigate} />
-        <NavSection title="Review" items={reviewNav} isAdmin={admin} onNavigate={onNavigate} />
+        <NavSection title="Review" items={reviewNavWithBadge} isAdmin={admin} onNavigate={onNavigate} />
         <NavSection title="Settings" items={settingsNav} isAdmin={admin} onNavigate={onNavigate} />
       </div>
 

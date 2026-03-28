@@ -98,6 +98,9 @@ export function registerActions(app: App): void {
     }
   });
 
+  // ── Dashboard CTA (no-op, link buttons still fire action events) ──
+  app.action('open_dashboard_requests', async ({ ack }) => { await ack(); });
+
   // ── Trigger Management ──
   app.action('trigger_pause', async ({ action, ack, body }) => {
     await ack();

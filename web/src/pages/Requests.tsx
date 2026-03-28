@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Bell, CheckCircle, XCircle, Wrench } from 'lucide-react';
+import { Bell, BookOpen, CheckCircle, XCircle, Wrench } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
@@ -15,13 +15,16 @@ import {
   useUpgradeRequests, useApproveUpgrade, useDenyUpgrade, useAgents,
   useToolRequests, useApproveToolRequest, useDenyToolRequest,
   useFeatureRequests, useDismissFeatureRequest,
+  usePendingCounts,
 } from '@/api/agents';
 import type { ToolRequest } from '@/api/agents';
 import { useEvolutionProposals, useApproveProposal, useRejectProposal } from '@/api/evolution';
+import { useKBEntries, useApproveKBEntry, useDeleteKBEntry } from '@/api/kb';
 import { toast } from '@/components/ui/use-toast';
 
 export function Requests() {
   const [activeTab, setActiveTab] = useState('upgrades');
+  const { data: counts } = usePendingCounts();
 
   return (
     <div>
@@ -29,11 +32,22 @@ export function Requests() {
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
-          <TabsTrigger value="upgrades">Upgrade Requests</TabsTrigger>
+          <TabsTrigger value="upgrades">
+            Upgrade Requests{counts?.upgrades ? ` (${counts.upgrades})` : ''}
+          </TabsTrigger>
           <TabsTrigger value="approvals">Action Approvals</TabsTrigger>
-          <TabsTrigger value="evolution">Evolution Proposals</TabsTrigger>
-          <TabsTrigger value="tool-requests">Tool Requests</TabsTrigger>
-          <TabsTrigger value="feature-requests">Feature Requests</TabsTrigger>
+          <TabsTrigger value="evolution">
+            Evolution Proposals{counts?.evolutionProposals ? ` (${counts.evolutionProposals})` : ''}
+          </TabsTrigger>
+          <TabsTrigger value="tool-requests">
+            Tool Requests{counts?.toolRequests ? ` (${counts.toolRequests})` : ''}
+          </TabsTrigger>
+          <TabsTrigger value="feature-requests">
+            Feature Requests{counts?.featureRequests ? ` (${counts.featureRequests})` : ''}
+          </TabsTrigger>
+          <TabsTrigger value="kb">
+            KB Contributions{counts?.kbContributions ? ` (${counts.kbContributions})` : ''}
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="upgrades">
@@ -50,6 +64,9 @@ export function Requests() {
         </TabsContent>
         <TabsContent value="feature-requests">
           <FeatureRequestsTab />
+        </TabsContent>
+        <TabsContent value="kb">
+          <KBContributionsTab />
         </TabsContent>
       </Tabs>
     </div>
@@ -487,6 +504,83 @@ function FeatureRequestsTab() {
           </CardContent>
         </Card>
       ))}
+    </div>
+  );
+}
+
+function KBContributionsTab() {
+  const { data, isLoading } = useKBEntries({ approved: false });
+  const approveEntry = useApproveKBEntry();
+  const deleteEntry = useDeleteKBEntry();
+
+  if (isLoading) return <Skeleton className="h-[300px]" />;
+
+  const entries = data?.entries ?? [];
+
+  if (entries.length === 0) {
+    return (
+      <EmptyState
+        icon={BookOpen}
+        title="No pending KB contributions"
+        description="When agents contribute knowledge base articles, they will appear here for review before being published."
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="rounded-card border border-warm-border bg-white overflow-x-auto">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Title</TableHead>
+              <TableHead>Category</TableHead>
+              <TableHead>Source</TableHead>
+              <TableHead>Created</TableHead>
+              <TableHead className="w-40"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {entries.map((entry) => (
+              <TableRow key={entry.id}>
+                <TableCell className="font-medium">{entry.title}</TableCell>
+                <TableCell className="text-sm">{entry.category || '\u2014'}</TableCell>
+                <TableCell className="text-sm text-warm-text-secondary">
+                  {entry.sourceType || entry.sourceName || '\u2014'}
+                </TableCell>
+                <TableCell className="text-warm-text-secondary text-sm">
+                  {formatDistanceToNow(new Date(entry.createdAt), { addSuffix: true })}
+                </TableCell>
+                <TableCell>
+                  <div className="flex gap-1">
+                    <Button
+                      size="sm"
+                      onClick={() => approveEntry.mutate(entry.id, {
+                        onSuccess: () => toast({ title: 'Entry approved', variant: 'success' }),
+                      })}
+                      disabled={approveEntry.isPending}
+                    >
+                      <CheckCircle className="mr-1.5 h-3.5 w-3.5" />
+                      Approve
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => deleteEntry.mutate(entry.id, {
+                        onSuccess: () => toast({ title: 'Entry rejected', variant: 'success' }),
+                      })}
+                      disabled={deleteEntry.isPending}
+                    >
+                      <XCircle className="mr-1.5 h-3.5 w-3.5" />
+                      Reject
+                    </Button>
+                  </div>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
     </div>
   );
 }
