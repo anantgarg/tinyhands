@@ -254,7 +254,7 @@ router.put('/agent/:agentId/:toolName', async (req: Request, res: Response) => {
           for (const admin of admins) {
             await sendDMBlocks(admin.user_id, [
               { type: 'section', text: { type: 'mrkdwn', text: `:lock: *Tool credential request*\n<@${userId}> wants to use *team credentials* for *${toolName}* on agent *${agent?.name || agentId}*.\nReview in the dashboard under Tool Requests.` } },
-            ]);
+            ], 'Tool credential request pending approval');
           }
         } catch {}
         res.status(202).json({ status: 'pending_approval', message: 'Using team credentials for write tools requires admin approval.' });
