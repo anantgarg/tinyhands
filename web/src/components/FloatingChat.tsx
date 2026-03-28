@@ -221,7 +221,6 @@ export function FloatingChat() {
       if (e.key === 'Escape' && isOpen) {
         if (creationMode) {
           exitCreationMode();
-          navigate('/agents');
         } else {
           close();
         }
@@ -421,8 +420,8 @@ export function FloatingChat() {
     return (
       <div
         ref={panelRef}
-        className="fixed inset-x-0 bottom-0 z-50 mx-auto flex flex-col bg-white shadow-lg transition-all sm:bottom-6 sm:max-w-[640px] sm:rounded-2xl sm:border sm:border-[#E0DED9]"
-        style={{ height: 'min(80vh, 700px)' }}
+        className="fixed bottom-0 right-0 z-50 flex flex-col bg-white shadow-lg transition-all sm:bottom-6 sm:right-6 sm:max-w-[640px] sm:rounded-2xl sm:border sm:border-[#E0DED9]"
+        style={{ height: 'min(80vh, 700px)', width: '100%', maxWidth: '640px' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[#E0DED9] px-4 py-3">
@@ -431,10 +430,7 @@ export function FloatingChat() {
             <span className="text-sm font-semibold text-warm-text">Create Agent</span>
           </div>
           <button
-            onClick={() => {
-              exitCreationMode();
-              navigate('/agents');
-            }}
+            onClick={() => exitCreationMode()}
             className="flex h-6 w-6 items-center justify-center rounded-md text-warm-text-secondary hover:bg-warm-bg hover:text-warm-text transition-colors"
           >
             <X className="h-3.5 w-3.5" />
