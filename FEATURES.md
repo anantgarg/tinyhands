@@ -10,54 +10,78 @@ Claude MUST check this before making changes and update it after commits.
 ### Creating Agents
 
 **Methods:**
-- **Dashboard wizard** (primary) -- 4-step flow: Describe, Identity, Settings, Tools
-- **Slack `/new-agent`** -- redirects to dashboard wizard
+- **Dashboard conversational chat** (primary) -- AI-guided conversation via FloatingChat in creation mode
+- **Slack `/new-agent`** -- redirects to dashboard
 - **API** -- `POST /api/v1/agents`
 
-**Wizard steps:**
-1. **Describe** -- plain-English goal. AI goal analyzer generates: name, emoji, instructions, model, tools, effort, memory, response mode. Non-admin users get read-only tool suggestions only. "I'll set it up manually" skips the AI step.
-2. **Identity** -- review/edit name, emoji avatar, instructions (system prompt).
-3. **Settings** -- model (Sonnet/Opus/Haiku), effort (Quick/Standard/Thorough/Maximum), Slack activation (mentioned only / relevant messages / every message), access level (Full Access / Limited Access / Invite Only), action approval (Automatic / Ask User First / Ask Owner/Admins), memory toggle.
-4. **Tools** -- select integrations. Each shows "Can view data" (read) and "Can make changes" (write, auto-enables read). Core tools (file access, web search, code analysis) are always available and not shown here.
+**Conversational Creation Flow (FloatingChat in creation mode):**
+
+When user navigates to `/agents/new`, the FloatingChat opens in creation mode (80% viewport height, 640px reading width, centered). An AI-guided conversation walks them through:
+
+1. **Describe** (text input) -- "What would you like your agent to do?" User describes the goal in plain English. AI goal analyzer runs and generates initial config (name, prompt, model, tools, effort, memory, response mode).
+2. **Clarify** (text input, conditional) -- If the description is vague, AI asks follow-up questions.
+3. **Channel** (dropdown card) -- "Which Slack channel should it live in?" Searchable list of workspace channels.
+4. **Activation** (multi-choice card) -- "When should it respond?" Every message / Relevant messages (recommended) / Only when @mentioned.
+5. **Schedule** (yes/no + schedule card, conditional) -- "Should it run on a schedule?" Only asked if time patterns detected. Frequency + timezone picker.
+6. **Triggers** (multi-choice card, conditional) -- "Any external event triggers?" Only if relevant integrations (Linear, Zendesk, etc.) are configured.
+7. **Tools** (multi-select card) -- "Which services should it access?" Shows configured integrations with read/write toggles. AI pre-selects from analysis.
+8. **Effort** (multi-choice card, conditional) -- "How thorough should it be?" Quick / Balanced / Deep / Maximum. Skipped if inferred.
+9. **Memory** (yes/no card, conditional) -- "Should it remember past conversations?" Skipped if inferred.
+10. **Access** (multi-choice card) -- "Who should be able to use it?" Everyone / View-only / Invite only.
+11. **Approval** (multi-choice card, conditional) -- "When it takes actions, should it..." Auto / Ask user / Ask owner. Only if write tools selected.
+12. **Confirm** (confirmation card) -- Shows full config summary. "Create Agent" or "Let me change something" (chat-based editing).
+
+**Interactive card types used:** MultiChoice, YesNo, Dropdown, MultiSelect, Schedule, Confirmation.
+
+**State machine:** 16 phases with conditional skipping based on goal analysis confidence. Phases in brackets are skipped when the AI already inferred the answer: INIT → DESCRIBE → ANALYZING → [CLARIFY] → CHANNEL → ACTIVATION → [SCHEDULE] → [TRIGGERS] → TOOLS → [EFFORT] → [MEMORY] → ACCESS → [APPROVAL] → CONFIRM → CREATING → DONE.
 
 **Rules:**
-- Any workspace user can create agents -- except members when non-admin restrictions apply (the "New Agent" button is hidden and navigating to the create page redirects to agents list).
+- Any workspace user can create agents.
 - Agent creator automatically becomes owner.
 - A Slack channel is created for each new agent.
-- Smart credential recommendations appear during tool selection based on agent purpose (team / creator's / each user's).
-- For non-admin creators, the goal analyzer restricts tool suggestions to read-only tools and does not propose new tools.
+- Non-admin creators: goal analyzer restricts tool suggestions to read-only tools and does not propose new tools.
+- Write tools with team credentials require admin approval (tool request created, not attached immediately).
+- Chat-based editing: on the confirmation card, user can say "Let me change something" and type changes in natural language. AI interprets and updates config.
 
 **Agent Creation Flow:**
 
 ```
-User starts wizard
+User navigates to /agents/new
      |
      v
-[Describe] -----> Goal Analyzer (AI)
-     |                  |
-     v                  v
-[Identity]        Auto-generates: name, prompt,
-     |            model, tools, effort
-     v
-[Settings] -----> Model, Effort, Activation,
-     |            Access, Action Approval, Memory
-     v
-[Tools] --------> Select integrations
-     |              (non-admin: read-only suggestions only)
-     v
-Create Agent ----> Channel created
+FloatingChat opens in creation mode
+(80% height, 640px width)
      |
      v
-Write tools present?
-     |            |
-     | yes        | no
-     v            v
-Non-admin?      Done
+AI: "What would you like your agent to do?"
      |
-     | yes
      v
-Tool requests created
-(admin approval needed)
+User describes goal (text input)
+     |
+     v
+Goal Analyzer (AI) runs
+     |
+     v
+AI determines which questions to ask
+(skips phases with high-confidence answers)
+     |
+     v
+Asks questions one at a time
+using interactive cards
+(channel, activation, tools, etc.)
+     |
+     v
+Shows confirmation card with full config
+     |           |
+     | Create    | Change something
+     v           v
+Create Agent   Chat-based editing
+     |          (re-shows confirmation)
+     v
+Channel created + triggers set up
+     |
+     v
+Navigate to agent detail page
 ```
 
 ### Agent Configuration
