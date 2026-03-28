@@ -34,9 +34,19 @@ const mockRequestUpgrade = vi.fn();
 const mockApproveUpgrade = vi.fn();
 const mockDenyUpgrade = vi.fn();
 
+const mockIsPlatformAdmin = vi.fn();
+const mockCreateToolRequest = vi.fn();
+const mockListToolRequests = vi.fn();
+const mockListAgentToolRequests = vi.fn();
+const mockApproveToolRequest = vi.fn();
+const mockDenyToolRequest = vi.fn();
+const mockListPlatformAdmins = vi.fn();
+
 vi.mock('../../src/modules/access-control', () => ({
   canModifyAgent: (...args: any[]) => mockCanModifyAgent(...args),
   canView: (...args: any[]) => mockCanView(...args),
+  isPlatformAdmin: (...args: any[]) => mockIsPlatformAdmin(...args),
+  listPlatformAdmins: (...args: any[]) => mockListPlatformAdmins(...args),
   getAgentRole: (...args: any[]) => mockGetAgentRole(...args),
   setAgentRole: (...args: any[]) => mockSetAgentRole(...args),
   removeAgentRole: (...args: any[]) => mockRemoveAgentRole(...args),
@@ -44,6 +54,11 @@ vi.mock('../../src/modules/access-control', () => ({
   requestUpgrade: (...args: any[]) => mockRequestUpgrade(...args),
   approveUpgrade: (...args: any[]) => mockApproveUpgrade(...args),
   denyUpgrade: (...args: any[]) => mockDenyUpgrade(...args),
+  createToolRequest: (...args: any[]) => mockCreateToolRequest(...args),
+  listToolRequests: (...args: any[]) => mockListToolRequests(...args),
+  listAgentToolRequests: (...args: any[]) => mockListAgentToolRequests(...args),
+  approveToolRequest: (...args: any[]) => mockApproveToolRequest(...args),
+  denyToolRequest: (...args: any[]) => mockDenyToolRequest(...args),
 }));
 
 const mockGetRunsByAgent = vi.fn();
@@ -60,6 +75,24 @@ vi.mock('../../src/modules/tools', () => ({
   addToolToAgent: (...args: any[]) => mockAddToolToAgent(...args),
   removeToolFromAgent: (...args: any[]) => mockRemoveToolFromAgent(...args),
   getAgentToolSummary: (...args: any[]) => mockGetAgentToolSummary(...args),
+}));
+
+const mockGetIntegrationIdForTool = vi.fn();
+const mockGetTeamConnection = vi.fn();
+const mockListAgentToolConnections = vi.fn();
+const mockSetAgentToolConnection = vi.fn();
+
+vi.mock('../../src/modules/connections', () => ({
+  getIntegrationIdForTool: (...args: any[]) => mockGetIntegrationIdForTool(...args),
+  getTeamConnection: (...args: any[]) => mockGetTeamConnection(...args),
+  listAgentToolConnections: (...args: any[]) => mockListAgentToolConnections(...args),
+  setAgentToolConnection: (...args: any[]) => mockSetAgentToolConnection(...args),
+}));
+
+const mockSendDMBlocks = vi.fn();
+
+vi.mock('../../src/slack', () => ({
+  sendDMBlocks: (...args: any[]) => mockSendDMBlocks(...args),
 }));
 
 const mockAttachSkillToAgent = vi.fn();
@@ -187,6 +220,15 @@ describe('Agent Routes', () => {
     });
     // Default: canView returns true (tests that need false must override)
     mockCanView.mockResolvedValue(true);
+    // Default: isPlatformAdmin returns true for admin app (override in specific tests)
+    mockIsPlatformAdmin.mockResolvedValue(true);
+    // Default: no team connections (no approval needed)
+    mockGetTeamConnection.mockResolvedValue(null);
+    mockGetIntegrationIdForTool.mockImplementation((name: string) => name.split('-')[0]);
+    mockListPlatformAdmins.mockResolvedValue([]);
+    mockCreateToolRequest.mockResolvedValue('req-1');
+    mockListAgentToolConnections.mockResolvedValue([]);
+    mockSendDMBlocks.mockResolvedValue(undefined);
     app = createApp();
   });
 
@@ -728,6 +770,62 @@ describe('Agent Routes', () => {
 
       expect(res.status).toBe(400);
       expect(res.body).toEqual({ error: "Couldn't add the tool. Please try again." });
+    });
+
+    it('returns 202 when non-admin adds write tool with team credentials', async () => {
+      const memberApp = createApp('member');
+      mockIsPlatformAdmin.mockResolvedValueOnce(false);
+      mockGetIntegrationIdForTool.mockReturnValueOnce('hubspot');
+      mockGetTeamConnection.mockResolvedValueOnce({ id: 'conn-1', integration_id: 'hubspot' });
+      mockGetAgent.mockResolvedValueOnce({ id: 'a1', name: 'Bot1' });
+      mockCreateToolRequest.mockResolvedValueOnce('req-1');
+      mockListPlatformAdmins.mockResolvedValueOnce([]);
+
+      const res = await makeRequest(memberApp, 'POST', '/agents/a1/tools', { toolName: 'hubspot-write' });
+
+      expect(res.status).toBe(202);
+      expect(res.body).toEqual({ status: 'pending_approval', message: 'Adding this tool requires admin approval.' });
+      expect(mockCreateToolRequest).toHaveBeenCalledWith('W123', 'a1', 'hubspot-write', 'read-write', 'U123');
+      expect(mockAddToolToAgent).not.toHaveBeenCalled();
+    });
+
+    it('allows admin to add write tool with team credentials directly', async () => {
+      mockIsPlatformAdmin.mockResolvedValueOnce(true);
+      const tools = ['hubspot-read', 'hubspot-write'];
+      mockAddToolToAgent.mockResolvedValueOnce(tools);
+
+      const res = await makeRequest(app, 'POST', '/agents/a1/tools', { toolName: 'hubspot-write' });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ tools });
+      expect(mockCreateToolRequest).not.toHaveBeenCalled();
+    });
+
+    it('allows non-admin to add write tool when no team credentials exist', async () => {
+      const memberApp = createApp('member');
+      mockIsPlatformAdmin.mockResolvedValueOnce(false);
+      mockGetIntegrationIdForTool.mockReturnValueOnce('hubspot');
+      mockGetTeamConnection.mockResolvedValueOnce(null);
+      const tools = ['hubspot-write'];
+      mockAddToolToAgent.mockResolvedValueOnce(tools);
+
+      const res = await makeRequest(memberApp, 'POST', '/agents/a1/tools', { toolName: 'hubspot-write' });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ tools });
+      expect(mockCreateToolRequest).not.toHaveBeenCalled();
+    });
+
+    it('allows non-admin to add non-write tool directly', async () => {
+      const memberApp = createApp('member');
+      const tools = ['hubspot-read'];
+      mockAddToolToAgent.mockResolvedValueOnce(tools);
+
+      const res = await makeRequest(memberApp, 'POST', '/agents/a1/tools', { toolName: 'hubspot-read' });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ tools });
+      expect(mockIsPlatformAdmin).not.toHaveBeenCalled();
     });
   });
 

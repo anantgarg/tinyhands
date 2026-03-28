@@ -5,7 +5,7 @@ import {
   updateAgent, deleteAgent, getAgentVersions, revertAgent,
 } from '../../modules/agents';
 import {
-  canModifyAgent, canView, isPlatformAdmin,
+  canModifyAgent, canView, isPlatformAdmin, listPlatformAdmins,
   getAgentRole, setAgentRole, removeAgentRole, getAgentRoles,
   requestUpgrade, approveUpgrade, denyUpgrade,
   createToolRequest, listToolRequests, listAgentToolRequests,
@@ -49,17 +49,42 @@ router.post('/', async (req: Request, res: Response) => {
   try {
     const { workspaceId, userId } = getSessionUser(req);
 
-    // Non-admins cannot use 'auto' write_policy with write tools
     const params = { ...req.body, createdBy: userId };
-    const hasWriteTools = (params.tools || []).some((t: string) => t.endsWith('-write'));
-    if (params.writePolicy === 'auto' || hasWriteTools) {
+
+    // If non-admin is creating an agent with write tools, filter them out
+    // and create tool_requests for any that would use team credentials
+    const writeToolsPending: string[] = [];
+    if ((params.tools || []).some((t: string) => t.endsWith('-write'))) {
       const isAdmin = await isPlatformAdmin(workspaceId, userId);
       if (!isAdmin) {
-        params.writePolicy = 'admin_confirm';
+        const { getIntegrationIdForTool, getTeamConnection } = await import('../../modules/connections');
+        const writeTools = (params.tools as string[]).filter(t => t.endsWith('-write'));
+        for (const toolName of writeTools) {
+          const integrationId = getIntegrationIdForTool(toolName);
+          const teamConn = await getTeamConnection(workspaceId, integrationId);
+          if (teamConn) {
+            writeToolsPending.push(toolName);
+          }
+        }
+        // Remove pending write tools from the tools array before creating the agent
+        if (writeToolsPending.length > 0) {
+          params.tools = (params.tools as string[]).filter((t: string) => !writeToolsPending.includes(t));
+        }
       }
     }
 
     const agent = await createAgent(workspaceId, params);
+
+    // Create tool_requests for write tools that need admin approval
+    if (writeToolsPending.length > 0) {
+      for (const toolName of writeToolsPending) {
+        await createToolRequest(workspaceId, agent.id, toolName, 'read-write', userId);
+      }
+      // Notify admins
+      try {
+        await notifyAdminsOfToolRequests(workspaceId, agent.id, agent.name, writeToolsPending, userId);
+      } catch { /* best-effort */ }
+    }
     res.status(201).json(agent);
   } catch (err: any) {
     logger.error('Create agent error', { error: err.message });
@@ -176,15 +201,7 @@ router.patch('/:id', async (req: Request, res: Response) => {
       return;
     }
 
-    // Non-admins cannot set write_policy to 'auto'
     const updates = { ...req.body };
-    if (updates.write_policy === 'auto') {
-      const isAdmin = await isPlatformAdmin(workspaceId, userId);
-      if (!isAdmin) {
-        updates.write_policy = 'admin_confirm';
-      }
-    }
-
     const agent = await updateAgent(workspaceId, id, updates, userId);
     res.json(agent);
   } catch (err: any) {
@@ -296,13 +313,23 @@ router.post('/:id/tools', async (req: Request, res: Response) => {
       return;
     }
 
-    // When adding a write tool, ensure write_policy is not 'auto' for non-admins
+    // When a non-admin adds a write tool that would use team credentials,
+    // create a tool_request for admin approval instead of attaching directly
     if (toolName.endsWith('-write')) {
       const isAdmin = await isPlatformAdmin(workspaceId, userId);
       if (!isAdmin) {
-        const currentAgent = await getAgent(workspaceId, id);
-        if (currentAgent && (currentAgent as any).write_policy === 'auto') {
-          await updateAgent(workspaceId, id, { write_policy: 'admin_confirm' } as any, userId);
+        const { getIntegrationIdForTool, getTeamConnection } = await import('../../modules/connections');
+        const integrationId = getIntegrationIdForTool(toolName);
+        const teamConn = await getTeamConnection(workspaceId, integrationId);
+        if (teamConn) {
+          const agent = await getAgent(workspaceId, id);
+          await createToolRequest(workspaceId, id, toolName, 'read-write', userId);
+          // Notify admins
+          try {
+            await notifyAdminsOfToolRequests(workspaceId, id, agent?.name || id, [toolName], userId);
+          } catch { /* best-effort */ }
+          res.status(202).json({ status: 'pending_approval', message: 'Adding this tool requires admin approval.' });
+          return;
         }
       }
     }
@@ -812,5 +839,36 @@ router.get('/:id/prompt-size', async (req: Request, res: Response) => {
     res.status(400).json({ error: 'Couldn\'t check the prompt size. Please try again.' });
   }
 });
+
+// ── Helper: Notify admins when write tool requests are created ──
+
+async function notifyAdminsOfToolRequests(
+  workspaceId: string,
+  agentId: string,
+  agentName: string,
+  toolNames: string[],
+  requestedBy: string,
+): Promise<void> {
+  const admins = await listPlatformAdmins(workspaceId);
+  if (admins.length === 0) return;
+
+  try {
+    const { sendDMBlocks } = await import('../../slack');
+    const toolList = toolNames.map(t => `\`${t}\``).join(', ');
+    for (const admin of admins) {
+      await sendDMBlocks(admin.user_id, [
+        {
+          type: 'section',
+          text: {
+            type: 'mrkdwn',
+            text: `:lock: <@${requestedBy}> requested to add write tool(s) ${toolList} to agent *${agentName}*. Review pending tool requests in the dashboard.`,
+          },
+        },
+      ], `Write tool request for ${agentName}`).catch(() => {});
+    }
+  } catch {
+    logger.warn('Failed to notify admins of tool requests', { workspaceId, agentId });
+  }
+}
 
 export default router;

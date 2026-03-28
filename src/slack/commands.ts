@@ -1807,6 +1807,34 @@ export function registerToolAndKBModals(app: App): void {
 
     if (agentId) {
       try {
+        // If non-admin adding a write tool with team credentials, create a tool_request
+        if (toolName.endsWith('-write')) {
+          const isAdmin = await isPlatformAdmin(workspaceId, userId);
+          if (!isAdmin) {
+            const { getIntegrationIdForTool, getTeamConnection } = await import('../modules/connections');
+            const integrationId = getIntegrationIdForTool(toolName);
+            const teamConn = await getTeamConnection(workspaceId, integrationId);
+            if (teamConn) {
+              const { createToolRequest } = await import('../modules/access-control');
+              const agent = await getAgent(workspaceId, agentId);
+              await createToolRequest(workspaceId, agentId, toolName, 'read-write', userId);
+              // Notify admins
+              const admins = await listPlatformAdmins(workspaceId);
+              if (admins.length > 0) {
+                for (const admin of admins) {
+                  await sendDMBlocks(admin.user_id, [
+                    { type: 'section', text: { type: 'mrkdwn', text: `:lock: <@${userId}> requested to add write tool \`${toolName}\` to agent *${agent?.name || agentId}*. Review pending tool requests in the dashboard.` } },
+                  ], `Write tool request for ${agent?.name || agentId}`).catch(() => {});
+                }
+              }
+              await sendDMBlocks(userId, [
+                { type: 'section', text: { type: 'mrkdwn', text: `:hourglass_flowing_sand: Your request to add *${toolName}* to agent *${agent?.name || agentId}* is pending admin approval.` } },
+              ], 'Tool request pending');
+              return;
+            }
+          }
+        }
+
         const { addToolToAgent } = await import('../modules/tools');
         await addToolToAgent(workspaceId, agentId, toolName, userId);
         const agent = await getAgent(workspaceId, agentId);

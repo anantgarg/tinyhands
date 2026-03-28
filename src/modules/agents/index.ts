@@ -52,7 +52,7 @@ export async function createAgent(workspaceId: string, params: CreateAgentParams
     mentions_only: params.mentionsOnly || false,
     visibility: params.visibility || 'public',
     default_access: params.defaultAccess || 'viewer',
-    write_policy: params.writePolicy || 'confirm',
+    write_policy: params.writePolicy || 'auto',
     relevance_keywords: params.relevanceKeywords || [],
     created_by: params.createdBy,
     created_at: new Date().toISOString(),
