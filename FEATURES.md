@@ -45,6 +45,13 @@ When user navigates to `/agents/new`, the FloatingChat opens in creation mode (8
 - X button closes the chat and shows the original 4-step manual wizard as a fallback.
 - "Or set up manually" link on the chat background page also switches to manual mode.
 - Chat panel is anchored bottom-right (not centered).
+- **Adaptive conversation depth**: AI determines confidence from the goal analysis. Detailed descriptions → fewer questions (3-4). Vague descriptions → CLARIFY phase with follow-up questions (8-10).
+- **Rich analysis summary**: After analyzing, shows agent name, recommended tools with reasoning, suggested triggers, model choice, and memory recommendation.
+- **System prompt review**: PROMPT_REVIEW phase shows a collapsible PromptPreviewCard. User can "Looks good" or "Let me edit" (re-runs analyzer with changes).
+- **Proper tool detection**: Groups integrations (HubSpot read+write = "HubSpot"). Shows connection status. Pre-selects from analysis. Friendly "no services yet" message if none configured.
+- **Channel improvements**: Private channels show 🔒 prefix. "Create a new channel" as first dropdown option.
+- **Confirmation card sections**: Agent, Channel, Response Mode, Tools, Triggers, Behavior, Access, Instructions (collapsible prompt).
+- **Copilot on manual wizard**: Floating sparkle button (✨) in bottom-right when using manual wizard. Opens FloatingChat to help fill fields. Also accessible via Cmd+K.
 
 **Agent Creation Flow:**
 
