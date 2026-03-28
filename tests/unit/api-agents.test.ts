@@ -947,15 +947,31 @@ describe('Agent Routes', () => {
   // ── GET /agents/:id/triggers ──
 
   describe('GET /agents/:id/triggers', () => {
-    it('returns agent triggers', async () => {
+    it('returns agent triggers with transformed fields', async () => {
       mockCanView.mockResolvedValueOnce(true);
-      const triggers = [{ id: 't1', type: 'webhook' }];
-      mockGetAgentTriggers.mockResolvedValueOnce(triggers);
+      const rawTriggers = [{
+        id: 't1',
+        agent_id: 'a1',
+        trigger_type: 'webhook',
+        config_json: '{"url":"https://example.com"}',
+        status: 'active',
+        last_fired_at: '2025-06-01T12:00:00Z',
+        created_at: '2025-01-01T00:00:00Z',
+      }];
+      mockGetAgentTriggers.mockResolvedValueOnce(rawTriggers);
 
       const res = await makeRequest(app, 'GET', '/agents/a1/triggers');
 
       expect(res.status).toBe(200);
-      expect(res.body).toEqual(triggers);
+      expect(res.body).toEqual([{
+        id: 't1',
+        agentId: 'a1',
+        type: 'webhook',
+        config: { url: 'https://example.com' },
+        enabled: true,
+        lastTriggeredAt: '2025-06-01T12:00:00Z',
+        createdAt: '2025-01-01T00:00:00Z',
+      }]);
     });
 
     it('returns 403 when user cannot view', async () => {

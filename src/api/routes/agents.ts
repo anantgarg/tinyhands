@@ -5,7 +5,7 @@ import {
   updateAgent, deleteAgent, getAgentVersions, revertAgent,
 } from '../../modules/agents';
 import {
-  canModifyAgent, canView,
+  canModifyAgent, canView, isPlatformAdmin,
   getAgentRole, setAgentRole, removeAgentRole, getAgentRoles,
   requestUpgrade, approveUpgrade, denyUpgrade,
   createToolRequest, listToolRequests, listAgentToolRequests,
@@ -48,7 +48,18 @@ router.get('/', async (req: Request, res: Response) => {
 router.post('/', async (req: Request, res: Response) => {
   try {
     const { workspaceId, userId } = getSessionUser(req);
-    const agent = await createAgent(workspaceId, { ...req.body, createdBy: userId });
+
+    // Non-admins cannot use 'auto' write_policy with write tools
+    const params = { ...req.body, createdBy: userId };
+    const hasWriteTools = (params.tools || []).some((t: string) => t.endsWith('-write'));
+    if (params.writePolicy === 'auto' || hasWriteTools) {
+      const isAdmin = await isPlatformAdmin(workspaceId, userId);
+      if (!isAdmin) {
+        params.writePolicy = 'admin_confirm';
+      }
+    }
+
+    const agent = await createAgent(workspaceId, params);
     res.status(201).json(agent);
   } catch (err: any) {
     logger.error('Create agent error', { error: err.message });
@@ -164,7 +175,17 @@ router.patch('/:id', async (req: Request, res: Response) => {
       res.status(403).json({ error: 'Insufficient permissions' });
       return;
     }
-    const agent = await updateAgent(workspaceId, id, req.body, userId);
+
+    // Non-admins cannot set write_policy to 'auto'
+    const updates = { ...req.body };
+    if (updates.write_policy === 'auto') {
+      const isAdmin = await isPlatformAdmin(workspaceId, userId);
+      if (!isAdmin) {
+        updates.write_policy = 'admin_confirm';
+      }
+    }
+
+    const agent = await updateAgent(workspaceId, id, updates, userId);
     res.json(agent);
   } catch (err: any) {
     logger.error('Update agent error', { error: err.message });
@@ -274,6 +295,18 @@ router.post('/:id/tools', async (req: Request, res: Response) => {
       res.status(400).json({ error: 'toolName is required' });
       return;
     }
+
+    // When adding a write tool, ensure write_policy is not 'auto' for non-admins
+    if (toolName.endsWith('-write')) {
+      const isAdmin = await isPlatformAdmin(workspaceId, userId);
+      if (!isAdmin) {
+        const currentAgent = await getAgent(workspaceId, id);
+        if (currentAgent && (currentAgent as any).write_policy === 'auto') {
+          await updateAgent(workspaceId, id, { write_policy: 'admin_confirm' } as any, userId);
+        }
+      }
+    }
+
     const tools = await addToolToAgent(workspaceId, id, toolName, userId);
 
     // If a sibling tool from the same integration already has a credential mode,
@@ -571,7 +604,15 @@ router.get('/:id/triggers', async (req: Request, res: Response) => {
       return;
     }
     const triggers = await getAgentTriggers(workspaceId, id);
-    res.json(triggers);
+    res.json((triggers as any[]).map((t: any) => ({
+      id: t.id,
+      agentId: t.agent_id,
+      type: t.trigger_type,
+      config: typeof t.config_json === 'string' ? JSON.parse(t.config_json || '{}') : (t.config_json || {}),
+      enabled: t.status === 'active',
+      lastTriggeredAt: t.last_triggered_at || t.last_fired_at || null,
+      createdAt: t.created_at,
+    })));
   } catch (err: any) {
     logger.error('Get agent triggers error', { error: err.message });
     res.status(500).json({ error: 'Failed to get triggers' });

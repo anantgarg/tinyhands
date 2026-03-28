@@ -88,7 +88,7 @@ describe('Agent Management', () => {
       expect(agent.memory_enabled).toBe(false);
       expect(agent.respond_to_all_messages).toBe(false);
       expect(agent.default_access).toBe('viewer');
-      expect(agent.write_policy).toBe('auto');
+      expect(agent.write_policy).toBe('confirm');
       expect(agent.tools).toEqual([]); // Core tools are always available, not listed
       expect(mockWithTransaction).toHaveBeenCalled();
 
