@@ -33,7 +33,15 @@ When user navigates to `/agents/new`, the FloatingChat opens in creation mode (8
 
 **Interactive card types used:** MultiChoice, YesNo, Dropdown, MultiSelect, Schedule, Confirmation.
 
-**State machine:** 16 phases with conditional skipping based on goal analysis confidence. Phases in brackets are skipped when the AI already inferred the answer: INIT → DESCRIBE → ANALYZING → [CLARIFY] → CHANNEL → ACTIVATION → [SCHEDULE] → [TRIGGERS] → TOOLS → [EFFORT] → [MEMORY] → ACCESS → [APPROVAL] → CONFIRM → CREATING → DONE.
+**State machine:** 20 phases with conditional skipping based on goal analysis confidence. Phases in brackets are skipped when conditions are met:
+
+INIT → DESCRIBE → ANALYZING → SUMMARY → [CLARIFY] → [PROMPT_REVIEW] → CHANNEL → ACTIVATION → [SCHEDULE_ASK] → [SCHEDULE] → TOOLS → [EFFORT] → [MEMORY] → ACCESS → [APPROVAL] → CONFIRM → [CHANGE_REQUEST] → CREATING → DONE
+
+Skip rules:
+- High confidence (detailed description + tools + triggers): skip CLARIFY, EFFORT, MEMORY
+- Medium confidence: skip EFFORT, MEMORY
+- No time patterns in goal: skip SCHEDULE_ASK
+- No write tools selected: skip APPROVAL
 
 **Rules:**
 - Any workspace user can create agents.
