@@ -1,350 +1,965 @@
-# TinyHands -- Complete Feature List
+# TinyHands Features & Workflows
 
-Everything TinyHands can do, organized by capability.
-
----
-
-## AI Agent Platform
-
-### Create Agents in Seconds
-Describe what you want your agent to do in plain English. TinyHands uses Claude to automatically generate the agent's name, personality, detailed instructions, recommended AI model, activation settings, and tool selections. Review and customize before creating, or accept the AI-generated configuration as-is.
-
-### Four-Step Creation Wizard
-1. **Describe** -- Type a goal like "Help our support team answer customer questions using our knowledge base"
-2. **Identity** -- Review and edit the generated name, emoji avatar, and detailed instructions
-3. **Settings** -- Configure the AI model (Sonnet, Opus, or Haiku), effort level, when the agent responds in Slack, who can access it, and whether it needs approval before taking actions
-4. **Tools** -- Select which connected services the agent can access, with granular read/write permissions per service
-
-### Agent Templates
-10 pre-built agent templates across five categories: Content & SEO, Sales & Revenue, Customer Insights, Competitive Intelligence, and Growth. Browse templates, preview their configuration, and deploy with one click.
-
-### Flexible AI Models
-Choose the right model for each agent's needs:
-- **Sonnet** -- Balanced performance for most tasks (recommended)
-- **Opus** -- Maximum capability for complex multi-step reasoning
-- **Haiku** -- Fastest responses for simple classification and routing
-
-### Adjustable Effort Levels
-Control how much work each agent puts into responses: Quick (fast answers), Standard (balanced), Thorough (detailed analysis), or Maximum (exhaustive research). Higher effort means the agent takes more steps and uses more tools before responding.
-
-### Agent Memory
-Agents can remember facts, preferences, corrections, and context across conversations. Memory is automatically extracted after each interaction and retrieved for future conversations. Categories include customer preferences, procedures, corrections, technical context, and entities.
+Internal reference document. Source of truth for how every feature works.
+Claude MUST check this before making changes and update it after commits.
 
 ---
 
-## Slack Integration
+## Agent Lifecycle
 
-### Channel-Based Agents
-Each agent lives in one or more Slack channels. Messages in those channels are automatically routed to the agent. Agents respond in threads with their own custom name and emoji avatar.
+### Creating Agents
 
-### Smart Activation Modes
-- **Only when @mentioned** -- Agent only responds when directly tagged
-- **Relevant messages** -- AI determines if a message is relevant to the agent's purpose and responds automatically
-- **Every message** -- Agent responds to all messages in its channels
+**Methods:**
+- **Dashboard wizard** (primary) -- 4-step flow: Describe, Identity, Settings, Tools
+- **Slack `/new-agent`** -- redirects to dashboard wizard
+- **API** -- `POST /api/v1/agents`
 
-### Direct Message Routing
-Message the bot directly in Slack DMs. If you have access to multiple agents, the system automatically determines which agent is most relevant to your message. If it can't decide, it shows a picker with your available agents. Thread-based conversations maintain continuity with the chosen agent.
+**Wizard steps:**
+1. **Describe** -- plain-English goal. AI goal analyzer generates: name, emoji, instructions, model, tools, effort, memory, response mode. Non-admin users get read-only tool suggestions only. "I'll set it up manually" skips the AI step.
+2. **Identity** -- review/edit name, emoji avatar, instructions (system prompt).
+3. **Settings** -- model (Sonnet/Opus/Haiku), effort (Quick/Standard/Thorough/Maximum), Slack activation (mentioned only / relevant messages / every message), access level (Full Access / Limited Access / Invite Only), action approval (Automatic / Ask User First / Ask Owner/Admins), memory toggle.
+4. **Tools** -- select integrations. Each shows "Can view data" (read) and "Can make changes" (write, auto-enables read). Core tools (file access, web search, code analysis) are always available and not shown here.
 
-### Real-Time Streaming
-Agent responses stream to Slack in real-time. See live status updates as the agent thinks, uses tools, and composes its response. No waiting for the full response -- see progress as it happens.
+**Rules:**
+- Any workspace user can create agents -- except members when non-admin restrictions apply (the "New Agent" button is hidden and navigating to the create page redirects to agents list).
+- Agent creator automatically becomes owner.
+- A Slack channel is created for each new agent.
+- Smart credential recommendations appear during tool selection based on agent purpose (team / creator's / each user's).
+- For non-admin creators, the goal analyzer restricts tool suggestions to read-only tools and does not propose new tools.
 
-### Rich Formatting
-Agent output automatically converts to Slack-native formatting: bold, italic, code blocks, bullet lists, and links. Slack user mentions (@name) and emoji codes render correctly in the dashboard.
+### Agent Configuration
 
----
+| Setting | Values | DB column | Dashboard label |
+|---------|--------|-----------|-----------------|
+| Model | `sonnet`, `opus`, `haiku` | `agents.model` | Sonnet / Opus / Haiku |
+| Effort | Quick, Standard, Thorough, Maximum | `agents.max_turns` | Quick / Standard / Thorough / Maximum |
+| Memory | on / off | `agents.memory_enabled` | Memory toggle |
+| Channels | one or more Slack channels | `agents.channels` (JSON array) | -- |
+| Activation | mentions_only, respond_to_all, or default (relevance check) | `agents.mentions_only`, `agents.respond_to_all` | Only when @mentioned / Relevant messages / Every message |
+| Default access | none, viewer, member | `agents.default_access` | Invite Only / Limited Access / Full Access |
+| Write policy | auto, confirm, admin_confirm | `agents.write_policy` | Automatic / Ask User First / Ask Owner/Admins |
+| Self-evolution | off, supervised, autonomous | `agents.self_evolution_mode` | Off / Supervised / Autonomous |
 
-## Connected Services
+### Pausing / Resuming / Deleting
 
-### 11 Integrations, Ready to Connect
+- **Pause/Resume** -- from agent detail header button or Agents list overflow menu. Sets `agents.status` to `paused` or `active`. Paused agents ignore all messages.
+- **Delete** -- from agent detail overflow menu or Agents list overflow menu. Requires owner access (`canModifyAgent`).
+- Platform admins (superadmin/admin) have owner-level access to all agents and can pause/resume/delete any agent.
 
-#### Chargebee (Billing & Subscriptions)
-- **View**: Search customers, list subscriptions, view invoices, browse plans and pricing, list coupons
-- **Act**: Create/update customers, manage subscriptions, cancel subscriptions, add charges, apply coupons
+### Version History
 
-#### Google Drive (File Management)
-- **View**: Search files across Drive, list folder contents, view file metadata, download and read documents (auto-exports Google Docs to text, Sheets to CSV)
-- **Act**: Create folders, move files between folders, upload new files
+Every configuration change creates a version entry in `agent_versions`.
 
-#### Google Sheets (Spreadsheets)
-- **View**: Read spreadsheet data by range (A1 notation), get sheet structure and dimensions
-- **Act**: Create new spreadsheets, update cell ranges, append rows to existing sheets
+**Tracked fields:** instructions (system_prompt), model, tools, max_turns, memory_enabled, mentions_only, respond_to_all, default_access, write_policy.
 
-#### Google Docs (Documents)
-- **View**: Read full document content including text from tables
-- **Act**: Create new documents with initial content, replace entire document content
+**Capabilities:**
+- Preview any version to see full configuration snapshot.
+- Restore any version to revert the agent to that state.
+- Each version records: what changed, who changed it, when.
 
-#### Gmail (Email)
-- **View**: Search emails with Gmail query syntax, read full email with attachments list, browse labels
-- **Act**: Send new emails with to/cc/bcc, reply to emails with proper threading (In-Reply-To headers preserved)
-
-#### HubSpot (CRM)
-- **View**: Search contacts, deals, and companies. View contact details, deal pipelines, company records
-- **Act**: Create/update contacts, deals, and companies. Add notes and tasks to records
-
-#### Knowledge Base (Internal)
-- **View**: Full-text search across all knowledge base entries, browse by category
-- Auto-configured, no API keys needed
-
-#### Linear (Project Management)
-- **View**: Search issues, browse projects, list teams and cycles, view labels and users
-- **Act**: Create/update issues, add comments, create projects
-
-#### PostHog (Product Analytics)
-- **View**: Query events, look up persons, list feature flags, view insights and cohorts
-
-#### SerpAPI (Search Rankings)
-- **View**: Track SERP rankings across Google, Bing, and Yahoo. Single keyword or batch search. Location and device targeting.
-
-#### Zendesk (Support)
-- **View**: Search tickets, view ticket details and comments, list groups and users, view satisfaction ratings
-- **Act**: Create tickets, add comments, update priority, tags, and assignees
-
-### One-Click Google OAuth
-All four Google integrations (Drive, Sheets, Docs, Gmail) connect through a single Google authorization. Click "Connect with Google," authorize once, and all Google services are available. No API keys or access tokens to copy.
-
-### Folder-Level Access Control
-Restrict a Google Drive connection to a specific folder. Browse your Drive with an interactive folder picker, select a folder, and the agent can only access files within that folder and its subfolders. Change or remove the restriction at any time from the Connections page.
-
-### Core Tools (Always Available)
-Every agent automatically has access to: run shell commands, read/write/edit files, search files by name or content, search the web, and fetch web pages. No configuration needed.
-
-### Custom Tools
-Create custom tools with JavaScript, Python, or Bash code. Define input schemas, set access levels (read-only or read-write), and attach to agents. Tools run in sandboxed Docker containers with a 30-second timeout.
+**Implementation:** Migration 020 added columns for model, tools, max_turns, memory_enabled, mentions_only, respond_to_all, default_access, write_policy to `agent_versions`.
 
 ---
 
-## Knowledge Base
+## Agent Execution
 
-### Hierarchical Organization
-Knowledge is organized in three levels: **Sources** (where content comes from), **Documents** (individual articles/pages), and **Content** (the searchable text). The dashboard shows source cards with entry counts and sync status -- click into a source to browse its documents.
+### Full Flow
 
-### Six Auto-Sync Connectors
+```
+1. Slack message received (listener process, src/index.ts)
+2. Relevance check (skip if @mentioned or mentions_only/respond_to_all)
+3. Job enqueued to BullMQ (priority queue via Redis)
+4. Worker dequeues job (src/worker.ts)
+5. Rate limit check (TPM/RPM token bucket at 90% capacity)
+6. Context retrieval:
+   - KB search (full-text via tsvector)
+   - Source chunks (indexed data)
+   - Agent memory (if enabled)
+   - Thread history (Slack conversation context)
+7. Docker container created with mounted tools, sources, config
+8. Claude Agent SDK runs inside container, streams events to stdout
+9. Worker reads stream -> buffers -> posts to Slack thread in real-time
+10. Run record updated (tokens, cost, duration, status)
+11. Container cleaned up
+12. Memories extracted and stored (if memory enabled)
+```
 
-| Source | What It Imports |
-|--------|----------------|
-| **GitHub** | Markdown files from repositories, with automatic Mintlify documentation detection |
-| **Google Drive** | Documents, spreadsheets, PDFs from Drive folders (with visual folder picker) |
-| **Zendesk Help Center** | Published help center articles |
-| **Website** | Crawl and index any website or documentation site |
-| **HubSpot KB** | Knowledge base articles from HubSpot CMS |
-| **Linear Docs** | Project documents and issue descriptions from Linear |
+### Rate Limiting
 
-### Visual Folder Picker for Google Drive
-When adding a Google Drive source, browse your Drive interactively instead of pasting folder IDs. Navigate through folders with breadcrumb navigation, see folder names, and select with one click. The same picker is available when editing an existing source.
+- Redis-backed token bucket in `src/queue/index.ts`.
+- Pre-flight check at 90% TPM capacity -- if over, job is delayed.
+- Per-minute tracking for both TPM (tokens per minute) and RPM (requests per minute).
+- Applies globally across all workers.
+- Automatic 60-second pause on 429 responses from Anthropic API.
 
-### Automatic Syncing
-Sources sync automatically on a configurable schedule (default: daily). Force a re-sync at any time, or flush all entries and re-import from scratch.
+### Thread Replies vs Top-Level Messages
 
-### Full-Text Search
-PostgreSQL-powered full-text search with ranking. Agents automatically search the knowledge base for relevant context before responding. Manual search available from the dashboard.
+- Agent responses always go to a Slack thread (reply to the triggering message).
+- Follow-up messages in the same thread continue the conversation with full thread context.
+- Real-time streaming via `src/slack/buffer.ts` -- progressive message updates in Slack.
 
-### Manual Entries with Approval
-Add knowledge base entries manually with title, category, tags, and content. Agent-contributed entries require human approval before appearing in search results. Edit or delete any entry from the dashboard.
+### DM Routing (Multi-Agent Selection)
 
-### Smart Categorization
-Entries are organized by category. AI-powered metadata generation suggests titles, summaries, categories, and tags from content. Categories are browsable and filterable in the dashboard.
+- Users can DM the TinyHands bot directly.
+- If the user has access to multiple agents, the system either:
+  - Routes to the most relevant agent automatically, or
+  - Shows a picker to choose which agent to talk to.
+- Follow-up messages in the same DM thread continue with the chosen agent.
 
----
+### Model Override (/opus, /sonnet, /haiku)
 
-## Triggers & Automation
+- Prefix a message with `/opus`, `/sonnet`, or `/haiku` to override the agent's default model for that run.
+- Handled by `src/modules/model-selection/`.
+- Override applies only to the single run, not permanently.
 
-### Schedule Triggers
-Run agents on a schedule using cron expressions. Timezone auto-detected from your Slack profile. Common patterns: hourly, daily at 9am, weekly on Mondays. Pause and resume schedules at any time.
+### Effort Levels (Quick, Standard, Thorough, Maximum -> maxTurns)
 
-### Event Triggers
-Fire agents automatically when events happen in external systems:
-- **Slack** -- Messages posted in specific channels
-- **Linear** -- Issues created or updated
-- **Zendesk** -- Tickets created or updated
-- **Intercom** -- Conversations started or updated
-- **Webhook** -- Any system that can send HTTP POST requests
+| Level | Best for | maxTurns |
+|-------|----------|----------|
+| Quick | Single-turn answers | Low |
+| Standard | Multi-step reasoning (default) | Default |
+| Thorough | Deep research and iteration | Higher |
+| Maximum | Complex, multi-tool investigations | Highest |
 
-### Deduplication
-Events are automatically deduplicated with a 5-minute window to prevent the same event from triggering multiple agent runs.
+Effort is stored as `max_turns` in the agents table. The dashboard shows friendly labels.
 
----
+### Run Records
 
-## Credentials & Security
+Every execution creates a `run_history` row tracking:
+- `status`: queued, running, success, error
+- `input_tokens`, `output_tokens`, `estimated_cost_usd`
+- `duration_ms`, `queue_wait_ms`
+- `context_tokens_injected`, `tool_calls_count`
+- `model`, `trace_id`, `job_id`, `slack_user_id`
+- `created_at`, `completed_at`
 
-### Encrypted Storage
-All credentials (API keys, OAuth tokens) are encrypted at rest using AES-256-GCM with a configurable encryption key. Credentials are never stored in plaintext.
+### Queue Priorities
 
-### Team vs Personal Credentials
-- **Team credentials** -- Shared across the workspace, managed by admins. One set of credentials used by all agents.
-- **Personal credentials** -- Each user connects their own account. Agents use the invoking user's credentials, the agent creator's credentials, or fall back to team credentials.
-
-### OAuth Flows
-Built-in OAuth support for Google, Notion, and GitHub. Users click "Connect," authorize in a popup, and credentials are stored automatically. No manual token copying.
-
-### Per-Agent Credential Control
-Each tool on each agent can be independently configured to use team credentials, the requesting user's personal credentials, or the agent creator's personal credentials.
+| Priority | Value | Use case |
+|----------|-------|----------|
+| high | 1 | @mentions, DMs |
+| normal | 2 | Channel messages (default) |
+| low | 3 | Scheduled triggers, bulk |
 
 ---
 
 ## Access Control
 
-### Three-Tier Platform Roles
-- **Super Admin** -- Full platform access. Manage all agents, tools, connections, settings, and users.
-- **Admin** -- Same capabilities as Super Admin for most operations.
-- **Member** -- Default role. Can use agents they have access to, connect personal credentials, browse the knowledge base.
+### Platform Roles
 
-### Per-Agent Access Levels
-- **Full Access** -- Everyone can use and configure the agent
-- **Limited Access** -- Everyone can interact, but only owners can configure
-- **Invite Only** -- Must be explicitly invited to access the agent
+| Role | Hierarchy value | Permissions |
+|------|----------------|-------------|
+| superadmin | 3 | Full platform control: manage all agents, tools, KB, roles, audit log |
+| admin | 2 | Manage tools, KB, and agents. Cannot change platform roles |
+| member | 1 | View and interact with agents only |
 
-### Action Approval Policies
-- **Automatic** -- Agent acts without asking permission
-- **Ask User First** -- Agent asks the person who triggered it before making changes
-- **Ask Owner/Admins** -- Agent asks the owner or admins before making changes (via Slack DM with approve/deny buttons)
+**Rules:**
+- First person to run any slash command in bot DM becomes superadmin (`initSuperadmin`).
+- Only superadmins can grant/revoke superadmin roles (`addSuperadmin` checks `isPlatformAdmin`).
+- There must always be at least one superadmin (enforced in `removePlatformRole`).
+- `isPlatformAdmin()` returns true for both superadmin and admin.
 
-### Upgrade Requests
-Users with limited access can request elevated permissions. Requests go to agent owners and admins for approval with an optional reason.
+**Non-admin (member) restrictions:**
+- Cannot create agents (New Agent button hidden; create page redirects to agents list).
+- Cannot access Tools & Integrations page (sees "Admin Access Required" message).
+- Cannot manage KB sources or API keys (can only search and add entries).
+- Can only edit or delete agents they own.
+- Goal analyzer restricts tool suggestions to read-only tools.
 
-### Tool Access Requests
-Non-admin users who need write access to a tool can submit a request. Admins review and approve/deny from the Requests page.
+### Agent Roles
 
-### Non-Admin Guardrails
-Members cannot create agents, manage tool integrations, access admin settings, or modify agents they don't own. All admin-only actions are hidden from the UI -- no confusing disabled buttons.
+| Role | Hierarchy value | Permissions |
+|------|----------------|-------------|
+| owner | 3 | Full control: modify agent, manage roles, delete, approve upgrades |
+| member | 2 | Full interaction: read and write tool actions |
+| viewer | 1 | Read-only: write actions trigger automatic upgrade request |
+| none | 0 | No access (used when default_access is "none" / Invite Only) |
+
+**Resolution order (in `getAgentRole`):**
+1. Check platform role -- superadmin or admin automatically get `owner` access on all agents.
+2. Check explicit agent role in `agent_roles` table.
+3. Fall back to agent's `default_access` field (none / viewer / member).
+
+### Default Access Levels
+
+| Dashboard label | DB value | Behavior for users without explicit role |
+|-----------------|----------|------------------------------------------|
+| Invite Only | `none` | Agent hidden. Only explicitly granted users can see/use it |
+| Limited Access | `viewer` | Can see agent. Write actions trigger upgrade requests |
+| Full Access | `member` | Full interaction for everyone |
+
+### Permission Check Functions
+
+| Function | Returns true when |
+|----------|-------------------|
+| `canView(ws, agent, user)` | Agent role >= viewer |
+| `canInteract(ws, agent, user)` | Agent role >= member |
+| `canModifyAgent(ws, agent, user)` | Agent role === owner |
+| `canSendTask(ws, agent, user)` | Delegates to `canAccessAgent()` |
+| `isPlatformAdmin(ws, user)` | Platform role is superadmin or admin |
+| `hasMinimumRole(userRole, required)` | Backward-compat hierarchy comparison |
+| `hasMinimumAgentRole(userRole, required)` | Agent role hierarchy comparison |
+
+**Who can create agents:** Everyone (any user) -- except when member restrictions apply (members cannot create agents).
+
+**Who can modify agents:** Owners only (via `canModifyAgent` which checks `agentRole === 'owner'`). Platform admins get owner-level access to all agents automatically.
+
+### Upgrade Request Flow (Viewer -> Member)
+
+1. Viewer attempts write action or clicks "Request Access" in dashboard.
+2. `requestUpgrade()` creates row in `upgrade_requests` (status: pending, requested_role: member).
+3. All agent owners are notified via Slack DM.
+4. Owner/admin reviews in dashboard **Requests > Upgrade Requests**.
+5. `approveUpgrade()`: sets status to approved, grants member role via `setAgentRole()`, user notified via Slack DM.
+6. `denyUpgrade()`: sets status to denied, no notification sent.
+7. Audit events logged for both request creation and resolution (fire-and-forget).
 
 ---
 
-## Version History
+## Tool System
 
-### Complete Change Tracking
-Every configuration change is automatically recorded: instructions, AI model, tools, effort level, memory setting, activation mode, access level, and action approval policy. Each version includes a descriptive change note (e.g., "Instructions, Model updated"), who made the change, and when.
+### Tool Categories
 
-### Preview Any Version
-Click "Preview" on any version to see the full agent configuration at that point in time: instructions text, model, effort, memory, access, and connected tools.
+| Category | Examples | Config needed | Discovery |
+|----------|----------|---------------|-----------|
+| Core/built-in | File access, web search, code analysis, shell commands | None (always available) | Hardcoded |
+| Integration tools | HubSpot, Zendesk, Linear, Google Drive, etc. | API keys or OAuth | Auto-discovered from `src/modules/tools/integrations/` |
+| Custom tools | User-created via dashboard | Code + schema | Stored in `custom_tools` table |
+| Agent-created tools | Created by agents during execution | Needs admin approval | Stored in `custom_tools` with approval flag |
 
-### One-Click Restore
-Roll back to any previous version with a single click. The agent's configuration is restored to exactly what it was at that point.
+### Tool Manifest Structure (ToolManifest)
+
+Every integration exports a `manifest` from `src/modules/tools/integrations/<name>/index.ts`:
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `id` | string | Unique identifier, e.g. "chargebee" |
+| `label` | string | Human-readable name, e.g. "Chargebee" |
+| `icon` | string | Slack emoji, e.g. ":credit_card:" |
+| `description` | string | Short text for integration picker UI |
+| `configKeys` | string[] | Required credential fields (e.g. ["api_key", "site"]) |
+| `configPlaceholders` | Record | Optional placeholder hints per config field |
+| `setupGuide` | string | Optional Slack mrkdwn setup instructions |
+| `connectionModel` | 'team' / 'personal' / 'hybrid' | Controls which connection flows are available |
+| `tools` | ToolDefinition[] | Read and optionally write tool definitions |
+| `register()` | function | Register tools into database |
+| `updateConfig()` | function | Update credentials for existing tools |
+
+### Tool Definition Structure (ToolDefinition)
+
+| Property | Type | Description |
+|----------|------|-------------|
+| `name` | string | DB name, e.g. "chargebee-read" |
+| `schema` | string | JSON-stringified JSON Schema for inputs |
+| `code` | string | JavaScript code that runs in Docker |
+| `accessLevel` | 'read-only' / 'read-write' | Whether tool can mutate data |
+| `displayName` | string | Friendly label shown in Slack during execution |
+
+### Read vs Write Tools (Name Suffix -read/-write, accessLevel Property)
+
+- Tool names follow pattern: `<integration>-read` and `<integration>-write`.
+- `accessLevel` property: `read-only` vs `read-write`.
+- Dashboard shows: "Can view data" (read) and "Can make changes" (write).
+- Enabling write automatically includes read access.
+
+### Tool Code Constraints
+
+- Runs inside Docker container with only Node.js built-ins (no npm packages).
+- Config loaded from `path.join(__dirname, '<tool-name>.config.json')`.
+- Inputs available via global `input` variable.
+- Output via `console.log(JSON.stringify(result))`.
+- 30-second timeout on all HTTP requests.
+
+### Adding Tools to Agents
+
+- During creation: wizard step 4 lets users select tools.
+- After creation: agent's Tools tab in dashboard.
+- When a non-admin adds a write tool and team credentials exist, a tool request is created (pending admin approval) instead of immediately attaching.
+- Admins can add any tool immediately without approval.
+
+### Existing Integrations
+
+| Integration | ID | Access | Connection Model | Config Keys |
+|-------------|-----|--------|-----------------|-------------|
+| Chargebee | `chargebee` | read + write | team | `api_key`, `site` |
+| HubSpot | `hubspot` | read + write | team | `access_token` |
+| Linear | `linear` | read + write | team | `api_key` |
+| Zendesk | `zendesk` | read + write | team | `subdomain`, `email`, `api_token` |
+| PostHog | `posthog` | read-only | team | `api_key`, `project_id` |
+| SerpAPI | `serpapi` | read-only | team | `api_key` |
+| Knowledge Base | `kb` | read-only | (auto) | (auto-configured) |
+| Google Drive | `google-drive` | read + write | personal | OAuth |
+| Google Sheets | `google-sheets` | read + write | personal | OAuth |
+| Google Docs | `google-docs` | read + write | personal | OAuth |
+| Gmail | `gmail` | read + write | personal | OAuth |
+| Notion | `notion` | read-only | personal | OAuth |
+| GitHub | `github` | read-only | personal | OAuth |
+
+**Google OAuth note:** All four Google integrations share a single OAuth config and callback (`/auth/callback/google`). One connection covers Drive, Sheets, Docs, and Gmail. Which services an agent uses depends on which tools are enabled. Legacy "Google Workspace" integration exists for backward compat but registers no tools (cleaned up by migration 019).
 
 ---
 
-## Observability & Monitoring
+## Credential & Connection System
 
-### Usage Dashboard
-Real-time metrics: total runs, tokens consumed, estimated cost, error rate, duration percentiles (p50/p95/p99), and queue wait times. Drill down by agent or model.
+### Team Credentials (Admin-Configured, Shared Workspace-Wide)
 
-### Power User & Agent Rankings
-See top users by run count, top agent creators, and most popular agents. Identify which agents are delivering the most value.
+- Created via Tools & Integrations page by admins.
+- Stored in `connections` table with `connection_type = 'team'`, `user_id = NULL`.
+- Encrypted with AES-256-GCM (requires `ENCRYPTION_KEY` env var, 32+ chars).
+- One team connection per integration per workspace (upsert on conflict).
 
-### Automated Alerts
-Five built-in alert rules: high error rate (>10%), expensive single runs (>$5), daily budget exceeded, queue depth warnings, and long-running jobs. Alerts post to Slack with deduplication to prevent spam.
+### Personal Credentials (User-Owned, OAuth or Manual)
 
-### Daily Digest
-Automated daily summary posted to Slack: run count, token usage, cost, top agent, top user, agents with high error rates, and agents with anomalous cost spikes (>2x their 7-day average).
+- Created via Connections page by individual users.
+- Stored in `connections` table with `connection_type = 'personal'`, `user_id` set.
+- OAuth supported for: Google, Notion, GitHub.
+- API key entry for integrations with `connectionModel: 'personal'` or `'hybrid'`.
+- One personal connection per integration per user per workspace (upsert on conflict).
 
-### Error Logs
-Browse failed runs with error details, agent name, duration, user who triggered it, and timestamp. Filter by agent or time range.
+### Connection Modes: Team, Delegated, Runtime
 
-### Audit Trail
-Every significant action is logged: agent creation, configuration changes, tool invocations, role changes, connection management, upgrade requests, and more. Filter by user, agent, or action type.
+Stored in `agent_tool_connections` table (unique per `agent_id` + `tool_name`):
+
+| Mode | DB value | Dashboard label | Behavior at runtime |
+|------|----------|-----------------|---------------------|
+| Team | `team` | Team credentials | Uses shared team connection |
+| Delegated | `delegated` | Agent creator's | Uses first agent owner's personal connection |
+| Runtime | `runtime` | Each user's own | Uses invoking user's personal connection |
+
+### Default: Falls Back to Team Credentials If No Explicit Mode Set
+
+In `resolveToolCredentials()`:
+1. Look up `agent_tool_connections` for explicit mode on this agent + tool.
+2. If found, resolve based on mode (team / delegated / runtime).
+3. **If no explicit mode set (`atc` is null)** -- default to team connection.
+4. If nothing found at all -- return `null` (triggers role-aware error).
+
+### Admin Approval Required: Non-Admin Adding Write Tool with Team Credentials
+
+**Rule:** When a non-admin adds a write tool to their agent AND team credentials exist for that integration, the tool is NOT attached immediately. A tool request is created (pending admin approval).
+
+### Admin Approval Required: Non-Admin Switching Write Tool to Team Credentials
+
+**Rule:** When a non-admin switches a write tool's credential dropdown to "Team credentials," the same approval flow applies.
+
+**Admin bypass:** Platform admins attach tools immediately with no approval needed.
+
+### Credential Resolution Order at Runtime
+
+`resolveToolCredentials(wsId, agentId, toolName, userId)`:
+
+1. Look up `agent_tool_connections` for explicit mode.
+2. If `team` -- `getTeamConnection(wsId, integrationId)`.
+3. If `delegated` -- iterate `getAgentOwners()`, find first owner's personal connection.
+4. If `runtime` -- `getPersonalConnection(wsId, integrationId, userId)`.
+5. If no explicit mode -- default to team: `getTeamConnection(wsId, integrationId)`.
+6. If null returned -- run fails with role-aware error message.
+7. All credentials auto-decrypted via `decryptCredentials()`.
+8. Google OAuth tokens auto-refreshed via `refreshIfGoogleOAuth()`.
+
+**Critical rule:** The system never silently falls back to stale or empty credentials. If credentials are missing, the run fails with a clear, specific error rather than proceeding with broken config.
+
+### Smart Credential Recommendations
+
+During agent creation, the AI goal analyzer recommends credential modes:
+
+| Mode | When recommended | Behavior |
+|------|-----------------|----------|
+| Team | Agent monitors or acts for whole team (e.g., ticket triage, dashboards) | Uses shared team credential |
+| Creator's | Agent is personal to the user (e.g., "manage MY tasks") | Uses agent creator's personal credential |
+| Each User's Own | Agent acts on behalf of whoever talks to it (e.g., "send email as requesting user") | Each user provides own credential |
+
+Respects each tool's `connectionModel` -- team-only tools (e.g., Chargebee) always use shared credentials.
+
+### Missing Credential Error Messages (Role-Aware)
+
+Generated by `getCredentialErrorContext()`:
+
+| Mode | Runner Role | Message |
+|------|-------------|---------|
+| Team | Admin | "Shared credentials haven't been set up. Go to Connections page in the dashboard." |
+| Team | Agent owner | "Ask a workspace admin to connect the tool in the Connections page." |
+| Team | Regular user | "Let @owner or a workspace admin know." |
+| Delegated | Agent owner | "You haven't connected yet." + Connect button |
+| Delegated | Others | "The owner's credentials aren't set up. Let @owner know." |
+| Runtime | Anyone | "I need your credentials to proceed." + Connect button |
+
+For runtime and delegated-owner cases, a **Connect** button is included. After user completes connection, agent automatically retries -- no need to re-send original message.
+
+### Google Drive Folder Restrictions
+
+- Users can restrict a Google personal connection to a specific Drive folder.
+- Set via Connections page folder browser (browse, navigate, select).
+- Stored as `root_folder_id` and `root_folder_name` in encrypted credentials.
+- Agents using this connection can only access files within that folder and subfolders.
+- Can be changed or cleared at any time.
+
+---
+
+## Approval & Request Workflows
+
+All non-realtime approvals happen in the **web dashboard**. Slack sends notification-only messages with "View in Dashboard" CTA link. Sidebar badge shows total pending count. Tab badges show per-type counts. Admins are notified via Slack DM when new requests arrive.
+
+### 1. Upgrade Requests
+
+**When it happens:** A user with limited access (viewer) tries to interact with an agent that requires member access, or clicks "Request Access" in the dashboard.
+
+**Flow:**
+1. User interacts with agent or clicks "Request Access"
+2. `requestUpgrade()` creates row in `upgrade_requests` (status: pending)
+3. Request appears in **Requests > Upgrade Requests**
+4. Agent owner or admin reviews and approves or denies
+5. If approved: user gets member role via `setAgentRole()`, notified via Slack DM
+6. If denied: user notified with reason
+
+### 2. Tool Requests (Write Tool + Team Credentials)
+
+**When it happens:** A non-admin user adds a write tool (e.g., Zendesk Write, HubSpot Write) to their agent AND team credentials exist for that integration. Also triggered when a non-admin switches the credential dropdown for a write tool to "Team credentials."
+
+**Flow:**
+1. Non-admin adds write tool or switches credentials to "Team"
+2. System checks: is user an admin? If yes, tool attached immediately
+3. If not admin AND team credentials exist: tool NOT attached, tool request created (pending)
+4. All admins receive Slack DM with "View in Dashboard" link
+5. Admin reviews in **Requests > Tool Requests** and approves or denies
+6. If approved: tool automatically attached to agent
+7. If denied: request marked denied, user notified
+
+**Why this exists:** Team credentials are shared company-wide. Non-admins should not grant their agent write access to shared resources without admin review.
+
+### 3. Evolution Proposals
+
+**When it happens:** An agent with self-evolution enabled detects a potential improvement. Agents in "supervised" mode create proposals for human review. Agents in "autonomous" mode auto-execute.
+
+**Flow:**
+1. Agent identifies improvement during a run
+2. `createProposal()` creates row with action type, description, diff
+3. Supervised: status = pending; Autonomous: status = executed (auto-runs)
+4. Admins receive Slack DM with "Review in Dashboard" link
+5. Admin reviews in **Requests > Evolution Proposals**
+6. If approved: `executeProposal()` runs (prompt updated, tool added, etc.)
+7. If rejected: proposal archived
+
+**Proposal types:** `update_prompt`, `write_tool`, `create_mcp`, `commit_code`, `add_to_kb`
+
+### 4. Feature Requests (Missing Capabilities)
+
+**When it happens:** During agent creation, the AI goal analyzer identifies needed tools or capabilities that don't exist in the system.
+
+**Flow:**
+1. User describes agent goal during creation
+2. Goal analyzer identifies required tools that don't exist
+3. Feature request created listing missing tools and descriptions
+4. Admins receive Slack DM with "View in Dashboard" link
+5. Admin reviews in **Requests > Feature Requests**
+6. Admin can dismiss or use as guide to build missing integration
+
+**Note:** Feature requests are informational only. Admin must build missing tools via code (adding integration in `src/modules/tools/integrations/`).
+
+### 5. KB Contributions
+
+**When it happens:** An agent submits content to the knowledge base during a run.
+
+**Flow:**
+1. Agent creates KB entry during execution
+2. Entry saved with `approved: false`
+3. Admin reviews in **Requests > KB Contributions**
+4. If approved: entry becomes searchable by all agents
+5. If rejected: entry deleted
+
+### 6. Write Approvals (Runtime -- Slack Only)
+
+**When it happens:** During agent execution, the agent attempts a write action and the agent's write policy is `confirm` or `admin_confirm`.
+
+**Flow:**
+1. Agent starts executing a write tool during a run
+2. Agent pauses and posts approval request in Slack thread with Approve/Deny buttons
+3. For `confirm` (Ask User First): any user in the thread can approve. 5-minute timeout.
+4. For `admin_confirm` (Ask Owner/Admins): only agent owner can approve. No timeout.
+5. If approved: agent resumes and completes the write action
+6. If denied: agent skips the action and continues
+7. If timeout (confirm only): treated as denied
+
+**Why Slack-only:** Write approvals are real-time, time-sensitive decisions that happen mid-execution. They must stay in the Slack thread where the conversation is happening.
+
+### Summary: Where Each Request Type Lives
+
+| Request Type | Dashboard Tab | Slack Notification | Slack Approve/Deny |
+|---|---|---|---|
+| Upgrade Requests | Requests > Upgrade Requests | No (planned) | No |
+| Tool Requests | Requests > Tool Requests | Yes (with dashboard CTA) | No |
+| Evolution Proposals | Requests > Evolution Proposals | Yes (with dashboard CTA) | No |
+| Feature Requests | Requests > Feature Requests | Yes (with dashboard CTA) | No |
+| KB Contributions | Requests > KB Contributions | Planned | No |
+| Write Approvals | N/A (Slack-only) | In-thread | Yes (real-time) |
+
+---
+
+## Action Approval (Write Policies)
+
+This is a **runtime** concept, separate from tool attachment approval (which is an admin workflow for adding tools to agents).
+
+| DB value | Dashboard label | Behavior |
+|----------|-----------------|----------|
+| `auto` | Automatic | Write actions execute immediately for members |
+| `confirm` | Ask User First | Agent pauses, DMs requesting user with action details and Approve/Deny buttons. 5-minute timeout |
+| `admin_confirm` | Ask Owner/Admins | Agent pauses, DMs agent owner with action details and Approve/Deny buttons. No timeout |
+
+**Rules:**
+- Default for new agents: `auto`.
+- Enforced at runtime via Redis-backed approval state in `src/queue/index.ts`.
+- Approval routes in `src/server.ts` handle approve/deny actions from Slack DM buttons.
+- Redis helpers in `src/queue/index.ts` manage approval request creation, polling, and expiration.
+- When denied: requesting user receives DM explaining which action was blocked and why.
+- When approved: agent automatically resumes and completes the write action.
+- Expired requests (`confirm` only): treated as denied.
+
+---
+
+## Knowledge Base
+
+### KB Entries
+
+- Stored in `kb_entries` table.
+- Full-text search via PostgreSQL tsvector + GIN index.
+- Fields: title, content, category, source, approved (boolean).
+- Agent-contributed entries default to `approved: false` (need admin review).
+- Admins can add manual entries, edit non-synced entries, approve pending entries, delete entries.
+- Auto-synced entries from connected sources cannot be edited.
+
+### KB Sources
+
+| Source | Config | Connection Type |
+|--------|--------|-----------------|
+| GitHub | Repository (owner/name), branch, path filter | GitHub API token (KB API key) |
+| Google Drive | Folder ID (via folder picker) | Google OAuth connection |
+| Zendesk Help Center | Subdomain, category ID (optional) | Zendesk API token (KB API key) |
+| Website / Docs (Web Crawl) | Start URL, max pages, URL pattern filter | Firecrawl API key (KB API key) |
+| Notion | Root page ID | Notion OAuth connection |
+
+### KB Source Management
+
+- **Add Source**: 4-step wizard (Choose Type, Configure, Sync Settings, Review & Create).
+- **Edit**: Update source name and configuration.
+- **Sync**: Run immediate one-time sync.
+- **Delete**: Removes source and all associated entries.
+- Auto-sync toggleable per source (24-hour interval).
+
+### KB Page Hierarchy
+
+1. **Sources** -- top-level view with source cards (GitHub, Drive, Zendesk, etc.) + "Manual Entries" card.
+2. **Documents** -- click source card to see entries, with source name in breadcrumb.
+3. **Content** -- click entry for full content, category, source, last-updated date.
+
+### KB Source Sync (Every 15 Minutes via Sync Process)
+
+- Sync process (`src/sync.ts`) handles KB source syncs.
+- Auto-sync checks periodically for sources with auto-sync enabled.
+- Each source connector handles fetching and indexing from its data source.
+
+### KB API Keys
+
+- Managed on Sources sub-page.
+- Keys shown once at creation -- copy immediately.
+- Used for external programmatic KB access.
+
+---
+
+## Triggers
+
+### Types
+
+| Type | DB value | Description |
+|------|----------|-------------|
+| Channel messages | `slack_channel` | Agent responds to messages in specific channels |
+| Scheduled | `schedule` | Cron expression with timezone support |
+| Linear | `linear` | React to issue updates |
+| Zendesk | `zendesk` | React to ticket events |
+| Intercom | `intercom` | React to conversation events |
+| Webhook | `webhook` | Generic HTTP webhook at `/webhooks/agent-{name}` |
+
+### Rules
+
+- Scheduler process (`src/scheduler.ts`) evaluates cron triggers every 60 seconds.
+- Deduplication via Redis NX keys with 5-minute window (prevents duplicate triggers from same event).
+- Scheduled triggers post results to agent's `channel_id`.
+- Triggers can be paused, resumed, edited, and deleted from dashboard Triggers tab.
+- Webhook signature verification for GitHub, Linear, Zendesk, Intercom (in `src/utils/webhooks.ts`).
+- Schedule triggers use cron expressions with timezone support (timezone auto-detected from Slack workspace).
+
+---
+
+## Agent Memory
+
+- **Optional** per-agent (toggle in Settings during creation or on Overview tab).
+- **Categories:** customer_preference, decision, context, technical, general, preference, procedure, correction, entity.
+- Stored in `agent_memories` table with relevance scores.
+- Memories extracted automatically after each run (when enabled).
+- Viewable and deletable from agent's Memory tab in dashboard.
+- User can type `forget about <topic>` in agent's channel to remove specific memories.
+
+---
+
+## Self-Evolution
+
+### Modes
+
+| Mode | DB value | Behavior |
+|------|----------|----------|
+| Off | `off` | No self-evolution |
+| Supervised | `supervised` | Creates proposal for admin review (status: pending) |
+| Autonomous | `autonomous` | Auto-executes proposals immediately (status: executed) |
+
+### Proposal Types
+
+| Action | What it does |
+|--------|-------------|
+| `update_prompt` | Modify agent's system prompt |
+| `write_tool` | Create a new custom tool |
+| `create_mcp` | Create an MCP server configuration |
+| `commit_code` | Commit code changes |
+| `add_to_kb` | Add content to knowledge base |
+
+### Rules
+
+- Only `canModifyAgent()` (owner-level access) can approve or reject proposals.
+- Supervised: proposal created with status `pending`, admins notified via Slack DM with "Review in Dashboard" link.
+- Autonomous: proposal created with status `executed`, `executeProposal()` runs immediately.
+- `getPendingProposals()` returns all pending proposals, optionally filtered by agent.
+- History limited to last 50 proposals per agent (`getProposalHistory`).
+- Agent-created tools require admin approval before other agents can use them (shown in "Agent-Created Tools" section on Tools page).
 
 ---
 
 ## Self-Improvement
 
-### Critique-Driven Learning
-Critique an agent's output in a Slack thread ("that's wrong," "next time do X," "fix your tone") and the agent proposes improvements to its own instructions. See a diff of the proposed changes and approve or reject.
-
-### Evolution Proposals
-Agents can propose their own improvements:
-- **Create new tools** -- Agent identifies a capability gap and writes a custom tool
-- **Update instructions** -- Agent refines its own system prompt based on patterns it observes
-- **Add to knowledge base** -- Agent contributes new entries to the KB for future reference
-- **Create MCP configs** -- Agent sets up new Model Context Protocol integrations
-
-Proposals can be auto-executed (autonomous mode) or require human approval via Slack buttons.
-
-### Tool Authoring
-Agents can write their own tools from scratch. Claude generates the tool specification, code, and input schema. Code is validated against security patterns and sandbox-tested in a Docker container before activation. Failed tools are auto-fixed by Claude.
-
-### Tool Versioning & Rollback
-Every tool code update is recorded. Roll back any tool to a previous version. Track success rates, average duration, and error history per tool.
-
----
-
-## Multi-Step Workflows
-
-### Visual Workflow Builder
-Define multi-step automation as a sequence of actions:
-- **Agent runs** -- Execute an agent with a specific prompt
-- **Timers** -- Wait for a configurable delay
-- **Human actions** -- Pause and wait for human input (resolved via Slack buttons)
-- **Conditions** -- Branch based on previous step results
-
-### Branching & Error Handling
-Each step can define different next steps for success vs failure. Workflows are capped at 20 steps to prevent runaway execution.
-
-### Status Tracking
-Monitor workflow runs in real-time: running, waiting for input, completed, or failed. Side effects are tracked to prevent duplicate execution on retries.
-
----
-
-## Multi-Agent Teams
-
-### Parallel Sub-Agents
-A lead agent can spawn sub-agents to handle tasks in parallel. Configure concurrency limits (default 3 concurrent sub-agents) and depth limits (default 2 levels) to prevent recursive explosion.
-
-### Result Aggregation
-When all sub-agents complete, results are aggregated and posted to the lead agent's Slack thread. Total cost is calculated across all sub-agent runs.
+- Detects critique in agent output (e.g., user corrects agent behavior in-thread: "that's wrong", "next time do X", "fix your tone").
+- Automatically suggests prompt refinements based on the critique.
+- Shows diff of proposed changes for approval.
+- Handled by `src/modules/self-improvement/`.
+- Works independently of self-evolution mode.
 
 ---
 
 ## Skills
 
-### Prompt Template Skills
-Reusable prompt templates with variable placeholders. Attach to agents to give them standardized capabilities: code review, company research, document filling, lead enrichment, ticket triage.
+### Structure
 
-### MCP Integration Skills
-Connect agents to external Model Context Protocol servers: GitHub (PRs, issues, code), Linear (issues, projects), Notion (pages, databases), Slack (channels, messages), Zendesk (tickets, replies).
+- Markdown files in `skills/` directory at repo root.
+- YAML frontmatter for metadata; markdown body is the template (for `prompt_template` type).
+- Auto-discovered: no registration files to edit. System reads all `.md` files in the skills directory.
+- Loaded by `src/modules/skills/` (builtins loader).
 
----
+### Types
 
-## Web Dashboard
+| Type | Description |
+|------|-------------|
+| `prompt_template` | Markdown body is the template with `{{variable}}` placeholders |
+| `mcp` | MCP server integration, capabilities listed in frontmatter |
 
-### Full Management Interface
-18-page React dashboard for managing every aspect of the platform:
-- **Dashboard** -- Usage metrics, cost tracking, recent activity
-- **Agents** -- List, create, configure, pause, delete
-- **Agent Detail** -- Six tabs: Overview, Tools, Runs, Memory, Triggers, Access
-- **Tools & Integrations** -- Connect services, manage API keys, OAuth
-- **Connections** -- Personal credentials, folder restrictions
-- **Knowledge Base** -- Browse sources and entries, search, add content
-- **KB Sources** -- Configure auto-sync connectors
-- **Triggers** -- Schedule, webhook, and event triggers
-- **Requests** -- Pending approvals (tool requests, upgrades, evolution proposals)
-- **Error Logs** -- Failed run details
-- **Audit Log** -- Complete action history
-- **Access & Roles** -- Platform role management
-- **Workspace Settings** -- Global configuration
+### Required Frontmatter Fields
 
-### Designed for Non-Technical Users
-No user IDs, no technical jargon, no raw API slugs. Friendly labels throughout: "Can view data" instead of "read-only," "Ask Owner/Admins" instead of "admin_confirm," "Sonnet" instead of "claude-sonnet-4-20250514."
+```yaml
+id: unique-id
+name: Display Name
+skillType: prompt_template | mcp
+description: Short description
+```
 
-### Collapsible Sidebar
-Navigation sidebar with sections: Manage (Agents, Tools, Connections, KB, Triggers), Review (Requests, Errors, Audit), Settings (Access, Workspace). Collapse to icon-only mode for more screen space.
+### Adding a New Skill
+
+1. Create `skills/<name>.md`.
+2. Add YAML frontmatter with required fields.
+3. For prompt template skills, write the template as the markdown body.
+4. No other files need editing.
 
 ---
 
-## Deployment & Operations
+## Workflows
 
-### One-Command Deploy
-Docker Compose deploys everything: the application, PostgreSQL, Redis, and the agent runner image. Single `docker compose up -d` command.
+- Multi-step stateful workflows (DAG of steps).
+- Stored in `workflow_definitions` and `workflow_runs` tables.
+- **Step types:** agent_action, human_action, conditional, parallel.
+- Timer-based expiration on steps.
+- Human-in-the-loop: workflow pauses for human input at `human_action` steps.
+- Capped at 20 steps to prevent runaway execution.
+- Side effects tracked to prevent duplicate execution on retries.
+- Handled by `src/modules/workflows/`.
 
-### Auto-Deploy from GitHub
-Push to main and the system automatically pulls changes, rebuilds, runs migrations, and restarts. No CI/CD pipeline needed. Alternatively, configure pull-based auto-updates that check for new versions on a schedule.
+---
 
-### Auto-SSL with Let's Encrypt
-Built-in Nginx reverse proxy with automatic SSL certificate provisioning and renewal via Let's Encrypt. Required for OAuth callbacks (Google, GitHub, Notion).
+## Dashboard
 
-### PM2 Process Management
-Six managed processes: Slack listener, 3 job workers, scheduler (cron trigger evaluation), and background sync (KB auto-sync, alerts, daily digest). Automatic restart on crashes.
+### Design Principles (Strict Rules)
 
-### Rate Limiting
-Redis-backed token bucket rate limiting for Anthropic API calls. Pre-flight capacity checks at 90% TPM. Automatic 60-second pause on 429 responses. Per-minute request rate tracking.
+The dashboard is for a **non-technical audience**. Follow these rules without exception:
 
-### Daily Budget Controls
-Set a daily spending threshold. When exceeded, non-critical triggers are automatically paused and an alert is posted to Slack.
+- **No user IDs** -- never show raw Slack user IDs (e.g., `UH6TP67FB`). Always resolve to display names.
+- **No technical identifiers** -- no trace IDs, database IDs, internal names, or API slugs.
+- **Friendly labels** -- "Effort" not "maxTurns". "Web Search" not "WebSearch". "Ask Owner/Admins" not "admin_confirm".
+- **No jargon** -- avoid "built-in", "integration", "token bucket", "tsvector". Say what it does, not how it works.
+- **Model names** -- show "Sonnet", "Opus", "Haiku" -- never full model IDs like `claude-sonnet-4-20250514`.
+- **Status labels** -- "Completed" not "success". "Failed" not "error". "Running" not "in_progress".
+
+### Pages
+
+| Page | Access | Description |
+|------|--------|-------------|
+| Dashboard | All | Agent metrics, recent activity, cost tracking |
+| Agents | All | List, filter, search. Split: "Your Agents" + "Other Agents". Create/edit |
+| Agent Detail | All (varies by role) | 6 tabs: Overview, Tools, Runs, Memory, Triggers, Access |
+| Tools & Integrations | Admin only | Connect services, manage integrations, agent-created tools |
+| Connections | All | Personal connections tab + Team connections tab (read-only for non-admins) |
+| Knowledge Base | All | Browse sources, entries, search. Admin: add/edit/approve/delete |
+| Requests | All | Tabs: Tool Requests, Upgrade Requests, Evolution Proposals, Feature Requests, KB Contributions |
+| Error Logs | All | Recent errors and failed runs |
+| Audit Log | Admin only | Full action audit trail, filterable |
+| Access & Roles | Admin only | Platform role management |
+| Workspace Settings | Admin only | Global configuration |
+
+### Sidebar Badges
+
+- Total pending request count badge on "Requests" sidebar item.
+- Per-type counts on individual request sub-tabs.
+
+---
+
+## Observability
+
+- **Cost tracking** per run: input tokens, output tokens, estimated cost in USD (via `src/utils/costs.ts`, `estimateCost()`, `getModelId()`).
+- **Error rate monitoring**: tracks failed runs, posts alerts when error rate exceeds thresholds.
+- **Alerts**: posted to `#tinyhands` Slack channel. Built-in rules: high error rate (>10%), expensive runs (>$5), daily budget exceeded, queue depth warnings, long-running jobs.
+- **Daily digest**: automated summary posted to Slack -- run count, token usage, cost, top agent, top user, high error agents, anomalous cost spikes (>2x 7-day average). Generated by sync process.
+- **Run history**: full execution records in `run_history` table with all metrics.
+- **Error Logs page**: browse failed runs with error details, agent name, duration, user, timestamp.
+- **Daily budget**: set `DAILY_BUDGET_USD` env var. When exceeded, non-critical triggers paused and alert posted.
+
+---
+
+## Auto-Update
+
+- Pull-based deployment from GitHub (no CI/CD pipeline needed).
+- Enabled via `AUTO_UPDATE_ENABLED` env var.
+- Checks for new commits periodically.
+- Only deploys when `package.json` version changes.
+- Process: pull code -> `npm install` -> `npm run build` -> run migrations -> reload PM2.
+- Deploy webhook endpoint: `POST /webhooks/github-deploy`.
+- Handled by `src/modules/auto-update/`.
+
+---
+
+## Error Handling
+
+**User-facing rules:**
+- All user-facing error messages are professional and non-technical.
+- Never expose `err.message`, database errors, or stack traces to users.
+- Generic pattern: "Something went wrong. Please try again."
+- Credential errors use role-aware messages (see Credential & Connection System section).
+
+**Internal logging:**
+- Full technical details preserved in logs via `src/utils/logger.ts`.
+- Structured logging with context (workspaceId, agentId, userId, etc.).
+- Log levels: error, warn, info, debug (configurable via `LOG_LEVEL` env var).
+- Run events logged via `logRunEvent()` for per-run tracing.
+
+---
+
+## Database
+
+### PostgreSQL with Migrations
+
+- Migrations in `src/db/migrations/`.
+- Query helpers: `query<T>()` (returns array), `queryOne<T>()` (returns single row or undefined), `execute()` (no return).
+
+### Connection Pool: Per-Process Sizing
+
+| Process | Pool max |
+|---------|----------|
+| Listener | 2 |
+| Worker | 3 |
+| Scheduler | 1 |
+| Sync | 1 |
+
+- `idleTimeoutMillis`: 10000 (10s)
+- `connectionTimeoutMillis`: 5000 (5s)
+
+### Graceful Shutdown
+
+- All processes call `closeDb()` on SIGTERM.
+- Pool drained before process exit.
+
+### Pool Health Logging Every 5 Minutes
+
+- Logs total, idle, and waiting connection counts.
+- Helps diagnose connection exhaustion.
+
+### Circuit Breaker on Pool Reset (Max 3 Resets, 30s Cooldown)
+
+- `consecutiveFailures` tracked per query.
+- Pool reset attempted after `MAX_FAILURES_BEFORE_RESET` (3 consecutive failures).
+- Rate limited: no more than one reset per 30 seconds (`RESET_COOLDOWN_MS`).
+- Circuit breaker: stops after `MAX_RESETS` (3 total resets).
+- Mutex prevents concurrent resets.
+- `isConnectionError()` detects: ECONNREFUSED, ECONNRESET, ETIMEDOUT, SSL errors, timeout, connection terminated, remaining slots.
+
+### Key Tables
+
+| Table | Purpose |
+|-------|---------|
+| `agents` | Agent config (name, system_prompt, tools[], model, default_access, write_policy, channels) |
+| `run_history` | Execution records (tokens, cost, duration, status, trace_id) |
+| `custom_tools` | Tool definitions (schema, code, config, access_level) |
+| `kb_entries` | Knowledge base articles (tsvector full-text search) |
+| `kb_sources` | KB source configs (auto-sync, connectors) |
+| `triggers` | Agent activation rules (cron, webhook, event-based) |
+| `sources` / `source_chunks` | Agent data sources and indexed content |
+| `agent_memories` | Persistent cross-run memory (facts, categories, relevance) |
+| `workflow_definitions` / `workflow_runs` | Multi-step automation state |
+| `evolution_proposals` | Agent self-improvement proposals |
+| `platform_roles` | Workspace-level roles (superadmin, admin, member) |
+| `agent_roles` | Per-agent access levels (owner, member, viewer) |
+| `agent_versions` | Configuration version history (all tracked fields) |
+| `workspace_settings` | Per-workspace configuration |
+| `upgrade_requests` | Viewer-to-member upgrade request tracking |
+| `connections` | Encrypted tool credentials (team + personal) |
+| `agent_tool_connections` | Per-agent tool connection mode config |
+| `oauth_states` | OAuth flow state tracking |
+| `action_audit_log` | Comprehensive action audit trail |
+
+---
+
+## Audit Log
+
+- Comprehensive action trail stored in `action_audit_log` table.
+- **Tracked actions:** role changes (platform and agent), agent creation/updates/deletion, tool invocations with user context, connection creation/deletion, upgrade request approvals/denials.
+- Indexed by: workspace, agent, user, timestamp.
+- Forever retention.
+- Accessible via dashboard Audit Log page (admin only) or `/audit` Slack command (redirects to dashboard).
+- Filterable by agent, user, action type, date range.
+- Audit events are fire-and-forget (non-blocking, best-effort via `logAuditEvent()` with `.catch(() => {})` pattern).
+
+---
+
+## Slack Integration
+
+### Slash Commands
+
+| Command | Where | Who | What it does |
+|---------|-------|-----|--------------|
+| `/agents` | Anywhere | All | Link to web dashboard |
+| `/new-agent` | Anywhere | All | Redirect to agent creation on dashboard |
+| `/update-agent` | Anywhere | All | Redirect to agent management on dashboard |
+| `/tools` | Anywhere | All | Redirect to tools page on dashboard |
+| `/kb` | Anywhere | All | Redirect to KB page on dashboard |
+| `/audit` | Anywhere | All | Redirect to audit log on dashboard |
+| `/templates` | Anywhere | All | Redirect to agent templates on dashboard |
+| `/connect` | Bot DM | All | Manage personal tool connections |
+| `add @user as superadmin` | Bot DM | Superadmins | Grant superadmin access |
+
+### Event Subscriptions (Socket Mode)
+
+- `message.channels` -- public channel messages
+- `message.groups` -- private channel messages
+- `message.im` -- direct messages
+- `message.mpim` -- group DMs
+- `app_mention` -- @mentions
+- `app_home_opened` -- Home tab opened
+- `file_shared` -- file uploads for KB
+
+### Activation Modes
+
+| Mode | DB columns | Behavior |
+|------|-----------|----------|
+| Only when @mentioned | `mentions_only = true` | Agent responds only when @mentioned |
+| Relevant messages | both false (default) | AI-determined relevance check |
+| Every message | `respond_to_all = true` | Agent responds to all messages in its channels |
+
+### Real-Time Streaming
+
+- Progressive message updates in Slack threads via `src/slack/buffer.ts`.
+- Custom avatars: each agent posts with its own name and emoji (`chat:write.customize` scope).
+- Status updates shown while agent thinks, uses tools, composes response.
+
+---
+
+## Processes
+
+| Process | Entry | Count | Purpose |
+|---------|-------|-------|---------|
+| Listener | `src/index.ts` | 1 | Slack events, commands, webhooks, Express server, dashboard API |
+| Worker | `src/worker.ts` | 3 | Dequeue jobs, run agents in Docker containers |
+| Scheduler | `src/scheduler.ts` | 1 | Evaluate cron triggers every 60s |
+| Sync | `src/sync.ts` | 1 | KB source sync, alerts, daily digest, auto-update |
+
+All managed by PM2. Total: 6 processes.
+
+---
+
+## Templates
+
+- Pre-built agent templates in `templates/` directory at repo root.
+- Markdown files with YAML frontmatter (same discovery pattern as skills).
+- One-click activation from dashboard.
+- 10 templates across categories: Content & SEO, Sales & Revenue, Customer Insights, Competitive Intelligence, Growth.
+- Auto-discovered: drop a file, no registration needed.
+
+---
+
+## Multi-Agent Teams
+
+- Lead agent can spawn sub-agents for parallel work.
+- Concurrency limits: default 3 concurrent sub-agents.
+- Depth limits: default 2 levels (prevents recursive explosion).
+- Results aggregated when all sub-agents complete.
+- Total cost calculated across all sub-agent runs.
+- Handled by `src/modules/teams/`.
+
+---
+
+## Self-Authoring (Agent-Created Tools)
+
+- Agents can create tools during execution.
+- `src/modules/self-authoring/` handles tool creation, code artifacts, MCP configs.
+- Created tools require admin approval before other agents can use them.
+- Shown in "Agent-Created Tools" section on Tools & Integrations page.
+- Admin can approve or delete from overflow menu.
+- Code validated and sandbox-tested in Docker before activation.
+- Tool versioning: every code update recorded, rollback available.
+
+---
+
+## Environment Variables
+
+### Required
+
+| Variable | Purpose |
+|----------|---------|
+| `SLACK_BOT_TOKEN` | Slack bot OAuth token (`xoxb-...`) |
+| `SLACK_APP_TOKEN` | App-level token for Socket Mode (`xapp-...`) |
+| `SLACK_SIGNING_SECRET` | Slack request signature verification |
+| `ANTHROPIC_API_KEY` | Claude API key |
+| `DATABASE_URL` | PostgreSQL connection string |
+| `REDIS_URL` | Redis connection string |
+
+### Optional
+
+| Variable | Default | Purpose |
+|----------|---------|---------|
+| `WEB_DASHBOARD_URL` | Falls back to `OAUTH_REDIRECT_BASE_URL` or `http://localhost:3000` | Dashboard URL used in Slack messages |
+| `ENCRYPTION_KEY` | (none) | 32+ chars, AES-256-GCM credential encryption |
+| `GOOGLE_OAUTH_CLIENT_ID` | (none) | Shared by Drive, Sheets, Docs, Gmail |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | (none) | Google OAuth secret |
+| `NOTION_OAUTH_CLIENT_ID` | (none) | Notion OAuth client ID |
+| `NOTION_OAUTH_CLIENT_SECRET` | (none) | Notion OAuth secret |
+| `GITHUB_OAUTH_CLIENT_ID` | (none) | GitHub OAuth client ID |
+| `GITHUB_OAUTH_CLIENT_SECRET` | (none) | GitHub OAuth secret |
+| `OAUTH_REDIRECT_BASE_URL` | (none) | Public URL for OAuth callbacks |
+| `OAUTH_DOMAIN` | (none) | Domain for Nginx SSL/Let's Encrypt setup |
+| `LETSENCRYPT_EMAIL` | (none) | Let's Encrypt certificate notifications |
+| `GITHUB_TOKEN` | (none) | Auto-update feature |
+| `PORT` | 3000 | Express server port |
+| `LOG_LEVEL` | info | Logging verbosity |
+| `DOCKER_BASE_IMAGE` | (default) | Base Docker image for agent execution containers |
+| `DAILY_BUDGET_USD` | (none) | Daily spending limit |
+| `AUTO_UPDATE_ENABLED` | false | Enable pull-based auto-update from GitHub |
+| `DATABASE_POOL_URL` | (none) | PgBouncer connection for queries (direct URL used for migrations) |

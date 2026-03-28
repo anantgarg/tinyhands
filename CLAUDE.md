@@ -276,15 +276,15 @@ Optional: `GITHUB_TOKEN`, `PORT` (default 3000), `LOG_LEVEL`, `DOCKER_BASE_IMAGE
 - **Use worktrees**: Always use git worktrees (`isolation: "worktree"`) when making code changes, to avoid disrupting the working directory.
 - **Test thoroughly**: Run the full test suite (`npm test`) before committing. All tests must pass with 100% code coverage — no skipped or failing tests. Every code change MUST include corresponding test updates: add tests for new functionality, update existing tests for modified behavior, and remove tests for deleted code.
 - **Publish releases**: Every push should include a tagged release with a changelog summarizing what changed. Use `gh release create` with clear release notes.
-- **Check PRODUCT_GUIDE.md before building**: Before implementing any feature or change, read the "Approval & Request Workflows" section and any other relevant sections in `PRODUCT_GUIDE.md`. If the planned change contradicts any documented workflow or behavior, STOP and flag the contradiction to the user before proceeding. This prevents breaking existing workflows.
+- **Check FEATURES.md before building**: Before implementing any feature or change, read the relevant sections in `FEATURES.md` (the source of truth for all features, workflows, and expected behaviors). If the planned change contradicts any documented workflow or behavior, STOP and flag the contradiction to the user before proceeding. This prevents breaking existing workflows.
 - **Update documentation**: Every time you make code changes, you MUST also update the relevant documentation files to reflect those changes:
   - `README.md` — User-facing overview, features list, getting started
   - `PRODUCT_GUIDE.md` — Product capabilities, use cases, workflows (this is the source of truth for how the product works)
   - `ADMIN_GUIDE.md` — Setup, configuration, administration, troubleshooting
   - `CLAUDE.md` — Architecture, code structure, developer reference (only if the change affects project structure, patterns, or dev workflow)
 
-  If a change adds a new feature, update README.md and PRODUCT_GUIDE.md. If it changes configuration or setup, update ADMIN_GUIDE.md. If it changes architecture or adds new modules, update CLAUDE.md. Bug fixes typically don't need doc changes unless they affect documented behavior.
-- **Report PRODUCT_GUIDE.md changes**: When updating PRODUCT_GUIDE.md, always tell the user exactly what was changed and why. This ensures they're aware of any workflow or behavior documentation changes.
+  If a change adds a new feature, update README.md, PRODUCT_GUIDE.md, and FEATURES.md. If it changes configuration or setup, update ADMIN_GUIDE.md. If it changes architecture or adds new modules, update CLAUDE.md. If it changes any workflow, behavior, or rule, update FEATURES.md. Bug fixes typically don't need doc changes unless they affect documented behavior.
+- **Report FEATURES.md changes**: When updating FEATURES.md, always tell the user exactly what was changed and why. This ensures they're aware of any workflow or behavior documentation changes. FEATURES.md is the source of truth — if it's wrong, the software will be built wrong.
 
 ## Dashboard UI Guidelines
 
