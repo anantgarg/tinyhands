@@ -42,6 +42,9 @@ When user navigates to `/agents/new`, the FloatingChat opens in creation mode (8
 - Non-admin creators: goal analyzer restricts tool suggestions to read-only tools and does not propose new tools.
 - Write tools with team credentials require admin approval (tool request created, not attached immediately).
 - Chat-based editing: on the confirmation card, user can say "Let me change something" and type changes in natural language. AI interprets and updates config.
+- X button closes the chat and shows the original 4-step manual wizard as a fallback.
+- "Or set up manually" link on the chat background page also switches to manual mode.
+- Chat panel is anchored bottom-right (not centered).
 
 **Agent Creation Flow:**
 
