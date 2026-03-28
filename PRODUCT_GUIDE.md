@@ -249,6 +249,103 @@ You can change this on the agent's Overview tab in the dashboard.
 
 ---
 
+## Approval & Request Workflows
+
+TinyHands has several approval workflows to keep agents safe and controlled. All approvals are managed in the **Requests** page of the web dashboard. Admins receive a Slack notification with a "View in Dashboard" link when a new request arrives. The sidebar shows a badge with the total number of pending requests.
+
+### 1. Upgrade Requests
+
+**When it happens:** A user with limited access (viewer) tries to interact with an agent that requires member access. For example, a viewer tries to configure an agent or trigger a write action they don't have permission for.
+
+**Flow:**
+1. User interacts with agent or clicks "Request Access" in the dashboard
+2. An upgrade request is created (status: pending)
+3. The request appears in the dashboard under **Requests > Upgrade Requests**
+4. Agent owner or admin reviews and approves or denies
+5. If approved, user is granted member access and notified via Slack DM
+6. If denied, user is notified with the reason
+
+### 2. Tool Requests (Write Tool + Team Credentials)
+
+**When it happens:** A non-admin user adds a write tool (e.g., Zendesk Write, HubSpot Write) to their agent, and team credentials exist for that integration. Also triggered when a non-admin switches the credential dropdown for a write tool to "Team credentials."
+
+**Flow:**
+1. User adds a write tool to their agent or switches credentials to "Team"
+2. System checks: is user an admin? If yes, tool is attached immediately
+3. If not admin AND team credentials exist: tool is NOT attached. A tool request is created (status: pending)
+4. All admins receive a Slack DM notification with a "View in Dashboard" link
+5. Admin reviews in **Requests > Tool Requests** and approves or denies
+6. If approved, the tool is automatically attached to the agent
+7. If denied, the request is marked denied and the user is notified
+
+**Why this exists:** Team credentials are shared company-wide (e.g., the Zendesk API key). A non-admin shouldn't be able to grant their agent write access to shared resources without admin review.
+
+### 3. Evolution Proposals
+
+**When it happens:** An agent with self-evolution enabled detects a potential improvement — such as updating its system prompt, adding a new tool, creating an MCP server, or adding content to the knowledge base. Agents in "autonomous" mode auto-execute these; agents in "supervised" mode create proposals for human review.
+
+**Flow:**
+1. Agent identifies an improvement opportunity during a run
+2. A proposal is created with the action type, description, and diff
+3. Admins receive a Slack DM notification with a "Review in Dashboard" link
+4. Admin reviews in **Requests > Evolution Proposals** (also visible on the Evolution page)
+5. If approved, the proposal is executed (prompt updated, tool added, etc.)
+6. If rejected, the proposal is archived
+
+**Proposal types:** update_prompt, write_tool, create_mcp, commit_code, add_to_kb
+
+### 4. Feature Requests (Missing Capabilities)
+
+**When it happens:** During agent creation, the AI goal analyzer identifies that the agent needs tools or capabilities that don't exist in the system yet. For example, a user says "I need an agent to monitor Jira tickets" but there's no Jira integration.
+
+**Flow:**
+1. User describes their agent goal during creation
+2. Goal analyzer identifies required tools that don't exist
+3. A feature request is created listing the missing tools and their descriptions
+4. Admins receive a Slack DM notification with a "View in Dashboard" link
+5. Admin reviews in **Requests > Feature Requests**
+6. Admin can dismiss the request or use it as a guide to build the missing integration
+
+**Note:** Feature requests are informational — they highlight gaps. The admin must build the missing tools via code (adding a new integration in `src/modules/tools/integrations/`).
+
+### 5. KB Contributions
+
+**When it happens:** An agent submits content to the knowledge base during a run. Agent-contributed KB entries are created with `approved: false` and must be reviewed before they're visible in searches.
+
+**Flow:**
+1. Agent creates a KB entry during execution
+2. Entry is saved with `approved: false`
+3. Admin reviews in **Requests > KB Contributions**
+4. If approved, the entry becomes searchable by all agents
+5. If rejected, the entry is deleted
+
+### 6. Write Approvals (Runtime — Slack Only)
+
+**When it happens:** During agent execution, the agent attempts a write action (e.g., updating a Zendesk ticket, creating a HubSpot deal) and the agent's Action Approval setting is "Ask User First" or "Ask Owner/Admins."
+
+**Flow:**
+1. Agent starts executing a write tool during a run
+2. Agent pauses and posts an approval request in the Slack thread with Approve/Deny buttons
+3. For "Ask User First": any user in the thread can approve (5-minute timeout)
+4. For "Ask Owner/Admins": only the agent owner can approve (no timeout)
+5. If approved, the agent resumes and completes the write action
+6. If denied, the agent skips the action and continues
+
+**Why Slack-only:** Write approvals are real-time, time-sensitive decisions that happen mid-execution. They must stay in the Slack thread where the conversation is happening.
+
+### Summary: Where Each Request Type Lives
+
+| Request Type | Dashboard Tab | Slack Notification | Slack Approve/Deny |
+|---|---|---|---|
+| Upgrade Requests | Requests > Upgrade Requests | No (planned) | No |
+| Tool Requests | Requests > Tool Requests | Yes (with dashboard CTA) | No |
+| Evolution Proposals | Requests > Evolution Proposals | Yes (with dashboard CTA) | No |
+| Feature Requests | Requests > Feature Requests | Yes (with dashboard CTA) | No |
+| KB Contributions | Requests > KB Contributions | Planned | No |
+| Write Approvals | N/A (Slack-only) | In-thread | Yes (real-time) |
+
+---
+
 ## Quick Reference
 
 | Command | What it does |
