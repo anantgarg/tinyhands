@@ -461,7 +461,24 @@ export function AgentCreate() {
   }, [creationMode, manualMode]);
 
   if (manualMode || !creationMode) {
-    return <ManualWizard />;
+    return (
+      <>
+        <ManualWizard />
+        {manualMode && (
+          <button
+            onClick={() => {
+              setManualMode(false);
+              const store = useChatStore.getState();
+              store.enterCreationMode();
+            }}
+            className="fixed bottom-6 right-6 z-40 flex h-12 w-12 items-center justify-center rounded-full bg-brand text-white shadow-lg hover:bg-brand/90 transition-colors"
+            title="AI Assistant"
+          >
+            <Sparkles className="h-5 w-5" />
+          </button>
+        )}
+      </>
+    );
   }
 
   // Chat-assisted creation page (minimal background behind the floating chat)

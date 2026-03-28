@@ -5,6 +5,7 @@ import { Check, Search, ChevronDown } from 'lucide-react';
 interface DropdownOption {
   value: string;
   label: string;
+  isPrivate?: boolean;
 }
 
 interface DropdownCardProps {
@@ -74,7 +75,7 @@ export function DropdownCard({
         </button>
 
         {isOpen && (
-          <div className="absolute z-20 mt-1 w-full rounded-lg border border-warm-border bg-white shadow-overlay">
+          <div className="absolute z-50 mt-1 w-full rounded-lg border border-warm-border bg-white shadow-overlay">
             {searchable && (
               <div className="flex items-center gap-2 border-b border-warm-border px-3 py-2">
                 <Search className="h-3.5 w-3.5 text-warm-text-secondary" />
@@ -88,7 +89,7 @@ export function DropdownCard({
                 />
               </div>
             )}
-            <div className="max-h-48 overflow-y-auto py-1">
+            <div className="max-h-64 overflow-y-auto py-1">
               {filtered.length === 0 ? (
                 <p className="px-3 py-2 text-xs text-warm-text-secondary">No results found</p>
               ) : (
@@ -108,7 +109,9 @@ export function DropdownCard({
                     )}
                   >
                     {selected === opt.value && <Check className="h-3.5 w-3.5 shrink-0" />}
-                    <span className={cn(selected !== opt.value && 'ml-5.5')}>{opt.label}</span>
+                    <span className={cn(selected !== opt.value && 'ml-5.5')}>
+                      {opt.isPrivate ? '🔒 ' : ''}{opt.label}
+                    </span>
                   </button>
                 ))
               )}

@@ -16,6 +16,7 @@ import {
   MultiSelectCard,
   ConfirmationCard,
   ScheduleCard,
+  PromptPreviewCard,
 } from './creation-chat/cards';
 import type { ConfirmationConfig } from './creation-chat/cards/ConfirmationCard';
 
@@ -134,6 +135,14 @@ function CreationCardRenderer({
           defaultFrequency={props.defaultFrequency as string | undefined}
           defaultTimezone={props.defaultTimezone as string | undefined}
           onSubmit={(cron, timezone) => onCardResponse(msg.id, { cron, timezone })}
+          disabled={msg.disabled}
+        />
+      );
+    case 'prompt-preview':
+      return (
+        <PromptPreviewCard
+          prompt={props.prompt as string}
+          onSubmit={(response) => onCardResponse(msg.id, response)}
           disabled={msg.disabled}
         />
       );
@@ -443,8 +452,8 @@ export function FloatingChat() {
             <div
               key={msg.id}
               className={cn(
-                'flex animate-in fade-in slide-in-from-bottom-2 duration-300',
-                msg.role === 'user' ? 'justify-end' : 'justify-start',
+                'flex flex-col animate-in fade-in slide-in-from-bottom-2 duration-300',
+                msg.role === 'user' ? 'items-end' : 'items-start',
               )}
             >
               <div
@@ -456,12 +465,16 @@ export function FloatingChat() {
                 )}
               >
                 <p className="whitespace-pre-wrap">{renderContent(msg.content)}</p>
-                <CreationCardRenderer
-                  msg={msg}
-                  onCardResponse={creationFlow.handleCardResponse}
-                  isCreating={creationFlow.isCreating}
-                />
               </div>
+              {msg.cardType && (
+                <div className="w-full mt-2">
+                  <CreationCardRenderer
+                    msg={msg}
+                    onCardResponse={creationFlow.handleCardResponse}
+                    isCreating={creationFlow.isCreating}
+                  />
+                </div>
+              )}
             </div>
           ))}
 

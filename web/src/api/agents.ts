@@ -137,12 +137,20 @@ interface RunParams {
 
 export interface AnalyzeGoalResult {
   name: string;
-  avatarEmoji: string;
-  systemPrompt: string;
+  agent_name?: string;
+  avatarEmoji?: string;
+  avatar_emoji?: string;
+  systemPrompt?: string;
+  system_prompt?: string;
   model: string;
   tools: string[];
-  mentionsOnly: boolean;
-  memoryEnabled: boolean;
+  custom_tools?: string[];
+  mentionsOnly?: boolean;
+  mentions_only?: boolean;
+  memoryEnabled?: boolean;
+  memory_enabled?: boolean;
+  summary?: string;
+  triggers?: Array<{ type: string; description: string; config: Record<string, unknown> }>;
   changes?: Record<string, { from: unknown; to: unknown }>;
 }
 

@@ -4,3 +4,4 @@ export { DropdownCard } from './DropdownCard';
 export { MultiSelectCard } from './MultiSelectCard';
 export { ConfirmationCard } from './ConfirmationCard';
 export { ScheduleCard } from './ScheduleCard';
+export { PromptPreviewCard } from './PromptPreviewCard';

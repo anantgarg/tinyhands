@@ -12,7 +12,8 @@ export type CardType =
   | 'dropdown'
   | 'multi-select'
   | 'confirmation'
-  | 'schedule';
+  | 'schedule'
+  | 'prompt-preview';
 
 export interface CreationMessage {
   id: string;
@@ -27,6 +28,9 @@ export type Phase =
   | 'INIT'
   | 'DESCRIBE'
   | 'ANALYZING'
+  | 'SUMMARY'
+  | 'CLARIFY'
+  | 'PROMPT_REVIEW'
   | 'CHANNEL'
   | 'ACTIVATION'
   | 'SCHEDULE_ASK'
@@ -56,6 +60,7 @@ interface AgentConfig {
   writePolicy: string;
   scheduleCron: string;
   scheduleTimezone: string;
+  triggers: Array<{ type: string; description: string; config: Record<string, unknown> }>;
 }
 
 export interface CreationFlow {
@@ -108,6 +113,41 @@ function hasWriteTools(tools: string[]): boolean {
   return tools.some((t) => t.endsWith('-write'));
 }
 
+interface GoalAnalysisRaw {
+  name?: string;
+  agent_name?: string;
+  avatarEmoji?: string;
+  avatar_emoji?: string;
+  systemPrompt?: string;
+  system_prompt?: string;
+  model?: string;
+  tools?: string[];
+  custom_tools?: string[];
+  mentionsOnly?: boolean;
+  mentions_only?: boolean;
+  memoryEnabled?: boolean;
+  memory_enabled?: boolean;
+  summary?: string;
+  triggers?: Array<{ type: string; description: string; config: Record<string, unknown> }>;
+}
+
+function getConfidenceLevel(analysis: GoalAnalysisRaw): 'high' | 'medium' | 'low' {
+  const customTools = analysis.custom_tools || analysis.tools || [];
+  const triggers = analysis.triggers || [];
+  const prompt = analysis.system_prompt || analysis.systemPrompt || '';
+  const hasTools = customTools.length > 0;
+  const hasTriggers = triggers.length > 0;
+  const hasDetailedPrompt = prompt.length > 500;
+  const score = (hasTools ? 1 : 0) + (hasTriggers ? 1 : 0) + (hasDetailedPrompt ? 1 : 0);
+  if (score >= 3) return 'high';
+  if (score >= 1) return 'medium';
+  return 'low';
+}
+
+function friendlyToolName(toolName: string): string {
+  return BUILTIN_FRIENDLY_NAMES[toolName] || toolName.replace(/-read$/, '').replace(/-write$/, '').replace(/-search$/, '').replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
 // ── Hook ──
 
 export function useCreationFlow(): CreationFlow {
@@ -121,10 +161,13 @@ export function useCreationFlow(): CreationFlow {
     defaultAccess: 'member',
     writePolicy: 'auto',
     tools: [],
+    triggers: [],
   });
   const [createdAgentId, setCreatedAgentId] = useState<string | null>(null);
   const goalRef = useRef('');
   const skipPhasesRef = useRef<Set<Phase>>(new Set());
+  const confidenceRef = useRef<'high' | 'medium' | 'low'>('medium');
+  const analysisRef = useRef<GoalAnalysisRaw | null>(null);
 
   const analyzeGoal = useAnalyzeGoal();
   const createAgent = useCreateAgent();
@@ -175,17 +218,21 @@ export function useCreationFlow(): CreationFlow {
 
   const goToChannel = useCallback(() => {
     setPhase('CHANNEL');
-    const channelOptions = channels.map((ch) => ({
-      value: ch.id,
-      label: `#${ch.name}`,
-    }));
+    const channelOptions = [
+      { value: '__create__', label: '+ Create a new channel' },
+      ...channels.map((ch) => ({
+        value: ch.id,
+        label: `${ch.isPrivate ? '' : '#'}${ch.name}`,
+        isPrivate: ch.isPrivate,
+      })),
+    ];
     addMsg({
       id: msgId(),
       role: 'assistant',
-      content: 'Which Slack channel should this agent live in? We\'ll create a new one if you prefer, or pick an existing channel.',
+      content: 'Which Slack channel should this agent live in?',
       cardType: 'dropdown',
       cardProps: {
-        options: channelOptions.length > 0 ? channelOptions : [{ value: '__new__', label: 'Create a new channel (automatic)' }],
+        options: channelOptions.length > 1 ? channelOptions : [{ value: '__create__', label: '+ Create a new channel' }],
         placeholder: 'Search for a channel...',
         searchable: true,
       },
@@ -241,23 +288,47 @@ export function useCreationFlow(): CreationFlow {
 
   const goToTools = useCallback(() => {
     setPhase('TOOLS');
-    const options = integrationGroups.map((g) => ({
+
+    // Filter to integrations that have at least one registered tool
+    const validGroups = integrationGroups.filter(g => g.readTool || g.writeTool);
+
+    if (validGroups.length === 0) {
+      // No integrations available — show friendly message and auto-continue button
+      addMsg({
+        id: msgId(),
+        role: 'assistant',
+        content: 'No connected services yet. Core tools like file access, web search, and code analysis are always included. You can add services later from the agent settings.',
+        cardType: 'yes-no',
+        cardProps: {
+          yesLabel: 'Continue without tools',
+          noLabel: 'Continue without tools',
+        },
+      });
+      return;
+    }
+
+    // Pre-select tools from analysis
+    const analysisTools = config.tools || [];
+    const preSelected = analysisTools.filter(t => {
+      return validGroups.some(g => g.readTool === t || g.writeTool === t);
+    });
+
+    const options = validGroups.map((g) => ({
       value: g.base,
       label: g.displayName,
       readToolName: g.readTool,
       writeToolName: g.writeTool,
       hasWrite: !!g.writeTool,
     }));
+
     addMsg({
       id: msgId(),
       role: 'assistant',
-      content: integrationGroups.length > 0
-        ? 'Which services should this agent have access to? Core tools like file access, web search, and code analysis are always included.'
-        : 'No connected services are available right now. Core tools (file access, web search, code analysis) will be included automatically. You can add services later from the agent settings.',
+      content: 'Which services should this agent have access to? Core tools like file access, web search, and code analysis are always included.',
       cardType: 'multi-select',
       cardProps: {
         options,
-        defaultValues: config.tools || [],
+        defaultValues: preSelected,
       },
     });
   }, [integrationGroups, addMsg, config.tools]);
@@ -358,6 +429,8 @@ export function useCreationFlow(): CreationFlow {
       channelName: config.channelName,
       scheduleCron: config.scheduleCron,
       scheduleTimezone: config.scheduleTimezone,
+      systemPrompt: config.systemPrompt,
+      triggers: config.triggers?.map(t => ({ type: t.type, description: t.description })),
     };
     addMsg({
       id: msgId(),
@@ -367,6 +440,19 @@ export function useCreationFlow(): CreationFlow {
       cardProps: { config: confirmConfig },
     });
   }, [addMsg, config]);
+
+  const goToPromptReview = useCallback(() => {
+    setPhase('PROMPT_REVIEW');
+    addMsg({
+      id: msgId(),
+      role: 'assistant',
+      content: 'I\'ve written detailed instructions for your agent. You can review them below or skip ahead.',
+      cardType: 'prompt-preview',
+      cardProps: {
+        prompt: config.systemPrompt || '',
+      },
+    });
+  }, [addMsg, config.systemPrompt]);
 
   const doCreate = useCallback(async () => {
     setPhase('CREATING');
@@ -411,6 +497,22 @@ export function useCreationFlow(): CreationFlow {
         }
       }
 
+      // Create any non-schedule triggers from the analysis
+      if (config.triggers && config.triggers.length > 0) {
+        for (const trigger of config.triggers) {
+          if (trigger.type === 'schedule') continue; // Already handled above
+          try {
+            await addTrigger.mutateAsync({
+              agentId: agent.id,
+              type: trigger.type,
+              config: trigger.config,
+            });
+          } catch {
+            // Non-fatal
+          }
+        }
+      }
+
       setCreatedAgentId(agent.id);
       setPhase('DONE');
       addMsg({
@@ -444,6 +546,54 @@ export function useCreationFlow(): CreationFlow {
     });
   }, [addMsg]);
 
+  // ── Build rich summary text ──
+
+  const buildSummaryText = useCallback((analysis: GoalAnalysisRaw) => {
+    const name = analysis.agent_name || analysis.name || 'New Agent';
+    const emoji = analysis.avatar_emoji || analysis.avatarEmoji || '';
+    const model = (analysis.model || 'sonnet');
+    const modelLabel = model.includes('opus') ? 'Opus' : model.includes('haiku') ? 'Haiku' : 'Sonnet';
+    const summary = analysis.summary || '';
+    const customTools = analysis.custom_tools || [];
+    const triggers = analysis.triggers || [];
+    const memory = analysis.memory_enabled ?? analysis.memoryEnabled ?? false;
+
+    let text = `Here's the plan for your new agent:\n\n`;
+    text += `**${emoji} ${name}**\n\n`;
+
+    if (summary) {
+      text += `${summary}\n\n`;
+    }
+
+    // Model choice
+    text += `**Model:** ${modelLabel}`;
+    if (model.includes('opus')) text += ' (most capable, for complex reasoning)';
+    else if (model.includes('haiku')) text += ' (fastest, for quick responses)';
+    else text += ' (balanced, recommended for most tasks)';
+    text += '\n';
+
+    // Recommended tools
+    if (customTools.length > 0) {
+      const toolNames = customTools
+        .map((t: string) => friendlyToolName(t))
+        .filter((v: string, i: number, a: string[]) => a.indexOf(v) === i);
+      text += `**Services:** ${toolNames.join(', ')}\n`;
+    }
+
+    // Triggers
+    if (triggers.length > 0) {
+      const triggerDescs = triggers.map((t) => t.description || t.type).join(', ');
+      text += `**Triggers:** ${triggerDescs}\n`;
+    }
+
+    // Memory
+    text += `**Memory:** ${memory ? 'Enabled (learns over time)' : 'Disabled (fresh each time)'}\n`;
+
+    text += `\nLet me show you the instructions I've written, then we'll pick a channel and finalize the settings.`;
+
+    return text;
+  }, []);
+
   // ── Handle text input ──
 
   const sendMessage = useCallback(
@@ -463,14 +613,16 @@ export function useCreationFlow(): CreationFlow {
         });
 
         analyzeGoal.mutate(trimmed, {
-          onSuccess: (result) => {
-            const name = result.name || 'New Agent';
-            const emoji = result.avatarEmoji || '';
-            const prompt = result.systemPrompt || '';
+          onSuccess: (result: GoalAnalysisRaw) => {
+            analysisRef.current = result;
+            const name = result.agent_name || result.name || 'New Agent';
+            const emoji = result.avatar_emoji || result.avatarEmoji || '';
+            const prompt = result.system_prompt || result.systemPrompt || '';
             const model = result.model?.includes('opus') ? 'opus' : result.model?.includes('haiku') ? 'haiku' : 'sonnet';
-            const tools = [...(result.tools || [])];
-            const memory = result.memoryEnabled ?? false;
-            const mentions = result.mentionsOnly ?? false;
+            const tools = [...(result.custom_tools || result.tools || [])];
+            const memory = result.memory_enabled ?? result.memoryEnabled ?? false;
+            const mentions = result.mentions_only ?? result.mentionsOnly ?? false;
+            const triggers = result.triggers || [];
 
             setConfig((prev) => ({
               ...prev,
@@ -481,38 +633,58 @@ export function useCreationFlow(): CreationFlow {
               tools,
               memoryEnabled: memory,
               activation: mentions ? 'mentions' : 'relevant',
+              triggers,
             }));
 
-            // Decide which phases to skip based on analysis
+            // Determine confidence level
+            const confidence = getConfidenceLevel(result);
+            confidenceRef.current = confidence;
+
+            // Decide which phases to skip based on confidence
             const skips = new Set<Phase>();
-            // Always show effort and memory since analyzer provides them
-            skips.add('EFFORT');
-            skips.add('MEMORY');
+
+            if (confidence === 'high') {
+              // High confidence: skip CLARIFY, EFFORT, MEMORY
+              skips.add('CLARIFY');
+              skips.add('EFFORT');
+              skips.add('MEMORY');
+            } else if (confidence === 'medium') {
+              // Medium confidence: skip EFFORT, MEMORY
+              skips.add('EFFORT');
+              skips.add('MEMORY');
+            }
+            // Low confidence: don't skip CLARIFY, EFFORT, MEMORY
+
             // Skip schedule ask if no time pattern detected
             if (!hasTimePattern(trimmed)) {
               skips.add('SCHEDULE_ASK');
             }
+
             // Skip approval if no write tools
             if (!hasWriteTools(tools)) {
               skips.add('APPROVAL');
             }
+
             skipPhasesRef.current = skips;
 
-            const toolNames = tools
-              .map((t: string) => BUILTIN_FRIENDLY_NAMES[t] || t.replace(/-read$/, '').replace(/-write$/, ''))
-              .filter((v: string, i: number, a: string[]) => a.indexOf(v) === i);
+            // Show rich summary
+            setPhase('SUMMARY');
+            const summaryText = buildSummaryText(result);
+            addMsg({ id: msgId(), role: 'assistant', content: summaryText });
 
-            let summary = `Great! Here's what I'm thinking:\n\n`;
-            summary += `**${emoji} ${name}**\n`;
-            summary += `Model: ${model.charAt(0).toUpperCase() + model.slice(1)}\n`;
-            if (toolNames.length > 0) {
-              summary += `Services: ${toolNames.join(', ')}\n`;
+            // Move to next phase based on confidence
+            if (confidence === 'low') {
+              // Low confidence: go to CLARIFY first
+              setPhase('CLARIFY');
+              addMsg({
+                id: msgId(),
+                role: 'assistant',
+                content: 'I\'d like to understand a bit more. Could you tell me more about what specific tasks this agent should handle? For example, what kind of data should it work with, or what actions should it take?',
+              });
+            } else {
+              // Medium/High: go to PROMPT_REVIEW
+              goToPromptReview();
             }
-            summary += `Memory: ${memory ? 'Enabled' : 'Disabled'}\n`;
-            summary += `\nLet's pick a channel for it.`;
-
-            addMsg({ id: msgId(), role: 'assistant', content: summary });
-            goToChannel();
           },
           onError: (err) => {
             addMsg({
@@ -523,6 +695,111 @@ export function useCreationFlow(): CreationFlow {
             setPhase('DESCRIBE');
           },
         });
+      } else if (phase === 'CLARIFY') {
+        // User provided more details - re-analyze with combined context
+        setPhase('ANALYZING');
+        addMsg({
+          id: msgId(),
+          role: 'assistant',
+          content: 'Got it, let me refine the setup...',
+        });
+
+        const combinedGoal = `${goalRef.current}\n\nAdditional details: ${trimmed}`;
+        goalRef.current = combinedGoal;
+
+        analyzeGoal.mutate(combinedGoal, {
+          onSuccess: (result: GoalAnalysisRaw) => {
+            analysisRef.current = result;
+            const name = result.agent_name || result.name || 'New Agent';
+            const emoji = result.avatar_emoji || result.avatarEmoji || '';
+            const prompt = result.system_prompt || result.systemPrompt || '';
+            const model = result.model?.includes('opus') ? 'opus' : result.model?.includes('haiku') ? 'haiku' : 'sonnet';
+            const tools = [...(result.custom_tools || result.tools || [])];
+            const memory = result.memory_enabled ?? result.memoryEnabled ?? false;
+            const mentions = result.mentions_only ?? result.mentionsOnly ?? false;
+            const triggers = result.triggers || [];
+
+            setConfig((prev) => ({
+              ...prev,
+              name,
+              avatarEmoji: emoji,
+              systemPrompt: prompt,
+              model,
+              tools,
+              memoryEnabled: memory,
+              activation: mentions ? 'mentions' : 'relevant',
+              triggers,
+            }));
+
+            // Re-check skips
+            if (!hasWriteTools(tools)) {
+              skipPhasesRef.current.add('APPROVAL');
+            } else {
+              skipPhasesRef.current.delete('APPROVAL');
+            }
+
+            // Show updated summary
+            const summaryText = buildSummaryText(result);
+            addMsg({ id: msgId(), role: 'assistant', content: summaryText });
+
+            goToPromptReview();
+          },
+          onError: (err) => {
+            addMsg({
+              id: msgId(),
+              role: 'assistant',
+              content: `I had trouble with that: ${err.message}. Let's continue with what we have.`,
+            });
+            goToPromptReview();
+          },
+        });
+      } else if (phase === 'PROMPT_REVIEW') {
+        // User wants to edit the prompt - they've typed changes
+        setPhase('ANALYZING');
+        addMsg({
+          id: msgId(),
+          role: 'assistant',
+          content: 'Updating the instructions...',
+        });
+
+        const editRequest = `${goalRef.current}\n\nPlease update the instructions: ${trimmed}`;
+
+        analyzeGoal.mutate(editRequest, {
+          onSuccess: (result: GoalAnalysisRaw) => {
+            const prompt = result.system_prompt || result.systemPrompt || '';
+            setConfig((prev) => ({
+              ...prev,
+              systemPrompt: prompt,
+            }));
+
+            addMsg({
+              id: msgId(),
+              role: 'assistant',
+              content: 'I\'ve updated the instructions. Take another look:',
+              cardType: 'prompt-preview',
+              cardProps: { prompt },
+            });
+            setPhase('PROMPT_REVIEW');
+          },
+          onError: (err) => {
+            addMsg({
+              id: msgId(),
+              role: 'assistant',
+              content: `I had trouble updating: ${err.message}. Let's continue with the current instructions.`,
+            });
+            goToChannel();
+          },
+        });
+      } else if (phase === 'CHANNEL') {
+        // User typed a channel name for creation
+        const channelName = trimmed.toLowerCase().replace(/[^a-z0-9-_]/g, '-').replace(/^-+|-+$/g, '');
+        setConfig((prev) => ({ ...prev, channelId: '', channelName: channelName }));
+        addMsg({
+          id: msgId(),
+          role: 'assistant',
+          content: `Great, I'll create a channel called **#${channelName}** for your agent.`,
+        });
+        goToActivation();
       } else if (phase === 'CHANGE_REQUEST') {
         // User asked to change something from the confirmation screen
         const lower = trimmed.toLowerCase();
@@ -572,6 +849,9 @@ export function useCreationFlow(): CreationFlow {
         } else if (lower.includes('schedule') || lower.includes('cron')) {
           goToSchedule();
           return;
+        } else if (lower.includes('instruction') || lower.includes('prompt')) {
+          goToPromptReview();
+          return;
         } else {
           // Try to interpret as a name change
           setConfig((prev) => ({ ...prev, name: trimmed }));
@@ -593,7 +873,7 @@ export function useCreationFlow(): CreationFlow {
         });
       }
     },
-    [phase, analyzeGoal, addMsg, config.model, goToChannel, goToActivation, goToTools, goToEffort, goToMemory, goToAccess, goToApproval, goToConfirm, goToSchedule],
+    [phase, analyzeGoal, addMsg, config.model, buildSummaryText, goToChannel, goToActivation, goToTools, goToEffort, goToMemory, goToAccess, goToApproval, goToConfirm, goToSchedule, goToPromptReview],
   );
 
   // ── Handle card responses ──
@@ -603,8 +883,34 @@ export function useCreationFlow(): CreationFlow {
       disableLastCard();
 
       switch (phase) {
+        case 'PROMPT_REVIEW': {
+          const { action } = response as { action: 'approve' | 'edit' };
+          if (action === 'approve') {
+            goToChannel();
+          } else {
+            // Enable text input for user to describe changes
+            addMsg({
+              id: msgId(),
+              role: 'assistant',
+              content: 'Sure! Describe what you\'d like to change about the instructions, and I\'ll update them.',
+            });
+            // Stay in PROMPT_REVIEW phase — text input will handle the edit
+          }
+          break;
+        }
+
         case 'CHANNEL': {
           const channelId = response as string;
+          if (channelId === '__create__') {
+            // Ask for channel name
+            addMsg({
+              id: msgId(),
+              role: 'assistant',
+              content: 'What should the channel be called? Use lowercase letters, numbers, and hyphens.',
+            });
+            // Stay in CHANNEL phase — text input will handle the name
+            return;
+          }
           const ch = channels.find((c) => c.id === channelId);
           setConfig((prev) => ({ ...prev, channelId, channelName: ch?.name || '' }));
           goToActivation();
@@ -636,6 +942,12 @@ export function useCreationFlow(): CreationFlow {
         }
 
         case 'TOOLS': {
+          // Handle the "no tools available" yes-no card
+          if (typeof response === 'boolean') {
+            // User clicked "Continue without tools"
+            goToEffort();
+            break;
+          }
           const tools = response as string[];
           setConfig((prev) => ({ ...prev, tools }));
           // Re-evaluate whether to show approval
@@ -685,7 +997,7 @@ export function useCreationFlow(): CreationFlow {
             addMsg({
               id: msgId(),
               role: 'assistant',
-              content: 'What would you like to change? You can say things like "change the name", "update the model", "add more tools", etc.',
+              content: 'What would you like to change? You can say things like "change the name", "update the model", "add more tools", "edit instructions", etc.',
             });
           }
           break;
@@ -713,7 +1025,7 @@ export function useCreationFlow(): CreationFlow {
     [
       phase, channels, disableLastCard, addMsg,
       goToActivation, goToScheduleAsk, goToSchedule, goToTools,
-      goToEffort, goToMemory, goToAccess, goToApproval, goToConfirm, doCreate,
+      goToEffort, goToMemory, goToAccess, goToApproval, goToConfirm, goToChannel, doCreate,
     ],
   );
 
@@ -721,7 +1033,8 @@ export function useCreationFlow(): CreationFlow {
     phase === 'ANALYZING' ||
     phase === 'CREATING' ||
     phase === 'DONE' ||
-    (phase !== 'DESCRIBE' && phase !== 'CHANGE_REQUEST' && messages.some((m) => m.cardType && !m.disabled));
+    phase === 'SUMMARY' ||
+    (phase !== 'DESCRIBE' && phase !== 'CHANGE_REQUEST' && phase !== 'CLARIFY' && phase !== 'PROMPT_REVIEW' && phase !== 'CHANNEL' && messages.some((m) => m.cardType && !m.disabled));
 
   return {
     messages,
