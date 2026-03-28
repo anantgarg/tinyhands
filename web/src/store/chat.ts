@@ -25,6 +25,7 @@ export interface ChatState {
   isLoading: boolean;
   conversations: Conversation[];
   showHistory: boolean;
+  creationMode: boolean;
   toggle: () => void;
   open: () => void;
   close: () => void;
@@ -36,6 +37,8 @@ export interface ChatState {
   newConversation: () => void;
   toggleHistory: () => void;
   loadConversation: (id: string) => void;
+  enterCreationMode: () => void;
+  exitCreationMode: () => void;
 }
 
 let messageCounter = 0;
@@ -56,6 +59,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   isLoading: false,
   conversations: [],
   showHistory: false,
+  creationMode: false,
   toggle: () => set((state) => ({ isOpen: !state.isOpen })),
   open: () => set({ isOpen: true }),
   close: () => set({ isOpen: false, isExpanded: false }),
@@ -109,4 +113,6 @@ export const useChatStore = create<ChatState>((set, get) => ({
       set({ messages: conv.messages, selectedAgentId: conv.agentId, showHistory: false });
     }
   },
+  enterCreationMode: () => set({ creationMode: true, isOpen: true, isExpanded: true, messages: [], showHistory: false }),
+  exitCreationMode: () => set({ creationMode: false, isExpanded: false, messages: [] }),
 }));

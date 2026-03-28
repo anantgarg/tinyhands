@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Send, X, ChevronDown, Sparkles, Command, Plus, Clock, Maximize2, Minimize2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { renderEmoji } from '@/lib/emoji';
@@ -7,6 +7,17 @@ import { useChatStore, generateMessageId } from '@/store/chat';
 import { useAgents, useUpdateAgent } from '@/api/agents';
 import { api } from '@/api/client';
 import { formatDistanceToNow } from 'date-fns';
+import { useCreationFlow } from './creation-chat/useCreationFlow';
+import type { CreationMessage } from './creation-chat/useCreationFlow';
+import {
+  MultiChoiceCard,
+  YesNoCard,
+  DropdownCard,
+  MultiSelectCard,
+  ConfirmationCard,
+  ScheduleCard,
+} from './creation-chat/cards';
+import type { ConfirmationConfig } from './creation-chat/cards/ConfirmationCard';
 
 interface ChatResponse {
   response: string;
@@ -48,8 +59,104 @@ function formatValue(value: unknown): string {
   return String(value);
 }
 
+// ── Card renderer for creation mode ──
+
+function CreationCardRenderer({
+  msg,
+  onCardResponse,
+  isCreating,
+}: {
+  msg: CreationMessage;
+  onCardResponse: (messageId: string, response: unknown) => void;
+  isCreating: boolean;
+}) {
+  if (!msg.cardType) return null;
+
+  const props = msg.cardProps || {};
+
+  switch (msg.cardType) {
+    case 'multi-choice':
+      return (
+        <MultiChoiceCard
+          options={props.options as { value: string; label: string; description?: string; recommended?: boolean }[]}
+          defaultValue={props.defaultValue as string | undefined}
+          onSubmit={(value) => onCardResponse(msg.id, value)}
+          disabled={msg.disabled}
+        />
+      );
+    case 'yes-no':
+      return (
+        <YesNoCard
+          question={props.question as string | undefined}
+          description={props.description as string | undefined}
+          yesLabel={props.yesLabel as string | undefined}
+          noLabel={props.noLabel as string | undefined}
+          defaultValue={props.defaultValue as boolean | undefined}
+          onSubmit={(value) => onCardResponse(msg.id, value)}
+          disabled={msg.disabled}
+        />
+      );
+    case 'dropdown':
+      return (
+        <DropdownCard
+          options={props.options as { value: string; label: string }[]}
+          searchable={props.searchable as boolean | undefined}
+          placeholder={props.placeholder as string | undefined}
+          defaultValue={props.defaultValue as string | undefined}
+          onSubmit={(value) => onCardResponse(msg.id, value)}
+          disabled={msg.disabled}
+        />
+      );
+    case 'multi-select':
+      return (
+        <MultiSelectCard
+          options={props.options as { value: string; label: string; icon?: string; hasWrite?: boolean; readToolName?: string; writeToolName?: string }[]}
+          defaultValues={props.defaultValues as string[] | undefined}
+          onSubmit={(values) => onCardResponse(msg.id, values)}
+          disabled={msg.disabled}
+        />
+      );
+    case 'confirmation': {
+      const config = props.config as ConfirmationConfig;
+      return (
+        <ConfirmationCard
+          config={config}
+          onConfirm={() => onCardResponse(msg.id, 'confirm')}
+          onChange={() => onCardResponse(msg.id, 'change')}
+          isCreating={isCreating}
+          disabled={msg.disabled}
+        />
+      );
+    }
+    case 'schedule':
+      return (
+        <ScheduleCard
+          defaultFrequency={props.defaultFrequency as string | undefined}
+          defaultTimezone={props.defaultTimezone as string | undefined}
+          onSubmit={(cron, timezone) => onCardResponse(msg.id, { cron, timezone })}
+          disabled={msg.disabled}
+        />
+      );
+    default:
+      return null;
+  }
+}
+
+// ── Render bold markdown fragments (**text**) ──
+
+function renderContent(text: string) {
+  const parts = text.split(/(\*\*[^*]+\*\*)/g);
+  return parts.map((part, i) => {
+    if (part.startsWith('**') && part.endsWith('**')) {
+      return <strong key={i}>{part.slice(2, -2)}</strong>;
+    }
+    return part;
+  });
+}
+
 export function FloatingChat() {
   const location = useLocation();
+  const navigate = useNavigate();
   const {
     isOpen,
     isExpanded,
@@ -68,17 +175,23 @@ export function FloatingChat() {
     toggleHistory,
     conversations,
     loadConversation,
+    creationMode,
+    exitCreationMode,
   } = useChatStore();
 
   const [inputValue, setInputValue] = useState('');
   const [agentDropdownOpen, setAgentDropdownOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const creationMessagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const collapsedInputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
   const { data: agents } = useAgents();
   const updateAgent = useUpdateAgent();
+
+  // Creation flow hook (always called but only active in creation mode)
+  const creationFlow = useCreationFlow();
 
   // Detect page context and auto-set agent
   const { agentId: pageAgentId, context: pageContext } = getPageContext(location.pathname);
@@ -88,33 +201,49 @@ export function FloatingChat() {
 
   // Auto-set agent context when navigating to an agent page — start fresh convo
   useEffect(() => {
+    if (creationMode) return; // Don't auto-switch during creation
     if (pageAgentId && pageAgentId !== selectedAgentId) {
       setSelectedAgentId(pageAgentId);
       if (messages.length > 0) {
         newConversation();
       }
     }
-  }, [pageAgentId, selectedAgentId, setSelectedAgentId, messages.length, newConversation]);
+  }, [pageAgentId, selectedAgentId, setSelectedAgentId, messages.length, newConversation, creationMode]);
 
   // Keyboard shortcut: Cmd+K / Ctrl+K
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
+        if (creationMode) return; // Don't toggle during creation
         toggle();
       }
       if (e.key === 'Escape' && isOpen) {
-        close();
+        if (creationMode) {
+          exitCreationMode();
+          navigate('/agents');
+        } else {
+          close();
+        }
       }
     }
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [toggle, close, isOpen]);
+  }, [toggle, close, isOpen, creationMode, exitCreationMode, navigate]);
 
-  // Scroll to bottom on new messages
+  // Scroll to bottom on new messages (regular chat)
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    if (!creationMode) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, creationMode]);
+
+  // Scroll to bottom on new creation messages
+  useEffect(() => {
+    if (creationMode) {
+      creationMessagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [creationFlow.messages, creationMode]);
 
   // Focus input when opening
   useEffect(() => {
@@ -122,6 +251,17 @@ export function FloatingChat() {
       setTimeout(() => inputRef.current?.focus(), 100);
     }
   }, [isOpen]);
+
+  // Navigate to agent detail when creation is done
+  useEffect(() => {
+    if (creationFlow.createdAgentId && creationMode) {
+      const timer = setTimeout(() => {
+        exitCreationMode();
+        navigate(`/agents/${creationFlow.createdAgentId}`);
+      }, 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [creationFlow.createdAgentId, creationMode, exitCreationMode, navigate]);
 
   const sendMessage = useCallback(async () => {
     const trimmed = inputValue.trim();
@@ -218,7 +358,14 @@ export function FloatingChat() {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      sendMessage();
+      if (creationMode) {
+        if (!creationFlow.inputDisabled && inputValue.trim()) {
+          creationFlow.sendMessage(inputValue.trim());
+          setInputValue('');
+        }
+      } else {
+        sendMessage();
+      }
     }
   };
 
@@ -228,9 +375,17 @@ export function FloatingChat() {
     }
   };
 
-  const placeholder = getPlaceholder(pageContext, currentAgent?.name);
+  const handleCreationSend = () => {
+    if (creationFlow.inputDisabled || !inputValue.trim()) return;
+    creationFlow.sendMessage(inputValue.trim());
+    setInputValue('');
+  };
 
-  // Collapsed bar
+  const placeholder = creationMode
+    ? (creationFlow.inputDisabled ? 'Choose an option above...' : 'Describe what your agent should do...')
+    : getPlaceholder(pageContext, currentAgent?.name);
+
+  // Collapsed bar (hidden during creation mode)
   if (!isOpen) {
     return (
       <div className="fixed bottom-6 left-1/2 z-50 w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 px-4 sm:w-full">
@@ -261,7 +416,100 @@ export function FloatingChat() {
     );
   }
 
-  // Expanded panel
+  // ── Creation mode panel ──
+  if (creationMode) {
+    return (
+      <div
+        ref={panelRef}
+        className="fixed inset-x-0 bottom-0 z-50 mx-auto flex flex-col bg-white shadow-lg transition-all sm:bottom-6 sm:max-w-[640px] sm:rounded-2xl sm:border sm:border-[#E0DED9]"
+        style={{ height: 'min(80vh, 700px)' }}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-[#E0DED9] px-4 py-3">
+          <div className="flex items-center gap-2">
+            <Sparkles className="h-4 w-4 text-brand" />
+            <span className="text-sm font-semibold text-warm-text">Create Agent</span>
+          </div>
+          <button
+            onClick={() => {
+              exitCreationMode();
+              navigate('/agents');
+            }}
+            className="flex h-6 w-6 items-center justify-center rounded-md text-warm-text-secondary hover:bg-warm-bg hover:text-warm-text transition-colors"
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        </div>
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3">
+          {creationFlow.messages.map((msg) => (
+            <div
+              key={msg.id}
+              className={cn(
+                'flex animate-in fade-in slide-in-from-bottom-2 duration-300',
+                msg.role === 'user' ? 'justify-end' : 'justify-start',
+              )}
+            >
+              <div
+                className={cn(
+                  'max-w-[90%] rounded-2xl px-3.5 py-2 text-sm',
+                  msg.role === 'user'
+                    ? 'bg-[#E7F5EE] text-warm-text'
+                    : 'border border-[#E0DED9] bg-white text-warm-text',
+                )}
+              >
+                <p className="whitespace-pre-wrap">{renderContent(msg.content)}</p>
+                <CreationCardRenderer
+                  msg={msg}
+                  onCardResponse={creationFlow.handleCardResponse}
+                  isCreating={creationFlow.isCreating}
+                />
+              </div>
+            </div>
+          ))}
+
+          {creationFlow.isAnalyzing && (
+            <div className="flex justify-start">
+              <div className="rounded-2xl border border-[#E0DED9] bg-white px-3.5 py-2">
+                <div className="flex gap-1">
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-warm-text-secondary/40" style={{ animationDelay: '0ms' }} />
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-warm-text-secondary/40" style={{ animationDelay: '150ms' }} />
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-warm-text-secondary/40" style={{ animationDelay: '300ms' }} />
+                </div>
+              </div>
+            </div>
+          )}
+          <div ref={creationMessagesEndRef} />
+        </div>
+
+        {/* Input area */}
+        <div className="border-t border-[#E0DED9] px-4 py-3">
+          <div className="flex items-center gap-2">
+            <input
+              ref={inputRef}
+              type="text"
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={placeholder}
+              className="flex-1 bg-transparent text-sm text-warm-text placeholder:text-warm-text-secondary/50 outline-none disabled:cursor-not-allowed"
+              disabled={creationFlow.inputDisabled}
+            />
+            <button
+              onClick={handleCreationSend}
+              disabled={!inputValue.trim() || creationFlow.inputDisabled}
+              className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand text-white transition-colors hover:bg-brand/90 disabled:opacity-40 disabled:cursor-not-allowed"
+            >
+              <Send className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ── Regular chat panel ──
   return (
     <div
       ref={panelRef}
