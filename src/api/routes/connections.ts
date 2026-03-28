@@ -238,6 +238,30 @@ router.put('/agent/:agentId/:toolName', async (req: Request, res: Response) => {
     const MODE_MAP: Record<string, string> = { team: 'team', personal: 'runtime', creator: 'delegated', runtime: 'runtime', delegated: 'delegated' };
     const resolvedMode = MODE_MAP[mode] || mode;
 
+    // Non-admins cannot switch write tools to team credentials without approval
+    if (resolvedMode === 'team' && toolName.endsWith('-write')) {
+      const { isPlatformAdmin } = await import('../../modules/access-control');
+      const isAdmin = await isPlatformAdmin(workspaceId, userId);
+      if (!isAdmin) {
+        const { createToolRequest, listPlatformAdmins } = await import('../../modules/access-control');
+        const { getAgent } = await import('../../modules/agents');
+        const agent = await getAgent(workspaceId, agentId);
+        await createToolRequest(workspaceId, agentId, toolName, 'read-write', userId, 'Requested team credentials for write tool');
+        // Notify admins
+        try {
+          const { sendDMBlocks } = await import('../../slack');
+          const admins = await listPlatformAdmins(workspaceId);
+          for (const admin of admins) {
+            await sendDMBlocks(admin.user_id, [
+              { type: 'section', text: { type: 'mrkdwn', text: `:lock: *Tool credential request*\n<@${userId}> wants to use *team credentials* for *${toolName}* on agent *${agent?.name || agentId}*.\nReview in the dashboard under Tool Requests.` } },
+            ]);
+          }
+        } catch {}
+        res.status(202).json({ status: 'pending_approval', message: 'Using team credentials for write tools requires admin approval.' });
+        return;
+      }
+    }
+
     // Set for the requested tool
     const result = await setAgentToolConnection(
       workspaceId, agentId, toolName,
