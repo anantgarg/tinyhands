@@ -27,6 +27,39 @@ Claude MUST check this before making changes and update it after commits.
 - Smart credential recommendations appear during tool selection based on agent purpose (team / creator's / each user's).
 - For non-admin creators, the goal analyzer restricts tool suggestions to read-only tools and does not propose new tools.
 
+**Agent Creation Flow:**
+
+```
+User starts wizard
+     |
+     v
+[Describe] -----> Goal Analyzer (AI)
+     |                  |
+     v                  v
+[Identity]        Auto-generates: name, prompt,
+     |            model, tools, effort
+     v
+[Settings] -----> Model, Effort, Activation,
+     |            Access, Action Approval, Memory
+     v
+[Tools] --------> Select integrations
+     |              (non-admin: read-only suggestions only)
+     v
+Create Agent ----> Channel created
+     |
+     v
+Write tools present?
+     |            |
+     | yes        | no
+     v            v
+Non-admin?      Done
+     |
+     | yes
+     v
+Tool requests created
+(admin approval needed)
+```
+
 ### Agent Configuration
 
 | Setting | Values | DB column | Dashboard label |
@@ -59,6 +92,19 @@ Every configuration change creates a version entry in `agent_versions`.
 
 **Implementation:** Migration 020 added columns for model, tools, max_turns, memory_enabled, mentions_only, respond_to_all, default_access, write_policy to `agent_versions`.
 
+**Access:**
+
+| Action | Superadmin | Admin | Agent Owner | Agent Member | Viewer |
+|--------|-----------|-------|-------------|-------------|--------|
+| Create agent | Yes | Yes | N/A | N/A | No |
+| Edit agent config | Yes | Yes | Yes | No | No |
+| Add read tools | Yes | Yes | Yes | No | No |
+| Add write tools (team creds) | Yes (immediate) | Yes (immediate) | Needs approval | No | No |
+| Pause/Resume agent | Yes | Yes | Yes | No | No |
+| Delete agent | Yes | Yes | Yes | No | No |
+| View version history | Yes | Yes | Yes | No | No |
+| Restore version | Yes | Yes | Yes | No | No |
+
 ---
 
 ## Agent Execution
@@ -83,6 +129,43 @@ Every configuration change creates a version entry in `agent_versions`.
 11. Container cleaned up
 12. Memories extracted and stored (if memory enabled)
 ```
+
+```
+Slack Message
+     |
+     v
+[Listener] ---------> Relevance Check
+     |                      |
+     | relevant             | not relevant
+     v                      v (skip)
+[BullMQ Queue]
+     |
+     v
+[Worker] -----------> Rate Limit Check
+     |                      |
+     | ok                   | over limit
+     v                      v (delay)
+[Build Context] -----> KB + Sources + Memory + Thread
+     |
+     v
+[Docker Container] --> Claude SDK
+     |
+     v
+[Stream to Slack] ---> Buffer --> Post/Update
+     |
+     v
+[Cleanup] -----------> Save run record + Extract memories
+```
+
+**Access:**
+
+| Action | Superadmin | Admin | Agent Owner | Agent Member | Viewer |
+|--------|-----------|-------|-------------|-------------|--------|
+| Trigger agent via message | Yes | Yes | Yes | Yes | Read-only (upgrade request) |
+| Override model (/opus etc.) | Yes | Yes | Yes | Yes | No |
+| View run history | Yes | Yes | Yes | Yes | Yes |
+| Approve write action (confirm) | Yes | Yes | Yes | Yes | No |
+| Approve write action (admin_confirm) | Yes | Yes | Yes | No | No |
 
 ### Rate Limiting
 
@@ -204,6 +287,18 @@ Every execution creates a `run_history` row tracking:
 
 **Who can modify agents:** Owners only (via `canModifyAgent` which checks `agentRole === 'owner'`). Platform admins get owner-level access to all agents automatically.
 
+**Access Summary:**
+
+| Action | Superadmin | Admin | Agent Owner | Agent Member | Viewer | None |
+|--------|-----------|-------|-------------|-------------|--------|------|
+| View agent | Yes | Yes | Yes | Yes | Yes | No |
+| Interact with agent | Yes | Yes | Yes | Yes | No (triggers upgrade request) | No |
+| Modify agent settings | Yes | Yes | Yes | No | No | No |
+| Manage agent roles | Yes | Yes | Yes | No | No | No |
+| Manage platform roles | Yes | No | No | No | No | No |
+| Request upgrade | N/A | N/A | N/A | N/A | Yes | No |
+| Approve upgrade request | Yes | Yes | Yes | No | No | No |
+
 ### Upgrade Request Flow (Viewer -> Member)
 
 1. Viewer attempts write action or clicks "Request Access" in dashboard.
@@ -297,6 +392,42 @@ Every integration exports a `manifest` from `src/modules/tools/integrations/<nam
 
 **Google OAuth note:** All four Google integrations share a single OAuth config and callback (`/auth/callback/google`). One connection covers Drive, Sheets, Docs, and Gmail. Which services an agent uses depends on which tools are enabled. Legacy "Google Workspace" integration exists for backward compat but registers no tools (cleaned up by migration 019).
 
+**Tool Request Approval Flow:**
+
+```
+Non-admin adds write tool
+     |
+     v
+Team credentials exist? --no--> Attach tool directly
+     |
+     | yes
+     v
+Create tool_request (pending)
+     |
+     v
+Slack DM to admins: "View in Dashboard"
+     |
+     v
+Admin reviews in Dashboard
+     |            |
+     | approve    | deny
+     v            v
+Attach tool    Notify user
+to agent       (denied)
+```
+
+**Access:**
+
+| Action | Superadmin | Admin | Agent Owner | Agent Member | Viewer |
+|--------|-----------|-------|-------------|-------------|--------|
+| View available integrations | Yes | Yes | No | No | No |
+| Connect integrations (team creds) | Yes | Yes | No | No | No |
+| Add read tools to own agent | Yes | Yes | Yes | No | No |
+| Add write tools (immediate) | Yes | Yes | No | No | No |
+| Add write tools (request) | N/A | N/A | Yes | No | No |
+| Create custom tools | Yes | Yes | No | No | No |
+| Approve agent-created tools | Yes | Yes | No | No | No |
+
 ---
 
 ## Credential & Connection System
@@ -359,6 +490,37 @@ In `resolveToolCredentials()`:
 
 **Critical rule:** The system never silently falls back to stale or empty credentials. If credentials are missing, the run fails with a clear, specific error rather than proceeding with broken config.
 
+**Credential Resolution Flow:**
+
+```
+resolveToolCredentials(agent, tool)
+     |
+     v
+Agent-Tool Connection exists?
+     |            |
+     | yes        | no
+     v            v
+Use explicit   Fall back to
+mode           team credentials
+  |                 |
+  +---team--------->Use team connection
+  |
+  +---delegated---->Use agent owner's personal connection
+  |
+  +---runtime------>Use current user's personal connection
+     |
+     v
+Credentials found?
+     |            |
+     | yes        | no
+     v            v
+Decrypt +      Role-aware
+auto-refresh   error message
+     |
+     v
+Return credentials
+```
+
 ### Smart Credential Recommendations
 
 During agent creation, the AI goal analyzer recommends credential modes:
@@ -393,6 +555,20 @@ For runtime and delegated-owner cases, a **Connect** button is included. After u
 - Stored as `root_folder_id` and `root_folder_name` in encrypted credentials.
 - Agents using this connection can only access files within that folder and subfolders.
 - Can be changed or cleared at any time.
+
+**Access:**
+
+| Action | Superadmin | Admin | Agent Owner | Agent Member | Viewer |
+|--------|-----------|-------|-------------|-------------|--------|
+| Create team connections | Yes | Yes | No | No | No |
+| Edit/delete team connections | Yes | Yes | No | No | No |
+| View team connections | Yes | Yes | Yes (read-only) | Yes (read-only) | Yes (read-only) |
+| Create personal connections | Yes | Yes | Yes | Yes | Yes |
+| Edit/delete own personal connections | Yes | Yes | Yes | Yes | Yes |
+| Set connection mode on own agent | Yes | Yes | Yes | No | No |
+| Switch write tool to team creds (immediate) | Yes | Yes | No | No | No |
+| Switch write tool to team creds (request) | N/A | N/A | Yes | No | No |
+| Restrict Google Drive folder | Yes | Yes | Yes | Yes | Yes |
 
 ---
 
@@ -493,6 +669,18 @@ All non-realtime approvals happen in the **web dashboard**. Slack sends notifica
 | KB Contributions | Requests > KB Contributions | Planned | No |
 | Write Approvals | N/A (Slack-only) | In-thread | Yes (real-time) |
 
+**Access:**
+
+| Request Type | Who Can Create | Who Can Approve/Deny |
+|---|---|---|
+| Upgrade Requests | Viewers (automatic on write attempt or manual) | Agent owner, Superadmin, Admin |
+| Tool Requests | Agent owner (non-admin, adding write tool w/ team creds) | Superadmin, Admin |
+| Evolution Proposals | Agent (automated, when self-evolution enabled) | Agent owner, Superadmin, Admin |
+| Feature Requests | System (automated, during agent creation) | Superadmin, Admin (dismiss only) |
+| KB Contributions | Agent (automated, during execution) | Superadmin, Admin |
+| Write Approvals (confirm) | Agent (automated, mid-execution) | Any user in thread |
+| Write Approvals (admin_confirm) | Agent (automated, mid-execution) | Agent owner only |
+
 ---
 
 ## Action Approval (Write Policies)
@@ -513,6 +701,36 @@ This is a **runtime** concept, separate from tool attachment approval (which is 
 - When denied: requesting user receives DM explaining which action was blocked and why.
 - When approved: agent automatically resumes and completes the write action.
 - Expired requests (`confirm` only): treated as denied.
+
+**Write Approval Flow (Runtime):**
+
+```
+Agent executes write tool
+     |
+     v
+write_policy?
+     |            |              |
+     | auto       | confirm      | admin_confirm
+     v            v              v
+Execute       DM user         DM owner
+immediately   (5min timeout)  (no timeout)
+                  |              |
+                  v              v
+              Approve/Deny   Approve/Deny
+                  |              |
+                  v              v
+              Execute or     Execute or
+              skip action    skip action
+```
+
+**Access:**
+
+| Action | Superadmin | Admin | Agent Owner | Agent Member | Viewer |
+|--------|-----------|-------|-------------|-------------|--------|
+| Set write policy on agent | Yes | Yes | Yes | No | No |
+| Approve (confirm mode) | Yes | Yes | Yes | Yes | No |
+| Approve (admin_confirm mode) | Yes | Yes | Yes | No | No |
+| Deny (any mode) | Same as approve for each mode | | | | |
 
 ---
 
@@ -563,6 +781,23 @@ This is a **runtime** concept, separate from tool attachment approval (which is 
 - Keys shown once at creation -- copy immediately.
 - Used for external programmatic KB access.
 
+**Access:**
+
+| Action | Superadmin | Admin | Agent Owner | Agent Member | Viewer |
+|--------|-----------|-------|-------------|-------------|--------|
+| Browse KB sources | Yes | Yes | Yes | Yes | Yes |
+| Search KB entries | Yes | Yes | Yes | Yes | Yes |
+| View KB entry content | Yes | Yes | Yes | Yes | Yes |
+| Add manual entries | Yes | Yes | No | No | No |
+| Edit non-synced entries | Yes | Yes | No | No | No |
+| Delete entries | Yes | Yes | No | No | No |
+| Approve pending entries | Yes | Yes | No | No | No |
+| Add KB sources | Yes | Yes | No | No | No |
+| Edit KB sources | Yes | Yes | No | No | No |
+| Delete KB sources | Yes | Yes | No | No | No |
+| Trigger sync | Yes | Yes | No | No | No |
+| Manage API keys | Yes | Yes | No | No | No |
+
 ---
 
 ## Triggers
@@ -586,6 +821,16 @@ This is a **runtime** concept, separate from tool attachment approval (which is 
 - Triggers can be paused, resumed, edited, and deleted from dashboard Triggers tab.
 - Webhook signature verification for GitHub, Linear, Zendesk, Intercom (in `src/utils/webhooks.ts`).
 - Schedule triggers use cron expressions with timezone support (timezone auto-detected from Slack workspace).
+
+**Access:**
+
+| Action | Superadmin | Admin | Agent Owner | Agent Member | Viewer |
+|--------|-----------|-------|-------------|-------------|--------|
+| View triggers | Yes | Yes | Yes | Yes | Yes |
+| Create triggers | Yes | Yes | Yes | No | No |
+| Edit triggers | Yes | Yes | Yes | No | No |
+| Pause/Resume triggers | Yes | Yes | Yes | No | No |
+| Delete triggers | Yes | Yes | Yes | No | No |
 
 ---
 
@@ -628,6 +873,17 @@ This is a **runtime** concept, separate from tool attachment approval (which is 
 - `getPendingProposals()` returns all pending proposals, optionally filtered by agent.
 - History limited to last 50 proposals per agent (`getProposalHistory`).
 - Agent-created tools require admin approval before other agents can use them (shown in "Agent-Created Tools" section on Tools page).
+
+**Access:**
+
+| Action | Superadmin | Admin | Agent Owner | Agent Member | Viewer |
+|--------|-----------|-------|-------------|-------------|--------|
+| Enable/disable self-evolution | Yes | Yes | Yes | No | No |
+| Set evolution mode | Yes | Yes | Yes | No | No |
+| View proposals | Yes | Yes | Yes | Yes | Yes |
+| Approve proposals | Yes | Yes | Yes | No | No |
+| Reject proposals | Yes | Yes | Yes | No | No |
+| Approve agent-created tools | Yes | Yes | No | No | No |
 
 ---
 
@@ -721,6 +977,22 @@ The dashboard is for a **non-technical audience**. Follow these rules without ex
 
 - Total pending request count badge on "Requests" sidebar item.
 - Per-type counts on individual request sub-tabs.
+
+**Access:**
+
+| Page | Superadmin | Admin | Member | Notes |
+|------|-----------|-------|--------|-------|
+| Dashboard (home) | Full | Full | Full | Metrics, activity, cost |
+| Agents | Full | Full | View + interact with accessible agents | Members cannot create agents |
+| Agent Detail | All tabs | All tabs | Varies by agent role | Viewers see limited tabs |
+| Tools & Integrations | Full | Full | No access ("Admin Access Required") | |
+| Connections | Full + manage team | Full + manage team | Personal only (team read-only) | |
+| Knowledge Base | Full CRUD | Full CRUD | Browse + search only | Cannot add/edit/delete |
+| Requests | All tabs | All tabs | All tabs | Can only act on own requests unless admin |
+| Error Logs | Full | Full | Full | |
+| Audit Log | Full | Full | No access | Admin only |
+| Access & Roles | Full | Full | No access | Admin only |
+| Workspace Settings | Full | Full | No access | Admin only |
 
 ---
 
