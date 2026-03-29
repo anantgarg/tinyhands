@@ -7,6 +7,7 @@ export interface ChatMessage {
   proposedChanges?: Record<string, { from: unknown; to: unknown }>;
   canApply?: boolean;
   agentId?: string;
+  toolCallsUsed?: string[];
 }
 
 interface Conversation {
@@ -17,12 +18,18 @@ interface Conversation {
   title: string;
 }
 
+export type ModelOverride = 'opus' | 'sonnet' | 'haiku' | null;
+
 export interface ChatState {
   isOpen: boolean;
   isExpanded: boolean;
   messages: ChatMessage[];
   selectedAgentId: string | null;
   isLoading: boolean;
+  isStreaming: boolean;
+  streamingContent: string;
+  activeToolCalls: Array<{ name: string; label: string }>;
+  modelOverride: ModelOverride;
   conversations: Conversation[];
   showHistory: boolean;
   creationMode: boolean;
@@ -32,7 +39,15 @@ export interface ChatState {
   toggleExpand: () => void;
   setSelectedAgentId: (id: string | null) => void;
   addMessage: (message: ChatMessage) => void;
+  updateLastMessage: (updates: Partial<ChatMessage>) => void;
   setLoading: (loading: boolean) => void;
+  setStreaming: (streaming: boolean) => void;
+  setStreamingContent: (content: string) => void;
+  appendStreamingContent: (chunk: string) => void;
+  setActiveToolCalls: (calls: Array<{ name: string; label: string }>) => void;
+  addActiveToolCall: (call: { name: string; label: string }) => void;
+  clearActiveToolCalls: () => void;
+  setModelOverride: (model: ModelOverride) => void;
   clearMessages: () => void;
   newConversation: () => void;
   toggleHistory: () => void;
@@ -57,6 +72,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
   selectedAgentId: null,
   isLoading: false,
+  isStreaming: false,
+  streamingContent: '',
+  activeToolCalls: [],
+  modelOverride: null,
   conversations: [],
   showHistory: false,
   creationMode: false,
@@ -87,7 +106,22 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
   addMessage: (message) =>
     set((state) => ({ messages: [...state.messages, message] })),
+  updateLastMessage: (updates) =>
+    set((state) => {
+      const msgs = [...state.messages];
+      if (msgs.length > 0) {
+        msgs[msgs.length - 1] = { ...msgs[msgs.length - 1], ...updates };
+      }
+      return { messages: msgs };
+    }),
   setLoading: (loading) => set({ isLoading: loading }),
+  setStreaming: (streaming) => set({ isStreaming: streaming }),
+  setStreamingContent: (content) => set({ streamingContent: content }),
+  appendStreamingContent: (chunk) => set((state) => ({ streamingContent: state.streamingContent + chunk })),
+  setActiveToolCalls: (calls) => set({ activeToolCalls: calls }),
+  addActiveToolCall: (call) => set((state) => ({ activeToolCalls: [...state.activeToolCalls, call] })),
+  clearActiveToolCalls: () => set({ activeToolCalls: [] }),
+  setModelOverride: (model) => set({ modelOverride: model }),
   clearMessages: () => set({ messages: [] }),
   newConversation: () => {
     const state = get();

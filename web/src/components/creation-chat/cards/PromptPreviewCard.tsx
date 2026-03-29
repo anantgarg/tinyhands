@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
-import { Check, ChevronDown, ChevronRight, Pencil } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Loader2, Pencil } from 'lucide-react';
 
 interface PromptPreviewCardProps {
   prompt: string;
@@ -48,9 +48,20 @@ export function PromptPreviewCard({ prompt, onSubmit, disabled }: PromptPreviewC
       {expanded && (
         <div className="border-t border-warm-border px-3 py-2">
           <div className="max-h-60 overflow-y-auto rounded-md bg-gray-50 p-3">
-            <pre className="whitespace-pre-wrap text-xs font-mono text-warm-text leading-relaxed">
-              {prompt}
-            </pre>
+            {prompt ? (
+              <pre className="whitespace-pre-wrap text-xs font-mono text-warm-text leading-relaxed">
+                {prompt}
+              </pre>
+            ) : (
+              <div className="space-y-2 animate-pulse">
+                <div className="h-3 bg-gray-200 rounded w-3/4" />
+                <div className="h-3 bg-gray-200 rounded w-full" />
+                <div className="h-3 bg-gray-200 rounded w-5/6" />
+                <div className="h-3 bg-gray-200 rounded w-2/3" />
+                <div className="h-3 bg-gray-200 rounded w-full" />
+                <div className="h-3 bg-gray-200 rounded w-4/5" />
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -61,17 +72,24 @@ export function PromptPreviewCard({ prompt, onSubmit, disabled }: PromptPreviewC
             setChosenAction('approve');
             onSubmit({ action: 'approve' });
           }}
-          className="rounded-btn bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-hover"
+          disabled={!prompt}
+          className="rounded-btn bg-brand px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-hover disabled:opacity-40 disabled:cursor-not-allowed"
         >
-          Looks good
+          {prompt ? 'Looks good' : (
+            <span className="flex items-center gap-1.5">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Loading...
+            </span>
+          )}
         </button>
         <button
           onClick={() => {
             setChosenAction('edit');
             onSubmit({ action: 'edit' });
           }}
+          disabled={!prompt}
           className={cn(
-            'rounded-btn border border-warm-border bg-white px-4 py-2 text-sm font-medium text-warm-text transition-colors hover:bg-warm-bg',
+            'rounded-btn border border-warm-border bg-white px-4 py-2 text-sm font-medium text-warm-text transition-colors hover:bg-warm-bg disabled:opacity-40 disabled:cursor-not-allowed',
           )}
         >
           Let me edit

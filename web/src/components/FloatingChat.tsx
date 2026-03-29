@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { Send, X, ChevronDown, Sparkles, Command, Plus, Clock, Maximize2, Minimize2 } from 'lucide-react';
+import { Send, X, ChevronDown, Sparkles, Command, Plus, Clock, Maximize2, Minimize2, Zap } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { renderEmoji } from '@/lib/emoji';
 import { useChatStore, generateMessageId } from '@/store/chat';
+import type { ModelOverride } from '@/store/chat';
 import { useAgents, useUpdateAgent } from '@/api/agents';
-import { api } from '@/api/client';
 import { formatDistanceToNow } from 'date-fns';
 import { useCreationFlow } from './creation-chat/useCreationFlow';
 import type { CreationMessage } from './creation-chat/useCreationFlow';
@@ -19,12 +19,6 @@ import {
   PromptPreviewCard,
 } from './creation-chat/cards';
 import type { ConfirmationConfig } from './creation-chat/cards/ConfirmationCard';
-
-interface ChatResponse {
-  response: string;
-  proposedChanges?: Record<string, { from: unknown; to: unknown }>;
-  canApply?: boolean;
-}
 
 function getPageContext(pathname: string): { agentId: string | null; context: string } {
   const agentMatch = pathname.match(/^\/agents\/([^/]+)$/);
@@ -58,6 +52,26 @@ function formatValue(value: unknown): string {
     return value;
   }
   return String(value);
+}
+
+// ── Parse model override from message (e.g., "/opus why is this failing?") ──
+
+function parseModelOverride(text: string): { model: ModelOverride; cleanText: string } {
+  const match = text.match(/^\/(opus|sonnet|haiku)\s+/i);
+  if (match) {
+    return {
+      model: match[1].toLowerCase() as ModelOverride,
+      cleanText: text.slice(match[0].length),
+    };
+  }
+  return { model: null, cleanText: text };
+}
+
+// ── Detect creation intent ──
+
+function isCreationIntent(text: string): boolean {
+  const lower = text.toLowerCase().trim();
+  return /^(create|make|build|set up|setup|start|new)\s+(a\s+)?(new\s+)?agent/i.test(lower);
 }
 
 // ── Card renderer for creation mode ──
@@ -158,16 +172,54 @@ function CreationCardRenderer({
   }
 }
 
-// ── Render bold markdown fragments (**text**) ──
+// ── Markdown renderer (bold, bullets, code spans, line breaks) ──
 
 function renderContent(text: string) {
-  const parts = text.split(/(\*\*[^*]+\*\*)/g);
-  return parts.map((part, i) => {
-    if (part.startsWith('**') && part.endsWith('**')) {
-      return <strong key={i}>{part.slice(2, -2)}</strong>;
+  const lines = text.split('\n');
+  return lines.map((line, lineIdx) => {
+    const isBullet = /^[\u2022\-\*]\s/.test(line);
+    const bulletContent = isBullet ? line.replace(/^[\u2022\-\*]\s/, '') : line;
+
+    // Parse inline formatting: **bold** and `code`
+    const parts = (isBullet ? bulletContent : line).split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
+    const rendered = parts.map((part, i) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return <strong key={i}>{part.slice(2, -2)}</strong>;
+      }
+      if (part.startsWith('`') && part.endsWith('`')) {
+        return <code key={i} className="rounded bg-gray-100 px-1 py-0.5 text-xs font-mono">{part.slice(1, -1)}</code>;
+      }
+      return part;
+    });
+
+    if (isBullet) {
+      return (
+        <span key={lineIdx} className="flex gap-1.5 items-start">
+          <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-warm-text-secondary/50" />
+          <span>{rendered}</span>
+        </span>
+      );
     }
-    return part;
+
+    return (
+      <span key={lineIdx}>
+        {lineIdx > 0 && <br />}
+        {rendered}
+      </span>
+    );
   });
+}
+
+// ── SSE stream reader ──
+
+interface StreamEvent {
+  type: 'text' | 'tool_call' | 'proposed_changes' | 'done' | 'error';
+  content?: string;
+  name?: string;
+  label?: string;
+  changes?: Record<string, { from: unknown; to: unknown }>;
+  canApply?: boolean;
+  toolCallsUsed?: string[];
 }
 
 export function FloatingChat() {
@@ -179,12 +231,23 @@ export function FloatingChat() {
     messages,
     selectedAgentId,
     isLoading,
+    isStreaming,
+    streamingContent,
+    activeToolCalls,
+    modelOverride,
     toggle,
     close,
     toggleExpand,
     setSelectedAgentId,
     addMessage,
+    updateLastMessage,
     setLoading,
+    setStreaming,
+    setStreamingContent,
+    appendStreamingContent,
+    addActiveToolCall,
+    clearActiveToolCalls,
+    setModelOverride,
     clearMessages,
     newConversation,
     showHistory,
@@ -192,6 +255,7 @@ export function FloatingChat() {
     conversations,
     loadConversation,
     creationMode,
+    enterCreationMode,
     exitCreationMode,
   } = useChatStore();
 
@@ -202,6 +266,7 @@ export function FloatingChat() {
   const inputRef = useRef<HTMLInputElement>(null);
   const collapsedInputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const { data: agents } = useAgents();
   const updateAgent = useUpdateAgent();
@@ -217,7 +282,7 @@ export function FloatingChat() {
 
   // Auto-set agent context when navigating to an agent page — start fresh convo
   useEffect(() => {
-    if (creationMode) return; // Don't auto-switch during creation
+    if (creationMode) return;
     if (pageAgentId && pageAgentId !== selectedAgentId) {
       setSelectedAgentId(pageAgentId);
       if (messages.length > 0) {
@@ -231,7 +296,7 @@ export function FloatingChat() {
     function handleKeyDown(e: KeyboardEvent) {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
-        if (creationMode) return; // Don't toggle during creation
+        if (creationMode) return;
         toggle();
       }
       if (e.key === 'Escape' && isOpen) {
@@ -251,7 +316,7 @@ export function FloatingChat() {
     if (!creationMode) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages, creationMode]);
+  }, [messages, streamingContent, activeToolCalls, creationMode]);
 
   // Scroll to bottom on new creation messages
   useEffect(() => {
@@ -278,50 +343,134 @@ export function FloatingChat() {
     }
   }, [creationFlow.createdAgentId, creationMode, exitCreationMode, navigate]);
 
+  // Cleanup abort controller on unmount
+  useEffect(() => {
+    return () => {
+      abortControllerRef.current?.abort();
+    };
+  }, []);
+
   const sendMessage = useCallback(async () => {
     const trimmed = inputValue.trim();
-    if (!trimmed || isLoading) return;
+    if (!trimmed || isLoading || isStreaming) return;
+
+    // Check for creation intent
+    if (isCreationIntent(trimmed) && !creationMode) {
+      setInputValue('');
+      enterCreationMode();
+      return;
+    }
+
+    // Parse model override prefix
+    const { model: msgModelOverride, cleanText } = parseModelOverride(trimmed);
+    if (msgModelOverride) {
+      setModelOverride(msgModelOverride);
+    }
+    const effectiveModel = msgModelOverride || modelOverride;
 
     const userMessage = {
       id: generateMessageId(),
       role: 'user' as const,
-      content: trimmed,
+      content: cleanText || trimmed,
     };
     addMessage(userMessage);
     setInputValue('');
     setLoading(true);
+    setStreaming(true);
+    setStreamingContent('');
+    clearActiveToolCalls();
+
+    // Build conversation history for the API (role + content only)
+    const conversationHistory = [...messages, userMessage].map(m => ({
+      role: m.role,
+      content: m.content,
+    }));
+
+    const agentId = selectedAgentId || pageAgentId;
 
     try {
-      const agentId = selectedAgentId || pageAgentId;
+      // Abort any previous stream
+      abortControllerRef.current?.abort();
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
 
-      // Don't trigger agent analysis for simple greetings
-      const greetings = ['hi', 'hello', 'hey', 'sup', 'howdy', 'hola', 'yo'];
-      if (agentId && greetings.includes(trimmed.toLowerCase())) {
-        const agentName = agents?.find(a => a.id === agentId)?.name || 'this agent';
-        addMessage({
-          id: generateMessageId(),
-          role: 'assistant',
-          content: `Hi! I can help you update "${agentName}". Try things like:\n\u2022 "Respond to all messages"\n\u2022 "Add the Linear tool"\n\u2022 "Change the model to Opus"\n\u2022 "Update the instructions to focus on customer support"`,
-        });
-        setLoading(false);
-        return;
-      }
-
-      const result = await api.post<ChatResponse>('/chat', {
-        message: trimmed,
-        agentId: agentId || undefined,
-        context: pageContext,
+      const response = await fetch('/api/v1/chat/stream', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          messages: conversationHistory,
+          agentId: agentId || undefined,
+          context: pageContext,
+          modelOverride: effectiveModel || undefined,
+        }),
+        signal: controller.signal,
       });
 
+      if (!response.ok) {
+        throw new Error(`Request failed (${response.status})`);
+      }
+
+      const reader = response.body?.getReader();
+      if (!reader) throw new Error('No response body');
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let fullText = '';
+      let proposedChanges: Record<string, { from: unknown; to: unknown }> | undefined;
+      let canApply: boolean | undefined;
+      let toolCallsUsed: string[] | undefined;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          try {
+            const event: StreamEvent = JSON.parse(line.slice(6));
+
+            switch (event.type) {
+              case 'text':
+                fullText += event.content || '';
+                appendStreamingContent(event.content || '');
+                break;
+              case 'tool_call':
+                addActiveToolCall({ name: event.name || '', label: event.label || '' });
+                break;
+              case 'proposed_changes':
+                proposedChanges = event.changes;
+                canApply = event.canApply;
+                break;
+              case 'done':
+                toolCallsUsed = event.toolCallsUsed;
+                break;
+              case 'error':
+                fullText = event.content || 'Something went wrong. Please try again.';
+                break;
+            }
+          } catch {
+            // Invalid JSON line — skip
+          }
+        }
+      }
+
+      // Finalize: add the complete assistant message
       addMessage({
         id: generateMessageId(),
         role: 'assistant',
-        content: result.response,
-        proposedChanges: result.proposedChanges,
-        canApply: result.canApply,
+        content: fullText,
+        proposedChanges,
+        canApply,
         agentId: agentId || undefined,
+        toolCallsUsed,
       });
     } catch (err: any) {
+      if (err.name === 'AbortError') return;
       addMessage({
         id: generateMessageId(),
         role: 'assistant',
@@ -329,16 +478,29 @@ export function FloatingChat() {
       });
     } finally {
       setLoading(false);
+      setStreaming(false);
+      setStreamingContent('');
+      clearActiveToolCalls();
     }
   }, [
     inputValue,
     isLoading,
+    isStreaming,
     selectedAgentId,
     pageAgentId,
     pageContext,
+    messages,
+    modelOverride,
+    creationMode,
     addMessage,
     setLoading,
-    agents,
+    setStreaming,
+    setStreamingContent,
+    appendStreamingContent,
+    clearActiveToolCalls,
+    addActiveToolCall,
+    setModelOverride,
+    enterCreationMode,
   ]);
 
   const handleApplyChanges = useCallback(
@@ -399,6 +561,21 @@ export function FloatingChat() {
   const placeholder = creationMode
     ? (creationFlow.inputDisabled ? 'Choose an option above...' : 'Describe what your agent should do...')
     : getPlaceholder(pageContext, currentAgent?.name);
+
+  // ── Context-aware suggestions ──
+
+  const suggestions = currentAgent
+    ? [
+        'Why is this agent failing?',
+        'Show recent errors',
+        'Improve instructions',
+        'Change the model',
+      ]
+    : [
+        'Create a new agent',
+        'Which agent has the most errors?',
+        'Show overall usage',
+      ];
 
   // Collapsed bar (hidden during creation mode)
   if (!isOpen) {
@@ -542,6 +719,18 @@ export function FloatingChat() {
         <div className="flex items-center gap-2">
           <Sparkles className="h-4 w-4 text-brand" />
           <span className="text-sm font-semibold text-warm-text">AI Assistant</span>
+          {/* Model override badge */}
+          {modelOverride && (
+            <button
+              onClick={() => setModelOverride(null)}
+              className="flex items-center gap-1 rounded-full bg-brand/10 px-2 py-0.5 text-[10px] font-medium text-brand hover:bg-brand/20 transition-colors"
+              title="Click to clear model override"
+            >
+              <Zap className="h-2.5 w-2.5" />
+              {modelOverride.charAt(0).toUpperCase() + modelOverride.slice(1)}
+              <X className="h-2.5 w-2.5" />
+            </button>
+          )}
         </div>
         <div className="flex items-center gap-1">
           {/* New Chat button */}
@@ -668,32 +857,30 @@ export function FloatingChat() {
           <div className="flex flex-col items-center justify-center py-6 gap-3">
             <p className="text-xs text-warm-text-secondary/60">
               {currentAgent
-                ? `Ask questions or describe changes for "${currentAgent.name}"`
-                : 'Select an agent to update, or ask a general question'}
+                ? `Ask questions or diagnose issues with "${currentAgent.name}"`
+                : 'Ask anything about your agents or workspace'}
             </p>
-            {currentAgent && (
-              <div className="flex flex-wrap gap-1.5 justify-center max-w-[280px]">
-                {[
-                  'Change the model',
-                  'Update instructions',
-                  'Add a tool',
-                  'Respond to all messages',
-                ].map((suggestion) => (
-                  <button
-                    key={suggestion}
-                    onClick={() => {
+            <div className="flex flex-wrap gap-1.5 justify-center max-w-[320px]">
+              {suggestions.map((suggestion) => (
+                <button
+                  key={suggestion}
+                  onClick={() => {
+                    if (suggestion === 'Create a new agent') {
+                      enterCreationMode();
+                    } else {
                       setInputValue(suggestion);
                       setTimeout(() => inputRef.current?.focus(), 0);
-                    }}
-                    className="rounded-full border border-[#E0DED9] px-2.5 py-1 text-[11px] text-warm-text-secondary hover:bg-warm-bg hover:text-warm-text transition-colors"
-                  >
-                    {suggestion}
-                  </button>
-                ))}
-              </div>
-            )}
+                    }
+                  }}
+                  className="rounded-full border border-[#E0DED9] px-2.5 py-1 text-[11px] text-warm-text-secondary hover:bg-warm-bg hover:text-warm-text transition-colors"
+                >
+                  {suggestion}
+                </button>
+              ))}
+            </div>
           </div>
         )}
+
         {messages.map((msg) => (
           <div
             key={msg.id}
@@ -707,7 +894,18 @@ export function FloatingChat() {
                   : 'border border-[#E0DED9] bg-white text-warm-text',
               )}
             >
-              <p className="whitespace-pre-wrap">{msg.content}</p>
+              <div className="whitespace-pre-wrap">{renderContent(msg.content)}</div>
+
+              {/* Tool calls used indicator */}
+              {msg.toolCallsUsed && msg.toolCallsUsed.length > 0 && (
+                <div className="mt-1.5 flex flex-wrap gap-1">
+                  {msg.toolCallsUsed.map((tool, i) => (
+                    <span key={i} className="rounded-full bg-brand/5 px-2 py-0.5 text-[10px] text-brand/70">
+                      {tool}
+                    </span>
+                  ))}
+                </div>
+              )}
 
               {/* Proposed changes diff */}
               {msg.proposedChanges && Object.keys(msg.proposedChanges).length > 0 && (
@@ -758,7 +956,44 @@ export function FloatingChat() {
           </div>
         ))}
 
-        {isLoading && (
+        {/* Streaming content + tool call indicators */}
+        {isStreaming && (
+          <div className="flex justify-start">
+            <div className="max-w-[85%] rounded-2xl border border-[#E0DED9] bg-white px-3.5 py-2 text-sm text-warm-text">
+              {streamingContent ? (
+                <div className="whitespace-pre-wrap">{renderContent(streamingContent)}</div>
+              ) : activeToolCalls.length > 0 ? (
+                <div className="flex items-center gap-2 text-warm-text-secondary">
+                  <div className="flex gap-1">
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-brand/40" style={{ animationDelay: '0ms' }} />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-brand/40" style={{ animationDelay: '150ms' }} />
+                    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-brand/40" style={{ animationDelay: '300ms' }} />
+                  </div>
+                  <span className="text-xs">{activeToolCalls[activeToolCalls.length - 1]?.label}</span>
+                </div>
+              ) : (
+                <div className="flex gap-1">
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-warm-text-secondary/40" style={{ animationDelay: '0ms' }} />
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-warm-text-secondary/40" style={{ animationDelay: '150ms' }} />
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-warm-text-secondary/40" style={{ animationDelay: '300ms' }} />
+                </div>
+              )}
+              {/* Show tool calls below streaming content */}
+              {streamingContent && activeToolCalls.length > 0 && (
+                <div className="mt-1.5 flex items-center gap-2 text-warm-text-secondary">
+                  <div className="flex gap-1">
+                    <span className="h-1 w-1 animate-bounce rounded-full bg-brand/40" style={{ animationDelay: '0ms' }} />
+                    <span className="h-1 w-1 animate-bounce rounded-full bg-brand/40" style={{ animationDelay: '150ms' }} />
+                    <span className="h-1 w-1 animate-bounce rounded-full bg-brand/40" style={{ animationDelay: '300ms' }} />
+                  </div>
+                  <span className="text-[10px]">{activeToolCalls[activeToolCalls.length - 1]?.label}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {isLoading && !isStreaming && (
           <div className="flex justify-start">
             <div className="rounded-2xl border border-[#E0DED9] bg-white px-3.5 py-2">
               <div className="flex gap-1">
@@ -781,9 +1016,9 @@ export function FloatingChat() {
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Type a message..."
+            placeholder={modelOverride ? `Using ${modelOverride.charAt(0).toUpperCase() + modelOverride.slice(1)} — type a message...` : 'Type a message...'}
             className="flex-1 bg-transparent text-sm text-warm-text placeholder:text-warm-text-secondary/50 outline-none"
-            disabled={isLoading}
+            disabled={isLoading || isStreaming}
           />
           {messages.length > 0 && (
             <button
@@ -795,7 +1030,7 @@ export function FloatingChat() {
           )}
           <button
             onClick={sendMessage}
-            disabled={!inputValue.trim() || isLoading}
+            disabled={!inputValue.trim() || isLoading || isStreaming}
             className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand text-white transition-colors hover:bg-brand/90 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Send className="h-3.5 w-3.5" />

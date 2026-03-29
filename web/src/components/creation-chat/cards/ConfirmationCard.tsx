@@ -84,7 +84,7 @@ export function ConfirmationCard({ config, onConfirm, onChange, isCreating, disa
           const base = t.replace(/-read$/, '').replace(/-write$/, '').replace(/-search$/, '');
           const isWrite = t.endsWith('-write');
           const name = base.charAt(0).toUpperCase() + base.slice(1).replace(/[-_]/g, ' ');
-          return isWrite ? `${name} (read + write)` : name;
+          return isWrite ? `${name} (view & edit)` : name;
         })
     : [];
 

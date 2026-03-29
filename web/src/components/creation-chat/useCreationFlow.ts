@@ -296,25 +296,26 @@ export function useCreationFlow(): CreationFlow {
     const validGroups = integrationGroups.filter(g => g.readTool || g.writeTool);
 
     if (validGroups.length === 0) {
-      // No integrations available — show friendly message and auto-continue button
+      // No integrations available — show friendly message and continue button
       addMsg({
         id: msgId(),
         role: 'assistant',
-        content: 'No connected services yet. Core tools like file access, web search, and code analysis are always included. You can add services later from the agent settings.',
-        cardType: 'yes-no',
+        content: 'No connected services yet. Core tools like file access, web search, and code analysis are always included.',
+        cardType: 'multi-choice',
         cardProps: {
-          yesLabel: 'Continue without tools',
-          noLabel: 'Continue without tools',
+          options: [
+            { value: 'continue', label: 'Continue', description: 'You can add services later from agent settings' },
+          ],
         },
       });
       return;
     }
 
-    // Pre-select tools from analysis
+    // Pre-select tools from analysis (map to group base names for MultiSelectCard)
     const analysisTools = config.tools || [];
-    const preSelected = analysisTools.filter(t => {
-      return validGroups.some(g => g.readTool === t || g.writeTool === t);
-    });
+    const preSelected = validGroups
+      .filter(g => analysisTools.some(t => g.readTool === t || g.writeTool === t))
+      .map(g => g.base);
 
     const options = validGroups.map((g) => ({
       value: g.base,
@@ -577,10 +578,20 @@ export function useCreationFlow(): CreationFlow {
 
     // Recommended tools
     if (customTools.length > 0) {
-      const toolNames = customTools
-        .map((t: string) => friendlyToolName(t))
-        .filter((v: string, i: number, a: string[]) => a.indexOf(v) === i);
-      text += `**Services:** ${toolNames.join(', ')}\n`;
+      // Group by friendly name and determine capabilities
+      const toolGroups: Record<string, { hasRead: boolean; hasWrite: boolean }> = {};
+      for (const t of customTools) {
+        const name = friendlyToolName(t);
+        if (!toolGroups[name]) toolGroups[name] = { hasRead: false, hasWrite: false };
+        if (t.endsWith('-read') || t.endsWith('-search')) toolGroups[name].hasRead = true;
+        if (t.endsWith('-write')) toolGroups[name].hasWrite = true;
+      }
+      const toolLabels = Object.entries(toolGroups).map(([name, caps]) => {
+        if (caps.hasRead && caps.hasWrite) return `${name} (view & edit)`;
+        if (caps.hasWrite) return `${name} (edit)`;
+        return name;
+      });
+      text += `**Services:** ${toolLabels.join(', ')}\n`;
     }
 
     // Triggers
@@ -945,9 +956,8 @@ export function useCreationFlow(): CreationFlow {
         }
 
         case 'TOOLS': {
-          // Handle the "no tools available" yes-no card
-          if (typeof response === 'boolean') {
-            // User clicked "Continue without tools"
+          // Handle the "no tools available" multi-choice card
+          if (response === 'continue') {
             goToEffort();
             break;
           }

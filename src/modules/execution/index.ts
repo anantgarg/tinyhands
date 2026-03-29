@@ -64,7 +64,7 @@ export async function createRunRecord(workspaceId: string, data: JobData, jobId:
 const ALLOWED_RUN_RECORD_COLUMNS = new Set([
   'output', 'status', 'input_tokens', 'output_tokens', 'estimated_cost_usd',
   'duration_ms', 'queue_wait_ms', 'context_tokens_injected', 'tool_calls_count',
-  'model', 'completed_at',
+  'model', 'completed_at', 'conversation_trace',
 ]);
 
 export async function updateRunRecord(workspaceId: string, id: string, updates: Partial<RunRecord>): Promise<void> {
@@ -541,6 +541,12 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
       duration_ms: durationMs,
       tool_calls_count: outputData.toolCallsCount,
       completed_at: new Date().toISOString(),
+      conversation_trace: allLogs || undefined,
+    });
+
+    // Parse and store individual tool calls from the conversation trace
+    parseAndStoreToolCalls(workspaceId, runRecord.id, allLogs).catch(err => {
+      logger.warn('Failed to store tool calls', { traceId: data.traceId, error: String(err) });
     });
 
     // Fire-and-forget audit log for the run
@@ -667,6 +673,99 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
 
     throw err;
   }
+}
+
+// ── Tool Call Parsing & Trace Helpers ──
+
+interface ParsedToolCall {
+  name: string;
+  input: Record<string, unknown> | null;
+  output: string | null;
+  error: string | null;
+  sequence: number;
+}
+
+async function parseAndStoreToolCalls(workspaceId: string, runId: string, allLogs: string): Promise<void> {
+  if (!allLogs) return;
+
+  const toolCalls: ParsedToolCall[] = [];
+  let sequence = 0;
+  let pendingToolUse: { name: string; input: Record<string, unknown> | null } | null = null;
+
+  for (const line of allLogs.split('\n')) {
+    try {
+      const event = JSON.parse(line);
+
+      // Format 1: Complete assistant messages
+      if (event.type === 'assistant' && event.message?.content) {
+        for (const block of event.message.content) {
+          if (block.type === 'tool_use') {
+            pendingToolUse = { name: block.name || 'unknown', input: block.input || null };
+          }
+        }
+      }
+
+      // Format 2: Granular stream events
+      if (event.type === 'content_block_start' && event.content_block?.type === 'tool_use') {
+        pendingToolUse = { name: event.content_block.name || 'unknown', input: event.content_block.input || null };
+      }
+
+      // Tool result (appears after tool_use in both formats)
+      if (event.type === 'tool' && event.message?.content) {
+        const resultText = Array.isArray(event.message.content)
+          ? event.message.content.map((b: any) => b.text || b.content || '').join('\n')
+          : String(event.message.content);
+        const isError = event.message.is_error === true || resultText.toLowerCase().startsWith('error');
+        toolCalls.push({
+          name: pendingToolUse?.name || 'unknown',
+          input: pendingToolUse?.input || null,
+          output: isError ? null : resultText.slice(0, 4000),
+          error: isError ? resultText.slice(0, 2000) : null,
+          sequence: sequence++,
+        });
+        pendingToolUse = null;
+      }
+    } catch {
+      // Not JSON — skip
+    }
+  }
+
+  // If we found a pending tool_use without a result, record it
+  if (pendingToolUse) {
+    toolCalls.push({
+      name: pendingToolUse.name,
+      input: pendingToolUse.input,
+      output: null,
+      error: 'No result received (possible timeout)',
+      sequence: sequence++,
+    });
+  }
+
+  if (toolCalls.length === 0) return;
+
+  // Batch insert tool calls
+  for (const tc of toolCalls) {
+    await execute(
+      `INSERT INTO tool_calls (id, run_id, workspace_id, tool_name, tool_input, tool_output, error, duration_ms, sequence_number)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+      [uuid(), runId, workspaceId, tc.name, tc.input ? JSON.stringify(tc.input) : null, tc.output, tc.error, 0, tc.sequence]
+    );
+  }
+}
+
+export async function getRunToolCalls(workspaceId: string, runId: string): Promise<import('../../types').ToolCallRecord[]> {
+  return query<import('../../types').ToolCallRecord>(
+    'SELECT * FROM tool_calls WHERE workspace_id = $1 AND run_id = $2 ORDER BY sequence_number ASC',
+    [workspaceId, runId]
+  );
+}
+
+export async function getRunTrace(workspaceId: string, runId: string): Promise<string | null> {
+  const row = await queryOne<{ conversation_trace: string | null }>(
+    'SELECT conversation_trace FROM run_history WHERE workspace_id = $1 AND id = $2',
+    [workspaceId, runId]
+  );
+  return row?.conversation_trace || null;
 }
 
 // ── Memory Extraction ──

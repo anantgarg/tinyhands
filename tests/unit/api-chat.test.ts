@@ -4,24 +4,12 @@ import express from 'express';
 
 // ── Mocks ──
 
-const mockGetAgent = vi.fn();
-const mockListAgents = vi.fn();
+const mockChatSync = vi.fn();
+const mockStreamChat = vi.fn();
 
-vi.mock('../../src/modules/agents', () => ({
-  getAgent: (...args: any[]) => mockGetAgent(...args),
-  listAgents: (...args: any[]) => mockListAgents(...args),
-}));
-
-const mockAnalyzeGoal = vi.fn();
-
-vi.mock('../../src/modules/agents/goal-analyzer', () => ({
-  analyzeGoal: (...args: any[]) => mockAnalyzeGoal(...args),
-}));
-
-const mockCanModifyAgent = vi.fn();
-
-vi.mock('../../src/modules/access-control', () => ({
-  canModifyAgent: (...args: any[]) => mockCanModifyAgent(...args),
+vi.mock('../../src/modules/chat-assistant', () => ({
+  chatSync: (...args: any[]) => mockChatSync(...args),
+  streamChat: (...args: any[]) => mockStreamChat(...args),
 }));
 
 vi.mock('../../src/utils/logger', () => ({
@@ -77,6 +65,54 @@ function makeRequest(
   });
 }
 
+function makeSSERequest(
+  app: express.Express,
+  path: string,
+  body: Record<string, any>,
+): Promise<{ status: number; events: any[] }> {
+  return new Promise((resolve, reject) => {
+    const server = app.listen(0, () => {
+      const addr = server.address();
+      if (!addr || typeof addr === 'string') {
+        server.close();
+        reject(new Error('Could not get server address'));
+        return;
+      }
+
+      const payload = JSON.stringify(body);
+      const options: http.RequestOptions = {
+        hostname: '127.0.0.1',
+        port: addr.port,
+        path,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(payload).toString(),
+        },
+      };
+
+      const req = http.request(options, (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          server.close();
+          const events = data.split('\n\n')
+            .filter(line => line.startsWith('data: '))
+            .map(line => {
+              try { return JSON.parse(line.slice(6)); } catch { return null; }
+            })
+            .filter(Boolean);
+          resolve({ status: res.statusCode || 0, events });
+        });
+      });
+
+      req.on('error', (err) => { server.close(); reject(err); });
+      req.write(payload);
+      req.end();
+    });
+  });
+}
+
 function createApp() {
   const app = express();
   app.use(express.json());
@@ -107,252 +143,222 @@ describe('Chat Routes', () => {
     app = createApp();
   });
 
-  describe('POST /chat', () => {
-    it('returns 400 when message is missing', async () => {
+  describe('POST /chat (non-streaming)', () => {
+    it('returns 400 when neither message nor messages is provided', async () => {
       const res = await makeRequest(app, 'POST', '/chat', {});
 
       expect(res.status).toBe(400);
-      expect(res.body).toEqual({ error: 'message is required' });
+      expect(res.body).toEqual({ error: 'message or messages is required' });
     });
 
-    it('returns 400 when message is not a string', async () => {
-      const res = await makeRequest(app, 'POST', '/chat', { message: 123 });
-
-      expect(res.status).toBe(400);
-      expect(res.body).toEqual({ error: 'message is required' });
-    });
-
-    it('returns general guidance when no agentId is provided', async () => {
-      mockListAgents.mockResolvedValueOnce([
-        { name: 'Bot1' },
-        { name: 'Bot2' },
-      ]);
+    it('calls chatSync with single message format', async () => {
+      mockChatSync.mockResolvedValueOnce({
+        response: 'Hello! I can help you with your agents.',
+        toolCallsUsed: [],
+      });
 
       const res = await makeRequest(app, 'POST', '/chat', {
-        message: 'How do I create an agent?',
+        message: 'Hello',
       });
 
       expect(res.status).toBe(200);
-      expect(res.body.response).toBeDefined();
-      expect(typeof res.body.response).toBe('string');
-      expect(mockListAgents).toHaveBeenCalledWith('W123');
+      expect(res.body.response).toBe('Hello! I can help you with your agents.');
+      expect(mockChatSync).toHaveBeenCalledWith({
+        messages: [{ role: 'user', content: 'Hello' }],
+        agentId: undefined,
+        context: 'general',
+        modelOverride: undefined,
+        workspaceId: 'W123',
+        userId: 'U123',
+      });
     });
 
-    it('returns dashboard context response', async () => {
-      mockListAgents.mockResolvedValueOnce([{ name: 'Bot1' }]);
+    it('calls chatSync with messages array format', async () => {
+      mockChatSync.mockResolvedValueOnce({
+        response: 'Based on our conversation...',
+      });
 
       const res = await makeRequest(app, 'POST', '/chat', {
-        message: 'What agents do I have?',
-        context: 'dashboard',
+        messages: [
+          { role: 'user', content: 'Tell me about my agents' },
+          { role: 'assistant', content: 'You have 3 agents.' },
+          { role: 'user', content: 'Which one has errors?' },
+        ],
       });
 
       expect(res.status).toBe(200);
-      expect(res.body.response).toContain('1 agent');
-    });
-
-    it('returns tools context response', async () => {
-      mockListAgents.mockResolvedValueOnce([]);
-
-      const res = await makeRequest(app, 'POST', '/chat', {
-        message: 'How do I add a tool?',
-        context: 'tools',
-      });
-
-      expect(res.status).toBe(200);
-      expect(res.body.response).toContain('tool');
-    });
-
-    it('returns kb context response', async () => {
-      mockListAgents.mockResolvedValueOnce([]);
-
-      const res = await makeRequest(app, 'POST', '/chat', {
-        message: 'How do I manage KB?',
-        context: 'kb',
-      });
-
-      expect(res.status).toBe(200);
-      expect(res.body.response).toContain('knowledge base');
-    });
-
-    it('returns 404 when agentId is provided but agent not found', async () => {
-      mockGetAgent.mockResolvedValueOnce(null);
-
-      const res = await makeRequest(app, 'POST', '/chat', {
-        message: 'Update this agent',
-        agentId: 'nonexistent',
-      });
-
-      expect(res.status).toBe(404);
-      expect(res.body).toEqual({ error: 'Agent not found' });
-    });
-
-    it('analyzes goal and returns proposed changes for agent context', async () => {
-      const agent = {
-        id: 'a1',
-        name: 'Test Bot',
-        system_prompt: 'You are a test bot',
-        model: 'sonnet',
-        tools: ['Read'],
-        memory_enabled: false,
-        respond_to_all_messages: false,
-        mentions_only: false,
-      };
-      mockGetAgent.mockResolvedValueOnce(agent);
-      mockCanModifyAgent.mockResolvedValueOnce(true);
-      mockAnalyzeGoal.mockResolvedValueOnce({
-        agent_name: 'Test Bot',
-        system_prompt: 'You are an updated test bot',
-        model: 'sonnet',
-        tools: ['Read', 'Write'],
-        memory_enabled: true,
-        respond_to_all_messages: false,
-        mentions_only: false,
-        summary: 'Updated the prompt and enabled memory.',
-      });
-
-      const res = await makeRequest(app, 'POST', '/chat', {
-        message: 'Enable memory and update the prompt',
-        agentId: 'a1',
-      });
-
-      expect(res.status).toBe(200);
-      expect(res.body.proposedChanges).toBeDefined();
-      expect(res.body.proposedChanges.systemPrompt).toEqual({
-        from: 'You are a test bot',
-        to: 'You are an updated test bot',
-      });
-      expect(res.body.proposedChanges.memoryEnabled).toEqual({
-        from: false,
-        to: true,
-      });
-      expect(res.body.proposedChanges.tools).toEqual({
-        from: ['Read'],
-        to: ['Read', 'Write'],
-      });
-      expect(res.body.canApply).toBe(true);
-      expect(mockAnalyzeGoal).toHaveBeenCalledWith(
-        'W123', 'Enable memory and update the prompt',
-        'You are a test bot', 'U123', 'Test Bot',
+      expect(mockChatSync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          messages: [
+            { role: 'user', content: 'Tell me about my agents' },
+            { role: 'assistant', content: 'You have 3 agents.' },
+            { role: 'user', content: 'Which one has errors?' },
+          ],
+        }),
       );
     });
 
-    it('returns canApply false when user cannot modify agent', async () => {
-      const agent = {
-        id: 'a1',
-        name: 'Test Bot',
-        system_prompt: 'You are a test bot',
-        model: 'sonnet',
-        tools: ['Read'],
-        memory_enabled: false,
-        respond_to_all_messages: false,
-        mentions_only: false,
-      };
-      mockGetAgent.mockResolvedValueOnce(agent);
-      mockCanModifyAgent.mockResolvedValueOnce(false);
-      mockAnalyzeGoal.mockResolvedValueOnce({
-        agent_name: 'Test Bot',
-        system_prompt: 'Updated prompt',
-        model: 'sonnet',
-        tools: ['Read'],
-        memory_enabled: false,
-        respond_to_all_messages: false,
-        mentions_only: false,
-        summary: 'Updated the prompt.',
+    it('returns proposed changes from chatSync', async () => {
+      mockChatSync.mockResolvedValueOnce({
+        response: 'I have 1 proposed change for "Test Bot".',
+        proposedChanges: {
+          model: { from: 'sonnet', to: 'opus' },
+        },
+        canApply: true,
       });
 
       const res = await makeRequest(app, 'POST', '/chat', {
-        message: 'Change the prompt',
+        message: 'Change the model to Opus',
         agentId: 'a1',
       });
 
       expect(res.status).toBe(200);
-      expect(res.body.canApply).toBe(false);
-      expect(res.body.response).toContain('do not have permission');
+      expect(res.body.proposedChanges).toEqual({
+        model: { from: 'sonnet', to: 'opus' },
+      });
+      expect(res.body.canApply).toBe(true);
     });
 
-    it('returns no changes when agent config matches', async () => {
-      const agent = {
-        id: 'a1',
-        name: 'Test Bot',
-        system_prompt: 'You are a test bot',
-        model: 'sonnet',
-        tools: ['Read'],
-        memory_enabled: false,
-        respond_to_all_messages: false,
-        mentions_only: false,
-      };
-      mockGetAgent.mockResolvedValueOnce(agent);
-      mockCanModifyAgent.mockResolvedValueOnce(true);
-      mockAnalyzeGoal.mockResolvedValueOnce({
-        agent_name: 'Test Bot',
-        system_prompt: 'You are a test bot',
-        model: 'sonnet',
-        tools: ['Read'],
-        memory_enabled: false,
-        respond_to_all_messages: false,
-        mentions_only: false,
-        summary: 'Already configured as described.',
+    it('passes model override when valid', async () => {
+      mockChatSync.mockResolvedValueOnce({ response: 'Done.' });
+
+      await makeRequest(app, 'POST', '/chat', {
+        message: 'Analyze this',
+        modelOverride: 'opus',
       });
 
-      const res = await makeRequest(app, 'POST', '/chat', {
-        message: 'Keep everything the same',
-        agentId: 'a1',
-      });
-
-      expect(res.status).toBe(200);
-      expect(res.body.proposedChanges).toBeUndefined();
-      expect(res.body.response).toContain('No changes needed');
+      expect(mockChatSync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          modelOverride: 'opus',
+        }),
+      );
     });
 
-    it('handles goal analysis failure gracefully', async () => {
-      const agent = {
-        id: 'a1',
-        name: 'Test Bot',
-        system_prompt: 'You are a test bot',
-        model: 'sonnet',
-        tools: [],
-        memory_enabled: false,
-        respond_to_all_messages: false,
-        mentions_only: false,
-      };
-      mockGetAgent.mockResolvedValueOnce(agent);
-      mockCanModifyAgent.mockResolvedValueOnce(true);
-      mockAnalyzeGoal.mockRejectedValueOnce(new Error('API timeout'));
+    it('ignores invalid model override', async () => {
+      mockChatSync.mockResolvedValueOnce({ response: 'Done.' });
 
-      const res = await makeRequest(app, 'POST', '/chat', {
-        message: 'Do something',
-        agentId: 'a1',
+      await makeRequest(app, 'POST', '/chat', {
+        message: 'Analyze this',
+        modelOverride: 'gpt-4',
       });
 
-      expect(res.status).toBe(200);
-      expect(res.body.response).toContain('I had trouble processing your request');
+      expect(mockChatSync).toHaveBeenCalledWith(
+        expect.objectContaining({
+          modelOverride: undefined,
+        }),
+      );
     });
 
     it('returns 500 on unexpected error', async () => {
-      // Simulate error in getSessionUser by not setting up middleware
-      const brokenApp = express();
-      brokenApp.use(express.json());
-      brokenApp.use((req: any, _res: any, next: any) => {
-        // Intentionally not setting sessionUser to cause error
-        req.sessionUser = {
-          userId: 'U123',
-          workspaceId: 'W123',
-          displayName: 'Test',
-          avatarUrl: '',
-          platformRole: 'admin',
-        };
-        next();
-      });
-      brokenApp.use('/chat', chatRoutes);
+      mockChatSync.mockRejectedValueOnce(new Error('DB connection failed'));
 
-      mockListAgents.mockRejectedValueOnce(new Error('DB connection failed'));
-
-      const res = await makeRequest(brokenApp, 'POST', '/chat', {
+      const res = await makeRequest(app, 'POST', '/chat', {
         message: 'Hello',
       });
 
       expect(res.status).toBe(500);
       expect(res.body).toEqual({ error: 'Failed to process chat message' });
+    });
+  });
+
+  describe('POST /chat/stream (SSE)', () => {
+    it('returns 400 when messages is missing', async () => {
+      const res = await makeRequest(app, 'POST', '/chat/stream', {});
+
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({ error: 'messages array is required' });
+    });
+
+    it('returns 400 when messages is empty array', async () => {
+      const res = await makeRequest(app, 'POST', '/chat/stream', {
+        messages: [],
+      });
+
+      expect(res.status).toBe(400);
+      expect(res.body).toEqual({ error: 'messages array is required' });
+    });
+
+    it('streams events from streamChat', async () => {
+      mockStreamChat.mockImplementation(async (_req: any, onEvent: any) => {
+        onEvent({ type: 'text', content: 'Hello ' });
+        onEvent({ type: 'text', content: 'world!' });
+        onEvent({ type: 'done', toolCallsUsed: [] });
+      });
+
+      const result = await makeSSERequest(app, '/chat/stream', {
+        messages: [{ role: 'user', content: 'Hello' }],
+      });
+
+      expect(result.status).toBe(200);
+      expect(result.events).toHaveLength(3);
+      expect(result.events[0]).toEqual({ type: 'text', content: 'Hello ' });
+      expect(result.events[1]).toEqual({ type: 'text', content: 'world!' });
+      expect(result.events[2]).toEqual({ type: 'done', toolCallsUsed: [] });
+    });
+
+    it('streams tool_call events during diagnostic analysis', async () => {
+      mockStreamChat.mockImplementation(async (_req: any, onEvent: any) => {
+        onEvent({ type: 'tool_call', name: 'get_recent_runs', label: 'Checking recent activity...' });
+        onEvent({ type: 'tool_call', name: 'get_error_rates', label: 'Checking error rates...' });
+        onEvent({ type: 'text', content: 'Your agent has a 25% error rate.' });
+        onEvent({ type: 'done', toolCallsUsed: ['Checking recent activity', 'Checking error rates'] });
+      });
+
+      const result = await makeSSERequest(app, '/chat/stream', {
+        messages: [{ role: 'user', content: 'Why is my agent failing?' }],
+        agentId: 'a1',
+      });
+
+      expect(result.events[0]).toEqual({
+        type: 'tool_call',
+        name: 'get_recent_runs',
+        label: 'Checking recent activity...',
+      });
+      expect(result.events.filter(e => e.type === 'tool_call')).toHaveLength(2);
+    });
+
+    it('streams proposed_changes events', async () => {
+      mockStreamChat.mockImplementation(async (_req: any, onEvent: any) => {
+        onEvent({ type: 'text', content: 'I suggest changing the model.' });
+        onEvent({
+          type: 'proposed_changes',
+          changes: { model: { from: 'sonnet', to: 'opus' } },
+          canApply: true,
+        });
+        onEvent({ type: 'done', toolCallsUsed: [] });
+      });
+
+      const result = await makeSSERequest(app, '/chat/stream', {
+        messages: [{ role: 'user', content: 'Use Opus' }],
+        agentId: 'a1',
+      });
+
+      const changeEvent = result.events.find(e => e.type === 'proposed_changes');
+      expect(changeEvent).toBeDefined();
+      expect(changeEvent.changes).toEqual({ model: { from: 'sonnet', to: 'opus' } });
+      expect(changeEvent.canApply).toBe(true);
+    });
+
+    it('passes agentId and context to streamChat', async () => {
+      mockStreamChat.mockImplementation(async (_req: any, onEvent: any) => {
+        onEvent({ type: 'done', toolCallsUsed: [] });
+      });
+
+      await makeSSERequest(app, '/chat/stream', {
+        messages: [{ role: 'user', content: 'Why is this failing?' }],
+        agentId: 'agent-123',
+        context: 'agent',
+      });
+
+      expect(mockStreamChat).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentId: 'agent-123',
+          context: 'agent',
+          workspaceId: 'W123',
+          userId: 'U123',
+        }),
+        expect.any(Function),
+      );
     });
   });
 });

@@ -101,6 +101,20 @@ export interface RunRecord {
   slack_user_id: string | null;
   created_at: string;
   completed_at: string | null;
+  conversation_trace?: string;
+}
+
+export interface ToolCallRecord {
+  id: string;
+  run_id: string;
+  workspace_id: string;
+  tool_name: string;
+  tool_input: Record<string, unknown> | null;
+  tool_output: string | null;
+  error: string | null;
+  duration_ms: number;
+  sequence_number: number;
+  created_at: string;
 }
 
 export interface JobData {
