@@ -4,23 +4,35 @@ import { logger } from '../../utils/logger';
 
 const router = Router();
 
-// GET /slack/channels — List Slack channels
+// GET /slack/channels — List ALL Slack channels (auto-paginates)
 router.get('/channels', async (req, res: Response) => {
   try {
     const client = getSlackApp().client;
-    const limit = parseInt(req.query.limit as string) || 200;
-    const cursor = req.query.cursor as string | undefined;
     const types = (req.query.types as string) || 'public_channel,private_channel';
+    const allChannels: any[] = [];
+    let cursor: string | undefined;
 
-    const result = await client.conversations.list({
-      limit,
-      cursor,
-      types,
-      exclude_archived: true,
+    // Auto-paginate to get ALL channels
+    do {
+      const result = await client.conversations.list({
+        limit: 200,
+        cursor,
+        types,
+        exclude_archived: true,
+      });
+      allChannels.push(...(result.channels || []));
+      cursor = result.response_metadata?.next_cursor || undefined;
+    } while (cursor);
+
+    // Sort: private first (user's channels), then public, alphabetical within each
+    allChannels.sort((a, b) => {
+      if (a.is_private && !b.is_private) return -1;
+      if (!a.is_private && b.is_private) return 1;
+      return (a.name || '').localeCompare(b.name || '');
     });
 
     res.json({
-      channels: (result.channels || []).map(c => ({
+      channels: allChannels.map(c => ({
         id: c.id,
         name: c.name,
         isPrivate: c.is_private,
@@ -29,7 +41,7 @@ router.get('/channels', async (req, res: Response) => {
         topic: (c as any).topic?.value || '',
         purpose: (c as any).purpose?.value || '',
       })),
-      nextCursor: result.response_metadata?.next_cursor || null,
+      nextCursor: null,
     });
   } catch (err: any) {
     logger.error('List Slack channels error', { error: err.message });
