@@ -10,11 +10,12 @@ Claude MUST check this before making changes and update it after commits.
 ### Creating Agents
 
 **Methods:**
-- **Dashboard conversational chat** (primary) -- AI-guided conversation via FloatingChat in creation mode
+- **AI Chat** (primary) -- AI-guided conversation via FloatingChat in creation mode. Opens automatically at `/agents/new`.
+- **Manual Wizard** (alternative) -- Traditional 4-step form (Describe, Identity, Settings, Tools). Accessible by clicking X on the AI chat or "Or set up manually" link. User can summon the AI copilot anytime from the manual wizard via the floating sparkle button (✨) or Cmd+K.
 - **Slack `/new-agent`** -- redirects to dashboard
 - **API** -- `POST /api/v1/agents`
 
-**Conversational Creation Flow (FloatingChat in creation mode):**
+**AI Chat Creation Flow (FloatingChat in creation mode):**
 
 When user navigates to `/agents/new`, the FloatingChat opens in creation mode (80% viewport height, 640px reading width, centered). An AI-guided conversation walks them through:
 
@@ -57,7 +58,7 @@ Skip rules:
 - **Rich analysis summary**: After analyzing, shows agent name, recommended tools with reasoning, suggested triggers, model choice, and memory recommendation.
 - **System prompt review**: PROMPT_REVIEW phase shows a collapsible PromptPreviewCard. User can "Looks good" or "Let me edit" (re-runs analyzer with changes).
 - **Proper tool detection**: Groups integrations (HubSpot read+write = "HubSpot"). Shows connection status. Pre-selects from analysis. Friendly "no services yet" message if none configured.
-- **Channel improvements**: Private channels show 🔒 prefix. "Create a new channel" as first dropdown option.
+- **Channel improvements**: Private channels show 🔒 prefix. "Create a new channel" as first dropdown option. Help text shown: "Don't see your channel? Private channels need TinyHands to be invited first. Use /invite @TinyHands in the channel." Refresh button to refetch channels after inviting the bot. Channel API auto-paginates to return ALL workspace channels.
 - **Confirmation card sections**: Agent, Channel, Response Mode, Tools, Triggers, Behavior, Access, Instructions (collapsible prompt).
 - **Copilot on manual wizard**: Floating sparkle button (✨) in bottom-right when using manual wizard. Opens FloatingChat to help fill fields. Also accessible via Cmd+K.
 
@@ -1187,6 +1188,15 @@ The dashboard is for a **non-technical audience**. Follow these rules without ex
 | Only when @mentioned | `mentions_only = true` | Agent responds only when @mentioned |
 | Relevant messages | both false (default) | AI-determined relevance check |
 | Every message | `respond_to_all = true` | Agent responds to all messages in its channels |
+
+### Channel Listing
+
+- Dashboard channel API (`GET /api/v1/slack/channels`) auto-paginates to return ALL workspace channels.
+- Public channels: always visible (bot has `channels:read` scope).
+- Private channels: only visible if the bot has been invited (`groups:read` scope, bot must be a member).
+- Channel list sorted: private channels first, then public, alphabetical within each group.
+- Help text shown on all channel dropdowns: "Don't see your channel? Private channels need TinyHands to be invited first. Use /invite @TinyHands in the channel."
+- Refresh button available to refetch after inviting the bot.
 
 ### Real-Time Streaming
 
