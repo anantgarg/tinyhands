@@ -240,7 +240,6 @@ export function FloatingChat() {
     toggleExpand,
     setSelectedAgentId,
     addMessage,
-    updateLastMessage,
     setLoading,
     setStreaming,
     setStreamingContent,
