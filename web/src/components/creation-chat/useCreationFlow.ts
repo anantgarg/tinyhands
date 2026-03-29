@@ -73,6 +73,8 @@ export interface CreationFlow {
   sendMessage: (text: string) => void;
   handleCardResponse: (messageId: string, response: unknown) => void;
   inputDisabled: boolean;
+  refetchChannels: () => void;
+  channelsFetching: boolean;
 }
 
 // ── Helpers ──
@@ -173,7 +175,7 @@ export function useCreationFlow(): CreationFlow {
   const createAgent = useCreateAgent();
   const addTrigger = useAddAgentTrigger();
   const { data: availableTools } = useAvailableTools();
-  const { data: channelsData } = useSlackChannels();
+  const { data: channelsData, refetch: refetchChannels, isFetching: channelsFetching } = useSlackChannels();
 
   const channels = channelsData?.channels || [];
 
@@ -235,6 +237,7 @@ export function useCreationFlow(): CreationFlow {
         options: channelOptions.length > 1 ? channelOptions : [{ value: '__create__', label: '+ Create a new channel' }],
         placeholder: 'Search for a channel...',
         searchable: true,
+        helpText: "Don't see your channel? Private channels need TinyHands to be invited first. Use /invite @TinyHands in the channel.",
       },
     });
   }, [channels, addMsg]);
@@ -1046,5 +1049,7 @@ export function useCreationFlow(): CreationFlow {
     sendMessage,
     handleCardResponse,
     inputDisabled,
+    refetchChannels: () => { refetchChannels(); },
+    channelsFetching,
   };
 }

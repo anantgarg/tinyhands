@@ -1,6 +1,6 @@
 import { useState, useMemo, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
-import { Check, Search, ChevronDown } from 'lucide-react';
+import { Check, Search, ChevronDown, Info, RefreshCw } from 'lucide-react';
 
 interface DropdownOption {
   value: string;
@@ -15,6 +15,9 @@ interface DropdownCardProps {
   defaultValue?: string;
   onSubmit: (value: string) => void;
   disabled?: boolean;
+  helpText?: string;
+  onRefresh?: () => void;
+  refreshing?: boolean;
 }
 
 export function DropdownCard({
@@ -24,6 +27,9 @@ export function DropdownCard({
   defaultValue,
   onSubmit,
   disabled,
+  helpText,
+  onRefresh,
+  refreshing,
 }: DropdownCardProps) {
   const [selected, setSelected] = useState(defaultValue || '');
   const [search, setSearch] = useState('');
@@ -119,6 +125,24 @@ export function DropdownCard({
           </div>
         )}
       </div>
+
+      {helpText && (
+        <div className="flex items-start gap-2 text-xs text-warm-text-secondary">
+          <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+          <span>{helpText}</span>
+        </div>
+      )}
+      {onRefresh && (
+        <button
+          onClick={onRefresh}
+          className="flex items-center gap-1 text-xs text-brand hover:text-brand/80 transition-colors"
+          disabled={refreshing}
+          type="button"
+        >
+          <RefreshCw className={cn("h-3 w-3", refreshing && "animate-spin")} />
+          Refresh channels
+        </button>
+      )}
 
       <button
         onClick={() => selected && onSubmit(selected)}

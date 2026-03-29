@@ -66,10 +66,14 @@ function CreationCardRenderer({
   msg,
   onCardResponse,
   isCreating,
+  onRefreshChannels,
+  channelsRefreshing,
 }: {
   msg: CreationMessage;
   onCardResponse: (messageId: string, response: unknown) => void;
   isCreating: boolean;
+  onRefreshChannels?: () => void;
+  channelsRefreshing?: boolean;
 }) {
   if (!msg.cardType) return null;
 
@@ -106,6 +110,9 @@ function CreationCardRenderer({
           defaultValue={props.defaultValue as string | undefined}
           onSubmit={(value) => onCardResponse(msg.id, value)}
           disabled={msg.disabled}
+          helpText={props.helpText as string | undefined}
+          onRefresh={props.helpText ? onRefreshChannels : undefined}
+          refreshing={channelsRefreshing}
         />
       );
     case 'multi-select':
@@ -472,6 +479,8 @@ export function FloatingChat() {
                     msg={msg}
                     onCardResponse={creationFlow.handleCardResponse}
                     isCreating={creationFlow.isCreating}
+                    onRefreshChannels={creationFlow.refetchChannels}
+                    channelsRefreshing={creationFlow.channelsFetching}
                   />
                 </div>
               )}

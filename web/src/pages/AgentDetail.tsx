@@ -4,7 +4,7 @@ import {
   ArrowLeft, Pause, Play, MoreVertical, Trash2, Plus, X,
   Info, Pencil, Check, Loader2, RotateCcw, Eye,
   Webhook, Clock, MessageSquare, Zap,
-  Search, Sparkles, Wand2, Cpu, FileText,
+  Search, Sparkles, Wand2, Cpu, FileText, RefreshCw,
 } from 'lucide-react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { Button } from '@/components/ui/button';
@@ -1808,7 +1808,7 @@ function SuggestImprovementButton({ agentId }: { agentId: string }) {
 
 function TriggersTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
   const { data: triggers, isLoading } = useAgentTriggers(agentId);
-  const { data: slackChannelsData } = useSlackChannels();
+  const { data: slackChannelsData, refetch: refetchChannels, isFetching: channelsFetching } = useSlackChannels();
   const updateTrigger = useUpdateTrigger();
   const deleteTrigger = useDeleteTrigger();
   const addTrigger = useAddAgentTrigger();
@@ -2061,6 +2061,19 @@ function TriggersTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
               ))
             )}
           </div>
+          <div className="mt-3 flex items-start gap-2 text-xs text-warm-text-secondary">
+            <Info className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+            <span>Don't see your channel? Private channels need TinyHands to be invited first. Use /invite @TinyHands in the channel.</span>
+          </div>
+          <button
+            onClick={() => refetchChannels()}
+            className="mt-1.5 flex items-center gap-1 text-xs text-brand hover:text-brand/80 transition-colors"
+            disabled={channelsFetching}
+            type="button"
+          >
+            <RefreshCw className={`h-3 w-3 ${channelsFetching ? 'animate-spin' : ''}`} />
+            Refresh channels
+          </button>
         </DialogContent>
       </Dialog>
 
