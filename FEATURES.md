@@ -57,7 +57,7 @@ Skip rules:
 - **Adaptive conversation depth**: AI determines confidence from the goal analysis. Detailed descriptions → fewer questions (3-4). Vague descriptions → CLARIFY phase with follow-up questions (8-10).
 - **Rich analysis summary**: After analyzing, shows agent name, recommended tools with reasoning, suggested triggers, model choice, and memory recommendation.
 - **System prompt review**: PROMPT_REVIEW phase shows a collapsible PromptPreviewCard. User can "Looks good" or "Let me edit" (re-runs analyzer with changes).
-- **Proper tool detection**: Groups integrations (HubSpot read+write = "HubSpot"). Shows connection status. Pre-selects from analysis. Friendly "no services yet" message if none configured.
+- **Proper tool detection**: Groups integrations (HubSpot read+write = "HubSpot (view & edit)"). Shows connection status. Pre-selects from analysis by mapping tool names to integration group bases. Friendly "no services yet" message with single Continue button if none configured.
 - **Channel improvements**: Private channels show 🔒 prefix. "Create a new channel" as first dropdown option. Help text shown: "Don't see your channel? Private channels need TinyHands to be invited first. Use /invite @TinyHands in the channel." Refresh button to refetch channels after inviting the bot. Channel API auto-paginates to return ALL workspace channels.
 - **Confirmation card sections**: Agent, Channel, Response Mode, Tools, Triggers, Behavior, Access, Instructions (collapsible prompt).
 - **Copilot on manual wizard**: Floating sparkle button (✨) in bottom-right when using manual wizard. Opens FloatingChat to help fill fields. Also accessible via Cmd+K.
@@ -1036,6 +1036,96 @@ The dashboard is for a **non-technical audience**. Follow these rules without ex
 | Audit Log | Full | Full | No access | Admin only |
 | Access & Roles | Full | Full | No access | Admin only |
 | Workspace Settings | Full | Full | No access | Admin only |
+
+---
+
+## AI Chat Assistant (FloatingChat)
+
+The FloatingChat widget is an AI-powered assistant available on every page. It uses Claude with tool-use to provide intelligent responses, agent configuration updates, and deep diagnostic analysis.
+
+### Modes
+
+1. **Creation Mode** — Activated at `/agents/new` or by typing "create a new agent" in the chat from any page. Runs the full agent creation flow (see Agent Lifecycle > AI Chat Creation Flow).
+2. **Regular Chat Mode** — Multi-turn conversation with streaming responses. Can manage agents and diagnose issues.
+
+### Capabilities
+
+- **Agent configuration** — Select an agent from the dropdown, then ask to change settings. The assistant proposes changes as a visual diff that you can review and apply with one click.
+- **Agent diagnostics** — Ask "why is this agent failing?" or "what went wrong in the last run?" The assistant inspects run history, tool calls, error rates, memories, triggers, tool code, and audit logs to diagnose issues and suggest fixes.
+- **General workspace questions** — Ask about error rates, usage, which agents exist, etc.
+- **Agent creation from any page** — Type "create a new agent" or click the suggestion to start the creation flow without navigating away.
+
+### Diagnostic Tools
+
+The assistant has access to 13 tools it calls on-demand to gather data:
+
+| Tool | What it does |
+|------|-------------|
+| Agent config | Read the agent's full settings, instructions, tools, model |
+| Recent runs | Fetch recent runs with status filtering |
+| Run detail | Read a specific run's input, output, tokens, cost |
+| Run tool calls | Inspect individual tool calls with inputs/outputs/errors |
+| Run trace | Read the full step-by-step execution trace |
+| Tool code | Read a tool's actual code and schema to understand capabilities |
+| Tool analytics | Check success rates, average duration, last error |
+| Agent memories | Review learned facts and patterns |
+| Agent triggers | Check scheduled and event-based trigger configs |
+| Error rates | Compare error rates across all agents |
+| Audit log | See recent config changes and actions |
+| List agents | List all agents in the workspace |
+| Propose changes | Build a structured config change diff for review |
+
+### Streaming
+
+Responses stream via Server-Sent Events (SSE). During diagnostic analysis, the UI shows real-time status indicators like "Checking run history..." and "Analyzing tool errors..." as the assistant calls tools.
+
+### Model Override
+
+Type `/opus`, `/sonnet`, or `/haiku` at the start of a message to override the model for that request. A badge appears in the header showing the active override. Click to clear.
+
+### Multi-Turn Conversation
+
+The full conversation history is sent with each request, so the assistant remembers context within a conversation. Conversations are stored in-memory (up to 20, not persisted to database).
+
+### Execution Trace Capture
+
+Every agent run now stores:
+- **`conversation_trace`** — Full JSONL output from the Claude SDK execution, stored on the run_history record.
+- **`tool_calls`** table — Per-invocation records with tool name, input parameters, output, errors, and sequence number. Enables the diagnostic assistant to inspect exactly what each tool did during a run.
+
+### Context-Aware Suggestions
+
+Empty state shows different quick-action buttons depending on context:
+- **With agent selected**: "Why is this agent failing?", "Show recent errors", "Improve instructions", "Change the model"
+- **Without agent**: "Create a new agent", "Which agent has the most errors?", "Show overall usage"
+
+### Non-Technical Language Rules
+
+The assistant follows strict rules for user-facing language:
+- Tool names: "Google Sheets" not "google-sheets-read"
+- Models: "Sonnet" not "claude-sonnet-4-20250514"
+- Durations: "2.3s" not "2300ms"
+- Costs: "$0.03" not "0.03 USD"
+- No IDs, no jargon, no technical internals
+
+### API Endpoints
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/v1/chat/stream` | POST | SSE streaming chat (primary) |
+| `/api/v1/chat` | POST | Non-streaming chat (backward compatible) |
+
+**Request body** (both endpoints):
+```json
+{
+  "messages": [{"role": "user", "content": "..."}],
+  "agentId": "optional-agent-id",
+  "context": "dashboard|agent|tools|kb|general",
+  "modelOverride": "opus|sonnet|haiku"
+}
+```
+
+The non-streaming endpoint also accepts the legacy `{ "message": "..." }` format for backward compatibility.
 
 ---
 
