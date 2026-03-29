@@ -12,8 +12,10 @@ const MAX_FAILURES_BEFORE_RESET = 3;
 let resetInProgress = false;
 let lastResetTime = 0;
 let resetCount = 0;
+let resetWindowStart = 0;
 const RESET_COOLDOWN_MS = 30000; // 30 seconds
 const MAX_RESETS = 3;
+const RESET_WINDOW_MS = 5 * 60 * 1000; // 5 minutes — reset the breaker counter after this
 
 // Pool health logging interval handle
 let healthInterval: ReturnType<typeof setInterval> | undefined;
@@ -57,10 +59,17 @@ async function resetPool(): Promise<void> {
     return;
   }
 
-  // Circuit breaker: stop after MAX_RESETS
+  // Circuit breaker: stop after MAX_RESETS within the window, but auto-recover after window expires
   if (resetCount >= MAX_RESETS) {
-    logger.error('Pool reset circuit breaker tripped — too many resets, giving up', { resetCount });
-    return;
+    if (now - resetWindowStart > RESET_WINDOW_MS) {
+      // Window expired — reset the breaker and allow retries
+      logger.info('Pool reset circuit breaker recovered — window expired, allowing retries');
+      resetCount = 0;
+      resetWindowStart = now;
+    } else {
+      logger.error('Pool reset circuit breaker tripped — too many resets, waiting for recovery window', { resetCount });
+      return;
+    }
   }
 
   resetInProgress = true;
@@ -82,6 +91,7 @@ async function resetPool(): Promise<void> {
     consecutiveFailures = 0;
     resetCount++;
     lastResetTime = Date.now();
+    if (resetCount === 1) resetWindowStart = lastResetTime;
     logger.info('Database pool recreated', { resetCount });
   } finally {
     resetInProgress = false;

@@ -106,6 +106,7 @@ export function DropdownCard({
                       setSelected(opt.value);
                       setIsOpen(false);
                       setSearch('');
+                      onSubmit(opt.value);
                     }}
                     className={cn(
                       'flex w-full items-center gap-2 px-3 py-1.5 text-sm transition-colors',
