@@ -445,7 +445,7 @@ export function useCreationFlow(): CreationFlow {
     });
   }, [addMsg, config]);
 
-  const goToPromptReview = useCallback(() => {
+  const goToPromptReview = useCallback((promptOverride?: string) => {
     setPhase('PROMPT_REVIEW');
     addMsg({
       id: msgId(),
@@ -453,7 +453,7 @@ export function useCreationFlow(): CreationFlow {
       content: 'I\'ve written detailed instructions for your agent. You can review them below or skip ahead.',
       cardType: 'prompt-preview',
       cardProps: {
-        prompt: config.systemPrompt || '',
+        prompt: promptOverride || config.systemPrompt || '',
       },
     });
   }, [addMsg, config.systemPrompt]);
@@ -697,7 +697,7 @@ export function useCreationFlow(): CreationFlow {
               });
             } else {
               // Medium/High: go to PROMPT_REVIEW
-              goToPromptReview();
+              goToPromptReview(prompt);
             }
           },
           onError: (err) => {
@@ -756,7 +756,7 @@ export function useCreationFlow(): CreationFlow {
             const summaryText = buildSummaryText(result);
             addMsg({ id: msgId(), role: 'assistant', content: summaryText });
 
-            goToPromptReview();
+            goToPromptReview(prompt);
           },
           onError: (err) => {
             addMsg({
