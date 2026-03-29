@@ -296,15 +296,20 @@ export function useCreationFlow(): CreationFlow {
     const validGroups = integrationGroups.filter(g => g.readTool || g.writeTool);
 
     if (validGroups.length === 0) {
-      // No integrations available — show friendly message and continue button
+      // No integrations available — show which tools are needed but not connected
+      const analysisTools = config.tools || [];
+      const neededNames = [...new Set(analysisTools.map(t => friendlyToolName(t)))];
+      const content = neededNames.length > 0
+        ? `This agent needs **${neededNames.join(', ')}**, but ${neededNames.length === 1 ? "it hasn't" : "they haven't"} been connected yet. You can connect them from the **Tools & Integrations** page, then add them to this agent from its settings.\n\nCore tools like file access, web search, and code analysis are always included.`
+        : 'No connected services yet. Core tools like file access, web search, and code analysis are always included.';
       addMsg({
         id: msgId(),
         role: 'assistant',
-        content: 'No connected services yet. Core tools like file access, web search, and code analysis are always included.',
+        content,
         cardType: 'multi-choice',
         cardProps: {
           options: [
-            { value: 'continue', label: 'Continue', description: 'You can add services later from agent settings' },
+            { value: 'continue', label: 'Continue', description: 'You can connect services later from Tools & Integrations' },
           ],
         },
       });
@@ -387,8 +392,8 @@ export function useCreationFlow(): CreationFlow {
       cardType: 'multi-choice',
       cardProps: {
         options: [
-          { value: 'member', label: 'Full Access', description: 'Everyone in the workspace can use and configure this agent', recommended: true },
-          { value: 'viewer', label: 'Limited Access', description: 'Everyone can use it, but only owners can change settings' },
+          { value: 'member', label: 'Full Access', description: 'Everyone in the workspace can use this agent', recommended: true },
+          { value: 'viewer', label: 'View Only', description: 'Everyone can see it, but must request access to take actions' },
           { value: 'none', label: 'Invite Only', description: 'Only people you explicitly invite can see this agent' },
         ],
         defaultValue: config.defaultAccess || 'member',
@@ -669,8 +674,8 @@ export function useCreationFlow(): CreationFlow {
             }
             // Low confidence: don't skip CLARIFY, EFFORT, MEMORY
 
-            // Skip schedule ask if no time pattern detected
-            if (!hasTimePattern(trimmed)) {
+            // Skip schedule ask if no time pattern in user text AND analyzer didn't suggest triggers
+            if (!hasTimePattern(trimmed) && triggers.length === 0) {
               skips.add('SCHEDULE_ASK');
             }
 

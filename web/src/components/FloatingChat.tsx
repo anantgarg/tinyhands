@@ -709,9 +709,9 @@ export function FloatingChat() {
       ref={panelRef}
       className={cn(
         'fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 flex-col rounded-2xl border border-[#E0DED9] bg-white px-4 shadow-lg transition-all',
-        isExpanded ? 'w-[calc(100%-2rem)] sm:w-[700px]' : 'w-[calc(100%-2rem)] sm:w-full max-w-xl',
+        isExpanded ? 'w-[calc(100%-2rem)] sm:w-[900px]' : 'w-[calc(100%-2rem)] sm:w-full max-w-xl',
       )}
-      style={{ maxHeight: isExpanded ? '600px' : '500px' }}
+      style={{ maxHeight: isExpanded ? '80vh' : '500px' }}
     >
       {/* Header */}
       <div className="flex items-center justify-between border-b border-[#E0DED9] px-1 py-3">
