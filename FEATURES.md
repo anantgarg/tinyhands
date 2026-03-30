@@ -613,6 +613,21 @@ For runtime and delegated-owner cases, a **Connect** button is included. After u
 | Switch write tool to team creds (request) | N/A | N/A | Yes | No | No |
 | Restrict Google Drive folder | Yes | Yes | Yes | Yes | Yes |
 
+### Connection Health Monitoring
+
+- Periodic health check runs every 30 minutes in the sync process.
+- Google OAuth connections: attempts token refresh; marks expired if refresh fails.
+- Other OAuth connections (Notion, GitHub): checks `oauth_token_expires_at`; marks expired if past.
+- Token expiry timestamp (`oauth_token_expires_at`) stored on OAuth callback and updated on each Google token refresh.
+- When a connection expires:
+  - Status set to `expired` in the database.
+  - Slack DM sent to connection owner with warning message and "Reconnect in Dashboard" button linking to `/connections`.
+- Dashboard indicators:
+  - Sidebar badge on Connections nav item shows count of expired connections.
+  - Warning banner at top of Connections page when expired connections exist.
+  - "Reconnect" button on expired connections in both personal and team tables.
+- Expired connections are visible in the dashboard (API returns both `active` and `expired` connections).
+
 ---
 
 ## Approval & Request Workflows
@@ -1148,6 +1163,7 @@ The non-streaming endpoint also accepts the legacy `{ "message": "..." }` format
 - Checks for new commits periodically.
 - Only deploys when `package.json` version changes.
 - Process: pull code -> `npm install` -> `npm run build` -> run migrations -> reload PM2.
+- Resilient reload: if bulk `pm2 reload` fails, falls back to reloading each process individually to prevent partial deploys.
 - Deploy webhook endpoint: `POST /webhooks/github-deploy`.
 - Handled by `src/modules/auto-update/`.
 
@@ -1187,7 +1203,7 @@ The non-streaming endpoint also accepts the legacy `{ "message": "..." }` format
 | **Run Completion/Error** | - | - | Yes | - | - | Thread users |
 | **Role Changes** | - | - | - | - | Yes | (none) |
 | **Trigger Failures** | - | - | - | - | Yes | (none) |
-| **OAuth Token Expiry** | - | - | - | - | Yes | (none) |
+| **OAuth Token Expiry** | Yes | - | - | Yes | - | Connection owner (DM with dashboard reconnect CTA) |
 | **Audit Events** | - | - | - | - | Yes | (none) |
 
 ### Dashboard "Requests" Page Tabs
