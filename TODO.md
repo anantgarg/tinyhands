@@ -38,7 +38,20 @@ No proactive notification when OAuth tokens expire. Connections stay "active" in
 ### 10. Smart Tool Selection in Agent Creation
 The tools step in the AI creation flow should auto-select tools based on the goal analyzer's recommendations, show whose credentials will be used (team vs personal), and display a read-only summary by default with an "Edit" button to modify selections. Currently shows all tools unchecked with no pre-selection and no credential info.
 
-### 11. Document Filling
+### 11. Notification Gaps
+Several events are silently logged but should notify users:
+
+**Missing Slack DM notifications:**
+- **Upgrade Requests** — Agent owners should get a DM when someone requests access (currently dashboard-only)
+- **OAuth Token Expiry** — Connection owner should get a DM when their token expires with a reconnect link
+- **KB Contributions** — Admins should get a DM when new KB entries are submitted for approval
+- **Trigger Failures** — Agent owner should get a DM when a scheduled/event trigger fails
+
+**Missing Dashboard indicators:**
+- **Expired Connections** — Sidebar badge showing count of broken/expired connections
+- **Agent Health** — Warning badge on agent detail page when agent has high error rate or expired tool credentials
+
+### 12. Document Filling
 No dashboard UI. Template field extraction and KB-powered filling is backend-only, triggered during agent runs.
 
 ### 9. Per-Message Model Override

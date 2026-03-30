@@ -612,8 +612,8 @@ export function FloatingChat() {
     return (
       <div
         ref={panelRef}
-        className="fixed bottom-0 right-0 z-50 flex flex-col bg-white shadow-lg transition-all sm:bottom-6 sm:right-6 sm:max-w-[640px] sm:rounded-2xl sm:border sm:border-[#E0DED9]"
-        style={{ height: 'min(80vh, 700px)', width: '100%', maxWidth: '640px' }}
+        className="fixed bottom-0 left-1/2 -translate-x-1/2 z-50 flex flex-col bg-white shadow-lg sm:bottom-6 sm:max-w-[640px] sm:rounded-2xl sm:border sm:border-[#E0DED9]"
+        style={{ height: 'min(80vh, 700px)', width: 'calc(100% - 2rem)', maxWidth: '640px' }}
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[#E0DED9] px-4 py-3">

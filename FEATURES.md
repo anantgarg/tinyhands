@@ -53,7 +53,7 @@ Skip rules:
 - Chat-based editing: on the confirmation card, user can say "Let me change something" and type changes in natural language. AI interprets and updates config.
 - X button closes the chat and shows the original 4-step manual wizard as a fallback.
 - "Or set up manually" link on the chat background page also switches to manual mode.
-- Chat panel is anchored bottom-right (not centered).
+- Chat panel is centered at bottom (matching regular chat position).
 - **Adaptive conversation depth**: AI determines confidence from the goal analysis. Detailed descriptions → fewer questions (3-4). Vague descriptions → CLARIFY phase with follow-up questions (8-10).
 - **Rich analysis summary**: After analyzing, shows agent name, recommended tools with reasoning, suggested triggers, model choice, and memory recommendation.
 - **System prompt review**: PROMPT_REVIEW phase shows a collapsible PromptPreviewCard. User can "Looks good" or "Let me edit" (re-runs analyzer with changes).
@@ -1150,6 +1150,60 @@ The non-streaming endpoint also accepts the legacy `{ "message": "..." }` format
 - Process: pull code -> `npm install` -> `npm run build` -> run migrations -> reload PM2.
 - Deploy webhook endpoint: `POST /webhooks/github-deploy`.
 - Handled by `src/modules/auto-update/`.
+
+---
+
+## Notifications & Alerts
+
+### Notification Channels
+
+| Channel | Description |
+|---------|-------------|
+| **Slack DM** | Direct message to specific user(s) |
+| **Slack Channel** | Posted to #tinyhands (or configured channel) |
+| **Slack Thread** | In-context reply in the conversation thread |
+| **Dashboard Badge** | Count badge on "Requests" sidebar item |
+| **Dashboard Page** | Viewable on a specific dashboard page/tab |
+| **Silent** | Logged only, not surfaced to users |
+
+### Notification Matrix
+
+| Event | Slack DM | Slack Channel | Slack Thread | Dashboard Badge | Silent | Recipients |
+|-------|----------|--------------|-------------|----------------|--------|------------|
+| **Evolution Proposals** (pending) | Yes | - | - | Yes (Requests) | - | Platform admins |
+| **Tool Requests** (non-admin) | Yes | - | - | Yes (Requests) | - | Platform admins |
+| **Upgrade Requests** | - | - | - | Yes (Requests) | - | Agent owners |
+| **KB Contributions** | - | - | - | Yes (Requests) | - | Admins |
+| **Feature Requests** | - | - | - | Yes (Requests) | - | Admins |
+| **Error Rate Alert** (>10%) | - | Yes | - | - | - | Channel watchers |
+| **Single Run Cost Alert** (>$5) | - | Yes | - | - | - | Channel watchers |
+| **Daily Budget Alert** | - | Yes | - | - | - | Channel watchers |
+| **Long Running Task Alert** | - | Yes | - | - | - | Channel watchers |
+| **Daily Digest** | - | Yes | - | - | - | Channel watchers |
+| **OAuth Connection Success** | Yes | - | - | - | - | OAuth user |
+| **Credential Error Pre-Run** | - | - | Yes | - | - | Thread users |
+| **Write Action Approval** | - | - | Yes | - | - | Thread users |
+| **Critique Detection** | - | - | Yes | - | - | Thread users |
+| **Run Completion/Error** | - | - | Yes | - | - | Thread users |
+| **Role Changes** | - | - | - | - | Yes | (none) |
+| **Trigger Failures** | - | - | - | - | Yes | (none) |
+| **OAuth Token Expiry** | - | - | - | - | Yes | (none) |
+| **Audit Events** | - | - | - | - | Yes | (none) |
+
+### Dashboard "Requests" Page Tabs
+
+5 tabs with per-type badge counts:
+1. **Upgrade Requests** — Viewer→Member access requests
+2. **Action Approvals** — Write policy approval queue
+3. **Evolution Proposals** — Agent self-improvement proposals
+4. **Tool Requests** — Non-admin tool attachment requests
+5. **Feature Requests** — User-submitted feature/tool requests
+6. **KB Contributions** — Pending knowledge base entries
+
+### Alert Cooldowns
+
+- Observability alerts: 30-minute cooldown per condition
+- Daily digest: Once per day at configured time (default 8am)
 
 ---
 
