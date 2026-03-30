@@ -148,7 +148,7 @@ Return ONLY valid JSON matching this schema:
   "credential_modes": {"integration_id": "team|delegated|runtime"},
   "feasible": true,
   "blockers": [],
-  "summary": "2-3 sentence explanation of the configuration and why each choice was made"
+  "summary": "2-3 sentence explanation of the configuration and why each choice was made. Use friendly credential labels: say 'shared team credentials' for team mode, 'the agent creator\\'s credentials' for delegated mode, and 'each user\\'s own credentials' for runtime mode. Never use the words 'delegated' or 'runtime' — describe the behavior instead."
 }
 
 IMPORTANT guidelines:

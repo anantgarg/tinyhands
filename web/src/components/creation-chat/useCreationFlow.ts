@@ -157,6 +157,10 @@ function cleanTechnicalNames(text: string): string {
       (match) => friendlyToolName(match))
     .replace(/\(requires admin approval\)/gi, '')
     .replace(/\(needs admin approval\)/gi, '')
+    .replace(/\bdelegated\s+(personal\s+)?credentials?\b/gi, "the agent creator's credentials")
+    .replace(/\bruntime\s+credentials?\b/gi, "each user's own credentials")
+    .replace(/\bteam\s+credentials?\b/gi, 'shared team credentials')
+    .replace(/\bcredential\s+mode\b/gi, 'credentials')
     .replace(/\s{2,}/g, ' ')
     .trim();
 }
@@ -229,11 +233,16 @@ export function useCreationFlow(): CreationFlow {
 
   // ── Phase transitions ──
 
-  const goToChannel = useCallback(() => {
+  const goToChannel = useCallback(async () => {
     setPhase('CHANNEL');
+
+    // Ensure channels are loaded fresh
+    const result = await refetchChannels();
+    const freshChannels = result.data?.channels || [];
+
     const channelOptions = [
       { value: '__create__', label: '+ Create a new channel' },
-      ...channels.map((ch) => ({
+      ...freshChannels.map((ch) => ({
         value: ch.id,
         label: `${ch.isPrivate ? '' : '#'}${ch.name}`,
         isPrivate: ch.isPrivate,
@@ -251,7 +260,7 @@ export function useCreationFlow(): CreationFlow {
         helpText: "Don't see your channel? Private channels need TinyHands to be invited first. Use /invite @TinyHands in the channel.",
       },
     });
-  }, [channels, addMsg]);
+  }, [refetchChannels, addMsg]);
 
   const goToActivation = useCallback(() => {
     setPhase('ACTIVATION');

@@ -1015,6 +1015,72 @@ The dashboard is for a **non-technical audience**. Follow these rules without ex
 - **Model names** -- show "Sonnet", "Opus", "Haiku" -- never full model IDs like `claude-sonnet-4-20250514`.
 - **Status labels** -- "Completed" not "success". "Failed" not "error". "Running" not "in_progress".
 
+### Dashboard Labels & Terminology
+
+All user-facing text in the dashboard and agent creation flow MUST use these labels. Never use internal/technical terms.
+
+**Credential Modes:**
+
+| Internal Value | Dashboard Label | Creation Flow Label |
+|---------------|----------------|-------------------|
+| `team` | Team credentials | Shared team credentials |
+| `delegated` | Agent creator's | The agent creator's credentials |
+| `runtime` | Requesting user's | Each user's own credentials |
+| `personal` | Requesting user's | Each user's own credentials |
+
+**Never use:** "delegated", "runtime", "credential mode", "connection mode" in user-facing text.
+
+**Tool Access Levels:**
+
+| Internal Value | Dashboard Label |
+|---------------|----------------|
+| `read-only` | Can view data |
+| `read-write` | Can make changes |
+
+**Agent Response Modes:**
+
+| Internal Value | Dashboard Label |
+|---------------|----------------|
+| `mentions_only` | When tagged |
+| `respond_to_all_messages` | Every message |
+| (default) | When relevant |
+
+**Write Policies:**
+
+| Internal Value | Dashboard Label |
+|---------------|----------------|
+| `auto` | Automatic |
+| `confirm` | Ask before acting |
+| `admin_confirm` | Ask owner/admins |
+
+**Status Labels:**
+
+| Internal Value | Dashboard Label |
+|---------------|----------------|
+| `success` | Completed |
+| `error` / `failed` | Failed |
+| `in_progress` / `running` | Running |
+| `active` | Active |
+| `expired` | Expired |
+| `revoked` | Revoked |
+
+**Model Names:**
+
+| Internal Value | Dashboard Label |
+|---------------|----------------|
+| `claude-sonnet-4-20250514` (or any sonnet) | Sonnet |
+| `claude-opus-4-6` (or any opus) | Opus |
+| `claude-haiku-4-5-20251001` (or any haiku) | Haiku |
+
+**Effort (maxTurns):**
+
+| Internal Value | Dashboard Label |
+|---------------|----------------|
+| `maxTurns` | Effort |
+| Low values (1-10) | Quick tasks |
+| Medium values (15-25) | Standard tasks |
+| High values (30-50) | Complex tasks |
+
 ### Pages
 
 | Page | Access | Description |
