@@ -29,7 +29,16 @@ Done: Learning tab on Agent Detail with prompt health indicator, inline suggest 
 ~~The Evolution page exists and works, but it's only accessible from the Requests page tab. There's no standalone Evolution page in the sidebar navigation. The page exists at `/evolution` but isn't linked.~~
 Done: Added route in App.tsx, sidebar link under Review, fixed backend to enrich with agent name/avatar, fixed frontend type mismatches.
 
-### 8. Document Filling
+### 8. Agent Creation Data Loss (Critical)
+The AI creation flow creates agents with blank/default data (empty prompt, no tools, no triggers, name "New Agent") even though the goal analyzer generated correct config. The `doCreate()` function's `config` state appears stale due to React state timing. The confirmation card also shows incorrect defaults. Needs investigation into how `config` state propagates through the multi-phase creation flow.
+
+### 9. Connection Health Monitoring
+No proactive notification when OAuth tokens expire. Connections stay "active" in DB until a run fails. Need: periodic token validation, sidebar badge for broken connections, explicit error messages ("your Gmail OAuth is expired") instead of generic failures.
+
+### 10. Smart Tool Selection in Agent Creation
+The tools step in the AI creation flow should auto-select tools based on the goal analyzer's recommendations, show whose credentials will be used (team vs personal), and display a read-only summary by default with an "Edit" button to modify selections. Currently shows all tools unchecked with no pre-selection and no credential info.
+
+### 11. Document Filling
 No dashboard UI. Template field extraction and KB-powered filling is backend-only, triggered during agent runs.
 
 ### 9. Per-Message Model Override

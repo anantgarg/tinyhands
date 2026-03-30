@@ -707,10 +707,7 @@ export function FloatingChat() {
   return (
     <div
       ref={panelRef}
-      className={cn(
-        'fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 flex-col rounded-2xl border border-[#E0DED9] bg-white px-4 shadow-lg transition-all',
-        isExpanded ? 'w-[calc(100%-2rem)] sm:w-[900px]' : 'w-[calc(100%-2rem)] sm:w-full max-w-xl',
-      )}
+      className="fixed bottom-6 left-1/2 z-50 flex -translate-x-1/2 flex-col rounded-2xl border border-[#E0DED9] bg-white px-4 shadow-lg w-[calc(100%-2rem)] sm:w-full max-w-xl transition-[max-height] duration-200"
       style={{ maxHeight: isExpanded ? '80vh' : '500px' }}
     >
       {/* Header */}
@@ -822,7 +819,7 @@ export function FloatingChat() {
       </div>
 
       {/* Messages / History */}
-      <div className="relative flex-1 overflow-y-auto px-1 py-3 space-y-3" style={{ maxHeight: isExpanded ? '460px' : '360px', minHeight: '120px' }}>
+      <div className="relative flex-1 overflow-y-auto px-1 py-3 space-y-3" style={{ maxHeight: isExpanded ? 'calc(80vh - 120px)' : '360px', minHeight: '120px' }}>
         {/* History overlay */}
         {showHistory && (
           <div className="absolute inset-0 z-10 bg-white rounded-lg overflow-y-auto p-3">
