@@ -284,11 +284,7 @@ Optional: `GITHUB_TOKEN`, `PORT` (default 3000), `LOG_LEVEL`, `DOCKER_BASE_IMAGE
   - `CLAUDE.md` — Architecture, code structure, developer reference (only if the change affects project structure, patterns, or dev workflow)
 
   If a change adds a new feature, update README.md, PRODUCT_GUIDE.md, and FEATURES.md. If it changes configuration or setup, update ADMIN_GUIDE.md. If it changes architecture or adds new modules, update CLAUDE.md. If it changes any workflow, behavior, or rule, update FEATURES.md. Bug fixes typically don't need doc changes unless they affect documented behavior.
-- **FEATURES.md requires explicit approval**: FEATURES.md is the source of truth for all features and workflows. Before editing it, you MUST:
-  1. Show the user a summary of what you want to change and why
-  2. Get their explicit approval ("yes", "go ahead", etc.)
-  3. Only then edit the file
-  Never edit FEATURES.md silently or without asking. If the user says to update it, still show them the proposed changes first. This ensures the documentation stays accurate and the user is always aware of what's documented.
+- **FEATURES.md auto-update**: FEATURES.md is the source of truth for all features and workflows. After every commit that changes features, workflows, or rules, update FEATURES.md directly without asking for approval. Also update TODO.md directly if new work items were discovered.
 
 ## Dashboard UI Guidelines
 

@@ -265,16 +265,21 @@ describe('Auto-Update Module', () => {
       expect(result.error).toBe('TypeScript compilation error');
     });
 
-    it('should return failure result when PM2 restart fails', async () => {
+    it('should fall back to individual process reloads when bulk PM2 reload fails', async () => {
       mockExecSync.mockImplementation((cmd: string) => {
-        if (cmd.includes('pm2 reload')) throw new Error('PM2 reload failed');
+        if (cmd === 'pm2 reload ecosystem.config.js --force') throw new Error('PM2 reload failed');
         return Buffer.from('');
       });
 
       const result = await handleDeploy(makePushPayload());
 
-      expect(result.success).toBe(false);
-      expect(result.error).toBe('PM2 reload failed');
+      // Should succeed because individual reloads work
+      expect(result.success).toBe(true);
+      // Verify individual process reloads were attempted
+      const reloadCalls = mockExecSync.mock.calls.filter(
+        (call: any[]) => typeof call[0] === 'string' && call[0].startsWith('pm2 reload tinyhands-')
+      );
+      expect(reloadCalls.length).toBe(6);
     });
 
     it('should handle payload with no commits array', async () => {

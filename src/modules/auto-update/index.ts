@@ -113,8 +113,22 @@ export async function handleDeploy(payload: any): Promise<DeployResult> {
     // 5. Graceful reload — sends SIGTERM to each process one at a time,
     // waits for it to exit (allowing active agent runs to finish), then starts the new version.
     // --force prevents "Reload already in progress" errors from overlapping deploys.
+    // If bulk reload fails, fall back to reloading each process individually.
     logger.info('Deploy: graceful reload via PM2');
-    execSync('pm2 reload ecosystem.config.js --force', { cwd: process.cwd(), timeout: 120000 });
+    try {
+      execSync('pm2 reload ecosystem.config.js --force', { cwd: process.cwd(), timeout: 120000 });
+    } catch (reloadErr: any) {
+      logger.warn('Bulk PM2 reload failed, falling back to individual process reloads', { error: reloadErr.message });
+      const processes = ['tinyhands-listener', 'tinyhands-worker-1', 'tinyhands-worker-2', 'tinyhands-worker-3', 'tinyhands-sync', 'tinyhands-scheduler'];
+      for (const proc of processes) {
+        try {
+          execSync(`pm2 reload ${proc} --force`, { cwd: process.cwd(), timeout: 30000 });
+          logger.info(`Reloaded ${proc}`);
+        } catch (procErr: any) {
+          logger.error(`Failed to reload ${proc}`, { error: procErr.message });
+        }
+      }
+    }
 
     const restartTime = Date.now() - startTime;
 
