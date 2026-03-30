@@ -150,6 +150,17 @@ function friendlyToolName(toolName: string): string {
   return BUILTIN_FRIENDLY_NAMES[toolName] || toolName.replace(/-read$/, '').replace(/-write$/, '').replace(/-search$/, '').replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
+// Clean technical tool names from AI-generated text (e.g., "zendesk-read" → "Zendesk")
+function cleanTechnicalNames(text: string): string {
+  return text
+    .replace(/\b(google-sheets|google-drive|google-docs|gmail|hubspot|zendesk|linear|chargebee|posthog|serpapi)-(read|write|search)\b/gi,
+      (match) => friendlyToolName(match))
+    .replace(/\(requires admin approval\)/gi, '')
+    .replace(/\(needs admin approval\)/gi, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 // ── Hook ──
 
 export function useCreationFlow(): CreationFlow {
@@ -562,7 +573,7 @@ export function useCreationFlow(): CreationFlow {
     const emoji = analysis.avatar_emoji || analysis.avatarEmoji || '';
     const model = (analysis.model || 'sonnet');
     const modelLabel = model.includes('opus') ? 'Opus' : model.includes('haiku') ? 'Haiku' : 'Sonnet';
-    const summary = analysis.summary || '';
+    const summary = cleanTechnicalNames(analysis.summary || '');
     const customTools = analysis.custom_tools || [];
     const triggers = analysis.triggers || [];
     const memory = analysis.memory_enabled ?? analysis.memoryEnabled ?? false;

@@ -262,7 +262,7 @@ export function FloatingChat() {
   const [agentDropdownOpen, setAgentDropdownOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const creationMessagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const collapsedInputRef = useRef<HTMLInputElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -680,14 +680,14 @@ export function FloatingChat() {
         {/* Input area */}
         <div className="border-t border-[#E0DED9] px-4 py-3">
           <div className="flex items-center gap-2">
-            <input
+            <textarea
               ref={inputRef}
-              type="text"
               value={inputValue}
-              onChange={(e) => setInputValue(e.target.value)}
+              onChange={(e) => { setInputValue(e.target.value); e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'; }}
               onKeyDown={handleKeyDown}
               placeholder={placeholder}
-              className="flex-1 bg-transparent text-sm text-warm-text placeholder:text-warm-text-secondary/50 outline-none disabled:cursor-not-allowed"
+              rows={1}
+              className="flex-1 bg-transparent text-sm text-warm-text placeholder:text-warm-text-secondary/50 outline-none disabled:cursor-not-allowed resize-none"
               disabled={creationFlow.inputDisabled}
             />
             <button
@@ -1009,14 +1009,14 @@ export function FloatingChat() {
       {/* Input area */}
       <div className="border-t border-[#E0DED9] px-1 py-3">
         <div className="flex items-center gap-2">
-          <input
+          <textarea
             ref={inputRef}
-            type="text"
             value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
+            onChange={(e) => { setInputValue(e.target.value); e.target.style.height = 'auto'; e.target.style.height = Math.min(e.target.scrollHeight, 120) + 'px'; }}
             onKeyDown={handleKeyDown}
             placeholder={modelOverride ? `Using ${modelOverride.charAt(0).toUpperCase() + modelOverride.slice(1)} — type a message...` : 'Type a message...'}
-            className="flex-1 bg-transparent text-sm text-warm-text placeholder:text-warm-text-secondary/50 outline-none"
+            rows={1}
+            className="flex-1 bg-transparent text-sm text-warm-text placeholder:text-warm-text-secondary/50 outline-none resize-none"
             disabled={isLoading || isStreaming}
           />
           {messages.length > 0 && (

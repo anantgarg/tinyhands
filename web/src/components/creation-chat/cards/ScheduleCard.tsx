@@ -84,7 +84,7 @@ export function ScheduleCard({ defaultFrequency, defaultTimezone, onSubmit, disa
         <select
           value={timezone}
           onChange={(e) => setTimezone(e.target.value)}
-          className="w-full rounded-btn border border-warm-border bg-white px-3 py-2 text-sm text-warm-text outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
+          className="w-full rounded-btn border border-warm-border bg-white px-3 pr-8 py-2 text-sm text-warm-text outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
         >
           {TIMEZONES.map((tz) => (
             <option key={tz} value={tz}>
