@@ -46,7 +46,7 @@ describe('config', () => {
     expect(config.docker.baseImage).toBe('tinyhands-runner:latest');
     expect(config.docker.defaultCpu).toBe(1);
     expect(config.docker.defaultMemory).toBe(2147483648);
-    expect(config.docker.defaultJobTimeoutMs).toBe(1800000);
+    expect(config.docker.defaultJobTimeoutMs).toBe(3600000);
     expect(config.docker.maxConcurrentWorkers).toBe(3);
     // Encryption and OAuth defaults
     expect(config.encryption.key).toBe('');

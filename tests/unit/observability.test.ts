@@ -11,7 +11,7 @@ vi.mock('../../src/db', () => ({
 vi.mock('../../src/config', () => ({
   config: {
     observability: { dailyBudgetUsd: 50, logLevel: 'info', dailyDigestTime: '09:00' },
-    docker: { defaultJobTimeoutMs: 1800000 },
+    docker: { defaultJobTimeoutMs: 3600000 },
   },
 }));
 
@@ -70,7 +70,7 @@ describe('getAlertRules', () => {
     expect(byCondition['single_run_cost'].threshold).toBe(5.0);
     expect(byCondition['daily_spend'].threshold).toBe(50); // from mocked config
     expect(byCondition['queue_depth'].threshold).toBe(50);
-    expect(byCondition['run_duration'].threshold).toBe(1800000);
+    expect(byCondition['run_duration'].threshold).toBe(3600000);
   });
 
   it('should have non-empty action strings', () => {
@@ -205,17 +205,17 @@ describe('checkAlerts', () => {
         id: 'longrun-1234-aaaa-bbbb-ccccddddeeee',
         agent_id: 'agent-001',
         agent_name: 'SlowBot',
-        duration_ms: 2400000, // 2400s = 40 minutes, exceeds 1800000ms threshold
+        duration_ms: 4200000, // 70 minutes, exceeds 3600000ms threshold
       });
 
     const alerts = await checkAlerts(TEST_WORKSPACE_ID);
     const durAlert = alerts.find((a) => a.condition === 'run_duration');
     expect(durAlert).toBeDefined();
     expect(durAlert!.triggered).toBe(true);
-    expect(durAlert!.value).toBe(2400000);
-    expect(durAlert!.threshold).toBe(1800000);
+    expect(durAlert!.value).toBe(4200000);
+    expect(durAlert!.threshold).toBe(3600000);
     expect(durAlert!.message).toContain('SlowBot');
-    expect(durAlert!.message).toContain('40.0 minutes');
+    expect(durAlert!.message).toContain('70.0 minutes');
   });
 
   it('should return multiple triggered alerts at once', async () => {
@@ -235,7 +235,7 @@ describe('checkAlerts', () => {
         id: 'longlong-1234-aaaa-bbbb-ccccddddeeee',
         agent_id: 'agent-001',
         agent_name: 'SlowBot',
-        duration_ms: 2400000, // exceeds 1800000ms threshold
+        duration_ms: 4200000, // 70 minutes, exceeds 3600000ms threshold
       }); // long run
 
     const alerts = await checkAlerts(TEST_WORKSPACE_ID);

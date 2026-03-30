@@ -36,10 +36,10 @@ async function cleanupOrphans(): Promise<void> {
       }
     }
 
-    // Mark any "running" runs older than 35 minutes as failed (max timeout is 30 min)
+    // Mark any "running" runs older than 65 minutes as failed (max timeout is 60 min)
     const result = await execute(
       `UPDATE run_history SET status = 'failed', output = 'Run interrupted — process restarted during execution.', completed_at = NOW()
-       WHERE status = 'running' AND created_at < NOW() - INTERVAL '35 minutes'`
+       WHERE status = 'running' AND created_at < NOW() - INTERVAL '65 minutes'`
     );
     if (result.rowCount > 0) {
       logger.warn('Marked stale runs as failed', { count: result.rowCount });

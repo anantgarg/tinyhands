@@ -58,7 +58,7 @@ export const config = {
     baseImage: process.env.DOCKER_BASE_IMAGE || 'tinyhands-runner:latest',
     defaultCpu: parseInt(process.env.DEFAULT_CONTAINER_CPU || '1', 10),
     defaultMemory: parseInt(process.env.DEFAULT_CONTAINER_MEMORY || '2147483648', 10),
-    defaultJobTimeoutMs: parseInt(process.env.DEFAULT_JOB_TIMEOUT_MS || '1800000', 10),
+    defaultJobTimeoutMs: parseInt(process.env.DEFAULT_JOB_TIMEOUT_MS || '3600000', 10),
     maxConcurrentWorkers: parseInt(process.env.MAX_CONCURRENT_WORKERS || '3', 10),
   },
 };

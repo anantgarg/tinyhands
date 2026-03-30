@@ -45,7 +45,7 @@ vi.mock('../../src/config', () => ({
     redis: { url: 'redis://localhost:6379' },
     oauth: { redirectBaseUrl: 'http://localhost:3000', googleClientId: '', googleClientSecret: '', notionClientId: '', notionClientSecret: '', githubClientId: '', githubClientSecret: '' },
     observability: { logLevel: 'info', dailyDigestTime: '09:00', dailyBudgetUsd: 50 },
-    docker: { baseImage: 'tinyhands-runner:latest', defaultCpu: 1, defaultMemory: 2147483648, defaultJobTimeoutMs: 1800000, maxConcurrentWorkers: 3 },
+    docker: { baseImage: 'tinyhands-runner:latest', defaultCpu: 1, defaultMemory: 2147483648, defaultJobTimeoutMs: 3600000, maxConcurrentWorkers: 3 },
     encryption: { key: '' },
   },
 }));
