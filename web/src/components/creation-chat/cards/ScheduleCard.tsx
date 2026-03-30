@@ -37,7 +37,11 @@ interface ScheduleCardProps {
 
 export function ScheduleCard({ defaultFrequency, defaultTimezone, onSubmit, disabled }: ScheduleCardProps) {
   const [frequency, setFrequency] = useState(defaultFrequency || '0 9 * * *');
-  const [timezone, setTimezone] = useState(defaultTimezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
+  const detectedTz = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+  const [timezone, setTimezone] = useState(defaultTimezone || detectedTz);
+
+  // Ensure the detected/selected timezone is always in the list
+  const timezoneList = TIMEZONES.includes(timezone) ? TIMEZONES : [timezone, ...TIMEZONES];
 
   if (disabled) {
     const freqLabel = FREQUENCIES.find((f) => f.value === frequency)?.label || frequency;
@@ -81,17 +85,22 @@ export function ScheduleCard({ defaultFrequency, defaultTimezone, onSubmit, disa
 
       <div>
         <p className="text-xs font-medium text-warm-text-secondary mb-1.5">Timezone</p>
-        <select
-          value={timezone}
-          onChange={(e) => setTimezone(e.target.value)}
-          className="w-full rounded-btn border border-warm-border bg-white px-3 pr-8 py-2 text-sm text-warm-text outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
-        >
-          {TIMEZONES.map((tz) => (
-            <option key={tz} value={tz}>
-              {tz.replace(/_/g, ' ')}
-            </option>
-          ))}
-        </select>
+        <div className="relative">
+          <select
+            value={timezone}
+            onChange={(e) => setTimezone(e.target.value)}
+            className="w-full appearance-none rounded-btn border border-warm-border bg-white px-3 pr-8 py-2 text-sm text-warm-text outline-none focus:border-brand focus:ring-2 focus:ring-brand/20"
+          >
+            {timezoneList.map((tz) => (
+              <option key={tz} value={tz}>
+                {tz.replace(/_/g, ' ')}
+              </option>
+            ))}
+          </select>
+          <svg className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-warm-text-secondary" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
       </div>
 
       <button
