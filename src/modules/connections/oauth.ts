@@ -151,6 +151,16 @@ export async function handleOAuthCallback(
     `${actualIntegrationId} (OAuth)`,
   );
 
+  // Store token expiry if available
+  if (tokenData.expires_in) {
+    const expiresAt = new Date(Date.now() + parseInt(tokenData.expires_in) * 1000);
+    await execute(
+      `UPDATE connections SET oauth_token_expires_at = $1
+       WHERE workspace_id = $2 AND integration_id = $3 AND user_id = $4 AND connection_type = 'personal' AND status = 'active'`,
+      [expiresAt.toISOString(), oauthState.workspace_id, actualIntegrationId, oauthState.user_id]
+    );
+  }
+
   logger.info('OAuth connection created', { integrationId: actualIntegrationId, userId: oauthState.user_id });
 
   return {
@@ -273,6 +283,7 @@ async function exchangeCodeForToken(
           if (parsed.access_token) result.access_token = parsed.access_token;
           if (parsed.refresh_token) result.refresh_token = parsed.refresh_token;
           if (parsed.token_type) result.token_type = parsed.token_type;
+          if (parsed.expires_in) result.expires_in = String(parsed.expires_in);
           resolve(result);
         } catch {
           reject(new Error('Failed to parse OAuth token response'));

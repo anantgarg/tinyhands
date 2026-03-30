@@ -381,4 +381,19 @@ router.put('/agent-tool-modes/:agentId/:toolName', async (req: Request, res: Res
   }
 });
 
+// GET /connections/expired-count — Count expired connections
+router.get('/expired-count', async (req: Request, res: Response) => {
+  try {
+    const { workspaceId } = getSessionUser(req);
+    const { queryOne } = await import('../../db');
+    const result = await queryOne<{ count: string }>(
+      "SELECT COUNT(*)::text AS count FROM connections WHERE workspace_id = $1 AND status = 'expired'",
+      [workspaceId]
+    );
+    res.json({ count: parseInt(result?.count || '0', 10) });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 export default router;

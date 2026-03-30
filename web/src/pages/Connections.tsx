@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link as LinkIcon, Trash2, ExternalLink, AlertCircle, Info, Plus, Key, Settings2, Folder } from 'lucide-react';
+import { Link as LinkIcon, Trash2, ExternalLink, AlertCircle, AlertTriangle, Info, Plus, Key, Settings2, Folder } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { EmptyState } from '@/components/EmptyState';
@@ -19,6 +19,7 @@ import {
   useDeleteConnection,
   useOAuthIntegrations,
   useUpdateConnectionSettings,
+  useExpiredConnectionCount,
 } from '@/api/connections';
 import { DriveFolderPicker } from '@/components/DriveFolderPicker';
 import { useIntegrations } from '@/api/tools';
@@ -53,6 +54,7 @@ function ConnectionsContent() {
   const [apiKeyDialog, setApiKeyDialog] = useState<{ id: string; name: string; configKeys: { key: string; label: string; placeholder: string; secret: boolean }[] } | null>(null);
   const [apiKeyValues, setApiKeyValues] = useState<Record<string, string>>({});
   const [folderDialog, setFolderDialog] = useState<{ connId: string; name: string; folderId: string; folderName: string } | null>(null);
+  const { data: expiredData } = useExpiredConnectionCount();
 
   const handleDelete = (id: string) => {
     if (confirm('Delete this connection?')) {
@@ -125,7 +127,18 @@ function ConnectionsContent() {
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
-                      {isGoogleDrive && (
+                      {conn.status === 'expired' && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            window.open(`/api/v1/connections/oauth/${conn.integrationId}/start`, '_blank');
+                          }}
+                        >
+                          Reconnect
+                        </Button>
+                      )}
+                      {isGoogleDrive && conn.status !== 'expired' && (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -189,6 +202,7 @@ function ConnectionsContent() {
                 <TableHead>Integration</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Connected since</TableHead>
+                <TableHead className="w-10"></TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -204,6 +218,19 @@ function ConnectionsContent() {
                     {conn.createdAt
                       ? formatDistanceToNow(new Date(conn.createdAt), { addSuffix: true })
                       : '\u2014'}
+                  </TableCell>
+                  <TableCell>
+                    {conn.status === 'expired' && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          window.open(`/api/v1/connections/oauth/${conn.integrationId}/start`, '_blank');
+                        }}
+                      >
+                        Reconnect
+                      </Button>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
@@ -230,6 +257,16 @@ function ConnectionsContent() {
           </div>
         </CardContent>
       </Card>
+
+      {expiredData && expiredData.count > 0 && (
+        <div className="mb-4 flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+          <AlertTriangle className="h-5 w-5 shrink-0 text-amber-500" />
+          <p className="text-sm text-amber-800">
+            {expiredData.count} connection{expiredData.count > 1 ? 's have' : ' has'} expired.
+            Reconnect to restore access for your agents.
+          </p>
+        </div>
+      )}
 
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>

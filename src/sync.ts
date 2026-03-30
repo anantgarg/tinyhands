@@ -13,6 +13,7 @@ const TINYHANDS_CHANNEL = process.env.TINYHANDS_CHANNEL_ID || 'tinyhands';
 
 const SYNC_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
 const ALERT_CHECK_INTERVAL_MS = 60 * 1000; // 1 minute
+const CONNECTION_HEALTH_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
 
 async function main(): Promise<void> {
   logger.info('Starting TinyHands sync process...');
@@ -130,6 +131,17 @@ async function main(): Promise<void> {
     logger.info('Auto-update enabled', { interval: config.autoUpdate.intervalMs, branch: config.autoUpdate.branch });
   }
 
+  // Connection health check loop
+  const connectionHealthInterval = setInterval(async () => {
+    try {
+      const workspaceId = getDefaultWorkspaceId();
+      const { checkConnectionHealth } = await import('./modules/connections/health');
+      await checkConnectionHealth(workspaceId);
+    } catch (err: any) {
+      logger.error('Connection health check failed', { error: err.message });
+    }
+  }, CONNECTION_HEALTH_INTERVAL_MS);
+
   logger.info('Sync process ready');
 
   // Graceful shutdown
@@ -138,6 +150,7 @@ async function main(): Promise<void> {
     clearInterval(syncInterval);
     clearInterval(alertInterval);
     clearInterval(digestInterval);
+    clearInterval(connectionHealthInterval);
     if (updateInterval) clearInterval(updateInterval);
     await closeDb();
     process.exit(0);

@@ -327,11 +327,18 @@ export function useCreationFlow(): CreationFlow {
       return;
     }
 
-    // Pre-select tools from analysis (map to group base names for MultiSelectCard)
+    // Pre-select tools from analysis (use actual tool names for MultiSelectCard)
     const analysisTools = config.tools || [];
     const preSelected = validGroups
       .filter(g => analysisTools.some(t => g.readTool === t || g.writeTool === t))
-      .map(g => g.base);
+      .flatMap(g => {
+        const names: string[] = [];
+        if (g.readTool && analysisTools.includes(g.readTool)) names.push(g.readTool);
+        if (g.writeTool && analysisTools.includes(g.writeTool)) names.push(g.writeTool);
+        // If analyzer recommended any tool from this group, at minimum include read
+        if (names.length === 0 && g.readTool) names.push(g.readTool);
+        return names;
+      });
 
     const options = validGroups.map((g) => ({
       value: g.base,

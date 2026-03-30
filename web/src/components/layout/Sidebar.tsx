@@ -22,6 +22,7 @@ import { useAuthStore } from '@/store/auth';
 import { useSidebarStore } from '@/store/sidebar';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { usePendingCounts } from '@/api/agents';
+import { useExpiredConnectionCount } from '@/api/connections';
 
 interface NavItem {
   label: string;
@@ -103,11 +104,19 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
   const admin = isAdmin();
   const { collapsed, toggle } = useSidebarStore();
   const { data: pendingCounts } = usePendingCounts();
+  const { data: expiredCount } = useExpiredConnectionCount();
 
   // Inject badge count on the Requests nav item
   const reviewNavWithBadge: NavItem[] = reviewNav.map((item) =>
     item.to === '/requests' && pendingCounts?.total
       ? { ...item, badge: pendingCounts.total }
+      : item
+  );
+
+  // Inject badge count on the Connections nav item for expired connections
+  const manageNavWithBadge: NavItem[] = manageNav.map((item) =>
+    item.to === '/connections' && expiredCount?.count
+      ? { ...item, badge: expiredCount.count }
       : item
   );
 
@@ -121,7 +130,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
     navigate('/login');
   };
 
-  const allItems = [...mainNav, ...manageNav, ...reviewNavWithBadge, ...settingsNav];
+  const allItems = [...mainNav, ...manageNavWithBadge, ...reviewNavWithBadge, ...settingsNav];
   const visibleCollapsedItems = allItems.filter((item) => !item.adminOnly || admin);
 
   if (collapsed) {
@@ -180,7 +189,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
       {/* Navigation */}
       <div className="flex-1 overflow-y-auto pt-1 pb-3">
         <NavSection items={mainNav} isAdmin={admin} onNavigate={onNavigate} />
-        <NavSection title="Manage" items={manageNav} isAdmin={admin} onNavigate={onNavigate} />
+        <NavSection title="Manage" items={manageNavWithBadge} isAdmin={admin} onNavigate={onNavigate} />
         <NavSection title="Review" items={reviewNavWithBadge} isAdmin={admin} onNavigate={onNavigate} />
         <NavSection title="Settings" items={settingsNav} isAdmin={admin} onNavigate={onNavigate} />
       </div>

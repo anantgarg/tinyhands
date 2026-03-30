@@ -159,8 +159,8 @@ async function refreshIfGoogleOAuth(
     // Update stored credentials with fresh token (best-effort, don't block on failure)
     const { encrypted, iv } = encrypt(JSON.stringify(credentials));
     execute(
-      'UPDATE connections SET credentials_encrypted = $1, credentials_iv = $2, updated_at = NOW() WHERE id = $3',
-      [encrypted, iv, conn.id]
+      'UPDATE connections SET credentials_encrypted = $1, credentials_iv = $2, oauth_token_expires_at = $3, updated_at = NOW() WHERE id = $4',
+      [encrypted, iv, new Date(Date.now() + 3600 * 1000).toISOString(), conn.id]
     ).catch(() => {});
 
     logger.info('Refreshed Google OAuth token', { connectionId: conn.id, integrationId: conn.integration_id });
@@ -242,14 +242,14 @@ export async function getAgentToolConnection(
 
 export async function listTeamConnections(wsId: string): Promise<Connection[]> {
   return query<Connection>(
-    "SELECT * FROM connections WHERE workspace_id = $1 AND connection_type = 'team' AND status = 'active' ORDER BY created_at DESC",
+    "SELECT * FROM connections WHERE workspace_id = $1 AND connection_type = 'team' AND status IN ('active', 'expired') ORDER BY created_at DESC",
     [wsId]
   );
 }
 
 export async function listPersonalConnectionsForUser(wsId: string, userId: string): Promise<Connection[]> {
   return query<Connection>(
-    "SELECT * FROM connections WHERE workspace_id = $1 AND user_id = $2 AND connection_type = 'personal' AND status = 'active' ORDER BY created_at DESC",
+    "SELECT * FROM connections WHERE workspace_id = $1 AND user_id = $2 AND connection_type = 'personal' AND status IN ('active', 'expired') ORDER BY created_at DESC",
     [wsId, userId]
   );
 }

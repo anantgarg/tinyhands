@@ -114,6 +114,14 @@ export function useSetAgentToolMode() {
   });
 }
 
+export function useExpiredConnectionCount() {
+  return useQuery({
+    queryKey: ['connections', 'expired-count'],
+    queryFn: () => api.get<{ count: number }>('/connections/expired-count'),
+    refetchInterval: 60000,
+  });
+}
+
 export function useAgentToolConnections(agentId: string) {
   return useQuery<AgentToolMode[]>({
     queryKey: ['connections', 'agent', agentId],
