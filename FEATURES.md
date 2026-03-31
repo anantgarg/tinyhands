@@ -250,6 +250,8 @@ Slack Message
 
 Effort is stored as `max_turns` in the agents table. The dashboard shows friendly labels.
 
+**Max turns exhaustion:** When an agent runs out of turns before producing a final response (Claude Code CLI reports `error_max_turns`), TinyHands posts an error message to the Slack thread: "Ran out of steps before finishing — the task needed more steps than the current effort level allows. Try increasing the effort level in the agent's settings, or simplify the task." Previously, the agent would silently vanish (status message deleted, no output posted).
+
 ### Run Records
 
 Every execution creates a `run_history` row tracking:
