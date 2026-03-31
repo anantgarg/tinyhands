@@ -217,6 +217,7 @@ Slack Message
 - Per-minute tracking for both TPM (tokens per minute) and RPM (requests per minute).
 - Applies globally across all workers.
 - Automatic 60-second pause on 429 responses from Anthropic API.
+- **Container output 429 detection:** When the Claude Code SDK inside a Docker container hits a rate limit (e.g., concurrent connections exceeded), it may exit with code 0 but output the 429 error JSON. The execution module detects rate limit patterns in the output (`rate_limit_error`, `Number of concurrent connections`, `429` + `rate limit`), marks the run as `failed` with a friendly message, sets the global rate limit flag in Redis (60s cooldown), re-queues the job with a 60-second delay, and posts a Slack message explaining the automatic retry. This prevents raw 429 JSON from being shown to users as agent output.
 
 ### Thread Replies vs Top-Level Messages
 
