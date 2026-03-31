@@ -577,13 +577,16 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
       return 'Rate limited — retrying automatically';
     }
 
+    // Detect max turns exhaustion — agent ran out of steps before producing a response
+    const hitMaxTurns = exitCode === 0 && allLogs.includes('"subtype":"error_max_turns"');
+
     const status: RunStatus = exitCode === 0 ? 'completed' : 'failed';
     // Claude Code CLI returns "(No output)" when the model has nothing to say — treat as empty
     const EMPTY_OUTPUT_PATTERNS = ['(No output)', 'No output', 'Agent completed but no structured result captured'];
     const isEmptyOutput = trimmedOutput.length === 0 || EMPTY_OUTPUT_PATTERNS.includes(trimmedOutput);
     const agentProducedOutput = exitCode === 0 && !isEmptyOutput;
     const output = exitCode === 0
-      ? trimmedOutput || 'Task completed successfully'
+      ? trimmedOutput || (hitMaxTurns ? 'Ran out of steps before finishing — try increasing the effort level or simplifying the task.' : 'Task completed successfully')
       : `Task failed (exit code ${exitCode}): ${outputData.output}`;
 
     await updateRunRecord(workspaceId, runRecord.id, {
@@ -660,6 +663,19 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
           data.threadTs,
           'done',
           output,
+          agent.name,
+          agent.avatar_emoji,
+          false,
+          data.agentId,
+        );
+      } else if (hitMaxTurns) {
+        // Agent ran out of turns before producing output — tell the user
+        await cleanupStatusMessage(data.channelId, data.threadTs, data.agentId);
+        bufferEvent(
+          data.channelId,
+          data.threadTs,
+          'error',
+          `Ran out of steps before finishing — the task needed more steps than the current effort level allows. Try increasing the effort level in the agent's settings, or simplify the task.`,
           agent.name,
           agent.avatar_emoji,
           false,
