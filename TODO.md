@@ -81,7 +81,10 @@ When creating or updating an agent, the AI goal analyzer (or a separate guardrai
 ### 16. Folder Restrictions Enforcement
 The folder picker exists on the Connections page, but the Google Drive tool code doesn't actually read the `root_folder_id` from the credentials to restrict operations. The setting is stored but not enforced at runtime.
 
-### 15. Agent Diagnostics Assistant
+### 17. Admin "All Members" Connections Tab
+Admins currently can only see Team Connections and their own Personal Connections. There's no way for an admin to see other users' personal connections (e.g., to diagnose Apoorv's expired Google connections). Add a third tab on the Connections page — "All Members" (admin-only) — that lists every user's personal connections with their name, status, and integration. This would also make the expired connections badge actionable for admins: they could see who has expired connections and reach out to them. The expired badge should then also count other users' expired personal connections for admins.
+
+### 18. Agent Diagnostics Assistant
 An AI-powered diagnostic agent (like Claude Code for TinyHands) that agent creators can talk to when an agent responds incorrectly. It would pull the agent's run logs, tool call history, system prompt, and tool schemas to diagnose why the agent behaved the way it did — e.g., "the HubSpot tool returned 0 results because search_contacts can't filter by blank properties, you need filter_contacts." Today when an agent gives a wrong answer, there's no way for the creator to know whether the problem is the prompt, the tool, the data, or the model — they just see the wrong output. This assistant would bridge that gap.
 
 ---
