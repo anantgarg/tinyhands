@@ -766,7 +766,7 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                     }
                     return grouped.map((group) => {
                       const credTool = group.readTool || group.writeTool || group.key;
-                      const currentMode = toolModeMap[credTool] ?? 'team';
+                      const currentMode = toolModeMap[credTool] ?? '';
                       return (
                         <TableRow key={group.key}>
                           <TableCell className="font-medium">{group.displayName}</TableCell>
@@ -826,8 +826,8 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                                   toast({ title: 'Updated', variant: 'success' });
                                 }}
                               >
-                                <SelectTrigger className="w-[160px] h-8 text-xs">
-                                  <SelectValue />
+                                <SelectTrigger className={`w-[160px] h-8 text-xs ${!currentMode ? 'text-amber-600 italic border-amber-300' : ''}`}>
+                                  <SelectValue placeholder="Not configured" />
                                 </SelectTrigger>
                                 <SelectContent>
                                   <SelectItem value="team">Team credentials</SelectItem>
