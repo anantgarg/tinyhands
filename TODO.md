@@ -75,7 +75,10 @@ FEATURES.md mentions OAuth for Notion and GitHub, but the Connections page only 
 ### 14. Backfill ATC Entries for Existing Agents
 Agents created before the no-fallback change may have tools without `agent_tool_connections` entries. These agents will now fail with "credentials not configured" errors. Need a migration or startup task that backfills missing ATC entries based on the integration's `connectionModel` (team-only tools get `team` mode, personal-only tools get `runtime` or `delegated` based on existing connections).
 
-### 15. Folder Restrictions Enforcement
+### 15. Cost Guardrails During Agent Creation & Editing
+When creating or updating an agent, the AI goal analyzer (or a separate guardrail check) should automatically detect patterns that could lead to expensive runs and warn the user before saving. Examples: scheduled agents querying large datasets without date filters, unbounded API searches, agents that pull full contact/ticket lists every run instead of incremental changes, high max_turns on frequent schedules. The guardrail should suggest fixes like adding date filters, limiting result counts, or reducing schedule frequency. This should work both during AI-guided creation and when editing an existing agent's prompt or settings.
+
+### 16. Folder Restrictions Enforcement
 The folder picker exists on the Connections page, but the Google Drive tool code doesn't actually read the `root_folder_id` from the credentials to restrict operations. The setting is stored but not enforced at runtime.
 
 ### 15. Agent Diagnostics Assistant
