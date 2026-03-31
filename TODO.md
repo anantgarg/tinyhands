@@ -72,7 +72,10 @@ The floating chat widget exists but is basic. Could benefit from agent selection
 ### 13. Notion/GitHub OAuth on Connections Page
 FEATURES.md mentions OAuth for Notion and GitHub, but the Connections page only shows Google integrations with OAuth buttons. Notion and GitHub OAuth are configured in the backend but not surfaced in the dashboard's Add Connection dialog.
 
-### 14. Folder Restrictions Enforcement
+### 14. Backfill ATC Entries for Existing Agents
+Agents created before the no-fallback change may have tools without `agent_tool_connections` entries. These agents will now fail with "credentials not configured" errors. Need a migration or startup task that backfills missing ATC entries based on the integration's `connectionModel` (team-only tools get `team` mode, personal-only tools get `runtime` or `delegated` based on existing connections).
+
+### 15. Folder Restrictions Enforcement
 The folder picker exists on the Connections page, but the Google Drive tool code doesn't actually read the `root_folder_id` from the credentials to restrict operations. The setting is stored but not enforced at runtime.
 
 ### 15. Agent Diagnostics Assistant
