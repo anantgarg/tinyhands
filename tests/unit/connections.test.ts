@@ -272,19 +272,13 @@ describe('resolveToolCredentials', () => {
     expect(result).toEqual({ access_token: 'user-tok' });
   });
 
-  it('should fallback to team connection when no agent tool connection exists', async () => {
+  it('should return null when no agent tool connection exists (no fallback)', async () => {
     // getAgentToolConnection returns null
     mockQueryOne.mockResolvedValueOnce(undefined);
-    // getTeamConnection fallback
-    mockQueryOne.mockResolvedValueOnce({
-      credentials_encrypted: 'enc.tag',
-      credentials_iv: 'iv123',
-    });
-    mockDecrypt.mockReturnValue('{"api_key":"fallback-key"}');
 
     const result = await resolveToolCredentials(TEST_WORKSPACE_ID, 'agent-1', 'chargebee-read');
 
-    expect(result).toEqual({ api_key: 'fallback-key' });
+    expect(result).toBeNull();
   });
 
   it('should return null when no connection is found', async () => {

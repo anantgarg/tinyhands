@@ -19,9 +19,11 @@ export interface CredentialErrorResult {
 }
 
 export function buildCredentialError(ctx: CredentialErrorContext): CredentialErrorResult {
-  const effectiveMode: ConnectionMode = ctx.mode || 'team';
+  if (!ctx.mode) {
+    return buildNotConfiguredError(ctx);
+  }
 
-  switch (effectiveMode) {
+  switch (ctx.mode) {
     case 'team':
       return buildTeamModeError(ctx);
     case 'delegated':
@@ -29,6 +31,31 @@ export function buildCredentialError(ctx: CredentialErrorContext): CredentialErr
     case 'runtime':
       return buildRuntimeModeError(ctx);
   }
+}
+
+function buildNotConfiguredError(ctx: CredentialErrorContext): CredentialErrorResult {
+  const { integrationLabel: label, integrationIcon: icon } = ctx;
+
+  if (ctx.isRunnerAdmin || ctx.isRunnerOwner) {
+    return {
+      message: `${label} credentials not configured`,
+      blocks: [{
+        type: 'section',
+        text: { type: 'mrkdwn', text: `${icon} *${label}* credentials haven't been configured for this agent yet. Open the agent's settings in the dashboard and choose a credential mode for *${label}*.` },
+      }],
+      showConnectButton: false,
+    };
+  }
+
+  const ownerMentions = ctx.agentOwnerIds.map(id => `<@${id}>`).join(' or ');
+  return {
+    message: `${label} credentials not configured`,
+    blocks: [{
+      type: 'section',
+      text: { type: 'mrkdwn', text: `${icon} *${label}* credentials haven't been configured for this agent yet. Let ${ownerMentions || 'the agent owner'} know.` },
+    }],
+    showConnectButton: false,
+  };
 }
 
 function buildTeamModeError(ctx: CredentialErrorContext): CredentialErrorResult {

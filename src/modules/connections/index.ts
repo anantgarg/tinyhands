@@ -337,12 +337,6 @@ export async function resolveToolCredentials(
     }
   }
 
-  // If no explicit mode set, default to team connection
-  if (!atc) {
-    const teamConn = await getTeamConnection(wsId, integrationId);
-    if (teamConn) return resolveFromConnection(teamConn);
-  }
-
   return null;
 }
 

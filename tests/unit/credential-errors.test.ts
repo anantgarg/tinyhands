@@ -114,20 +114,38 @@ describe('buildCredentialError', () => {
     });
   });
 
-  // ── Null Mode (no explicit mode set) ──
+  // ── Null Mode (no explicit mode set — not configured) ──
 
-  describe('null mode (no explicit connection mode)', () => {
-    it('should treat null mode as team mode', () => {
+  describe('null mode (credentials not configured)', () => {
+    it('should return not-configured error for regular user', () => {
       const ctx = makeContext({ mode: null });
       const result = buildCredentialError(ctx);
-      // Should produce team mode error messages
-      expect(result.message).toContain('shared Chargebee credentials');
+      expect(result.message).toContain('Chargebee credentials not configured');
+      expect(result.blocks[0].text.text).toContain("haven't been configured for this agent yet");
+      expect(result.blocks[0].text.text).toContain('<@U_OWNER1>');
+      expect(result.showConnectButton).toBe(false);
     });
 
-    it('should show admin message for null mode when runner is admin', () => {
+    it('should return not-configured error with settings link for admin', () => {
       const ctx = makeContext({ mode: null, isRunnerAdmin: true, runnerPlatformRole: 'admin' });
       const result = buildCredentialError(ctx);
-      expect(result.blocks[0].text.text).toContain('Go to the *Connections* page in the dashboard');
+      expect(result.message).toContain('Chargebee credentials not configured');
+      expect(result.blocks[0].text.text).toContain("Open the agent's settings in the dashboard");
+      expect(result.showConnectButton).toBe(false);
+    });
+
+    it('should return not-configured error with settings link for owner', () => {
+      const ctx = makeContext({ mode: null, isRunnerOwner: true, runnerAgentRole: 'owner' });
+      const result = buildCredentialError(ctx);
+      expect(result.message).toContain('Chargebee credentials not configured');
+      expect(result.blocks[0].text.text).toContain("Open the agent's settings in the dashboard");
+      expect(result.showConnectButton).toBe(false);
+    });
+
+    it('should fall back to "the agent owner" when no owners for null mode', () => {
+      const ctx = makeContext({ mode: null, agentOwnerIds: [] });
+      const result = buildCredentialError(ctx);
+      expect(result.blocks[0].text.text).toContain('the agent owner');
     });
   });
 

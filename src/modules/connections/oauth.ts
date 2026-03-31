@@ -100,7 +100,7 @@ export async function getOAuthUrl(
   }
 
   // Google requires access_type=offline + prompt=consent to get a refresh token
-  if (integrationId === 'google' || integrationId === 'google_drive') {
+  if (GOOGLE_IDS.has(integrationId)) {
     params.set('access_type', 'offline');
     params.set('prompt', 'consent');
   }

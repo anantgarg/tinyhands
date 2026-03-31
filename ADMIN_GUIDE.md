@@ -115,10 +115,14 @@ When an agent runs and needs tool credentials, the system resolves them based on
 2. **Delegated mode** -- uses the agent owner's personal connection
 3. **Runtime mode** -- uses the invoking user's personal connection
 
+If no credential mode is set for a tool (missing `agent_tool_connections` entry), the run fails with a "credentials not configured" error. There is no silent fallback to team credentials.
+
 If the required credential is missing at execution time, the agent posts a role-aware error message in the thread and fails the run. The message tells the user exactly what happened and who can fix it:
 
 | Mode | Runner Role | Message |
 |------|------------|---------|
+| Not configured | Admin/Owner | "Credentials haven't been configured for this agent yet. Open agent settings." |
+| Not configured | Others | "Credentials haven't been configured. Let @owner know." |
 | Team | Admin | "Shared credentials haven't been set up. Go to the Connections page in the dashboard." |
 | Team | Agent owner | "Ask a workspace admin to connect the tool in the Connections page." |
 | Team | Regular user | "Let @owner or a workspace admin know." |
