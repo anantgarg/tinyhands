@@ -381,14 +381,21 @@ router.put('/agent-tool-modes/:agentId/:toolName', async (req: Request, res: Res
   }
 });
 
-// GET /connections/expired-count — Count expired connections
+// GET /connections/expired-count — Count expired connections relevant to current user
+// Admins see all expired connections (team + all personal); non-admins see only their own
 router.get('/expired-count', async (req: Request, res: Response) => {
   try {
-    const { workspaceId } = getSessionUser(req);
+    const { workspaceId, userId } = getSessionUser(req);
     const { queryOne } = await import('../../db');
+    const { isPlatformAdmin } = await import('../../modules/access-control');
+    const isAdmin = await isPlatformAdmin(workspaceId, userId);
+    // Admins: expired team connections + their own expired personal connections
+    // Non-admins: only their own expired personal connections
     const result = await queryOne<{ count: string }>(
-      "SELECT COUNT(*)::text AS count FROM connections WHERE workspace_id = $1 AND status = 'expired'",
-      [workspaceId]
+      isAdmin
+        ? "SELECT COUNT(*)::text AS count FROM connections WHERE workspace_id = $1 AND status = 'expired' AND (connection_type = 'team' OR user_id = $2)"
+        : "SELECT COUNT(*)::text AS count FROM connections WHERE workspace_id = $1 AND status = 'expired' AND user_id = $2 AND connection_type = 'personal'",
+      [workspaceId, userId]
     );
     res.json({ count: parseInt(result?.count || '0', 10) });
   } catch (err: any) {
