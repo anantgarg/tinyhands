@@ -41,8 +41,9 @@ export async function generatePromptDiff(
 
     const response = await client.messages.create({
       model: 'claude-sonnet-4-6',
-      max_tokens: 2048,
+      max_tokens: 8192,
       system: `You are a prompt engineer. Given a system prompt and user critique, produce an improved version of the prompt.
+Return the COMPLETE improved prompt — every section must be included, even those you did not change. Do not truncate, summarize, or omit any part of the original prompt. Only modify the parts relevant to the critique.
 Return ONLY the improved prompt text — no explanation, no markdown fences.`,
       messages: [{
         role: 'user',
