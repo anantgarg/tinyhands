@@ -522,8 +522,62 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
     const cost = outputData.costUsd > 0 ? outputData.costUsd : estimateCost(model, outputData.inputTokens, outputData.outputTokens);
     await recordTokenUsage(workspaceId, outputData.inputTokens + outputData.outputTokens);
 
-    const status: RunStatus = exitCode === 0 ? 'completed' : 'failed';
     const trimmedOutput = outputData.output.trim();
+
+    // Detect rate limit errors in container output — the SDK may exit 0 but output the 429 error
+    const isRateLimitInOutput = exitCode === 0 && (
+      trimmedOutput.includes('rate_limit_error') ||
+      trimmedOutput.includes('Number of concurrent connections') ||
+      (trimmedOutput.includes('429') && trimmedOutput.includes('rate limit'))
+    );
+
+    if (isRateLimitInOutput) {
+      logger.warn('Rate limit detected in container output, will retry', {
+        traceId: data.traceId, agentId: data.agentId, cost,
+      });
+
+      await updateRunRecord(workspaceId, runRecord.id, {
+        status: 'failed',
+        output: 'Rate limited — too many agents running at once. Retrying automatically.',
+        input_tokens: outputData.inputTokens,
+        output_tokens: outputData.outputTokens,
+        estimated_cost_usd: cost,
+        duration_ms: durationMs,
+        tool_calls_count: outputData.toolCallsCount,
+        completed_at: new Date().toISOString(),
+        conversation_trace: allLogs || undefined,
+      });
+
+      // Set global rate limit flag so other workers back off
+      const { handleRateLimitResponse } = await import('../../queue');
+      await handleRateLimitResponse(workspaceId, 60);
+
+      // Re-queue the job with a 60-second delay (new traceId to avoid jobId collision)
+      try {
+        const { enqueueRun } = await import('../../queue');
+        const retryData = { ...data, traceId: uuid() };
+        await enqueueRun(retryData, 'normal', 60000);
+        logger.info('Rate-limited job re-queued with 60s delay', { traceId: data.traceId });
+      } catch (requeueErr: any) {
+        logger.error('Failed to re-queue rate-limited job', { error: requeueErr.message });
+      }
+
+      // Notify user in Slack
+      if (data.channelId) {
+        await cleanupStatusMessage(data.channelId, data.threadTs, data.agentId);
+        const { postMessage: postMsg } = await import('../../slack');
+        await postMsg(
+          data.channelId,
+          `:hourglass: Too many agents running at once — hit the API rate limit. This task will automatically retry in about a minute.`,
+          data.threadTs,
+        );
+      }
+
+      await removeContainer(container);
+      return 'Rate limited — retrying automatically';
+    }
+
+    const status: RunStatus = exitCode === 0 ? 'completed' : 'failed';
     // Claude Code CLI returns "(No output)" when the model has nothing to say — treat as empty
     const EMPTY_OUTPUT_PATTERNS = ['(No output)', 'No output', 'Agent completed but no structured result captured'];
     const isEmptyOutput = trimmedOutput.length === 0 || EMPTY_OUTPUT_PATTERNS.includes(trimmedOutput);

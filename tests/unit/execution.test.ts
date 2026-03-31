@@ -15,12 +15,16 @@ const mockCheckRateLimit = vi.fn().mockResolvedValue({ allowed: true });
 const mockCheckRequestRate = vi.fn().mockResolvedValue(true);
 const mockRecordTokenUsage = vi.fn().mockResolvedValue(undefined);
 const mockGetRedisConnection = vi.fn();
+const mockHandleRateLimitResponse = vi.fn().mockResolvedValue(undefined);
+const mockEnqueueRun = vi.fn().mockResolvedValue({ id: 'retry-job-1' });
 
 vi.mock('../../src/queue', () => ({
   getRedisConnection: (...args: any[]) => mockGetRedisConnection(...args),
   recordTokenUsage: (...args: any[]) => mockRecordTokenUsage(...args),
   checkRateLimit: (...args: any[]) => mockCheckRateLimit(...args),
   checkRequestRate: (...args: any[]) => mockCheckRequestRate(...args),
+  handleRateLimitResponse: (...args: any[]) => mockHandleRateLimitResponse(...args),
+  enqueueRun: (...args: any[]) => mockEnqueueRun(...args),
 }));
 
 const mockCreateAgentContainer = vi.fn();
@@ -1864,6 +1868,157 @@ describe('Execution Module – executeAgentRun', () => {
 
     // Should NOT call estimateCost when cost_usd > 0
     expect(mockEstimateCost).not.toHaveBeenCalled();
+  });
+
+  // ── Rate limit detection in container output ──
+
+  it('should detect rate_limit_error in container output and retry', async () => {
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"{\\"type\\":\\"error\\",\\"error\\":{\\"type\\":\\"rate_limit_error\\",\\"message\\":\\"Number of concurrent connections exceeded\\"}}","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+    });
+
+    const job = makeFakeJob(makeJobData());
+    const result = await executeAgentRun(job);
+
+    expect(result).toBe('Rate limited — retrying automatically');
+
+    // Run record should be marked as failed, not completed
+    const failedUpdate = mockExecute.mock.calls.find(
+      (c: any[]) => c[0].includes('UPDATE run_history') && c[1]?.includes('failed')
+    );
+    expect(failedUpdate).toBeDefined();
+    const outputParam = failedUpdate![1].find((p: any) => typeof p === 'string' && p.includes('Rate limited'));
+    expect(outputParam).toContain('Retrying automatically');
+
+    // Should set global rate limit flag
+    expect(mockHandleRateLimitResponse).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 60);
+
+    // Should re-queue with 60s delay
+    expect(mockEnqueueRun).toHaveBeenCalledWith(
+      expect.objectContaining({ agentId: 'agent-1' }),
+      'normal',
+      60000,
+    );
+    // Re-queued job should have a new traceId (not the original)
+    const requeuedData = mockEnqueueRun.mock.calls[0][0];
+    expect(requeuedData.traceId).not.toBe('trace-abc');
+
+    // Should notify user in Slack
+    expect(mockCleanupStatusMessage).toHaveBeenCalledWith('C123', '1700000000.000000', 'agent-1');
+    expect(mockPostMessage).toHaveBeenCalledWith(
+      'C123',
+      expect.stringContaining('rate limit'),
+      '1700000000.000000',
+    );
+
+    // Container should be cleaned up
+    expect(mockRemoveContainer).toHaveBeenCalledWith(container);
+  });
+
+  it('should detect "Number of concurrent connections" in output and retry', async () => {
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"Number of concurrent connections exceeded. Please try again later.","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+    });
+
+    const job = makeFakeJob(makeJobData());
+    const result = await executeAgentRun(job);
+
+    expect(result).toBe('Rate limited — retrying automatically');
+    expect(mockHandleRateLimitResponse).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 60);
+    expect(mockEnqueueRun).toHaveBeenCalledWith(expect.anything(), 'normal', 60000);
+  });
+
+  it('should detect combined 429 + rate limit text in output and retry', async () => {
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"Error 429: rate limit exceeded","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+    });
+
+    const job = makeFakeJob(makeJobData());
+    const result = await executeAgentRun(job);
+
+    expect(result).toBe('Rate limited — retrying automatically');
+    expect(mockHandleRateLimitResponse).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 60);
+  });
+
+  it('should not treat non-rate-limit output with exit 0 as rate limited', async () => {
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"Here is the result","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+    });
+
+    const job = makeFakeJob(makeJobData());
+    const result = await executeAgentRun(job);
+
+    expect(result).toBe('Here is the result');
+    expect(mockHandleRateLimitResponse).not.toHaveBeenCalled();
+    expect(mockEnqueueRun).not.toHaveBeenCalled();
+  });
+
+  it('should not detect rate limit when exit code is non-zero', async () => {
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 1,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"rate_limit_error something","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+    });
+
+    const job = makeFakeJob(makeJobData());
+    const result = await executeAgentRun(job);
+
+    // Should follow normal failure path, not rate limit path
+    expect(result).toContain('Task failed (exit code 1)');
+    expect(mockHandleRateLimitResponse).not.toHaveBeenCalled();
+    expect(mockEnqueueRun).not.toHaveBeenCalled();
+  });
+
+  it('should handle re-queue failure gracefully when rate limited', async () => {
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"rate_limit_error","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+    });
+    mockEnqueueRun.mockRejectedValueOnce(new Error('Queue unavailable'));
+
+    const job = makeFakeJob(makeJobData());
+    const result = await executeAgentRun(job);
+
+    // Should still return the rate limit message even if re-queue fails
+    expect(result).toBe('Rate limited — retrying automatically');
+    expect(mockLoggerError).toHaveBeenCalledWith(
+      'Failed to re-queue rate-limited job',
+      { error: 'Queue unavailable' },
+    );
+  });
+
+  it('should skip Slack notification when channelId is empty on rate limit', async () => {
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"rate_limit_error","input_tokens":10,"output_tokens":5,"tool_calls_count":0,"cost_usd":0}',
+    });
+
+    const job = makeFakeJob(makeJobData({ channelId: '' }));
+    const result = await executeAgentRun(job);
+
+    expect(result).toBe('Rate limited — retrying automatically');
+    expect(mockCleanupStatusMessage).not.toHaveBeenCalled();
+    expect(mockPostMessage).not.toHaveBeenCalled();
+    // Should still set rate limit flag and re-queue
+    expect(mockHandleRateLimitResponse).toHaveBeenCalled();
+    expect(mockEnqueueRun).toHaveBeenCalled();
   });
 });
 
