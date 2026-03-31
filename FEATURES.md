@@ -626,7 +626,7 @@ For runtime and delegated-owner cases, a **Connect** button is included. After u
   - Status set to `expired` in the database.
   - Slack DM sent to connection owner with warning message and "Reconnect in Dashboard" button linking to `/connections`.
 - Dashboard indicators:
-  - Sidebar badge on Connections nav item shows count of expired connections.
+  - Sidebar badge on Connections nav item shows count of expired connections visible to the current user (admins: expired team connections + own personal; non-admins: own personal only).
   - Warning banner at top of Connections page when expired connections exist.
   - "Reconnect" button on expired connections in both personal and team tables.
 - Expired connections are visible in the dashboard (API returns both `active` and `expired` connections).
