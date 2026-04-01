@@ -435,6 +435,7 @@ Every integration exports a `manifest` from `src/modules/tools/integrations/<nam
 | Gmail | `gmail` | read + write | personal | OAuth |
 | Notion | `notion` | read-only | personal | OAuth |
 | GitHub | `github` | read-only | personal | OAuth |
+| Documents | `docs` | read + write | team | (auto-configured) |
 
 **Google OAuth note:** All four Google integrations share a single OAuth config and callback (`/auth/callback/google`). One connection covers Drive, Sheets, Docs, and Gmail. Which services an agent uses depends on which tools are enabled. Legacy "Google Workspace" integration exists for backward compat but registers no tools (cleaned up by migration 019).
 
@@ -798,6 +799,83 @@ immediately   (5min timeout)  (no timeout)
 
 ---
 
+## Documents
+
+Native document management system. Three document types: **Docs** (rich text), **Sheets** (spreadsheets with tabs), and **Files** (any uploaded file).
+
+### Document Types
+
+| Type | Storage | Agent Read Format | Agent Write Format |
+|------|---------|-------------------|-------------------|
+| Doc | Slate JSON (JSONB) | Markdown | Markdown (auto-converted to Slate) |
+| Sheet | Sparse cell data in `sheet_tabs` (JSONB) | CSV | CSV (auto-converted to cell data) |
+| File | BYTEA in `document_files` | Text extraction (PDF, DOCX, text) | Binary upload |
+
+### Agent Access
+
+- Agents interact via the `docs` tool integration (two tools: `docs-read` and `docs-write`).
+- `docs-read` actions: `list`, `search`, `read_doc`, `read_sheet_tab`, `read_file`
+- `docs-write` actions: `create_doc`, `create_sheet`, `create_file`, `update_doc`, `update_cells`, `append_rows`, `create_tab`, `delete_tab`, `rename`, `archive`
+- Agent tools call internal API endpoints (`/internal/docs/*`) with `X-Internal-Secret` header.
+- Each document has an `agent_editable` toggle (default: true). If false, agent write operations return 403.
+- Agents can never permanently delete documents.
+
+### Human Access (Dashboard)
+
+- **Documents page** (`/documents`): master list of all documents across all agents.
+- Filter by type (All / Docs / Sheets / Files), search by title/content, pagination.
+- Create new documents or spreadsheets, upload files, import CSV or DOCX.
+- Per-agent filtering available on the agent detail page (Docs tab).
+- Inline title editing, `agent_editable` toggle, version history, export/download.
+
+### Version History
+
+- Every update creates a version snapshot (content, title, change summary, who changed it).
+- Cap: 50 versions for docs/sheets, 10 for files.
+- Restore any version via the History dialog in the editor.
+- Optimistic locking: version counter on each document, 409 Conflict on stale writes.
+
+### Full-Text Search
+
+- `document_search` table with `tsvector` + GIN index.
+- Indexed: doc content (plain text), sheet cell values, extracted file text.
+- Text extraction: `pdf-parse` for PDFs, `mammoth` for DOCX, passthrough for text files.
+
+### File Handling
+
+- Max file size: 25 MB.
+- Blocked extensions: .exe, .sh, .bat, .dll, .so, .cmd, .com, .msi, .scr.
+- Storage: PostgreSQL BYTEA via `document_files` table (abstracted via StorageProvider for future S3 swap).
+- Preview by mime type: images (img), PDFs (iframe), text (pre), otherwise download only.
+
+### Import/Export
+
+- **Docs**: export as Markdown.
+- **Sheets**: export as CSV (per tab).
+- **Import**: CSV → Sheet, DOCX → Doc (via mammoth).
+- **Files**: direct download.
+
+### Database Tables
+
+- `documents` — metadata, content (JSONB), version counter, tags, `agent_editable`
+- `document_versions` — version snapshots with content, change summary
+- `sheet_tabs` — per-tab sparse cell data (JSONB), columns, row/col counts
+- `document_files` — binary file storage (BYTEA), separated for future S3 swap
+- `document_search` — full-text search index (tsvector + GIN)
+
+### Access Control
+
+| Action | Superadmin | Admin | Member | Viewer |
+|--------|-----------|-------|--------|--------|
+| View all documents | Yes | Yes | Own only | Own only |
+| Create documents | Yes | Yes | Yes | No |
+| Edit documents | Yes | Yes | Own only | No |
+| Delete (archive) | Yes | Yes | Own only | No |
+| Permanent delete | Yes | Yes | No | No |
+| Toggle agent_editable | Yes | Yes | Own only | No |
+
+---
+
 ## Knowledge Base
 
 ### KB Entries
@@ -1097,6 +1175,7 @@ All user-facing text in the dashboard and agent creation flow MUST use these lab
 | Tools & Integrations | Admin only | Connect services, manage integrations, agent-created tools |
 | Connections | All | Personal connections tab + Team connections tab (read-only for non-admins) |
 | Knowledge Base | All | Browse sources, entries, search. Admin: add/edit/approve/delete |
+| Documents | All | List, create, edit, delete docs/sheets/files. Filter by type, search, version history |
 | Requests | All | Tabs: Tool Requests, Upgrade Requests, Evolution Proposals, Feature Requests, KB Contributions |
 | Error Logs | All | Recent errors and failed runs |
 | Audit Log | Admin only | Full action audit trail, filterable |

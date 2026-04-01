@@ -27,6 +27,8 @@ const Requests = lazy(() => import('@/pages/Requests').then(m => ({ default: m.R
 const ErrorLogs = lazy(() => import('@/pages/ErrorLogs').then(m => ({ default: m.ErrorLogs })));
 const Skills = lazy(() => import('@/pages/Skills').then(m => ({ default: m.Skills })));
 const Evolution = lazy(() => import('@/pages/Evolution').then(m => ({ default: m.Evolution })));
+const Documents = lazy(() => import('@/pages/Documents').then(m => ({ default: m.Documents })));
+const DocumentDetail = lazy(() => import('@/pages/DocumentDetail').then(m => ({ default: m.DocumentDetail })));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -113,6 +115,8 @@ export function App() {
                 <Route path="skills" element={<Suspense fallback={<PageLoader />}><Skills /></Suspense>} />
                 <Route path="kb" element={<Suspense fallback={<PageLoader />}><KnowledgeBase /></Suspense>} />
                 <Route path="kb/sources" element={<Suspense fallback={<PageLoader />}><KBSources /></Suspense>} />
+                <Route path="documents" element={<Suspense fallback={<PageLoader />}><Documents /></Suspense>} />
+                <Route path="documents/:id" element={<Suspense fallback={<PageLoader />}><DocumentDetail /></Suspense>} />
                 <Route path="connections" element={<Suspense fallback={<PageLoader />}><Connections /></Suspense>} />
                 <Route path="triggers" element={<Suspense fallback={<PageLoader />}><Triggers /></Suspense>} />
                 <Route path="requests" element={<Suspense fallback={<PageLoader />}><Requests /></Suspense>} />

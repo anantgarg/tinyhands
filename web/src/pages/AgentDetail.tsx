@@ -63,6 +63,7 @@ import { useAvailableTools } from '@/api/tools';
 import { useBuiltinSkills, useWorkspaceSkills } from '@/api/skills';
 import { useUpdateTrigger, useDeleteTrigger } from '@/api/triggers';
 import { useAgentToolConnections, useSetAgentToolConnection } from '@/api/connections';
+import { useDocuments, type Document as DocType } from '@/api/docs';
 import { useSlackChannels, useSlackUsers } from '@/api/slack';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { renderEmoji } from '@/lib/emoji';
@@ -304,6 +305,7 @@ export function AgentDetail() {
           <TabsTrigger value="skills">Skills</TabsTrigger>
           <TabsTrigger value="triggers">Triggers</TabsTrigger>
           <TabsTrigger value="access">Access</TabsTrigger>
+          <TabsTrigger value="docs">Docs</TabsTrigger>
           <TabsTrigger value="learning">Learning</TabsTrigger>
         </TabsList>
 
@@ -327,6 +329,9 @@ export function AgentDetail() {
         </TabsContent>
         <TabsContent value="access">
           <AccessTab agentId={id!} agent={agent} />
+        </TabsContent>
+        <TabsContent value="docs">
+          <DocsTab agentId={id!} />
         </TabsContent>
         <TabsContent value="learning">
           <LearningTab agentId={id!} agent={agent} />
@@ -2617,5 +2622,74 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
         </Card>
       )}
     </div>
+  );
+}
+
+// ---- Docs Tab ----
+
+function DocsTab({ agentId }: { agentId: string }) {
+  const navigate = useNavigate();
+  const { data, isLoading } = useDocuments({ agentId, limit: 50 });
+  const docs = data?.documents || [];
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardContent className="py-8">
+          <div className="flex items-center justify-center">
+            <Loader2 className="h-5 w-5 animate-spin text-warm-text-secondary" />
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle>Documents</CardTitle>
+        <Button size="sm" onClick={() => navigate('/documents')}>
+          View All Documents
+        </Button>
+      </CardHeader>
+      <CardContent>
+        {docs.length === 0 ? (
+          <p className="text-sm text-warm-text-secondary text-center py-8">
+            This agent hasn't created any documents yet.
+          </p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Title</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Agent Editable</TableHead>
+                <TableHead>Updated</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {docs.map((doc: DocType) => (
+                <TableRow
+                  key={doc.id}
+                  className="cursor-pointer"
+                  onClick={() => navigate(`/documents/${doc.id}`)}
+                >
+                  <TableCell className="font-medium">{doc.title}</TableCell>
+                  <TableCell>
+                    <Badge variant="secondary">
+                      {doc.type === 'doc' ? 'Document' : doc.type === 'sheet' ? 'Spreadsheet' : 'File'}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>{doc.agentEditable ? 'Yes' : 'No'}</TableCell>
+                  <TableCell className="text-warm-text-secondary text-sm">
+                    {formatDistanceToNow(new Date(doc.updatedAt), { addSuffix: true })}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
   );
 }

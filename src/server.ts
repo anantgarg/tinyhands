@@ -399,6 +399,246 @@ export function createWebhookServer(): express.Application {
     }
   });
 
+  // ── Internal Docs API (used by in-container docs tool) ──
+
+  app.post('/internal/docs/create', async (req, res) => {
+    const secret = req.headers['x-internal-secret'] as string;
+    if (config.server.internalSecret && secret !== config.server.internalSecret) {
+      res.status(401).json({ error: 'Unauthorized' }); return;
+    }
+    try {
+      const workspaceId = getDefaultWorkspaceId();
+      const { createDocument } = await import('./modules/docs');
+      const { markdownToSlateJson } = await import('./modules/docs/convert');
+      const { type, title, description, content, agent_id, run_id, tags } = req.body;
+
+      let docContent = content;
+      if (type === 'doc' && typeof content === 'string') {
+        docContent = markdownToSlateJson(content);
+      }
+
+      const doc = await createDocument(workspaceId, {
+        type: type || 'doc',
+        title: title || 'Untitled',
+        description,
+        content: docContent,
+        tags,
+        agentId: agent_id,
+        runId: run_id,
+        createdBy: agent_id || 'system',
+        createdByType: 'agent',
+      });
+      res.json(doc);
+    } catch (err: any) {
+      logger.error('Internal docs create failed', { error: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get('/internal/docs/get/:id', async (req, res) => {
+    const secret = req.headers['x-internal-secret'] as string;
+    if (config.server.internalSecret && secret !== config.server.internalSecret) {
+      res.status(401).json({ error: 'Unauthorized' }); return;
+    }
+    try {
+      const workspaceId = getDefaultWorkspaceId();
+      const { getDocument, getSheetTabs } = await import('./modules/docs');
+      const { slateJsonToMarkdown, cellDataToCsv } = await import('./modules/docs/convert');
+      const doc = await getDocument(workspaceId, req.params.id);
+      if (!doc) { res.status(404).json({ error: 'Not found' }); return; }
+
+      const result: any = { id: doc.id, type: doc.type, title: doc.title, description: doc.description };
+
+      if (doc.type === 'doc' && doc.content) {
+        result.content = slateJsonToMarkdown(doc.content);
+      } else if (doc.type === 'sheet') {
+        const tabs = await getSheetTabs(workspaceId, doc.id);
+        result.tabs = tabs.map(t => ({ id: t.id, name: t.name, csv: cellDataToCsv(t.data), row_count: t.row_count, col_count: t.col_count }));
+      } else if (doc.type === 'file') {
+        result.mime_type = doc.mime_type;
+        result.file_size = doc.file_size;
+        // For text-based files, include content
+        if (doc.mime_type?.startsWith('text/') || ['application/json', 'application/xml', 'application/yaml'].includes(doc.mime_type || '')) {
+          const { getFile } = await import('./modules/docs/storage');
+          const data = await getFile(doc.id);
+          if (data) result.content = data.toString('utf-8').slice(0, 50000);
+        }
+      }
+      res.json(result);
+    } catch (err: any) {
+      logger.error('Internal docs get failed', { error: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/internal/docs/update/:id', async (req, res) => {
+    const secret = req.headers['x-internal-secret'] as string;
+    if (config.server.internalSecret && secret !== config.server.internalSecret) {
+      res.status(401).json({ error: 'Unauthorized' }); return;
+    }
+    try {
+      const workspaceId = getDefaultWorkspaceId();
+      const { getDocument, updateDocument } = await import('./modules/docs');
+      const { markdownToSlateJson } = await import('./modules/docs/convert');
+      const doc = await getDocument(workspaceId, req.params.id);
+      if (!doc) { res.status(404).json({ error: 'Not found' }); return; }
+      if (!doc.agent_editable) { res.status(403).json({ error: 'Document is not agent-editable' }); return; }
+
+      let content = req.body.content;
+      if (doc.type === 'doc' && typeof content === 'string') {
+        content = markdownToSlateJson(content);
+      }
+
+      const updated = await updateDocument(workspaceId, req.params.id, {
+        title: req.body.title,
+        content,
+        updatedBy: req.body.agent_id || 'agent',
+        expectedVersion: doc.version,
+      });
+      res.json(updated);
+    } catch (err: any) {
+      logger.error('Internal docs update failed', { error: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.delete('/internal/docs/delete/:id', async (req, res) => {
+    const secret = req.headers['x-internal-secret'] as string;
+    if (config.server.internalSecret && secret !== config.server.internalSecret) {
+      res.status(401).json({ error: 'Unauthorized' }); return;
+    }
+    try {
+      const workspaceId = getDefaultWorkspaceId();
+      const { archiveDocument } = await import('./modules/docs');
+      await archiveDocument(workspaceId, req.params.id);
+      res.json({ ok: true });
+    } catch (err: any) {
+      logger.error('Internal docs delete failed', { error: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get('/internal/docs/list', async (req, res) => {
+    const secret = req.headers['x-internal-secret'] as string;
+    if (config.server.internalSecret && secret !== config.server.internalSecret) {
+      res.status(401).json({ error: 'Unauthorized' }); return;
+    }
+    try {
+      const workspaceId = getDefaultWorkspaceId();
+      const { listDocuments } = await import('./modules/docs');
+      const type = req.query.type as any;
+      const agentId = req.query.agent_id as string;
+      const limit = parseInt(req.query.limit as string) || 20;
+      const result = await listDocuments(workspaceId, { type, agentId, limit });
+      res.json({
+        documents: result.documents.map(d => ({
+          id: d.id, type: d.type, title: d.title, description: d.description,
+          agent_id: d.agent_id, updated_at: d.updated_at,
+        })),
+        total: result.total,
+      });
+    } catch (err: any) {
+      logger.error('Internal docs list failed', { error: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/internal/docs/search', async (req, res) => {
+    const secret = req.headers['x-internal-secret'] as string;
+    if (config.server.internalSecret && secret !== config.server.internalSecret) {
+      res.status(401).json({ error: 'Unauthorized' }); return;
+    }
+    try {
+      const workspaceId = getDefaultWorkspaceId();
+      const { searchDocuments } = await import('./modules/docs');
+      const results = await searchDocuments(workspaceId, req.body.query, req.body.limit || 10);
+      res.json({
+        results: results.map(d => ({
+          id: d.id, type: d.type, title: d.title, description: d.description,
+        })),
+      });
+    } catch (err: any) {
+      logger.error('Internal docs search failed', { error: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Sheet operations
+  app.post('/internal/docs/sheet/:id/tab', async (req, res) => {
+    const secret = req.headers['x-internal-secret'] as string;
+    if (config.server.internalSecret && secret !== config.server.internalSecret) {
+      res.status(401).json({ error: 'Unauthorized' }); return;
+    }
+    try {
+      const workspaceId = getDefaultWorkspaceId();
+      const { createSheetTab } = await import('./modules/docs');
+      const tab = await createSheetTab(workspaceId, req.params.id, req.body.name || 'New Sheet');
+      res.json(tab);
+    } catch (err: any) {
+      logger.error('Internal sheet create tab failed', { error: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get('/internal/docs/sheet/:id/tab/:tabId', async (req, res) => {
+    const secret = req.headers['x-internal-secret'] as string;
+    if (config.server.internalSecret && secret !== config.server.internalSecret) {
+      res.status(401).json({ error: 'Unauthorized' }); return;
+    }
+    try {
+      const workspaceId = getDefaultWorkspaceId();
+      const { getSheetTabs } = await import('./modules/docs');
+      const { cellDataToCsv } = await import('./modules/docs/convert');
+      const tabs = await getSheetTabs(workspaceId, req.params.id);
+      const tab = tabs.find(t => t.id === req.params.tabId);
+      if (!tab) { res.status(404).json({ error: 'Tab not found' }); return; }
+      res.json({ id: tab.id, name: tab.name, csv: cellDataToCsv(tab.data), row_count: tab.row_count, col_count: tab.col_count });
+    } catch (err: any) {
+      logger.error('Internal sheet read tab failed', { error: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/internal/docs/sheet/:id/cells', async (req, res) => {
+    const secret = req.headers['x-internal-secret'] as string;
+    if (config.server.internalSecret && secret !== config.server.internalSecret) {
+      res.status(401).json({ error: 'Unauthorized' }); return;
+    }
+    try {
+      const workspaceId = getDefaultWorkspaceId();
+      const { getDocument, updateCells } = await import('./modules/docs');
+      const doc = await getDocument(workspaceId, req.params.id);
+      if (!doc) { res.status(404).json({ error: 'Not found' }); return; }
+      if (!doc.agent_editable) { res.status(403).json({ error: 'Document is not agent-editable' }); return; }
+
+      const tab = await updateCells(workspaceId, req.body.tab_id, req.body.cells);
+      res.json({ ok: true, row_count: tab.row_count, col_count: tab.col_count });
+    } catch (err: any) {
+      logger.error('Internal sheet update cells failed', { error: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/internal/docs/sheet/:id/rows', async (req, res) => {
+    const secret = req.headers['x-internal-secret'] as string;
+    if (config.server.internalSecret && secret !== config.server.internalSecret) {
+      res.status(401).json({ error: 'Unauthorized' }); return;
+    }
+    try {
+      const workspaceId = getDefaultWorkspaceId();
+      const { getDocument, appendRows } = await import('./modules/docs');
+      const doc = await getDocument(workspaceId, req.params.id);
+      if (!doc) { res.status(404).json({ error: 'Not found' }); return; }
+      if (!doc.agent_editable) { res.status(403).json({ error: 'Document is not agent-editable' }); return; }
+
+      const tab = await appendRows(workspaceId, req.body.tab_id, req.body.rows);
+      res.json({ ok: true, row_count: tab.row_count, col_count: tab.col_count });
+    } catch (err: any) {
+      logger.error('Internal sheet append rows failed', { error: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ── SPA fallback — serve index.html for all non-API, non-webhook routes ──
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api/') || req.path.startsWith('/webhooks/') ||
