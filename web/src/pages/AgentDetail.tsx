@@ -331,7 +331,7 @@ export function AgentDetail() {
           <AccessTab agentId={id!} agent={agent} />
         </TabsContent>
         <TabsContent value="docs">
-          <DocsTab agentId={id!} />
+          <DocsTab agentId={id!} agent={agent} />
         </TabsContent>
         <TabsContent value="learning">
           <LearningTab agentId={id!} agent={agent} />
@@ -2627,8 +2627,9 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
 
 // ---- Docs Tab ----
 
-function DocsTab({ agentId }: { agentId: string }) {
+function DocsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
   const navigate = useNavigate();
+  const hasDocsTool = agent.tools?.some(t => t === 'docs-read' || t === 'docs-write');
   const { data, isLoading } = useDocuments({ agentId, limit: 50 });
   const docs = data?.documents || [];
 
@@ -2653,9 +2654,16 @@ function DocsTab({ agentId }: { agentId: string }) {
         </Button>
       </CardHeader>
       <CardContent>
+        {!hasDocsTool && (
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+            This agent does not have the Documents tool enabled. Add <strong>docs-read</strong> or <strong>docs-write</strong> from the Tools tab to let it work with documents.
+          </div>
+        )}
         {docs.length === 0 ? (
           <p className="text-sm text-warm-text-secondary text-center py-8">
-            This agent hasn't created any documents yet.
+            {hasDocsTool
+              ? "This agent hasn't created any documents yet."
+              : 'No documents associated with this agent.'}
           </p>
         ) : (
           <Table>
