@@ -77,8 +77,19 @@ Core tools (file access, web search, code execution) are always available. Conne
 | **PostHog** | Events, persons, feature flags | -- | API key |
 | **SerpAPI** | SERP rankings (Google, Bing, Yahoo) | -- | API key |
 | **Zendesk** | Tickets, groups, users | Create tickets, comments, update priority | API key |
+| **Documents** | Read docs, sheets, files | Create, edit, archive documents | Auto |
 
 All four Google integrations share a single OAuth flow -- one authorization covers Drive, Sheets, Docs, and Gmail.
+
+### Documents
+
+Native document management — create, edit, and manage three document types directly in TinyHands:
+
+- **Docs** — Rich text documents with auto-save, version history, and Markdown export
+- **Sheets** — Spreadsheets with tabs, cell editing, and CSV export
+- **Files** — Upload any file (images, PDFs, text) with preview and download
+
+Agents can create and edit documents via tool calls. Each document has an "Allow agents to edit" toggle. Full-text search across all document types.
 
 ### Knowledge Base
 

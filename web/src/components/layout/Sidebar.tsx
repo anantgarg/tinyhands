@@ -14,6 +14,7 @@ import {
   Shield,
   Settings,
   LogOut,
+  FolderOpen,
   ChevronsLeft,
   ChevronsRight,
 } from 'lucide-react';
@@ -42,6 +43,7 @@ const manageNav: NavItem[] = [
   { label: 'Tools & Integrations', to: '/tools', icon: Wrench, adminOnly: true },
   { label: 'Connections', to: '/connections', icon: Link },
   { label: 'Knowledge Base', to: '/kb', icon: BookOpen },
+  { label: 'Documents', to: '/documents', icon: FolderOpen },
   { label: 'Triggers', to: '/triggers', icon: Zap },
 ];
 

@@ -93,6 +93,11 @@ The `connect_personal_apikey`, `connect_personal_oauth`, and `personal_connectio
 ### 20. Update PRODUCT_GUIDE.md and ADMIN_GUIDE.md for credential system changes
 The credential system was overhauled: `connectionModel` replaced with `supportedCredentialModes`, Slack connect flow removed, tool requests expanded to all team credential selections, runtime "Continue without tools?" confirmation added. PRODUCT_GUIDE.md and ADMIN_GUIDE.md may reference the old behavior.
 
+### 21. Documents Feature Follow-ups
+- **RichTextEditor limited heading support**: The TipTap editor only supports h2 headings (`heading: { levels: [2] }`), but the Slate JSON format and markdown converter support h1, h2, h3. Headings created by agents or imported from markdown will display as plain text in the editor. Should either expand TipTap config to support h1-h3 or document the limitation.
+- **SheetEditor no real-time collaboration**: Multiple users editing the same sheet will overwrite each other's changes since there's no WebSocket-based live sync or OT/CRDT. The `useUpdateCells` approach sends partial updates which helps, but simultaneous edits to the same cell will still race.
+- **FileViewer replaceFile doesn't track version**: The `handleReplace` callback uses `replaceFile.mutate` which calls a separate endpoint that doesn't go through the optimistic locking flow, so `currentVersion` can get out of sync after a file replacement followed by a title rename.
+
 ---
 
 ## Completed

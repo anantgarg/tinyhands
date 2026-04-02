@@ -439,6 +439,70 @@ export interface AlertRule {
   action: string;
 }
 
+// ── Native Document Types ──
+
+export type DocType = 'doc' | 'sheet' | 'file';
+export type DocCreatorType = 'user' | 'agent';
+
+export interface Document {
+  id: string;
+  workspace_id: string;
+  type: DocType;
+  title: string;
+  description: string | null;
+  content: Record<string, unknown> | null;
+  mime_type: string | null;
+  file_size: number | null;
+  tags: string[];
+  agent_id: string | null;
+  run_id: string | null;
+  created_by: string;
+  created_by_type: DocCreatorType;
+  updated_by: string | null;
+  agent_editable: boolean;
+  version: number;
+  is_archived: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DocumentVersion {
+  id: string;
+  document_id: string;
+  version: number;
+  content: Record<string, unknown>;
+  changed_by: string;
+  change_summary: string | null;
+  created_at: string;
+}
+
+export interface SheetTab {
+  id: string;
+  document_id: string;
+  name: string;
+  position: number;
+  columns: SheetColumn[];
+  data: Record<string, CellData>;
+  metadata: Record<string, unknown>;
+  row_count: number;
+  col_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SheetColumn {
+  id: string;
+  name: string;
+  type: 'text' | 'number' | 'date' | 'boolean';
+  width?: number;
+}
+
+export interface CellData {
+  v: string | number | boolean | null;
+  f?: string;
+  t?: 'string' | 'number' | 'boolean' | 'date';
+}
+
 // ── Document Filling Types ──
 
 export interface TemplateField {

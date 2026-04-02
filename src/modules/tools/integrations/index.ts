@@ -20,10 +20,12 @@ import { manifest as linear } from './linear';
 import { manifest as posthog } from './posthog';
 import { manifest as serpapi } from './serpapi';
 import { manifest as zendesk } from './zendesk';
+import { manifest as docs } from './docs';
 
 /** All registered integration manifests, keyed by id. */
 const ALL_MANIFESTS: ToolManifest[] = [
   chargebee,
+  docs,
   gmail,
   google,
   googleDocs,

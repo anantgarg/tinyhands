@@ -19,6 +19,7 @@ import settingsRoutes from './routes/settings';
 import skillRoutes from './routes/skills';
 import slackHelperRoutes from './routes/slack-helpers';
 import chatRoutes from './routes/chat';
+import docsRoutes from './routes/docs';
 
 export function createApiRouter(): Router {
   const router = Router();
@@ -47,6 +48,7 @@ export function createApiRouter(): Router {
   router.use('/skills', requireAuth, skillRoutes);
   router.use('/slack', requireAuth, slackHelperRoutes);
   router.use('/chat', requireAuth, chatRoutes);
+  router.use('/docs', requireAuth, docsRoutes);
 
   // Catch-all 404 for API routes (return JSON, not HTML)
   router.use((_req, res) => {

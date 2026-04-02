@@ -194,6 +194,53 @@ The Sources page also manages API keys for external KB access. Click **New API K
 
 ---
 
+## Document Management
+
+Open the **Documents** page in the web dashboard to manage all documents.
+
+### The Documents Page
+
+The documents page shows:
+- Statistics: total documents, docs, sheets, files
+- Type filter tabs: All, Docs, Sheets, Files
+- Search bar for searching across titles and content
+- Create dropdown: New Document, New Spreadsheet, Upload File, Import CSV, Import DOCX
+
+### Document Types
+
+| Type | Description | Storage | Agent Format |
+|------|-------------|---------|-------------|
+| Doc | Rich text document | Slate JSON | Markdown |
+| Sheet | Spreadsheet with tabs | Sparse cell JSONB | CSV |
+| File | Any uploaded file | PostgreSQL BYTEA | Text extraction |
+
+### Agent Editability
+
+Each document has an **Allow agents to edit** toggle (default: on). When disabled, agents can still read the document but cannot modify it. The toggle is available in each document's editor toolbar.
+
+### Version History
+
+All document edits create version snapshots. Documents retain up to 50 versions, files up to 10. Restore any version from the History dialog.
+
+### File Upload Limits
+
+- Maximum file size: 25 MB
+- Blocked file types: .exe, .sh, .bat, .dll, .so, .cmd, .com, .msi, .scr
+- File storage uses PostgreSQL BYTEA (can be swapped to S3 via StorageProvider interface)
+
+### Database Tables
+
+Migration `022_docs.sql` creates: `documents`, `document_versions`, `sheet_tabs`, `document_files`, `document_search`.
+
+### Dependencies
+
+The documents feature requires these npm packages:
+- `multer` — file upload handling
+- `pdf-parse` — PDF text extraction for search indexing
+- `mammoth` — DOCX import/conversion
+
+---
+
 ## Agent Management
 
 ### Creating Agents

@@ -49,7 +49,7 @@ src/
 ├── config.ts                                       # Env var config
 ├── db/
 │   ├── index.ts                                    # PostgreSQL pool, query helpers
-│   └── migrations/                                 # SQL migrations (001-015)
+│   └── migrations/                                 # SQL migrations (001-022)
 ├── queue/index.ts                                  # BullMQ queue, Redis, rate limiting
 ├── slack/
 │   ├── index.ts                                    # Bolt app setup
@@ -76,6 +76,7 @@ src/
 │   ├── model-selection/     # Runtime model override (/opus, /sonnet, /haiku)
 │   ├── observability/       # Cost tracking, error rates, alerts, daily digest
 │   ├── dashboard/           # Slack Home Tab metrics
+│   ├── docs/                # Native documents (docs, sheets, files) — CRUD, versioning, search, storage
 │   ├── document-filling/    # Google Docs/Sheets template automation
 │   ├── auto-update/         # Pull-based deploy from GitHub
 │   ├── permissions/         # Tool access control (read-only vs read-write)
@@ -108,6 +109,11 @@ PostgreSQL with migrations in `src/db/migrations/`. Key tables:
 - **agent_tool_connections** — Per-agent tool connection mode config
 - **oauth_states** — OAuth flow state tracking
 - **action_audit_log** — Comprehensive action audit trail
+- **documents** — Document metadata, content (JSONB), version counter, tags, agent_editable
+- **document_versions** — Version snapshots (content, change summary, created_by)
+- **sheet_tabs** — Per-tab sparse cell data (JSONB), columns, row/col counts
+- **document_files** — Binary file storage (BYTEA), abstracted via StorageProvider
+- **document_search** — Full-text search index (tsvector + GIN)
 
 Query helpers: `query()`, `queryOne()`, `execute()` from `src/db/index.ts`.
 
@@ -126,6 +132,7 @@ Tools live in `src/modules/tools/integrations/`. Each tool is a self-contained f
 | PostHog | `integrations/posthog/` | read-only | `api_key`, `project_id` |
 | SerpAPI | `integrations/serpapi/` | read-only | `api_key` |
 | Knowledge Base | `integrations/kb/` | read-only | (auto-configured) |
+| Documents | `integrations/docs/` | read + write | (auto-configured) |
 
 ### Adding a new tool
 

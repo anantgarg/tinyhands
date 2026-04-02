@@ -111,6 +111,41 @@ Everyone can search the knowledge base by DMing the bot and typing `/kb search <
 
 ---
 
+## Documents
+
+The **Documents** page lets you manage all documents created by you or your agents.
+
+### Document Types
+
+- **Docs** — Rich text documents. Edit with the built-in editor, auto-saves as you type. Export as Markdown.
+- **Sheets** — Spreadsheets with multiple tabs. Click any cell to edit. Export as CSV.
+- **Files** — Upload images, PDFs, or any file. Preview supported for images and PDFs.
+
+### Creating Documents
+
+From the Documents page, click **New** to:
+- **New Document** — create a blank rich text document
+- **New Spreadsheet** — create a blank spreadsheet
+- **Upload File** — upload any file (max 25 MB)
+- **Import CSV** — import a CSV file as a spreadsheet
+- **Import DOCX** — import a Word document as a rich text document
+
+### Agent Access
+
+Agents can create and edit documents via built-in tool calls. Each document has an **Allow agents to edit** toggle (on by default). Turn it off to make a document read-only for agents while still allowing human edits.
+
+### Version History
+
+Every edit creates a version snapshot. Click **History** in any document editor to see all versions and restore a previous one.
+
+### Filtering
+
+- Filter by type: All, Docs, Sheets, Files
+- Search by title or content
+- View documents for a specific agent from the agent's **Docs** tab
+
+---
+
 ## Triggers
 
 Triggers control when an agent activates beyond direct messages. Types include:
