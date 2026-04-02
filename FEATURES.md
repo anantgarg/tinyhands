@@ -819,6 +819,8 @@ Native document management system. Three document types: **Docs** (rich text), *
 - Agent tools call internal API endpoints (`/internal/docs/*`) with `X-Internal-Secret` header.
 - Each document has an `agent_editable` toggle (default: true). If false, agent write operations return 403.
 - Agents can never permanently delete documents.
+- Agent updates support optimistic locking: `expected_version` can be passed with `update_doc`/`rename` actions. If omitted, falls back to current version (no conflict check). All create/update/get responses include `version` so agents can track it.
+- Cell updates (both API and internal) are limited to 10,000 cells per request and 10 MB total payload size.
 
 ### Human Access (Dashboard)
 
