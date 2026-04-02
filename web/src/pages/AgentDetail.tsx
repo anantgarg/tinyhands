@@ -59,10 +59,10 @@ import {
   usePromptSize,
 } from '@/api/agents';
 import type { Agent as AgentData, AgentVersion } from '@/api/agents';
-import { useAvailableTools } from '@/api/tools';
+import { useAvailableTools, useIntegrations } from '@/api/tools';
 import { useBuiltinSkills, useWorkspaceSkills } from '@/api/skills';
 import { useUpdateTrigger, useDeleteTrigger } from '@/api/triggers';
-import { useAgentToolConnections, useSetAgentToolConnection } from '@/api/connections';
+import { useAgentToolConnections, useSetAgentToolConnection, useConnectionAvailability } from '@/api/connections';
 import { useSlackChannels, useSlackUsers } from '@/api/slack';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { renderEmoji } from '@/lib/emoji';
@@ -632,10 +632,12 @@ function formatAccessLevel(level: string): string {
 function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
   const updateAgent = useUpdateAgent();
   const { data: availableTools } = useAvailableTools();
+  const { data: integrationsList } = useIntegrations();
   const removeAgentTool = useRemoveAgentTool();
   const addAgentTool = useAddAgentTool();
   const { data: toolConnections } = useAgentToolConnections(agentId);
   const setToolConnection = useSetAgentToolConnection();
+  const { data: connectionAvailability } = useConnectionAvailability(agentId);
   const { data: toolRequests } = useAgentToolRequests(agentId);
   const createToolRequest = useCreateToolRequest();
   const isAdmin = useAuthStore((s) => s.user?.platformRole === 'superadmin' || s.user?.platformRole === 'admin');
@@ -645,6 +647,12 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
 
   const pendingToolRequests = (toolRequests ?? []).filter((r) => r.status === 'pending');
   const pendingWriteTools = new Set(pendingToolRequests.filter(r => r.toolName.endsWith('-write')).map(r => r.toolName));
+
+  // Derive integration ID from a tool group key (matches backend getIntegrationIdForTool logic)
+  const getIntegrationId = (groupKey: string): string => {
+    const integ = integrationsList?.find(i => i.id === groupKey);
+    return integ?.id || groupKey;
+  };
 
   const currentTools = agent.tools ?? [];
   const toolsNotAdded = (availableTools ?? []).filter((t) => !currentTools.includes(t.name));
@@ -830,11 +838,44 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                                   <SelectValue placeholder="Not configured" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                  <SelectItem value="team">Team credentials</SelectItem>
-                                  <SelectItem value="personal">Requesting user's</SelectItem>
-                                  <SelectItem value="creator">Agent creator's</SelectItem>
+                                  {(() => {
+                                    const integ = integrationsList?.find(i => i.id === group.key);
+                                    const supported = integ?.supportedCredentialModes;
+                                    const integId = getIntegrationId(group.key);
+                                    const avail = connectionAvailability?.[integId];
+                                    const teamStatus = avail ? (avail.teamConnected ? ' (Connected)' : ' (Not Connected)') : '';
+                                    const creatorStatus = avail ? (avail.creatorConnected ? ' (Connected)' : ' (Not Connected)') : '';
+                                    const allModes = [
+                                      { value: 'team', label: `Team credentials${teamStatus}`, mode: 'team' },
+                                      { value: 'creator', label: `Agent creator's${creatorStatus}`, mode: 'delegated' },
+                                      { value: 'personal', label: "Requesting user's", mode: 'runtime' },
+                                    ];
+                                    const filtered = supported && supported.length > 0
+                                      ? allModes.filter(m => supported.includes(m.mode))
+                                      : allModes;
+                                    return filtered.map(m => (
+                                      <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                                    ));
+                                  })()}
                                 </SelectContent>
                               </Select>
+                              {(() => {
+                                const integId = getIntegrationId(group.key);
+                                const avail = connectionAvailability?.[integId];
+                                if (currentMode === 'creator' && avail && !avail.creatorConnected) {
+                                  return (
+                                    <a
+                                      href="/connections"
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="ml-1 text-[10px] text-brand hover:underline whitespace-nowrap"
+                                    >
+                                      Connect
+                                    </a>
+                                  );
+                                }
+                                return null;
+                              })()}
                             ) : (
                               <span className="text-xs text-warm-text-secondary">&mdash;</span>
                             )}

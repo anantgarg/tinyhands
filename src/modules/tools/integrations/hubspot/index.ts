@@ -354,7 +354,6 @@ export const manifest: ToolManifest = {
   configPlaceholders: {
     access_token: 'Paste Private App access token here',
   },
-  connectionModel: 'hybrid',
   tools: [
     { name: 'hubspot-read', schema: READ_SCHEMA, code: READ_CODE, accessLevel: 'read-only', displayName: 'Checking HubSpot' },
     { name: 'hubspot-write', schema: WRITE_SCHEMA, code: WRITE_CODE, accessLevel: 'read-write', displayName: 'Updating HubSpot' },

@@ -421,7 +421,6 @@ export const manifest: ToolManifest = {
     api_key: 'live_xxxxxxxxxxxxxxxx',
     site: 'your-subdomain (from your-subdomain.chargebee.com)',
   },
-  connectionModel: 'team',
   tools: [
     { name: 'chargebee-read', schema: READ_SCHEMA, code: READ_CODE, accessLevel: 'read-only', displayName: 'Checking Chargebee' },
     { name: 'chargebee-write', schema: WRITE_SCHEMA, code: WRITE_CODE, accessLevel: 'read-write', displayName: 'Updating Chargebee' },

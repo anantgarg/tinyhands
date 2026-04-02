@@ -61,6 +61,7 @@ interface AgentConfig {
   scheduleCron: string;
   scheduleTimezone: string;
   triggers: Array<{ type: string; description: string; config: Record<string, unknown> }>;
+  credentialModes: Record<string, string>;
 }
 
 export interface CreationFlow {
@@ -131,6 +132,7 @@ interface GoalAnalysisRaw {
   memory_enabled?: boolean;
   summary?: string;
   triggers?: Array<{ type: string; description: string; config: Record<string, unknown> }>;
+  credential_modes?: Record<string, string>;
 }
 
 function getConfidenceLevel(analysis: GoalAnalysisRaw): 'high' | 'medium' | 'low' {
@@ -179,6 +181,7 @@ export function useCreationFlow(): CreationFlow {
     writePolicy: 'auto',
     tools: [],
     triggers: [],
+    credentialModes: {},
   });
   const [createdAgentId, setCreatedAgentId] = useState<string | null>(null);
   const goalRef = useRef('');
@@ -467,6 +470,7 @@ export function useCreationFlow(): CreationFlow {
       scheduleTimezone: config.scheduleTimezone,
       systemPrompt: config.systemPrompt,
       triggers: config.triggers?.map(t => ({ type: t.type, description: t.description })),
+      credentialModes: config.credentialModes,
     };
     addMsg({
       id: msgId(),
@@ -515,6 +519,9 @@ export function useCreationFlow(): CreationFlow {
         respondToAllMessages: respondToAll,
         defaultAccess: config.defaultAccess || 'member',
         writePolicy: config.writePolicy || 'auto',
+        credentialModes: config.credentialModes && Object.keys(config.credentialModes).length > 0
+          ? config.credentialModes
+          : undefined,
       });
 
       // Create schedule trigger if configured
@@ -669,6 +676,7 @@ export function useCreationFlow(): CreationFlow {
             const memory = result.memory_enabled ?? result.memoryEnabled ?? false;
             const mentions = result.mentions_only ?? result.mentionsOnly ?? false;
             const triggers = result.triggers || [];
+            const credentialModes = result.credential_modes || {};
 
             setConfig((prev) => ({
               ...prev,
@@ -680,6 +688,7 @@ export function useCreationFlow(): CreationFlow {
               memoryEnabled: memory,
               activation: mentions ? 'mentions' : 'relevant',
               triggers,
+              credentialModes,
             }));
 
             // Determine confidence level
@@ -764,6 +773,7 @@ export function useCreationFlow(): CreationFlow {
             const memory = result.memory_enabled ?? result.memoryEnabled ?? false;
             const mentions = result.mentions_only ?? result.mentionsOnly ?? false;
             const triggers = result.triggers || [];
+            const credentialModes = result.credential_modes || {};
 
             setConfig((prev) => ({
               ...prev,
@@ -775,6 +785,7 @@ export function useCreationFlow(): CreationFlow {
               memoryEnabled: memory,
               activation: mentions ? 'mentions' : 'relevant',
               triggers,
+              credentialModes,
             }));
 
             // Re-check skips

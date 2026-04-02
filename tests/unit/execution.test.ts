@@ -17,6 +17,8 @@ const mockRecordTokenUsage = vi.fn().mockResolvedValue(undefined);
 const mockGetRedisConnection = vi.fn();
 const mockHandleRateLimitResponse = vi.fn().mockResolvedValue(undefined);
 const mockEnqueueRun = vi.fn().mockResolvedValue({ id: 'retry-job-1' });
+const mockSetApprovalState = vi.fn().mockResolvedValue(undefined);
+const mockGetApprovalState = vi.fn().mockResolvedValue('approved');
 
 vi.mock('../../src/queue', () => ({
   getRedisConnection: (...args: any[]) => mockGetRedisConnection(...args),
@@ -25,6 +27,8 @@ vi.mock('../../src/queue', () => ({
   checkRequestRate: (...args: any[]) => mockCheckRequestRate(...args),
   handleRateLimitResponse: (...args: any[]) => mockHandleRateLimitResponse(...args),
   enqueueRun: (...args: any[]) => mockEnqueueRun(...args),
+  setApprovalState: (...args: any[]) => mockSetApprovalState(...args),
+  getApprovalState: (...args: any[]) => mockGetApprovalState(...args),
 }));
 
 const mockCreateAgentContainer = vi.fn();
@@ -113,7 +117,6 @@ vi.mock('../../src/modules/connections', () => ({
 const mockBuildCredentialError = vi.fn().mockReturnValue({
   message: 'Missing shared Chargebee credentials',
   blocks: [{ type: 'section', text: { type: 'mrkdwn', text: ':chargebee: Missing credentials' } }],
-  showConnectButton: false,
 });
 vi.mock('../../src/modules/connections/errors', () => ({
   buildCredentialError: (...args: any[]) => mockBuildCredentialError(...args),
@@ -185,6 +188,7 @@ vi.mock('../../src/config', () => ({
       maxConcurrentWorkers: 3,
     },
     anthropic: { apiKey: 'test' },
+    server: { webDashboardUrl: 'http://localhost:3000' },
   },
 }));
 
@@ -2318,7 +2322,7 @@ describe('Execution Module – Credential Resolution', () => {
     }
   });
 
-  it('should fail run with role-aware error when no connection exists', async () => {
+  it('should fail run immediately when all tools have missing credentials', async () => {
     const agent = makeAgent({ tools: ['chargebee-read'] });
     mockGetAgent.mockResolvedValue(agent);
     mockListCustomTools.mockResolvedValue([
@@ -2338,11 +2342,11 @@ describe('Execution Module – Credential Resolution', () => {
       TEST_WORKSPACE_ID, 'agent-1', 'chargebee-read', 'U001',
     );
     expect(mockBuildCredentialError).toHaveBeenCalled();
-    // Should post error blocks to Slack
+    // Should post error blocks to Slack with dashboard link
     expect(mockPostBlocks).toHaveBeenCalledWith(
       'C123',
       expect.any(Array),
-      expect.stringContaining('Chargebee'),
+      expect.stringContaining('Missing credentials'),
       '1700000000.000000',
     );
     // Should fail the run — not proceed with container
@@ -2352,10 +2356,10 @@ describe('Execution Module – Credential Resolution', () => {
       expect.stringContaining('UPDATE run_history'),
       expect.arrayContaining(['failed']),
     );
-    expect(result).toBe('Missing shared Chargebee credentials');
+    expect(result).toBe('All tools have missing credentials');
   });
 
-  it('should fail run when credential resolution throws', async () => {
+  it('should collect missing credential tools and fail when resolution throws', async () => {
     const agent = makeAgent({ tools: ['chargebee-read'] });
     mockGetAgent.mockResolvedValue(agent);
     mockListCustomTools.mockResolvedValue([
@@ -2370,19 +2374,105 @@ describe('Execution Module – Credential Resolution', () => {
     const result = await executeAgentRun(job);
 
     expect(mockResolveToolCredentials).toHaveBeenCalled();
-    expect(mockLoggerWarn).toHaveBeenCalledWith('Credential resolution failed, aborting run', expect.objectContaining({ tool: 'chargebee-read' }));
-    // Should post error message to Slack
-    expect(mockPostMessage).toHaveBeenCalledWith(
+    expect(mockLoggerWarn).toHaveBeenCalledWith('Credential resolution failed, collecting for confirmation', expect.objectContaining({ tool: 'chargebee-read' }));
+    // All tools missing — should fail immediately
+    expect(mockPostBlocks).toHaveBeenCalledWith(
       'C123',
-      expect.stringContaining('chargebee-read'),
+      expect.any(Array),
+      expect.stringContaining('Missing credentials'),
       '1700000000.000000',
     );
-    // Should NOT proceed with container creation
     expect(mockCreateAgentContainer).not.toHaveBeenCalled();
-    expect(result).toBe('Credential resolution failed for chargebee-read');
+    expect(result).toBe('All tools have missing credentials');
   });
 
-  it('should add connect button for runtime mode missing credentials', async () => {
+  it('should show continue/cancel confirmation when some tools have missing credentials', async () => {
+    const agent = makeAgent({ tools: ['chargebee-read', 'linear-read'] });
+    mockGetAgent.mockResolvedValue(agent);
+    mockListCustomTools.mockResolvedValue([
+      { name: 'chargebee-read', schema_json: '{}', config_json: '{"api_key":"key1"}', language: 'javascript' },
+      { name: 'linear-read', schema_json: '{}', config_json: '{"api_key":"key2"}', language: 'javascript' },
+    ]);
+    mockGetToolExecutionScript.mockResolvedValue('console.log("test")');
+    // First tool resolves, second tool fails
+    mockResolveToolCredentials
+      .mockResolvedValueOnce({ api_key: 'resolved-key' })
+      .mockResolvedValueOnce(null);
+    mockGetCredentialErrorContext.mockResolvedValue({
+      mode: 'runtime',
+      integrationId: 'linear',
+      integrationLabel: 'Linear',
+      integrationIcon: ':bar_chart:',
+      runnerPlatformRole: 'member',
+      runnerAgentRole: 'member',
+      agentOwnerIds: ['U_OWNER1'],
+      isRunnerOwner: false,
+      isRunnerAdmin: false,
+    });
+    mockBuildCredentialError.mockReturnValue({
+      message: 'Missing Linear credentials for user',
+      blocks: [{ type: 'section', text: { type: 'mrkdwn', text: ':key: I need your *Linear* credentials' } }],
+    });
+    // Simulate user approving to continue without the missing tool
+    mockGetApprovalState.mockResolvedValue('approved');
+
+    const data = makeJobData();
+    const job = makeFakeJob(data);
+
+    await executeAgentRun(job);
+
+    // Should have posted confirmation with continue/cancel buttons
+    expect(mockPostBlocks).toHaveBeenCalled();
+    const postedBlocks = mockPostBlocks.mock.calls[0][1];
+    const actionsBlock = postedBlocks.find((b: any) => b.type === 'actions');
+    expect(actionsBlock).toBeDefined();
+    expect(actionsBlock.elements[0].action_id).toBe('approve_skip_tools');
+    expect(actionsBlock.elements[1].action_id).toBe('deny_skip_tools');
+    // Dashboard link should be included
+    const contextBlock = postedBlocks.find((b: any) => b.type === 'context');
+    expect(contextBlock).toBeDefined();
+    expect(contextBlock.elements[0].text).toContain('connections');
+  });
+
+  it('should cancel run when user denies continue without tools', async () => {
+    const agent = makeAgent({ tools: ['chargebee-read', 'linear-read'] });
+    mockGetAgent.mockResolvedValue(agent);
+    mockListCustomTools.mockResolvedValue([
+      { name: 'chargebee-read', schema_json: '{}', config_json: '{"api_key":"key1"}', language: 'javascript' },
+      { name: 'linear-read', schema_json: '{}', config_json: '{"api_key":"key2"}', language: 'javascript' },
+    ]);
+    mockGetToolExecutionScript.mockResolvedValue('console.log("test")');
+    mockResolveToolCredentials
+      .mockResolvedValueOnce({ api_key: 'resolved-key' })
+      .mockResolvedValueOnce(null);
+    mockGetCredentialErrorContext.mockResolvedValue({
+      mode: 'runtime',
+      integrationId: 'linear',
+      integrationLabel: 'Linear',
+      integrationIcon: ':bar_chart:',
+      runnerPlatformRole: 'member',
+      runnerAgentRole: 'member',
+      agentOwnerIds: ['U_OWNER1'],
+      isRunnerOwner: false,
+      isRunnerAdmin: false,
+    });
+    mockBuildCredentialError.mockReturnValue({
+      message: 'Missing Linear credentials for user',
+      blocks: [{ type: 'section', text: { type: 'mrkdwn', text: ':key: I need your *Linear* credentials' } }],
+    });
+    // Simulate user denying
+    mockGetApprovalState.mockResolvedValue('denied');
+
+    const data = makeJobData();
+    const job = makeFakeJob(data);
+
+    const result = await executeAgentRun(job);
+
+    expect(result).toBe('Run cancelled — missing tool credentials');
+    expect(mockCreateAgentContainer).not.toHaveBeenCalled();
+  });
+
+  it('should include dashboard link in error blocks for missing credentials', async () => {
     const agent = makeAgent({ tools: ['gmail-read'] });
     mockGetAgent.mockResolvedValue(agent);
     mockListCustomTools.mockResolvedValue([
@@ -2403,8 +2493,7 @@ describe('Execution Module – Credential Resolution', () => {
     });
     mockBuildCredentialError.mockReturnValue({
       message: 'Missing Gmail credentials for user',
-      blocks: [{ type: 'section', text: { type: 'mrkdwn', text: ':key: I need your *Gmail* credentials' } }],
-      showConnectButton: true,
+      blocks: [{ type: 'section', text: { type: 'mrkdwn', text: ':key: I need your *Gmail* credentials. Go to the Connections page in the TinyHands dashboard.' } }],
     });
 
     const data = makeJobData();
@@ -2412,11 +2501,11 @@ describe('Execution Module – Credential Resolution', () => {
 
     await executeAgentRun(job);
 
-    // Should have posted error blocks with a connect button
+    // All tools missing — should post error with dashboard link
     expect(mockPostBlocks).toHaveBeenCalled();
     const postedBlocks = mockPostBlocks.mock.calls[0][1];
-    const actionsBlock = postedBlocks.find((b: any) => b.type === 'actions');
-    expect(actionsBlock).toBeDefined();
-    expect(actionsBlock.elements[0].action_id).toMatch(/connect_personal/);
+    const contextBlock = postedBlocks.find((b: any) => b.type === 'context');
+    expect(contextBlock).toBeDefined();
+    expect(contextBlock.elements[0].text).toContain('connections');
   });
 });

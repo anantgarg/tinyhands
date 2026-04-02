@@ -60,7 +60,7 @@ export function getToolIntegrations() {
     tools: m.tools.map(t => t.name),
     requiredConfigKeys: m.configKeys,
     configPlaceholders: m.configPlaceholders || {},
-    connectionModel: m.connectionModel,
+    supportedCredentialModes: m.supportedCredentialModes,
   }));
 }
 

@@ -17,7 +17,8 @@ interface Integration {
   status: 'active' | 'inactive';
   connectionId: string | null;
   toolsCount: number;
-  connectionModel: 'team' | 'personal' | 'hybrid';
+  supportedCredentialModes?: string[];
+  oauthSupported?: boolean;
   configKeys: { key: string; label: string; placeholder: string; required: boolean; secret: boolean }[];
   setupGuide: string | null;
 }

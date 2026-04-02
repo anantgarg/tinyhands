@@ -27,7 +27,6 @@ vi.mock('../../src/modules/tools/integrations/google', () => ({
     icon: ':file_folder:',
     description: 'Google Workspace integration',
     configKeys: ['access_token'],
-    connectionModel: 'personal',
     tools: [
       { name: 'google-read', schema: '{}', code: '', accessLevel: 'read-only', displayName: 'Checking Google Workspace' },
       { name: 'google-write', schema: '{}', code: '', accessLevel: 'read-write', displayName: 'Updating Google Workspace' },

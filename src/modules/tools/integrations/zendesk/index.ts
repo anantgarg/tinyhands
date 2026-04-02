@@ -279,7 +279,6 @@ export const manifest: ToolManifest = {
     email: 'admin@company.com',
     api_token: 'API token from Admin Center',
   },
-  connectionModel: 'team',
   tools: [
     { name: 'zendesk-read', schema: READ_SCHEMA, code: READ_CODE, accessLevel: 'read-only', displayName: 'Checking Zendesk' },
     { name: 'zendesk-write', schema: WRITE_SCHEMA, code: WRITE_CODE, accessLevel: 'read-write', displayName: 'Updating Zendesk' },

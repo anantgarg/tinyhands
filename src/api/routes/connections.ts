@@ -9,12 +9,21 @@ import {
   getToolAgentUsage,
 } from '../../modules/connections';
 import { getIntegrations } from '../../modules/tools/integrations';
+import { getSupportedOAuthIntegrations } from '../../modules/connections/oauth';
 import { resolveUserNames } from '../helpers/user-resolver';
 import { query, execute } from '../../db';
 import { logger } from '../../utils/logger';
 import { config } from '../../config';
 
 const router = Router();
+
+/** Lazily resolved list of OAuth-capable integration IDs */
+let _oauthIds: string[] | null = null;
+function getOAuthIds(): string[] {
+  if (!_oauthIds) _oauthIds = getSupportedOAuthIntegrations();
+  return _oauthIds;
+}
+const oauthIds = { includes: (id: string) => getOAuthIds().includes(id) };
 
 // GET /connections/team — List team connections (admin-only)
 router.get('/team', requireAdmin, async (req: Request, res: Response) => {
@@ -239,22 +248,37 @@ router.put('/agent/:agentId/:toolName', async (req: Request, res: Response) => {
     const MODE_MAP: Record<string, string> = { team: 'team', personal: 'runtime', creator: 'delegated', runtime: 'runtime', delegated: 'delegated' };
     const resolvedMode = MODE_MAP[mode] || mode;
 
-    // Non-admins cannot switch write tools to team credentials without approval
-    if (resolvedMode === 'team' && toolName.endsWith('-write')) {
+    // Validate mode against integration's supportedCredentialModes
+    try {
+      const { getIntegrationIdForTool } = await import('../../modules/connections');
+      const integId = getIntegrationIdForTool(toolName);
+      const { getIntegration } = await import('../../modules/tools/integrations');
+      const integ = getIntegration(integId);
+      if (integ?.supportedCredentialModes && integ.supportedCredentialModes.length > 0) {
+        if (!integ.supportedCredentialModes.includes(resolvedMode as any)) {
+          res.status(400).json({ error: `Mode '${resolvedMode}' is not supported for this integration. Supported: ${integ.supportedCredentialModes.join(', ')}` });
+          return;
+        }
+      }
+    } catch { /* best-effort validation */ }
+
+    // Non-admins cannot switch any tool to team credentials without approval
+    if (resolvedMode === 'team') {
       const { isPlatformAdmin } = await import('../../modules/access-control');
       const isAdmin = await isPlatformAdmin(workspaceId, userId);
       if (!isAdmin) {
         const { createToolRequest, listPlatformAdmins } = await import('../../modules/access-control');
         const { getAgent } = await import('../../modules/agents');
         const agent = await getAgent(workspaceId, agentId);
-        await createToolRequest(workspaceId, agentId, toolName, 'read-write', userId, 'Requested team credentials for write tool');
+        const accessLevel = toolName.endsWith('-write') ? 'read-write' : 'read-only';
+        await createToolRequest(workspaceId, agentId, toolName, accessLevel, userId, 'Requested team credentials');
         // Notify admins
         try {
           const { sendDMBlocks } = await import('../../slack');
           const admins = await listPlatformAdmins(workspaceId);
           for (const admin of admins) {
             await sendDMBlocks(admin.user_id, [
-              { type: 'section', text: { type: 'mrkdwn', text: `:lock: *Tool credential request*\n<@${userId}> wants to use *team credentials* for *${toolName}* on agent *${agent?.name || agentId}*.\nReview in the dashboard under Tool Requests.` } },
+              { type: 'section', text: { type: 'mrkdwn', text: `:lock: *Credential request*\n<@${userId}> wants to use *team credentials* for *${toolName}* on agent *${agent?.name || agentId}*.\nReview in the dashboard under Credential Requests.` } },
               {
                 type: 'actions',
                 elements: [{
@@ -264,10 +288,10 @@ router.put('/agent/:agentId/:toolName', async (req: Request, res: Response) => {
                   action_id: 'open_dashboard_requests',
                 }],
               },
-            ], 'Tool credential request pending approval');
+            ], 'Credential request pending review');
           }
         } catch {}
-        res.status(202).json({ status: 'pending_approval', message: 'Using team credentials for write tools requires admin approval.' });
+        res.status(202).json({ status: 'pending_approval', message: 'Using team credentials requires admin approval.' });
         return;
       }
     }
@@ -326,7 +350,7 @@ router.get('/oauth-integrations', async (_req: Request, res: Response) => {
           name: int.id,
           displayName: int.label || int.id,
           description: int.description || '',
-          oauthSupported: !!(int as any).oauthConfig || int.connectionModel === 'personal',
+          oauthSupported: oauthIds.includes(int.id),
         }));
     } catch { /* ignore */ }
     res.json(result);
@@ -378,6 +402,57 @@ router.put('/agent-tool-modes/:agentId/:toolName', async (req: Request, res: Res
   } catch (err: any) {
     logger.error('Set agent tool mode error', { error: err.message });
     res.status(400).json({ error: "Couldn't update the tool mode. Please try again." });
+  }
+});
+
+// GET /connections/agent/:agentId/availability — Check connection availability for an agent's tools
+// Returns booleans indicating whether team, creator, and current user have connections for each integration
+router.get('/agent/:agentId/availability', async (req: Request, res: Response) => {
+  try {
+    const { workspaceId, userId } = getSessionUser(req);
+    const agentId = req.params.agentId as string;
+
+    const { getAgent } = await import('../../modules/agents');
+    const { getIntegrationIdForTool } = await import('../../modules/connections');
+
+    const agent = await getAgent(workspaceId, agentId);
+    if (!agent) {
+      res.status(404).json({ error: 'Agent not found' });
+      return;
+    }
+
+    // Map agent tools to unique integration IDs
+    const integrationIds = new Set<string>();
+    for (const tool of (agent.tools || []) as string[]) {
+      const intId = getIntegrationIdForTool(tool);
+      if (intId) integrationIds.add(intId);
+    }
+
+    // Batch-query connections
+    const teamConnections = await listTeamConnections(workspaceId);
+    const creatorConnections = agent.created_by
+      ? await listPersonalConnectionsForUser(workspaceId, agent.created_by)
+      : [];
+    const currentUserConnections = await listPersonalConnectionsForUser(workspaceId, userId);
+
+    // Build team connection set
+    const teamSet = new Set((teamConnections as any[]).filter((c: any) => c.status === 'active').map((c: any) => c.integration_id));
+    const creatorSet = new Set((creatorConnections as any[]).filter((c: any) => c.status === 'active').map((c: any) => c.integration_id));
+    const currentUserSet = new Set((currentUserConnections as any[]).filter((c: any) => c.status === 'active').map((c: any) => c.integration_id));
+
+    const result: Record<string, { teamConnected: boolean; creatorConnected: boolean; currentUserConnected: boolean }> = {};
+    for (const intId of integrationIds) {
+      result[intId] = {
+        teamConnected: teamSet.has(intId),
+        creatorConnected: creatorSet.has(intId),
+        currentUserConnected: currentUserSet.has(intId),
+      };
+    }
+
+    res.json(result);
+  } catch (err: any) {
+    logger.error('Connection availability error', { error: err.message });
+    res.status(500).json({ error: 'Failed to check connection availability' });
   }
 });
 

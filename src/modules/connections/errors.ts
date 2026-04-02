@@ -15,7 +15,6 @@ export interface CredentialErrorContext {
 export interface CredentialErrorResult {
   message: string;
   blocks: any[];
-  showConnectButton: boolean;
 }
 
 export function buildCredentialError(ctx: CredentialErrorContext): CredentialErrorResult {
@@ -43,7 +42,6 @@ function buildNotConfiguredError(ctx: CredentialErrorContext): CredentialErrorRe
         type: 'section',
         text: { type: 'mrkdwn', text: `${icon} *${label}* credentials haven't been configured for this agent yet. Open the agent's settings in the dashboard and choose a credential mode for *${label}*.` },
       }],
-      showConnectButton: false,
     };
   }
 
@@ -54,7 +52,6 @@ function buildNotConfiguredError(ctx: CredentialErrorContext): CredentialErrorRe
       type: 'section',
       text: { type: 'mrkdwn', text: `${icon} *${label}* credentials haven't been configured for this agent yet. Let ${ownerMentions || 'the agent owner'} know.` },
     }],
-    showConnectButton: false,
   };
 }
 
@@ -68,7 +65,6 @@ function buildTeamModeError(ctx: CredentialErrorContext): CredentialErrorResult 
         type: 'section',
         text: { type: 'mrkdwn', text: `${icon} The shared *${label}* credentials haven't been set up yet. Go to the *Connections* page in the dashboard to configure them.` },
       }],
-      showConnectButton: false,
     };
   }
 
@@ -79,7 +75,6 @@ function buildTeamModeError(ctx: CredentialErrorContext): CredentialErrorResult 
         type: 'section',
         text: { type: 'mrkdwn', text: `${icon} This agent uses shared *${label}* credentials, but they haven't been set up by an admin yet. Ask a workspace admin to connect *${label}* in the Connections page.` },
       }],
-      showConnectButton: false,
     };
   }
 
@@ -90,7 +85,6 @@ function buildTeamModeError(ctx: CredentialErrorContext): CredentialErrorResult 
       type: 'section',
       text: { type: 'mrkdwn', text: `${icon} This agent uses shared *${label}* credentials, but they aren't configured yet. Let ${ownerMentions || 'a workspace admin'} know.` },
     }],
-    showConnectButton: false,
   };
 }
 
@@ -102,9 +96,8 @@ function buildDelegatedModeError(ctx: CredentialErrorContext): CredentialErrorRe
       message: `Missing ${label} credentials for agent owner`,
       blocks: [{
         type: 'section',
-        text: { type: 'mrkdwn', text: `${icon} This agent uses your *${label}* credentials, but you haven't connected *${label}* yet.` },
+        text: { type: 'mrkdwn', text: `${icon} This agent uses your *${label}* credentials, but you haven't connected *${label}* yet. Go to the Connections page in the TinyHands dashboard to set it up.` },
       }],
-      showConnectButton: true,
     };
   }
 
@@ -114,9 +107,8 @@ function buildDelegatedModeError(ctx: CredentialErrorContext): CredentialErrorRe
       message: `Missing ${label} credentials for agent owner`,
       blocks: [{
         type: 'section',
-        text: { type: 'mrkdwn', text: `${icon} This agent uses ${ownerMentions || "the owner"}'s *${label}* credentials, but they haven't connected yet. Let them know they need to connect *${label}*.` },
+        text: { type: 'mrkdwn', text: `${icon} This agent uses ${ownerMentions || "the owner"}'s *${label}* credentials, but they haven't connected yet. Let them know they need to connect *${label}* in the TinyHands dashboard.` },
       }],
-      showConnectButton: false,
     };
   }
 
@@ -125,9 +117,8 @@ function buildDelegatedModeError(ctx: CredentialErrorContext): CredentialErrorRe
     message: `Missing ${label} credentials for agent owner`,
     blocks: [{
       type: 'section',
-      text: { type: 'mrkdwn', text: `${icon} This agent uses the owner's *${label}* credentials, but they aren't set up yet. Let ${ownerMentions || 'the agent owner'} know.` },
+      text: { type: 'mrkdwn', text: `${icon} This agent uses the owner's *${label}* credentials, but they aren't set up yet. Let ${ownerMentions || 'the agent owner'} know — they need to connect *${label}* in the TinyHands dashboard.` },
     }],
-    showConnectButton: false,
   };
 }
 
@@ -137,8 +128,7 @@ function buildRuntimeModeError(ctx: CredentialErrorContext): CredentialErrorResu
     message: `Missing ${label} credentials for user`,
     blocks: [{
       type: 'section',
-      text: { type: 'mrkdwn', text: `:key: I need your *${label}* credentials to proceed.` },
+      text: { type: 'mrkdwn', text: `:key: I need your *${label}* credentials to proceed. Go to the Connections page in the TinyHands dashboard to connect it.` },
     }],
-    showConnectButton: true,
   };
 }

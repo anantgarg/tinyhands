@@ -13,7 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   useUpgradeRequests, useApproveUpgrade, useDenyUpgrade, useAgents,
-  useToolRequests, useApproveToolRequest, useDenyToolRequest,
+  useToolRequests, useDenyToolRequest,
   useFeatureRequests, useDismissFeatureRequest,
   usePendingCounts,
 } from '@/api/agents';
@@ -40,7 +40,7 @@ export function Requests() {
             Evolution Proposals{counts?.evolutionProposals ? ` (${counts.evolutionProposals})` : ''}
           </TabsTrigger>
           <TabsTrigger value="tool-requests">
-            Tool Requests{counts?.toolRequests ? ` (${counts.toolRequests})` : ''}
+            Credential Requests{counts?.toolRequests ? ` (${counts.toolRequests})` : ''}
           </TabsTrigger>
           <TabsTrigger value="feature-requests">
             Feature Requests{counts?.featureRequests ? ` (${counts.featureRequests})` : ''}
@@ -328,7 +328,6 @@ function formatAccessLevel(level: string): string {
 function ToolRequestsTab() {
   const { data: agents } = useAgents();
   const { data: requests, isLoading } = useToolRequests('pending');
-  const approveRequest = useApproveToolRequest();
   const denyRequest = useDenyToolRequest();
   const [agentFilter, setAgentFilter] = useState('all');
 
@@ -343,8 +342,8 @@ function ToolRequestsTab() {
     return (
       <EmptyState
         icon={Wrench}
-        title="No pending tool requests"
-        description="When users request tool access for agents, their requests will appear here for review."
+        title="No pending credential requests"
+        description="When users request team credentials for agent tools, their requests will appear here for review."
       />
     );
   }
@@ -405,11 +404,12 @@ function ToolRequestsTab() {
                   <div className="flex gap-1">
                     <Button
                       size="sm"
-                      onClick={() => approveRequest.mutate({ agentId: req.agentId, requestId: req.id })}
-                      disabled={approveRequest.isPending}
+                      asChild
                     >
-                      <CheckCircle className="mr-1.5 h-3.5 w-3.5" />
-                      Approve
+                      <Link to="/connections">
+                        <Wrench className="mr-1.5 h-3.5 w-3.5" />
+                        Configure
+                      </Link>
                     </Button>
                     <Button
                       variant="outline"

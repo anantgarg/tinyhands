@@ -102,13 +102,15 @@ describe('Slack actions module', () => {
       expect(handlers).toHaveProperty('evolution_approve');
       expect(handlers).toHaveProperty('evolution_reject');
       expect(handlers).toHaveProperty('workflow_action');
+      expect(handlers).toHaveProperty('approve_skip_tools');
+      expect(handlers).toHaveProperty('deny_skip_tools');
       expect(handlers).toHaveProperty('trigger_pause');
       expect(handlers).toHaveProperty('trigger_resume');
       expect(handlers).toHaveProperty('open_dashboard_requests');
     });
 
-    it('should register exactly 8 action handlers', () => {
-      expect(Object.keys(handlers)).toHaveLength(8);
+    it('should register exactly 10 action handlers', () => {
+      expect(Object.keys(handlers)).toHaveLength(10);
     });
   });
 

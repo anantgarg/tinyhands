@@ -141,7 +141,6 @@ export const manifest: ToolManifest = {
     api_key: 'phx_xxxxxxxxxxxxxxxx',
     project_id: 'Numeric project ID',
   },
-  connectionModel: 'team',
   tools: [
     { name: 'posthog-read', schema: READ_SCHEMA, code: READ_CODE, accessLevel: 'read-only', displayName: 'Checking PostHog' },
   ],

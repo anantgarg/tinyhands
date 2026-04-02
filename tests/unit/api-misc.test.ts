@@ -31,6 +31,22 @@ vi.mock('../../src/modules/agents', () => ({
   getAgent: (...args: any[]) => mockGetAgent(...args),
 }));
 
+// Access control (needed for team credential approval flow)
+const mockIsPlatformAdmin = vi.fn().mockResolvedValue(true);
+const mockCreateToolRequest = vi.fn().mockResolvedValue('req-1');
+const mockListPlatformAdmins = vi.fn().mockResolvedValue([]);
+vi.mock('../../src/modules/access-control', () => ({
+  isPlatformAdmin: (...args: any[]) => mockIsPlatformAdmin(...args),
+  createToolRequest: (...args: any[]) => mockCreateToolRequest(...args),
+  listPlatformAdmins: (...args: any[]) => mockListPlatformAdmins(...args),
+}));
+
+// Tool integrations (needed for supportedCredentialModes validation)
+vi.mock('../../src/modules/tools/integrations', () => ({
+  getIntegration: () => null,
+  getIntegrations: () => [],
+}));
+
 // Triggers
 const mockCreateTrigger = vi.fn();
 const mockGetTrigger = vi.fn();

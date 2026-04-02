@@ -98,6 +98,29 @@ export function registerActions(app: App): void {
     }
   });
 
+  // ── Skip Missing Tools Approval ──
+  app.action('approve_skip_tools', async ({ action, ack }) => {
+    await ack();
+    try {
+      const { setApprovalState } = await import('../queue');
+      const { requestId } = JSON.parse((action as any).value);
+      await setApprovalState(requestId, 'approved');
+    } catch (err: any) {
+      logger.error('Skip tools approval failed', { error: err.message });
+    }
+  });
+
+  app.action('deny_skip_tools', async ({ action, ack }) => {
+    await ack();
+    try {
+      const { setApprovalState } = await import('../queue');
+      const { requestId } = JSON.parse((action as any).value);
+      await setApprovalState(requestId, 'denied');
+    } catch (err: any) {
+      logger.error('Skip tools denial failed', { error: err.message });
+    }
+  });
+
   // ── Dashboard CTA (no-op, link buttons still fire action events) ──
   app.action('open_dashboard_requests', async ({ ack }) => { await ack(); });
 

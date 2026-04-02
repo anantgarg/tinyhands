@@ -426,9 +426,32 @@ export async function approveToolRequest(workspaceId: string, requestId: string,
 }
 
 export async function denyToolRequest(workspaceId: string, requestId: string, deniedBy: string): Promise<void> {
+  const req = await queryOne<ToolRequest>(
+    "SELECT * FROM tool_requests WHERE id = $1 AND workspace_id = $2 AND status = 'pending'",
+    [requestId, workspaceId]
+  );
+  if (!req) return;
+
   await execute(
     "UPDATE tool_requests SET status = 'denied', resolved_by = $1, resolved_at = NOW() WHERE id = $2 AND workspace_id = $3 AND status = 'pending'",
     [deniedBy, requestId, workspaceId]
   );
-  logger.info('Tool request denied', { requestId });
+
+  // Cleanup on denial
+  try {
+    if (req.tool_name.endsWith('-write')) {
+      // Write tool denied: remove the tool from the agent entirely
+      const { removeToolFromAgent } = await import('../tools');
+      await removeToolFromAgent(workspaceId, req.agent_id, req.tool_name, deniedBy);
+    }
+    // For all tools (including write): remove the agent_tool_connections row
+    await execute(
+      'DELETE FROM agent_tool_connections WHERE workspace_id = $1 AND agent_id = $2 AND tool_name = $3',
+      [workspaceId, req.agent_id, req.tool_name]
+    );
+  } catch (err: any) {
+    logger.warn('Denial cleanup failed', { requestId, error: err.message });
+  }
+
+  logger.info('Tool request denied', { requestId, toolName: req.tool_name, agentId: req.agent_id });
 }

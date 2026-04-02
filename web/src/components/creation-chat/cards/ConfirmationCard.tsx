@@ -47,6 +47,7 @@ export interface ConfirmationConfig {
   scheduleTimezone?: string;
   systemPrompt?: string;
   triggers?: Array<{ type: string; description: string }>;
+  credentialModes?: Record<string, string>;
 }
 
 interface ConfirmationCardProps {
@@ -73,6 +74,12 @@ function SectionHeader({ label }: { label: string }) {
     </div>
   );
 }
+
+const CREDENTIAL_MODE_LABELS: Record<string, string> = {
+  team: 'Shared team credentials',
+  delegated: "Agent creator's credentials",
+  runtime: "Each user's own credentials",
+};
 
 export function ConfirmationCard({ config, onConfirm, onChange, isCreating, disabled }: ConfirmationCardProps) {
   const [promptExpanded, setPromptExpanded] = useState(false);
@@ -140,6 +147,23 @@ export function ConfirmationCard({ config, onConfirm, onChange, isCreating, disa
           <>
             <SectionHeader label="Triggers" />
             <ConfigRow label="Schedule" value={`${config.scheduleCron} (${config.scheduleTimezone || 'UTC'})`} />
+          </>
+        )}
+
+        {/* Credentials section */}
+        {config.credentialModes && Object.keys(config.credentialModes).length > 0 && (
+          <>
+            <SectionHeader label="Credentials" />
+            {Object.entries(config.credentialModes).map(([integrationId, mode]) => {
+              const friendlyInteg = integrationId.charAt(0).toUpperCase() + integrationId.slice(1).replace(/[-_]/g, ' ');
+              return (
+                <ConfigRow
+                  key={integrationId}
+                  label={friendlyInteg}
+                  value={CREDENTIAL_MODE_LABELS[mode] || mode}
+                />
+              );
+            })}
           </>
         )}
 

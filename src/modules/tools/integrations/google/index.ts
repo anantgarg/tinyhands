@@ -20,7 +20,6 @@ export const manifest: ToolManifest = {
   icon: ':file_folder:',
   description: 'Legacy integration — use Google Drive, Google Sheets, Google Docs, or Gmail instead.',
   configKeys: ['access_token'],
-  connectionModel: 'personal',
   tools: [],
   async register() {
     // No-op: no tools to register. Use the individual integrations instead.

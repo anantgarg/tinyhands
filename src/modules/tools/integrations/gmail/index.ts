@@ -322,7 +322,6 @@ export const manifest: ToolManifest = {
   configPlaceholders: {
     access_token: 'Connected via OAuth',
   },
-  connectionModel: 'personal',
   tools: [
     { name: 'gmail-read', schema: READ_SCHEMA, code: READ_CODE, accessLevel: 'read-only', displayName: 'Reading Gmail' },
     { name: 'gmail-write', schema: WRITE_SCHEMA, code: WRITE_CODE, accessLevel: 'read-write', displayName: 'Sending Email' },

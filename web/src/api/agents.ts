@@ -57,6 +57,7 @@ interface CreateAgentPayload {
   defaultAccess?: string;
   writePolicy?: string;
   streamingDetail?: boolean;
+  credentialModes?: Record<string, string>;
 }
 
 interface UpdateAgentPayload extends Partial<CreateAgentPayload> {
@@ -152,6 +153,7 @@ export interface AnalyzeGoalResult {
   summary?: string;
   triggers?: Array<{ type: string; description: string; config: Record<string, unknown> }>;
   changes?: Record<string, { from: unknown; to: unknown }>;
+  credential_modes?: Record<string, string>;
 }
 
 export interface PendingCounts {

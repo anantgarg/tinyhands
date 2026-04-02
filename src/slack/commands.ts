@@ -2576,16 +2576,20 @@ async function buildCredentialSelectionBlocks(
       const teamConn = await getTeamConnection(workspaceId, intId);
       const personalConn = await getPersonalConnection(workspaceId, intId, userId);
       const isOAuth = oauthIntegrations.includes(intId);
-      const connectionModel = (manifest as any).connectionModel || 'team';
+      const supportedModes = (manifest as any).supportedCredentialModes as string[] | undefined;
       const recommended = recommendedModes?.[intId];
 
-      // Build available options based on connectionModel and available connections
+      // Build available options based on supportedCredentialModes (default: all three)
+      const allModes = ['team', 'delegated', 'runtime'];
+      const allowedModes = supportedModes && supportedModes.length > 0 ? supportedModes : allModes;
       const allOptions: Array<{ text: { type: string; text: string }; value: string }> = [];
-      if (connectionModel === 'team' || connectionModel === 'hybrid') {
+      if (allowedModes.includes('team')) {
         allOptions.push({ text: { type: 'plain_text', text: CREDENTIAL_MODE_LABELS.team }, value: 'team' });
       }
-      if (connectionModel === 'personal' || connectionModel === 'hybrid') {
+      if (allowedModes.includes('delegated')) {
         allOptions.push({ text: { type: 'plain_text', text: CREDENTIAL_MODE_LABELS.delegated }, value: 'delegated' });
+      }
+      if (allowedModes.includes('runtime')) {
         allOptions.push({ text: { type: 'plain_text', text: CREDENTIAL_MODE_LABELS.runtime }, value: 'runtime' });
       }
 

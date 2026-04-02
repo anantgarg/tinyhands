@@ -67,12 +67,12 @@ export async function analyzeGoal(workspaceId: string, goal: string, existingPro
   // Get ALL integration manifests (connected or not) so the analyzer knows what's possible
   const registeredToolNames = new Set([...readOnlyTools.map(t => t.name), ...writeTools.map(t => t.name)]);
   const unregisteredIntegrations: string[] = [];
-  const integrationConnectionModels = new Map<string, string>();
+  const integrationSupportedModes = new Map<string, string[]>();
   try {
     const integrations = getIntegrations();
     for (const integ of integrations) {
-      if ((integ as any).connectionModel) {
-        integrationConnectionModels.set(integ.id, (integ as any).connectionModel);
+      if (integ.supportedCredentialModes) {
+        integrationSupportedModes.set(integ.id, integ.supportedCredentialModes);
       }
       for (const tool of (integ as any).tools || []) {
         if (!registeredToolNames.has(tool.name)) {
@@ -83,14 +83,11 @@ export async function analyzeGoal(workspaceId: string, goal: string, existingPro
     }
   } catch { /* integrations module may not be available */ }
 
-  const connectionModelSection = integrationConnectionModels.size > 0
-    ? `\nIntegration credential models (determines which credential modes are valid for each integration):
-${Array.from(integrationConnectionModels.entries()).map(([id, model]) => `- ${id}: ${model}`).join('\n')}
+  const connectionModelSection = integrationSupportedModes.size > 0
+    ? `\nIntegration supported credential modes (determines which credential modes are valid for each integration):
+${Array.from(integrationSupportedModes.entries()).map(([id, modes]) => `- ${id}: ${modes.join(', ')}`).join('\n')}
 
-Credential model rules:
-- "team" model: only "team" credential mode is valid (shared org credentials)
-- "personal" model: only "delegated" or "runtime" modes are valid (NOT "team")
-- "hybrid" model: all modes are valid ("team", "delegated", "runtime")`
+Respect each integration's supported credential modes (if specified). If no restriction, all modes are available.`
     : '';
 
   const customToolsSection = readOnlyToolList.length > 0 || writeToolList.length > 0 || unregisteredIntegrations.length > 0
@@ -173,7 +170,7 @@ IMPORTANT guidelines:
   - "team": agent monitors or acts on behalf of the whole team (e.g., ticket triage, monitoring dashboards, team-wide reporting). Uses shared org-level credentials.
   - "delegated": agent is personal to the creator and acts on their behalf (e.g., "manage MY email", "track MY tasks"). Uses the creator's own credentials.
   - "runtime": agent acts on behalf of whichever user talks to it (e.g., "send email as the requesting user", "file a ticket as the user"). Each user provides their own credentials.
-  Respect the integration's credential model constraints (see above). If a tool has a "team" model, only use "team". If "personal" model, use "delegated" or "runtime". If "hybrid", any mode works.
+  Respect each integration's supported credential modes (if specified). If no restriction is listed, all modes are available.
 - SLACK MENTIONS: If the goal references tagging/mentioning/notifying a specific person, use the Slack mention format <@USER_ID> in the system_prompt. The requesting user's Slack ID is provided below — use it when the goal says "tag me", "notify me", "mention me", etc. For other users mentioned by name, include a note in the system_prompt to use <@USER_ID> format and that the admin should configure the correct user ID.`,
     messages: [{
       role: 'user',
@@ -242,7 +239,7 @@ IMPORTANT guidelines:
     }
   }
 
-  // Validate credential_modes against manifest connectionModels
+  // Validate credential_modes against manifest supportedCredentialModes
   if (!analysis.credential_modes) analysis.credential_modes = {};
   const allCustomToolNames = [...(analysis.custom_tools || []), ...(analysis.write_tools_requested || [])];
   const usedIntegrationIds = new Set<string>();
@@ -263,11 +260,12 @@ IMPORTANT guidelines:
       }
       const integ = integrations.find(i => i.id === integId);
       if (!integ) { delete analysis.credential_modes[integId]; continue; }
-      const cm = (integ as any).connectionModel || 'team';
+      const supportedModes = integ.supportedCredentialModes;
       const mode = analysis.credential_modes[integId];
-      // Correct modes that violate connectionModel constraints
-      if (cm === 'team' && mode !== 'team') analysis.credential_modes[integId] = 'team';
-      if (cm === 'personal' && mode === 'team') analysis.credential_modes[integId] = 'delegated';
+      // If supportedCredentialModes is defined and the mode is not in it, reset to first supported mode
+      if (supportedModes && supportedModes.length > 0 && !supportedModes.includes(mode as any)) {
+        analysis.credential_modes[integId] = supportedModes[0];
+      }
     }
   } catch { /* best-effort */ }
 

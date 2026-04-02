@@ -203,29 +203,6 @@ export function createWebhookServer(): express.Application {
         }
       } catch { /* Slack notification is best-effort */ }
 
-      // Check for pending retries waiting on this connection
-      try {
-        const { queryOne, execute: dbExecute } = await import('./db');
-        const pendingRetry = await queryOne<{ id: string; data: any }>(
-          `SELECT id, data FROM pending_confirmations
-           WHERE data->>'type' = 'pending_connection_retry'
-             AND data->>'userId' = $1
-             AND data->>'integrationId' = $2
-             AND expires_at > NOW()
-           LIMIT 1`,
-          [userId, integration],
-        );
-        if (pendingRetry) {
-          const { enqueueRun } = await import('./queue');
-          await enqueueRun(pendingRetry.data.jobData);
-          await dbExecute('DELETE FROM pending_confirmations WHERE id = $1', [pendingRetry.id]);
-          const { sendDMBlocks: dmBlocks } = await import('./slack');
-          await dmBlocks(userId, [
-            { type: 'section', text: { type: 'mrkdwn', text: `:arrows_counterclockwise: Got it! Retrying your previous request now.` } },
-          ], 'Retrying request');
-        }
-      } catch { /* retry check is best-effort */ }
-
       res.status(200).send(`
         <html><body style="font-family: sans-serif; text-align: center; padding: 40px;">
           <h2>Connected!</h2>

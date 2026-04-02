@@ -211,7 +211,6 @@ export const manifest: ToolManifest = {
   configPlaceholders: {
     access_token: 'Connected via OAuth',
   },
-  connectionModel: 'personal',
   tools: [
     { name: 'google-docs-read', schema: READ_SCHEMA, code: READ_CODE, accessLevel: 'read-only', displayName: 'Reading Google Docs' },
     { name: 'google-docs-write', schema: WRITE_SCHEMA, code: WRITE_CODE, accessLevel: 'read-write', displayName: 'Updating Google Docs' },

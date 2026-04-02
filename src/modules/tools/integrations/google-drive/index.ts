@@ -275,7 +275,6 @@ export const manifest: ToolManifest = {
   configPlaceholders: {
     access_token: 'Connected via OAuth',
   },
-  connectionModel: 'personal',
   tools: [
     { name: 'google-drive-read', schema: READ_SCHEMA, code: READ_CODE, accessLevel: 'read-only', displayName: 'Browsing Google Drive' },
     { name: 'google-drive-write', schema: WRITE_SCHEMA, code: WRITE_CODE, accessLevel: 'read-write', displayName: 'Updating Google Drive' },

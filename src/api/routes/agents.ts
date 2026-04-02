@@ -86,6 +86,55 @@ router.post('/', async (req: Request, res: Response) => {
         await notifyAdminsOfToolRequests(workspaceId, agent.id, agent.name, writeToolsPending, userId);
       } catch { /* best-effort */ }
     }
+
+    // Process credential_modes from the creation flow
+    try {
+      const credentialModes = req.body.credential_modes;
+      if (credentialModes && typeof credentialModes === 'object') {
+        const { getIntegrationIdForTool, setAgentToolConnection } = await import('../../modules/connections');
+        const isAdmin = await isPlatformAdmin(workspaceId, userId);
+        const agentTools = (agent.tools || []) as string[];
+
+        for (const [integrationId, mode] of Object.entries(credentialModes)) {
+          const modeStr = mode as string;
+          // Find tools belonging to this integration
+          const matchingTools = agentTools.filter(t => getIntegrationIdForTool(t) === integrationId);
+
+          for (const toolName of matchingTools) {
+            if (modeStr === 'team' && !isAdmin) {
+              // Non-admin requesting team credentials: create tool request
+              const accessLevel = toolName.endsWith('-write') ? 'read-write' : 'read-only';
+              await createToolRequest(workspaceId, agent.id, toolName, accessLevel, userId, 'Requested team credentials during creation');
+            } else if (modeStr === 'team' && isAdmin) {
+              // Admin: set team mode directly
+              await setAgentToolConnection(workspaceId, agent.id, toolName, 'team', null, userId);
+            } else if (modeStr === 'delegated' || modeStr === 'runtime') {
+              // delegated or runtime: set directly
+              await setAgentToolConnection(workspaceId, agent.id, toolName, modeStr, null, userId);
+            }
+          }
+        }
+
+        // Notify admins if any team credential requests were created by non-admin
+        if (!isAdmin) {
+          const teamRequestTools: string[] = [];
+          for (const [integrationId, mode] of Object.entries(credentialModes)) {
+            if (mode === 'team') {
+              const matching = agentTools.filter(t => getIntegrationIdForTool(t) === integrationId);
+              teamRequestTools.push(...matching);
+            }
+          }
+          if (teamRequestTools.length > 0) {
+            try {
+              await notifyAdminsOfToolRequests(workspaceId, agent.id, agent.name, teamRequestTools, userId);
+            } catch { /* best-effort */ }
+          }
+        }
+      }
+    } catch (err: any) {
+      logger.warn('Failed to process credential_modes during creation', { error: err.message });
+    }
+
     res.status(201).json(agent);
   } catch (err: any) {
     logger.error('Create agent error', { error: err.message });

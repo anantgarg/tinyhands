@@ -214,7 +214,7 @@ The connections module (`src/modules/connections/`) manages encrypted credential
 - `listAgentToolConnections(agentId)` — connection mode config per tool on an agent
 - `getIntegrationIdForTool(toolName)` — resolve integration ID from tool name
 
-Integration manifests declare a `connectionModel` property (`team`, `personal`, or `hybrid`) that controls which connection flows are available.
+Integration manifests can optionally declare `supportedCredentialModes` (array of `'team' | 'delegated' | 'runtime'`) to restrict which credential modes are available. If omitted, all three modes are supported.
 
 ### Write Policy Approval Gates
 Write policies (`confirm`, `admin_confirm`) are enforced at runtime via Redis-backed approval state. Approval routes in `src/server.ts` handle approve/deny actions from Slack DM buttons. Redis helpers in `src/queue/index.ts` manage approval request creation, polling, and expiration.

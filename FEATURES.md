@@ -381,7 +381,7 @@ Every integration exports a `manifest` from `src/modules/tools/integrations/<nam
 | `configKeys` | string[] | Required credential fields (e.g. ["api_key", "site"]) |
 | `configPlaceholders` | Record | Optional placeholder hints per config field |
 | `setupGuide` | string | Optional Slack mrkdwn setup instructions |
-| `connectionModel` | 'team' / 'personal' / 'hybrid' | Controls which connection flows are available |
+| `supportedCredentialModes` | string[] (optional) | Which credential modes this integration supports. Defaults to all three (team, delegated, runtime) if omitted. |
 | `tools` | ToolDefinition[] | Read and optionally write tool definitions |
 | `register()` | function | Register tools into database |
 | `updateConfig()` | function | Update credentials for existing tools |
@@ -416,25 +416,28 @@ Every integration exports a `manifest` from `src/modules/tools/integrations/<nam
 - During creation: wizard step 4 lets users select tools.
 - After creation: agent's Tools tab in dashboard.
 - When a non-admin adds a write tool and team credentials exist, a tool request is created (pending admin approval) instead of immediately attaching.
-- Admins can add any tool immediately without approval.
+- Separately, when a non-admin selects "Team credentials" as the credential mode for any tool (read or write), a credential request is created for admin review.
+- Admins can add any tool and set any credential mode immediately without approval.
 
 ### Existing Integrations
 
-| Integration | ID | Access | Connection Model | Config Keys |
-|-------------|-----|--------|-----------------|-------------|
-| Chargebee | `chargebee` | read + write | team | `api_key`, `site` |
-| HubSpot | `hubspot` | read + write | team | `access_token` |
-| Linear | `linear` | read + write | team | `api_key` |
-| Zendesk | `zendesk` | read + write | team | `subdomain`, `email`, `api_token` |
-| PostHog | `posthog` | read-only | team | `api_key`, `project_id` |
-| SerpAPI | `serpapi` | read-only | team | `api_key` |
-| Knowledge Base | `kb` | read-only | (auto) | (auto-configured) |
-| Google Drive | `google-drive` | read + write | personal | OAuth |
-| Google Sheets | `google-sheets` | read + write | personal | OAuth |
-| Google Docs | `google-docs` | read + write | personal | OAuth |
-| Gmail | `gmail` | read + write | personal | OAuth |
-| Notion | `notion` | read-only | personal | OAuth |
-| GitHub | `github` | read-only | personal | OAuth |
+| Integration | ID | Access | Config Keys |
+|-------------|-----|--------|-------------|
+| Chargebee | `chargebee` | read + write | `api_key`, `site` |
+| HubSpot | `hubspot` | read + write | `access_token` |
+| Linear | `linear` | read + write | `api_key` |
+| Zendesk | `zendesk` | read + write | `subdomain`, `email`, `api_token` |
+| PostHog | `posthog` | read-only | `api_key`, `project_id` |
+| SerpAPI | `serpapi` | read-only | `api_key` |
+| Knowledge Base | `kb` | read-only | (auto-configured) |
+| Google Drive | `google-drive` | read + write | OAuth |
+| Google Sheets | `google-sheets` | read + write | OAuth |
+| Google Docs | `google-docs` | read + write | OAuth |
+| Gmail | `gmail` | read + write | OAuth |
+| Notion | `notion` | read-only | OAuth |
+| GitHub | `github` | read-only | OAuth |
+
+All integrations support all three credential modes (team, delegated, runtime). Future integrations can restrict this via `supportedCredentialModes` in their manifest.
 
 **Google OAuth note:** All four Google integrations share a single OAuth config and callback (`/auth/callback/google`). One connection covers Drive, Sheets, Docs, and Gmail. Which services an agent uses depends on which tools are enabled. Legacy "Google Workspace" integration exists for backward compat but registers no tools (cleaned up by migration 019).
 
@@ -490,7 +493,7 @@ to agent       (denied)
 - Created via Connections page by individual users.
 - Stored in `connections` table with `connection_type = 'personal'`, `user_id` set.
 - OAuth supported for: Google, Notion, GitHub.
-- API key entry for integrations with `connectionModel: 'personal'` or `'hybrid'`.
+- API key entry available for any integration. OAuth supported for Google, Notion, and GitHub.
 - One personal connection per integration per user per workspace (upsert on conflict).
 
 ### Connection Modes: Team, Delegated, Runtime
@@ -503,24 +506,28 @@ Stored in `agent_tool_connections` table (unique per `agent_id` + `tool_name`):
 | Delegated | `delegated` | Agent creator's | Uses first agent owner's personal connection |
 | Runtime | `runtime` | Each user's own | Uses invoking user's personal connection |
 
-### No Fallback: Explicit Mode Required
+### Missing Credentials: Confirmation Before Running
 
-Every tool on an agent MUST have an explicit `agent_tool_connections` entry. If no entry exists at runtime, the run fails with a clear "credentials not configured" error — the system never silently falls back to team or any other mode.
+Every tool on an agent MUST have an explicit `agent_tool_connections` entry. If any tools have missing or unconfigured credentials at runtime, the agent does not silently fail or fall back. Instead:
+
+1. The system identifies all tools with missing credentials.
+2. A message is posted in the Slack thread listing the affected tools with a link to the dashboard Connections page.
+3. The user is asked: "Should I continue without these tools?" with Continue / Cancel buttons.
+4. If the user approves: the agent runs without the unconfigured tools.
+5. If the user cancels or the 5-minute timeout expires: the run is cancelled.
+
+This ensures users always know which tools are unavailable and can make an informed decision.
 
 Credential modes are set in three ways:
 - **Dashboard**: when a user picks a credential mode for a tool, the mode is applied to ALL tools in the same integration group (e.g., setting Google Docs Read to "Each user's own" also sets Google Docs Write).
 - **Agent creation**: the AI goal analyzer recommends modes, and on creation the selected modes are saved for all tools.
 - **Adding a tool**: when a tool is added to an agent, it inherits the credential mode from any existing sibling tool in the same integration group.
 
-### Admin Approval Required: Non-Admin Adding Write Tool with Team Credentials
+### Admin Involvement: Non-Admin Using Team Credentials
 
-**Rule:** When a non-admin adds a write tool to their agent AND team credentials exist for that integration, the tool is NOT attached immediately. A tool request is created (pending admin approval).
+**Rule:** When a non-admin selects "Team credentials" for any tool on their agent (read or write), a credential request is created. The admin resolves it by configuring the team connection on the Connections page (or denying).
 
-### Admin Approval Required: Non-Admin Switching Write Tool to Team Credentials
-
-**Rule:** When a non-admin switches a write tool's credential dropdown to "Team credentials," the same approval flow applies.
-
-**Admin bypass:** Platform admins attach tools immediately with no approval needed.
+**Admin bypass:** Platform admins set credential modes immediately with no request needed.
 
 ### Credential Resolution Order at Runtime
 
@@ -578,7 +585,7 @@ During agent creation, the AI goal analyzer recommends credential modes:
 | Creator's | Agent is personal to the user (e.g., "manage MY tasks") | Uses agent creator's personal credential |
 | Each User's Own | Agent acts on behalf of whoever talks to it (e.g., "send email as requesting user") | Each user provides own credential |
 
-Respects each tool's `connectionModel` -- team-only tools (e.g., Chargebee) always use shared credentials.
+All modes are available for all integrations by default. Integrations that restrict their supported modes (via `supportedCredentialModes` in the manifest) are respected — the AI will only recommend from the allowed modes.
 
 ### Missing Credential Error Messages (Role-Aware)
 
@@ -591,11 +598,23 @@ Generated by `getCredentialErrorContext()`:
 | Team | Admin | "Shared credentials haven't been set up. Go to Connections page in the dashboard." |
 | Team | Agent owner | "Ask a workspace admin to connect the tool in the Connections page." |
 | Team | Regular user | "Let @owner or a workspace admin know." |
-| Delegated | Agent owner | "You haven't connected yet." + Connect button |
-| Delegated | Others | "The owner's credentials aren't set up. Let @owner know." |
-| Runtime | Anyone | "I need your credentials to proceed." + Connect button |
+| Delegated | Agent owner | "You haven't connected yet. Go to the Connections page in the dashboard." |
+| Delegated | Others | "Let @owner know — they need to connect in the dashboard." |
+| Runtime | Anyone | "I need your credentials. Go to the Connections page in the dashboard." |
 
-For runtime and delegated-owner cases, a **Connect** button is included. After user completes connection, agent automatically retries -- no need to re-send original message.
+All error messages include a link to the dashboard Connections page. No credential entry or connection management happens in Slack.
+
+### Credential Mode Dropdown (Agent Tools Page)
+
+Each integration tool on an agent has a credential mode dropdown with three options:
+
+- **Team credentials** — always shown. Displays "(Connected)" or "(Not Connected)" based on whether a team connection exists. If a non-admin selects this, a credential request is created for admin review.
+- **Agent creator's** — always shown. Displays "(Connected)" or "(Not Connected)" based on whether the agent creator has a personal connection. If not connected, a "Connect" link appears next to the dropdown linking to the Connections page.
+- **Requesting user's** — always shown. No connection status displayed (the invoking user is unknown at configuration time).
+
+If no credential mode has been selected, the dropdown shows "Not configured" in amber text.
+
+If an integration restricts its supported credential modes (via `supportedCredentialModes` in the manifest), only the supported options appear in the dropdown. Currently all integrations support all modes.
 
 ### Google Drive Folder Restrictions
 
@@ -652,20 +671,23 @@ All non-realtime approvals happen in the **web dashboard**. Slack sends notifica
 5. If approved: user gets member role via `setAgentRole()`, notified via Slack DM
 6. If denied: user notified with reason
 
-### 2. Tool Requests (Write Tool + Team Credentials)
+### 2. Credential Requests (Team Credentials)
 
-**When it happens:** A non-admin user adds a write tool (e.g., Zendesk Write, HubSpot Write) to their agent AND team credentials exist for that integration. Also triggered when a non-admin switches the credential dropdown for a write tool to "Team credentials."
+**When it happens:** A non-admin user selects "Team credentials" for any tool (read or write) on their agent.
 
 **Flow:**
-1. Non-admin adds write tool or switches credentials to "Team"
-2. System checks: is user an admin? If yes, tool attached immediately
-3. If not admin AND team credentials exist: tool NOT attached, tool request created (pending)
+1. Non-admin selects "Team credentials" in the credential dropdown
+2. System checks: is user an admin? If yes, credential mode set immediately.
+3. If not admin: credential request created (pending). Credential mode NOT set yet.
 4. All admins receive Slack DM with "View in Dashboard" link
-5. Admin reviews in **Requests > Tool Requests** and approves or denies
-6. If approved: tool automatically attached to agent
-7. If denied: request marked denied, user notified
+5. Admin reviews in **Requests > Credential Requests**
+6. Admin clicks **Configure** → navigates to Connections page to set up team credentials
+7. When the admin creates the team connection, all pending requests for that integration **auto-resolve** and credential modes are set to "Team credentials"
+8. If admin clicks **Deny**:
+   - Read tools: credential mode reset to blank (not configured)
+   - Write tools: tool removed from agent entirely (write access is a privilege escalation)
 
-**Why this exists:** Team credentials are shared company-wide. Non-admins should not grant their agent write access to shared resources without admin review.
+**Why this exists:** Team credentials are shared company-wide. Non-admins should not use shared credentials without admin awareness. Admins resolve requests by configuring the connection, not by clicking "Approve."
 
 ### 3. Evolution Proposals
 
@@ -727,7 +749,7 @@ All non-realtime approvals happen in the **web dashboard**. Slack sends notifica
 | Request Type | Dashboard Tab | Slack Notification | Slack Approve/Deny |
 |---|---|---|---|
 | Upgrade Requests | Requests > Upgrade Requests | No (planned) | No |
-| Tool Requests | Requests > Tool Requests | Yes (with dashboard CTA) | No |
+| Credential Requests | Requests > Credential Requests | Yes (with dashboard CTA) | No |
 | Evolution Proposals | Requests > Evolution Proposals | Yes (with dashboard CTA) | No |
 | Feature Requests | Requests > Feature Requests | Yes (with dashboard CTA) | No |
 | KB Contributions | Requests > KB Contributions | Planned | No |
@@ -738,7 +760,7 @@ All non-realtime approvals happen in the **web dashboard**. Slack sends notifica
 | Request Type | Who Can Create | Who Can Approve/Deny |
 |---|---|---|
 | Upgrade Requests | Viewers (automatic on write attempt or manual) | Agent owner, Superadmin, Admin |
-| Tool Requests | Agent owner (non-admin, adding write tool w/ team creds) | Superadmin, Admin |
+| Credential Requests | Non-admin selecting "Team credentials" for any tool | Superadmin, Admin (Configure + Deny) |
 | Evolution Proposals | Agent (automated, when self-evolution enabled) | Agent owner, Superadmin, Admin |
 | Feature Requests | System (automated, during agent creation) | Superadmin, Admin (dismiss only) |
 | KB Contributions | Agent (automated, during execution) | Superadmin, Admin |
@@ -1259,7 +1281,7 @@ The non-streaming endpoint also accepts the legacy `{ "message": "..." }` format
 | Event | Slack DM | Slack Channel | Slack Thread | Dashboard Badge | Silent | Recipients |
 |-------|----------|--------------|-------------|----------------|--------|------------|
 | **Evolution Proposals** (pending) | Yes | - | - | Yes (Requests) | - | Platform admins |
-| **Tool Requests** (non-admin) | Yes | - | - | Yes (Requests) | - | Platform admins |
+| **Credential Requests** (non-admin) | Yes | - | - | Yes (Requests) | - | Platform admins |
 | **Upgrade Requests** | - | - | - | Yes (Requests) | - | Agent owners |
 | **KB Contributions** | - | - | - | Yes (Requests) | - | Admins |
 | **Feature Requests** | - | - | - | Yes (Requests) | - | Admins |

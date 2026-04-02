@@ -264,13 +264,14 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
       }
     }
     const customToolEntries = [];
+    const missingCredTools: { name: string; message: string }[] = [];
     for (const t of agentCustomTools) {
       const execScript = await getToolExecutionScript(workspaceId, t.name);
 
       // Resolve credentials via connection system — never fall back silently
-      let toolConfig: Record<string, any>;
+      let toolConfig: Record<string, any> | null = null;
       try {
-        const { resolveToolCredentials, getCredentialErrorContext, getIntegrationIdForTool } = await import('../connections');
+        const { resolveToolCredentials, getCredentialErrorContext } = await import('../connections');
         const { buildCredentialError } = await import('../connections/errors');
         const resolved = await resolveToolCredentials(workspaceId, agent.id, t.name, data.userId || undefined);
 
@@ -278,68 +279,15 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
           const runnerId = data.userId || '';
           const errorCtx = await getCredentialErrorContext(workspaceId, agent.id, t.name, runnerId);
           const credError = buildCredentialError(errorCtx);
-
-          if (data.channelId) {
-            const errorBlocks = [...credError.blocks];
-
-            // Add connect button for runtime mode or delegated mode where runner is owner
-            if (credError.showConnectButton && runnerId) {
-              const integrationId = getIntegrationIdForTool(t.name);
-              const { getSupportedOAuthIntegrations } = await import('../connections/oauth');
-              const oauthIntegrations = getSupportedOAuthIntegrations();
-              const isOAuth = oauthIntegrations.includes(integrationId);
-
-              errorBlocks.push({
-                type: 'actions',
-                elements: [{
-                  type: 'button',
-                  text: { type: 'plain_text', text: isOAuth ? ':link: Connect' : ':key: Connect' },
-                  action_id: isOAuth ? 'connect_personal_oauth' : 'connect_personal_apikey',
-                  value: integrationId,
-                }],
-              });
-
-              // Store pending retry so the job auto-retries after user connects
-              try {
-                const { execute: dbExec } = await import('../../db');
-                const { v4: retryUuid } = await import('uuid');
-                await dbExec(
-                  `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
-                  [retryUuid(), JSON.stringify({
-                    type: 'pending_connection_retry',
-                    userId: runnerId,
-                    integrationId,
-                    jobData: data,
-                  })],
-                );
-              } catch { /* best-effort */ }
-            }
-
-            const { postBlocks: postConnBlocks } = await import('../../slack');
-            await postConnBlocks(data.channelId, errorBlocks, `Missing ${errorCtx.integrationLabel} credentials`, data.threadTs);
-          }
-
-          await updateRunRecord(workspaceId, runRecord.id, {
-            status: 'failed',
-            output: credError.message,
-            completed_at: new Date().toISOString(),
-          });
-          return credError.message;
+          missingCredTools.push({ name: t.name, message: credError.message });
+          continue;
         }
 
         toolConfig = resolved;
       } catch (resolveErr) {
-        logger.warn('Credential resolution failed, aborting run', { tool: t.name, error: String(resolveErr) });
-        if (data.channelId) {
-          const { postMessage: postMsg } = await import('../../slack');
-          await postMsg(data.channelId, `:warning: Failed to load credentials for *${t.name}*. Please contact a workspace admin.`, data.threadTs);
-        }
-        await updateRunRecord(workspaceId, runRecord.id, {
-          status: 'failed',
-          output: `Credential resolution error for ${t.name}`,
-          completed_at: new Date().toISOString(),
-        });
-        return `Credential resolution failed for ${t.name}`;
+        logger.warn('Credential resolution failed, collecting for confirmation', { tool: t.name, error: String(resolveErr) });
+        missingCredTools.push({ name: t.name, message: `Failed to load credentials for ${t.name}` });
+        continue;
       }
 
       customToolEntries.push({
@@ -351,6 +299,80 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
         config: toolConfig,
       });
     }
+
+    // Handle missing credential tools — ask user to continue without them
+    if (missingCredTools.length > 0) {
+      const { config: appConfig } = await import('../../config');
+
+      // If ALL tools are missing, fail immediately
+      if (customToolEntries.length === 0) {
+        const toolList = missingCredTools.map(t => `• ${t.name} — ${t.message}`).join('\n');
+        if (data.channelId) {
+          const { postBlocks: postConnBlocks } = await import('../../slack');
+          await postConnBlocks(data.channelId, [
+            { type: 'section', text: { type: 'mrkdwn', text: `:warning: *${agent.name}* can't run — all tools have missing credentials:\n${toolList}` } },
+            { type: 'context', elements: [{ type: 'mrkdwn', text: `<${appConfig.server.webDashboardUrl}/connections|Open Connections in Dashboard>` }] },
+          ], 'Missing credentials for all tools', data.threadTs);
+        }
+        await updateRunRecord(workspaceId, runRecord.id, {
+          status: 'failed',
+          output: 'All tools have missing credentials',
+          completed_at: new Date().toISOString(),
+        });
+        return 'All tools have missing credentials';
+      }
+
+      // Some tools are valid — ask user if agent should continue without the missing ones
+      const { v4: confirmUuid } = await import('uuid');
+      const { setApprovalState, getApprovalState } = await import('../../queue');
+      const requestId = confirmUuid();
+      await setApprovalState(requestId, 'pending', 300); // 5-minute timeout
+
+      const toolList = missingCredTools.map(t => `• ${t.name} — ${t.message}`).join('\n');
+      if (data.channelId) {
+        const { postBlocks: postConnBlocks } = await import('../../slack');
+        await postConnBlocks(data.channelId, [
+          { type: 'section', text: { type: 'mrkdwn', text: `:warning: *${agent.name}* needs these tools but they aren't configured:\n${toolList}\n\nShould I continue without them?` } },
+          {
+            type: 'actions',
+            elements: [
+              { type: 'button', text: { type: 'plain_text', text: ':white_check_mark: Continue' }, action_id: 'approve_skip_tools', value: JSON.stringify({ requestId }), style: 'primary' },
+              { type: 'button', text: { type: 'plain_text', text: ':x: Cancel' }, action_id: 'deny_skip_tools', value: JSON.stringify({ requestId }), style: 'danger' },
+            ],
+          },
+          { type: 'context', elements: [{ type: 'mrkdwn', text: `<${appConfig.server.webDashboardUrl}/connections|Open Connections in Dashboard>` }] },
+        ], 'Missing tool credentials', data.threadTs);
+      }
+
+      // Poll for approval (5 minutes max, check every 3 seconds)
+      let approvalResult: string | null = 'pending';
+      const pollStart = Date.now();
+      const TIMEOUT_MS = 300_000;
+      while (approvalResult === 'pending' && Date.now() - pollStart < TIMEOUT_MS) {
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        approvalResult = await getApprovalState(requestId);
+      }
+
+      if (approvalResult !== 'approved') {
+        await updateRunRecord(workspaceId, runRecord.id, {
+          status: 'failed',
+          output: 'Run cancelled — missing tool credentials',
+          completed_at: new Date().toISOString(),
+        });
+        if (data.channelId) {
+          const { postMessage: postMsg } = await import('../../slack');
+          await postMsg(data.channelId, approvalResult === 'denied' ? ':x: Run cancelled.' : ':hourglass: Run timed out waiting for confirmation.', data.threadTs);
+        }
+        return 'Run cancelled — missing tool credentials';
+      }
+
+      // User approved — continue without the missing tools
+      if (data.channelId) {
+        const { postMessage: postMsg } = await import('../../slack');
+        await postMsg(data.channelId, `:white_check_mark: Continuing without: ${missingCredTools.map(t => t.name).join(', ')}`, data.threadTs);
+      }
+    }
+
     customToolsConfig = JSON.stringify(customToolEntries);
 
     // Collect DB-stored MCP configs

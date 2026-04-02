@@ -48,6 +48,10 @@ vi.mock('../../src/modules/connections', () => ({
   listTeamConnections: (...args: any[]) => mockListTeamConnectionsForTools(...args),
 }));
 
+vi.mock('../../src/modules/connections/oauth', () => ({
+  getSupportedOAuthIntegrations: vi.fn().mockReturnValue([]),
+}));
+
 import toolRoutes from '../../src/api/routes/tools';
 
 // ── HTTP Test Helper ──
@@ -414,7 +418,7 @@ describe('Tool Routes', () => {
   describe('GET /tools/integrations', () => {
     it('returns integrations with status', async () => {
       mockGetIntegrations.mockReturnValueOnce([
-        { id: 'linear', label: 'Linear', description: 'Issue tracker', tools: [{ name: 'linear-read' }], configKeys: ['api_key'], connectionModel: 'team' },
+        { id: 'linear', label: 'Linear', description: 'Issue tracker', tools: [{ name: 'linear-read' }], configKeys: ['api_key'] },
       ]);
       mockListTeamConnectionsForTools.mockResolvedValueOnce([
         { id: 'conn-1', integration_id: 'linear' },

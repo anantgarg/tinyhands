@@ -40,6 +40,39 @@ export async function createTeamConnection(
   } catch { /* best-effort */ }
 
   logger.info('Team connection created', { wsId, integrationId });
+
+  // Auto-resolve pending tool requests for this integration
+  try {
+    const pendingRequests = await query(
+      "SELECT * FROM tool_requests WHERE workspace_id = $1 AND status = 'pending'",
+      [wsId]
+    );
+    const matching = (pendingRequests as any[]).filter((r: any) => {
+      try {
+        return getIntegrationIdForTool(r.tool_name) === integrationId;
+      } catch { return false; }
+    });
+    for (const req of matching) {
+      await execute(
+        "UPDATE tool_requests SET status = 'approved', resolved_by = $1, resolved_at = NOW() WHERE id = $2",
+        [createdBy, req.id]
+      );
+      await setAgentToolConnection(wsId, req.agent_id, req.tool_name, 'team', null, createdBy);
+      // Notify requesting user via Slack DM (best-effort)
+      try {
+        const { sendDMBlocks } = await import('../../slack');
+        await sendDMBlocks(req.requested_by, [
+          { type: 'section', text: { type: 'mrkdwn', text: `:white_check_mark: Your request to use *team credentials* for *${req.tool_name}* has been approved. The team connection has been configured.` } },
+        ], 'Credential request approved');
+      } catch { /* best-effort */ }
+    }
+    if (matching.length > 0) {
+      logger.info('Auto-resolved pending tool requests', { wsId, integrationId, count: matching.length });
+    }
+  } catch (err: any) {
+    logger.warn('Failed to auto-resolve pending tool requests', { wsId, integrationId, error: err.message });
+  }
+
   return row!;
 }
 

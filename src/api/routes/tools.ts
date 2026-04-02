@@ -9,6 +9,7 @@ import {
 } from '../../modules/tools';
 import { getIntegrations } from '../../modules/tools/integrations';
 import { createTeamConnection } from '../../modules/connections';
+import { getSupportedOAuthIntegrations } from '../../modules/connections/oauth';
 import { logger } from '../../utils/logger';
 
 const router = Router();
@@ -260,7 +261,8 @@ router.get('/integrations', requireAdmin, async (req: Request, res: Response) =>
       status: connectionMap[int.id] ? 'active' : 'inactive',
       connectionId: connectionMap[int.id] || null,
       toolsCount: int.tools?.length ?? 0,
-      connectionModel: int.connectionModel || 'team',
+      supportedCredentialModes: int.supportedCredentialModes || undefined,
+      oauthSupported: getSupportedOAuthIntegrations().includes(int.id),
       configKeys: (int.configKeys ?? []).map((k: string) => ({
         key: k,
         label: k.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()),

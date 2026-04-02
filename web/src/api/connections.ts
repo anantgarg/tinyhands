@@ -122,6 +122,14 @@ export function useExpiredConnectionCount() {
   });
 }
 
+export function useConnectionAvailability(agentId: string) {
+  return useQuery<Record<string, { teamConnected: boolean; creatorConnected: boolean; currentUserConnected: boolean }>>({
+    queryKey: ['connections', 'availability', agentId],
+    queryFn: () => api.get(`/connections/agent/${agentId}/availability`),
+    enabled: !!agentId,
+  });
+}
+
 export function useAgentToolConnections(agentId: string) {
   return useQuery<AgentToolMode[]>({
     queryKey: ['connections', 'agent', agentId],

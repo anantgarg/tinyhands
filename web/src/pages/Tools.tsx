@@ -396,7 +396,7 @@ ${hasBody ? 'req.write(body);\n' : ''}req.end();`;
                         <span className="text-xs text-warm-text-secondary">{integration.toolsCount ?? 0} tools</span>
                       )}
                       <div className="flex gap-1">
-                        {integration.connectionModel !== 'personal' && (integration.configKeys ?? []).length > 0 && (
+                        {!integration.oauthSupported && (integration.configKeys ?? []).length > 0 && (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -460,7 +460,7 @@ ${hasBody ? 'req.write(body);\n' : ''}req.end();`;
                 <CardContent className="p-5">
                   <h3 className="font-semibold mb-1">{integration.displayName ?? integration.name ?? 'Unknown'}</h3>
                   <p className="text-xs text-warm-text-secondary mb-3">{integration.description || 'Available for connection'}</p>
-                  {integration.connectionModel === 'personal' ? (
+                  {integration.oauthSupported ? (
                     <Button
                       size="sm"
                       variant="outline"
