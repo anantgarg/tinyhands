@@ -2629,9 +2629,19 @@ function AccessTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
 
 function DocsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
   const navigate = useNavigate();
-  const hasDocsTool = agent.tools?.some(t => t === 'docs-read' || t === 'docs-write');
+  const hasRead = agent.tools?.includes('docs-read');
+  const hasWrite = agent.tools?.includes('docs-write');
+  const hasAnyDocsTool = hasRead || hasWrite;
   const { data, isLoading } = useDocuments({ agentId, limit: 50 });
   const docs = data?.documents || [];
+
+  const accessLabel = hasRead && hasWrite
+    ? 'Can view and edit documents'
+    : hasRead
+      ? 'Can view documents (read-only)'
+      : hasWrite
+        ? 'Can edit documents (write-only)'
+        : null;
 
   if (isLoading) {
     return (
@@ -2648,20 +2658,34 @@ function DocsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>Documents</CardTitle>
+        <div>
+          <CardTitle>Documents</CardTitle>
+          {accessLabel && (
+            <p className="mt-1 text-sm text-warm-text-secondary">{accessLabel}</p>
+          )}
+        </div>
         <Button size="sm" onClick={() => navigate('/documents')}>
           View All Documents
         </Button>
       </CardHeader>
       <CardContent>
-        {!hasDocsTool && (
+        {!hasAnyDocsTool && (
           <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
-            This agent does not have the Documents tool enabled. Add <strong>docs-read</strong> or <strong>docs-write</strong> from the Tools tab to let it work with documents.
+            This agent does not have the Documents tool enabled. Go to the <strong>Tools</strong> tab and add:
+            <ul className="mt-1 ml-4 list-disc">
+              <li><strong>Read Documents</strong> — lets the agent search and read docs, sheets, and files</li>
+              <li><strong>Create & Edit Documents</strong> — lets the agent create, edit, and archive documents</li>
+            </ul>
+          </div>
+        )}
+        {hasRead && !hasWrite && (
+          <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+            This agent can only <strong>read</strong> documents. To let it create or edit documents, add <strong>Create & Edit Documents</strong> from the Tools tab.
           </div>
         )}
         {docs.length === 0 ? (
           <p className="text-sm text-warm-text-secondary text-center py-8">
-            {hasDocsTool
+            {hasAnyDocsTool
               ? "This agent hasn't created any documents yet."
               : 'No documents associated with this agent.'}
           </p>
