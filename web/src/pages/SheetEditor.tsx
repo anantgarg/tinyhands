@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/table';
 import {
   useUpdateDocument, useUpdateSheetTab, useCreateSheetTab,
-  useDeleteSheetTab, useDocVersions, useRestoreVersion,
+  useDeleteSheetTab, useUpdateCells, useDocVersions, useRestoreVersion,
   type Document, type SheetTab,
 } from '@/api/docs';
 import {
@@ -32,6 +32,7 @@ export function SheetEditor({ document: doc }: SheetEditorProps) {
   const navigate = useNavigate();
   const updateDoc = useUpdateDocument();
   const updateTab = useUpdateSheetTab();
+  const updateCells = useUpdateCells();
   const createTab = useCreateSheetTab();
   const deleteTab = useDeleteSheetTab();
   const { data: versions } = useDocVersions(doc.id);
@@ -45,6 +46,7 @@ export function SheetEditor({ document: doc }: SheetEditorProps) {
   const [showVersions, setShowVersions] = useState(false);
   const [editingCell, setEditingCell] = useState<string | null>(null);
   const [cellValue, setCellValue] = useState('');
+  const [currentVersion, setCurrentVersion] = useState(doc.version);
 
   const activeTab = doc.tabs?.find(t => t.id === activeTabId) || doc.tabs?.[0];
   const cellData = activeTab?.data || {};
@@ -71,26 +73,27 @@ export function SheetEditor({ document: doc }: SheetEditorProps) {
 
   const saveCellData = useCallback(async (ref: string, value: string) => {
     if (!activeTab) return;
-    const newData = { ...cellData };
+
+    let cellValue: any;
     if (value.trim() === '') {
-      delete newData[ref];
+      cellValue = null; // server treats null as deletion
     } else {
       const num = Number(value);
-      newData[ref] = { v: (!isNaN(num) && value.trim() !== '') ? num : value };
+      cellValue = { v: (!isNaN(num) && value.trim() !== '') ? num : value };
     }
 
     try {
       setSaving(true);
-      await updateTab.mutateAsync({
+      await updateCells.mutateAsync({
         docId: doc.id,
         tabId: activeTab.id,
-        data: newData,
+        cells: { [ref]: cellValue },
       });
       setLastSaved(new Date());
     } finally {
       setSaving(false);
     }
-  }, [activeTab, cellData, doc.id, updateTab]);
+  }, [activeTab, doc.id, updateCells]);
 
   const handleCellBlur = useCallback(() => {
     if (editingCell) {
@@ -109,8 +112,11 @@ export function SheetEditor({ document: doc }: SheetEditorProps) {
 
   const handleToggleAgentEditable = useCallback((checked: boolean) => {
     setAgentEditable(checked);
-    updateDoc.mutate({ id: doc.id, agentEditable: checked, expectedVersion: doc.version });
-  }, [doc.id, doc.version, updateDoc]);
+    updateDoc.mutate(
+      { id: doc.id, agentEditable: checked, expectedVersion: currentVersion },
+      { onSuccess: () => setCurrentVersion(v => v + 1) },
+    );
+  }, [doc.id, currentVersion, updateDoc]);
 
   const handleAddTab = useCallback(async () => {
     const result = await createTab.mutateAsync({ docId: doc.id, name: `Sheet${(doc.tabs?.length || 0) + 1}` });
@@ -151,7 +157,10 @@ export function SheetEditor({ document: doc }: SheetEditorProps) {
         onChange={(e) => setTitle(e.target.value)}
         onBlur={() => {
           if (title !== doc.title) {
-            updateDoc.mutate({ id: doc.id, title, expectedVersion: doc.version });
+            updateDoc.mutate(
+              { id: doc.id, title, expectedVersion: currentVersion },
+              { onSuccess: () => setCurrentVersion(v => v + 1) },
+            );
           }
         }}
         className="text-2xl font-bold border-none shadow-none px-0 focus-visible:ring-0"

@@ -8,6 +8,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { RichTextEditor } from '@/components/RichTextEditor';
 import { useUpdateDocument, useDocVersions, useRestoreVersion, type Document } from '@/api/docs';
+import { slateJsonToMarkdown, markdownToSlateJson } from '@/lib/doc-convert';
 import { ArrowLeft, Save, History, Download, Clock } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -31,9 +32,9 @@ export function DocEditor({ document: doc }: DocEditorProps) {
 
   const [title, setTitle] = useState(doc.title);
   const [content, setContent] = useState(() => {
-    // Convert Slate JSON to plain text for the RichTextEditor
+    // Convert Slate JSON to markdown for the RichTextEditor
     if (doc.content) {
-      return extractPlainText(doc.content);
+      return slateJsonToMarkdown(doc.content);
     }
     return '';
   });
@@ -62,7 +63,7 @@ export function DocEditor({ document: doc }: DocEditorProps) {
         await updateDoc.mutateAsync({
           id: doc.id,
           title: titleRef.current,
-          content: { type: 'doc', children: [{ type: 'p', children: [{ text: contentRef.current }] }] },
+          content: markdownToSlateJson(contentRef.current),
           agentEditable: agentEditableRef.current,
           expectedVersion: versionRef.current,
         });
@@ -199,13 +200,3 @@ export function DocEditor({ document: doc }: DocEditorProps) {
   );
 }
 
-function extractPlainText(content: Record<string, unknown>): string {
-  const children = (content as any).children || [];
-  return children.map(nodeToText).filter(Boolean).join('\n\n');
-}
-
-function nodeToText(node: any): string {
-  if (typeof node.text === 'string') return node.text;
-  if (node.children) return node.children.map(nodeToText).join('');
-  return '';
-}

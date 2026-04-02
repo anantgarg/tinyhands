@@ -57,10 +57,32 @@ describe('markdownToSlateJson', () => {
     expect(bq.children[0].text).toBe('A quote');
   });
 
-  it('should convert code blocks', () => {
-    const result = markdownToSlateJson('```') as any;
+  it('should convert code blocks with multi-line content', () => {
+    const result = markdownToSlateJson('```\nconst x = 1;\nconst y = 2;\n```') as any;
     const code = result.children.find((n: any) => n.type === 'code_block');
     expect(code).toBeDefined();
+    expect(code.children[0].text).toBe('const x = 1;\nconst y = 2;');
+  });
+
+  it('should convert empty code blocks', () => {
+    const result = markdownToSlateJson('```\n```') as any;
+    const code = result.children.find((n: any) => n.type === 'code_block');
+    expect(code).toBeDefined();
+    expect(code.children[0].text).toBe('');
+  });
+
+  it('should handle unclosed code blocks', () => {
+    const result = markdownToSlateJson('```\nsome code\nmore code') as any;
+    const code = result.children.find((n: any) => n.type === 'code_block');
+    expect(code).toBeDefined();
+    expect(code.children[0].text).toBe('some code\nmore code');
+  });
+
+  it('should not treat lines inside code block as other block types', () => {
+    const result = markdownToSlateJson('```\n# Not a heading\n- Not a list\n```') as any;
+    expect(result.children).toHaveLength(1);
+    expect(result.children[0].type).toBe('code_block');
+    expect(result.children[0].children[0].text).toBe('# Not a heading\n- Not a list');
   });
 
   it('should convert horizontal rules', () => {
@@ -132,6 +154,24 @@ describe('slateJsonToMarkdown', () => {
     expect(md).toContain('A paragraph.');
     expect(md).toContain('> A quote');
     expect(md).toContain('---');
+  });
+
+  it('should roundtrip code blocks with multi-line content', () => {
+    const md = '```\nfunction hello() {\n  return "world";\n}\n```';
+    const slate = markdownToSlateJson(md);
+    const result = slateJsonToMarkdown(slate);
+    expect(result).toBe(md);
+  });
+
+  it('should convert code_block node to fenced code block', () => {
+    const slate = {
+      type: 'doc',
+      children: [
+        { type: 'code_block', children: [{ text: 'line1\nline2' }] },
+      ],
+    };
+    const md = slateJsonToMarkdown(slate);
+    expect(md).toBe('```\nline1\nline2\n```');
   });
 
   it('should preserve inline formatting', () => {

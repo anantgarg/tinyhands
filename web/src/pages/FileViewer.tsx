@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,6 +44,7 @@ export function FileViewer({ document: doc }: FileViewerProps) {
   const [title, setTitle] = useState(doc.title);
   const [agentEditable, setAgentEditable] = useState(doc.agentEditable);
   const [showVersions, setShowVersions] = useState(false);
+  const [currentVersion, setCurrentVersion] = useState(doc.version);
   const replaceInputRef = useRef<HTMLInputElement>(null);
 
   const previewType = getPreviewType(doc.mimeType);
@@ -51,8 +52,11 @@ export function FileViewer({ document: doc }: FileViewerProps) {
 
   const handleToggleAgentEditable = useCallback((checked: boolean) => {
     setAgentEditable(checked);
-    updateDoc.mutate({ id: doc.id, agentEditable: checked, expectedVersion: doc.version });
-  }, [doc.id, doc.version, updateDoc]);
+    updateDoc.mutate(
+      { id: doc.id, agentEditable: checked, expectedVersion: currentVersion },
+      { onSuccess: () => setCurrentVersion(v => v + 1) },
+    );
+  }, [doc.id, currentVersion, updateDoc]);
 
   const handleReplace = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -99,7 +103,10 @@ export function FileViewer({ document: doc }: FileViewerProps) {
         onChange={(e) => setTitle(e.target.value)}
         onBlur={() => {
           if (title !== doc.title) {
-            updateDoc.mutate({ id: doc.id, title, expectedVersion: doc.version });
+            updateDoc.mutate(
+              { id: doc.id, title, expectedVersion: currentVersion },
+              { onSuccess: () => setCurrentVersion(v => v + 1) },
+            );
           }
         }}
         className="text-2xl font-bold border-none shadow-none px-0 focus-visible:ring-0"

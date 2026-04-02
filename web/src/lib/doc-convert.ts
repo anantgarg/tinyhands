@@ -1,16 +1,16 @@
 /**
- * Content conversion utilities for the Docs module.
+ * Client-side content conversion utilities for the Docs module.
  *
- * Agents write/read markdown; the dashboard uses Slate/Plate JSON.
- * Sheets are read/written as CSV by agents; stored as sparse JSONB.
+ * These are pure-function ports of the server-side converters in
+ * src/modules/docs/convert.ts, used by the dashboard editors to
+ * round-trip between Slate JSON (storage format) and markdown
+ * (editor format).
  */
-import type { CellData } from '../../types';
 
-// ── Markdown ↔ Slate JSON ──
+// ── Markdown → Slate JSON ──
 
 /**
  * Convert markdown text to a simple Slate-compatible JSON document.
- * This produces a flat block structure suitable for Plate editor consumption.
  */
 export function markdownToSlateJson(markdown: string): Record<string, unknown> {
   const lines = markdown.split('\n');
@@ -25,7 +25,6 @@ export function markdownToSlateJson(markdown: string): Record<string, unknown> {
         inCodeBlock = true;
         codeLines = [];
       } else {
-        // Closing fence — flush accumulated code lines as a single code_block
         children.push({ type: 'code_block', children: [{ text: codeLines.join('\n') }] });
         inCodeBlock = false;
         codeLines = [];
@@ -33,7 +32,6 @@ export function markdownToSlateJson(markdown: string): Record<string, unknown> {
       continue;
     }
 
-    // Accumulate lines inside a code block
     if (inCodeBlock) {
       codeLines.push(line);
       continue;
@@ -54,15 +52,13 @@ export function markdownToSlateJson(markdown: string): Record<string, unknown> {
     } else if (line.startsWith('---') || line.startsWith('***')) {
       children.push({ type: 'hr', children: [{ text: '' }] });
     } else if (line.trim() === '') {
-      // Skip empty lines between blocks
       continue;
     } else {
-      // Parse inline formatting
       children.push({ type: 'p', children: parseInlineFormatting(line) });
     }
   }
 
-  // Handle unclosed code block (no closing fence)
+  // Handle unclosed code block
   if (inCodeBlock && codeLines.length > 0) {
     children.push({ type: 'code_block', children: [{ text: codeLines.join('\n') }] });
   }
@@ -79,7 +75,6 @@ function parseInlineFormatting(text: string): any[] {
   let remaining = text;
 
   while (remaining.length > 0) {
-    // Bold **text**
     const boldMatch = remaining.match(/^(.*?)\*\*(.+?)\*\*(.*)/s);
     if (boldMatch) {
       if (boldMatch[1]) result.push({ text: boldMatch[1] });
@@ -88,7 +83,6 @@ function parseInlineFormatting(text: string): any[] {
       continue;
     }
 
-    // Italic *text*
     const italicMatch = remaining.match(/^(.*?)\*(.+?)\*(.*)/s);
     if (italicMatch) {
       if (italicMatch[1]) result.push({ text: italicMatch[1] });
@@ -97,7 +91,6 @@ function parseInlineFormatting(text: string): any[] {
       continue;
     }
 
-    // Code `text`
     const codeMatch = remaining.match(/^(.*?)`(.+?)`(.*)/s);
     if (codeMatch) {
       if (codeMatch[1]) result.push({ text: codeMatch[1] });
@@ -106,13 +99,14 @@ function parseInlineFormatting(text: string): any[] {
       continue;
     }
 
-    // Plain text
     result.push({ text: remaining });
     break;
   }
 
   return result.length > 0 ? result : [{ text }];
 }
+
+// ── Slate JSON → Markdown ──
 
 /**
  * Convert Slate JSON document tree to markdown text.
@@ -157,147 +151,4 @@ function inlineToText(node: any): string {
   }
   if (node.children) return childrenToText(node.children);
   return '';
-}
-
-// ── CSV ↔ Cell Data ──
-
-/**
- * Convert sparse cell data to CSV string.
- */
-export function cellDataToCsv(data: Record<string, CellData>): string {
-  if (Object.keys(data).length === 0) return '';
-
-  // Find dimensions
-  let maxRow = 0;
-  let maxCol = 0;
-  for (const key of Object.keys(data)) {
-    const parsed = parseCellRef(key);
-    if (parsed) {
-      if (parsed.row > maxRow) maxRow = parsed.row;
-      if (parsed.col > maxCol) maxCol = parsed.col;
-    }
-  }
-
-  const rows: string[] = [];
-  for (let r = 1; r <= maxRow; r++) {
-    const cells: string[] = [];
-    for (let c = 1; c <= maxCol; c++) {
-      const ref = columnLetter(c - 1) + r;
-      const cell = data[ref];
-      const value = cell?.v ?? '';
-      // CSV-escape values containing commas, quotes, or newlines
-      const str = String(value);
-      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
-        cells.push(`"${str.replace(/"/g, '""')}"`);
-      } else {
-        cells.push(str);
-      }
-    }
-    rows.push(cells.join(','));
-  }
-  return rows.join('\n');
-}
-
-/**
- * Parse CSV string into sparse cell data.
- */
-export function csvToCellData(csv: string): Record<string, CellData> {
-  const data: Record<string, CellData> = {};
-  const rows = parseCsvRows(csv);
-
-  for (let r = 0; r < rows.length; r++) {
-    for (let c = 0; c < rows[r].length; c++) {
-      const value = rows[r][c];
-      if (value === '') continue; // skip empty cells
-      const ref = columnLetter(c) + (r + 1);
-      // Try to detect number type
-      const num = Number(value);
-      if (!isNaN(num) && value.trim() !== '') {
-        data[ref] = { v: num, t: 'number' };
-      } else {
-        data[ref] = { v: value, t: 'string' };
-      }
-    }
-  }
-  return data;
-}
-
-function parseCsvRows(csv: string): string[][] {
-  const rows: string[][] = [];
-  let current: string[] = [];
-  let cell = '';
-  let inQuotes = false;
-
-  for (let i = 0; i < csv.length; i++) {
-    const ch = csv[i];
-    if (inQuotes) {
-      if (ch === '"' && csv[i + 1] === '"') {
-        cell += '"';
-        i++;
-      } else if (ch === '"') {
-        inQuotes = false;
-      } else {
-        cell += ch;
-      }
-    } else {
-      if (ch === '"') {
-        inQuotes = true;
-      } else if (ch === ',') {
-        current.push(cell);
-        cell = '';
-      } else if (ch === '\n' || (ch === '\r' && csv[i + 1] === '\n')) {
-        current.push(cell);
-        rows.push(current);
-        current = [];
-        cell = '';
-        if (ch === '\r') i++;
-      } else {
-        cell += ch;
-      }
-    }
-  }
-  // Last cell/row
-  current.push(cell);
-  if (current.length > 0 && current.some(c => c !== '')) {
-    rows.push(current);
-  }
-  return rows;
-}
-
-// ── Extract text for search indexing ──
-
-/**
- * Extract searchable plain text from a Slate JSON document.
- */
-export function extractTextForSearch(content: Record<string, unknown>): string {
-  const children = (content as any).children || [];
-  return children.map(extractNodeText).filter(Boolean).join(' ');
-}
-
-function extractNodeText(node: any): string {
-  if (typeof node.text === 'string') return node.text;
-  if (node.children) return node.children.map(extractNodeText).join(' ');
-  return '';
-}
-
-// ── Helpers ──
-
-function parseCellRef(ref: string): { col: number; row: number } | null {
-  const match = ref.match(/^([A-Z]+)(\d+)$/);
-  if (!match) return null;
-  let col = 0;
-  for (let i = 0; i < match[1].length; i++) {
-    col = col * 26 + (match[1].charCodeAt(i) - 64);
-  }
-  return { col, row: parseInt(match[2], 10) };
-}
-
-function columnLetter(index: number): string {
-  let letter = '';
-  let n = index;
-  while (n >= 0) {
-    letter = String.fromCharCode((n % 26) + 65) + letter;
-    n = Math.floor(n / 26) - 1;
-  }
-  return letter;
 }

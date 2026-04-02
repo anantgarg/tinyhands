@@ -541,32 +541,34 @@ export async function updateFileContent(
     throw new Error(`File size ${data.length} exceeds maximum of ${MAX_FILE_SIZE} bytes`);
   }
 
-  // Create version of old file
+  // Create version, replace file data, and update doc record in a transaction
   const oldData = await getFile(docId);
-  if (oldData) {
-    await execute(
-      `INSERT INTO document_versions (id, document_id, version, content, changed_by, change_summary)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [uuid(), docId, doc.version, JSON.stringify({ file_size: doc.file_size }), updatedBy, 'File replaced']
-    );
-    // Prune old file versions
-    await execute(
-      `DELETE FROM document_versions WHERE document_id = $1 AND version NOT IN (
-        SELECT version FROM document_versions WHERE document_id = $1 ORDER BY version DESC LIMIT $2
-      )`,
-      [docId, MAX_FILE_VERSIONS]
-    );
-  }
+  await withTransaction(async (client) => {
+    if (oldData) {
+      await client.query(
+        `INSERT INTO document_versions (id, document_id, version, content, changed_by, change_summary)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [uuid(), docId, doc.version, JSON.stringify({ file_size: doc.file_size }), updatedBy, 'File replaced']
+      );
+      // Prune old file versions
+      await client.query(
+        `DELETE FROM document_versions WHERE document_id = $1 AND version NOT IN (
+          SELECT version FROM document_versions WHERE document_id = $1 ORDER BY version DESC LIMIT $2
+        )`,
+        [docId, MAX_FILE_VERSIONS]
+      );
+    }
 
-  // Replace file data
-  await deleteFile(docId);
-  await storeFile(docId, data);
+    // Replace file data
+    await deleteFile(docId, client);
+    await storeFile(docId, data, client);
 
-  // Update document record
-  await execute(
-    'UPDATE documents SET file_size = $1, updated_by = $2, updated_at = NOW(), version = version + 1 WHERE id = $3',
-    [data.length, updatedBy, docId]
-  );
+    // Update document record
+    await client.query(
+      'UPDATE documents SET file_size = $1, updated_by = $2, updated_at = NOW(), version = version + 1 WHERE id = $3',
+      [data.length, updatedBy, docId]
+    );
+  });
 
   // Re-index text
   const text = await extractTextFromFile(doc.title, doc.mime_type || '', data);

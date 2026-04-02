@@ -202,10 +202,29 @@ async function main() {
         var getResp = await httpRequest('GET', '/internal/docs/get/' + resp.data.id, null);
         if (getResp.status === 200 && getResp.data.tabs && getResp.data.tabs.length > 0) {
           // Parse CSV into cells
+          function parseCsvLine(line) {
+            var cells = [];
+            var current = '';
+            var inQuotes = false;
+            for (var i = 0; i < line.length; i++) {
+              var ch = line[i];
+              if (inQuotes) {
+                if (ch === '"' && line[i+1] === '"') { current += '"'; i++; }
+                else if (ch === '"') { inQuotes = false; }
+                else { current += ch; }
+              } else {
+                if (ch === '"') { inQuotes = true; }
+                else if (ch === ',') { cells.push(current); current = ''; }
+                else { current += ch; }
+              }
+            }
+            cells.push(current);
+            return cells;
+          }
           var lines = input.csv.split('\\n');
           var cells = {};
           for (var r = 0; r < lines.length; r++) {
-            var cols = lines[r].split(',');
+            var cols = parseCsvLine(lines[r]);
             for (var c = 0; c < cols.length; c++) {
               var letter = '';
               var n = c;
