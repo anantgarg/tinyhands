@@ -869,12 +869,12 @@ Native document management system. Three document types: **Docs** (rich text), *
 
 | Action | Superadmin | Admin | Member | Viewer |
 |--------|-----------|-------|--------|--------|
-| View all documents | Yes | Yes | Own only | Own only |
+| View all documents | Yes | Yes | Yes | Yes |
 | Create documents | Yes | Yes | Yes | No |
-| Edit documents | Yes | Yes | Own only | No |
-| Delete (archive) | Yes | Yes | Own only | No |
+| Edit documents | Yes | Yes | Yes | No |
+| Delete (archive) | Yes | Yes | Yes | No |
 | Permanent delete | Yes | Yes | No | No |
-| Toggle agent_editable | Yes | Yes | Own only | No |
+| Toggle agent_editable | Yes | Yes | Yes | No |
 
 ---
 
