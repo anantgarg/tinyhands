@@ -87,6 +87,11 @@ Admins currently can only see Team Connections and their own Personal Connection
 ### 18. Agent Diagnostics Assistant
 An AI-powered diagnostic agent (like Claude Code for TinyHands) that agent creators can talk to when an agent responds incorrectly. It would pull the agent's run logs, tool call history, system prompt, and tool schemas to diagnose why the agent behaved the way it did — e.g., "the HubSpot tool returned 0 results because search_contacts can't filter by blank properties, you need filter_contacts." Today when an agent gives a wrong answer, there's no way for the creator to know whether the problem is the prompt, the tool, the data, or the model — they just see the wrong output. This assistant would bridge that gap.
 
+### 19. Documents Feature Follow-ups
+- **RichTextEditor limited heading support**: The TipTap editor only supports h2 headings (`heading: { levels: [2] }`), but the Slate JSON format and markdown converter support h1, h2, h3. Headings created by agents or imported from markdown will display as plain text in the editor. Should either expand TipTap config to support h1-h3 or document the limitation.
+- **SheetEditor no real-time collaboration**: Multiple users editing the same sheet will overwrite each other's changes since there's no WebSocket-based live sync or OT/CRDT. The `useUpdateCells` approach sends partial updates which helps, but simultaneous edits to the same cell will still race.
+- **FileViewer replaceFile doesn't track version**: The `handleReplace` callback uses `replaceFile.mutate` which calls a separate endpoint that doesn't go through the optimistic locking flow, so `currentVersion` can get out of sync after a file replacement followed by a title rename.
+
 ---
 
 ## Completed
