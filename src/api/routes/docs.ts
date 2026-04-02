@@ -11,10 +11,36 @@ import {
   uploadFile, getFileDownload, updateFileContent,
   MAX_FILE_SIZE,
 } from '../../modules/docs';
+import { isPlatformAdmin, canView, canModifyAgent } from '../../modules/access-control';
 import { slateJsonToMarkdown, cellDataToCsv, csvToCellData, markdownToSlateJson } from '../../modules/docs/convert';
 import { logger } from '../../utils/logger';
 
 const router = Router();
+
+/**
+ * Check document-level permission based on agent roles.
+ * - Platform admins (superadmin/admin) can do everything
+ * - Agent-scoped docs: check agent role (view=viewer+, modify=owner)
+ * - Non-agent docs: anyone can view, only creator can modify
+ */
+async function checkDocPermission(
+  workspaceId: string, userId: string, doc: { agent_id: string | null; created_by: string },
+  level: 'view' | 'modify'
+): Promise<boolean> {
+  // Admins can do everything
+  if (await isPlatformAdmin(workspaceId, userId)) return true;
+
+  if (doc.agent_id) {
+    // Agent-scoped document: check agent role
+    if (level === 'view') return canView(workspaceId, doc.agent_id, userId);
+    return canModifyAgent(workspaceId, doc.agent_id, userId);
+  }
+
+  // No agent — creator has owner-like access
+  if (level === 'view') return true; // all authenticated users can view non-agent docs
+  return doc.created_by === userId; // only creator can modify non-agent docs
+}
+
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: MAX_FILE_SIZE } });
 
 // ── Stats ──
@@ -76,6 +102,15 @@ router.post('/', async (req: Request, res: Response) => {
     if (title.length > 500) { res.status(400).json({ error: 'Title must be under 500 characters' }); return; }
     if (description && description.length > 2000) { res.status(400).json({ error: 'Description must be under 2000 characters' }); return; }
 
+    // Check create permission: if agent-scoped, user must be agent owner or admin
+    if (agentId) {
+      const isAdmin = await isPlatformAdmin(workspaceId, userId);
+      if (!isAdmin && !(await canModifyAgent(workspaceId, agentId, userId))) {
+        res.status(403).json({ error: "You don't have permission to access this document" });
+        return;
+      }
+    }
+
     let docContent = content;
     if (type === 'doc' && typeof content === 'string') {
       docContent = markdownToSlateJson(content);
@@ -103,6 +138,16 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
   try {
     const { workspaceId, userId } = getSessionUser(req);
 
+    // Check create permission: if agent-scoped, user must be agent owner or admin
+    const agentId = req.body.agentId;
+    if (agentId) {
+      const isAdmin = await isPlatformAdmin(workspaceId, userId);
+      if (!isAdmin && !(await canModifyAgent(workspaceId, agentId, userId))) {
+        res.status(403).json({ error: "You don't have permission to access this document" });
+        return;
+      }
+    }
+
     // Check for multer-processed file
     const file = (req as any).file;
     if (!file) { res.status(400).json({ error: 'No file uploaded' }); return; }
@@ -126,6 +171,17 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
 router.post('/import-csv', upload.single('file'), async (req: Request, res: Response) => {
   try {
     const { workspaceId, userId } = getSessionUser(req);
+
+    // Check create permission: if agent-scoped, user must be agent owner or admin
+    const agentId = req.body.agentId;
+    if (agentId) {
+      const isAdmin = await isPlatformAdmin(workspaceId, userId);
+      if (!isAdmin && !(await canModifyAgent(workspaceId, agentId, userId))) {
+        res.status(403).json({ error: "You don't have permission to access this document" });
+        return;
+      }
+    }
+
     const file = (req as any).file;
     if (!file) { res.status(400).json({ error: 'No file uploaded' }); return; }
 
@@ -157,6 +213,17 @@ router.post('/import-csv', upload.single('file'), async (req: Request, res: Resp
 router.post('/import-docx', upload.single('file'), async (req: Request, res: Response) => {
   try {
     const { workspaceId, userId } = getSessionUser(req);
+
+    // Check create permission: if agent-scoped, user must be agent owner or admin
+    const agentId = req.body.agentId;
+    if (agentId) {
+      const isAdmin = await isPlatformAdmin(workspaceId, userId);
+      if (!isAdmin && !(await canModifyAgent(workspaceId, agentId, userId))) {
+        res.status(403).json({ error: "You don't have permission to access this document" });
+        return;
+      }
+    }
+
     const file = (req as any).file;
     if (!file) { res.status(400).json({ error: 'No file uploaded' }); return; }
 
@@ -191,9 +258,14 @@ router.post('/import-docx', upload.single('file'), async (req: Request, res: Res
 // GET /docs/:id — Get document
 router.get('/:id', async (req: Request, res: Response) => {
   try {
-    const { workspaceId } = getSessionUser(req);
+    const { workspaceId, userId } = getSessionUser(req);
     const doc = await getDocument(workspaceId, req.params.id as string);
     if (!doc) { res.status(404).json({ error: 'Document not found' }); return; }
+
+    if (!(await checkDocPermission(workspaceId, userId, doc, 'view'))) {
+      res.status(403).json({ error: "You don't have permission to access this document" });
+      return;
+    }
 
     // Include sheet tabs for sheet type
     let tabs;
@@ -211,7 +283,16 @@ router.get('/:id', async (req: Request, res: Response) => {
 // GET /docs/:id/download — Download file
 router.get('/:id/download', async (req: Request, res: Response) => {
   try {
-    const { workspaceId } = getSessionUser(req);
+    const { workspaceId, userId } = getSessionUser(req);
+
+    // Check view permission before downloading
+    const doc = await getDocument(workspaceId, req.params.id as string);
+    if (!doc) { res.status(404).json({ error: 'Document not found' }); return; }
+    if (!(await checkDocPermission(workspaceId, userId, doc, 'view'))) {
+      res.status(403).json({ error: "You don't have permission to access this document" });
+      return;
+    }
+
     const { data, mimeType, title } = await getFileDownload(workspaceId, req.params.id as string);
     res.setHeader('Content-Type', mimeType);
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(title)}"`);
@@ -226,10 +307,15 @@ router.get('/:id/download', async (req: Request, res: Response) => {
 // GET /docs/:id/export — Export document as markdown, HTML, or CSV
 router.get('/:id/export', async (req: Request, res: Response) => {
   try {
-    const { workspaceId } = getSessionUser(req);
+    const { workspaceId, userId } = getSessionUser(req);
     const format = req.query.format as string;
     const doc = await getDocument(workspaceId, req.params.id as string);
     if (!doc) { res.status(404).json({ error: 'Document not found' }); return; }
+
+    if (!(await checkDocPermission(workspaceId, userId, doc, 'view'))) {
+      res.status(403).json({ error: "You don't have permission to access this document" });
+      return;
+    }
 
     if (doc.type === 'doc') {
       if (format === 'markdown' || format === 'md') {
@@ -274,6 +360,15 @@ router.get('/:id/export', async (req: Request, res: Response) => {
 router.post('/:id/replace', upload.single('file'), async (req: Request, res: Response) => {
   try {
     const { workspaceId, userId } = getSessionUser(req);
+
+    // Check modify permission
+    const existingDoc = await getDocument(workspaceId, req.params.id as string);
+    if (!existingDoc) { res.status(404).json({ error: 'Document not found' }); return; }
+    if (!(await checkDocPermission(workspaceId, userId, existingDoc, 'modify'))) {
+      res.status(403).json({ error: "You don't have permission to access this document" });
+      return;
+    }
+
     const file = (req as any).file;
     if (!file) { res.status(400).json({ error: 'File is required' }); return; }
     const doc = await updateFileContent(workspaceId, req.params.id as string, file.buffer, userId);
@@ -292,6 +387,14 @@ router.patch('/:id', async (req: Request, res: Response) => {
     if (!expectedVersion) { res.status(400).json({ error: 'expectedVersion is required' }); return; }
     if (title && title.length > 500) { res.status(400).json({ error: 'Title must be under 500 characters' }); return; }
     if (description && description.length > 2000) { res.status(400).json({ error: 'Description must be under 2000 characters' }); return; }
+
+    // Check modify permission
+    const existingDoc = await getDocument(workspaceId, req.params.id as string);
+    if (!existingDoc) { res.status(404).json({ error: 'Document not found' }); return; }
+    if (!(await checkDocPermission(workspaceId, userId, existingDoc, 'modify'))) {
+      res.status(403).json({ error: "You don't have permission to access this document" });
+      return;
+    }
 
     const doc = await updateDocument(workspaceId, req.params.id as string, {
       title, description, content, tags, agentEditable,
@@ -312,7 +415,16 @@ router.patch('/:id', async (req: Request, res: Response) => {
 // DELETE /docs/:id — Archive (soft delete)
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
-    const { workspaceId } = getSessionUser(req);
+    const { workspaceId, userId } = getSessionUser(req);
+
+    // Check modify permission for archive
+    const doc = await getDocument(workspaceId, req.params.id as string);
+    if (!doc) { res.status(404).json({ error: 'Document not found' }); return; }
+    if (!(await checkDocPermission(workspaceId, userId, doc, 'modify'))) {
+      res.status(403).json({ error: "You don't have permission to access this document" });
+      return;
+    }
+
     await archiveDocument(workspaceId, req.params.id as string);
     res.json({ ok: true });
   } catch (err: any) {
@@ -337,7 +449,16 @@ router.delete('/:id/permanent', requireAdmin, async (req: Request, res: Response
 
 router.get('/:id/versions', async (req: Request, res: Response) => {
   try {
-    const { workspaceId } = getSessionUser(req);
+    const { workspaceId, userId } = getSessionUser(req);
+
+    // Check view permission
+    const doc = await getDocument(workspaceId, req.params.id as string);
+    if (!doc) { res.status(404).json({ error: 'Document not found' }); return; }
+    if (!(await checkDocPermission(workspaceId, userId, doc, 'view'))) {
+      res.status(403).json({ error: "You don't have permission to access this document" });
+      return;
+    }
+
     const versions = await listVersions(workspaceId, req.params.id as string);
     res.json(versions);
   } catch (err: any) {
@@ -348,7 +469,16 @@ router.get('/:id/versions', async (req: Request, res: Response) => {
 
 router.get('/:id/versions/:version', async (req: Request, res: Response) => {
   try {
-    const { workspaceId } = getSessionUser(req);
+    const { workspaceId, userId } = getSessionUser(req);
+
+    // Check view permission
+    const doc = await getDocument(workspaceId, req.params.id as string);
+    if (!doc) { res.status(404).json({ error: 'Document not found' }); return; }
+    if (!(await checkDocPermission(workspaceId, userId, doc, 'view'))) {
+      res.status(403).json({ error: "You don't have permission to access this document" });
+      return;
+    }
+
     const version = await getVersion(workspaceId, req.params.id as string, parseInt(req.params.version as string));
     if (!version) { res.status(404).json({ error: 'Version not found' }); return; }
     res.json(version);
@@ -361,6 +491,15 @@ router.get('/:id/versions/:version', async (req: Request, res: Response) => {
 router.post('/:id/versions/:version/restore', async (req: Request, res: Response) => {
   try {
     const { workspaceId, userId } = getSessionUser(req);
+
+    // Check modify permission for restore
+    const existingDoc = await getDocument(workspaceId, req.params.id as string);
+    if (!existingDoc) { res.status(404).json({ error: 'Document not found' }); return; }
+    if (!(await checkDocPermission(workspaceId, userId, existingDoc, 'modify'))) {
+      res.status(403).json({ error: "You don't have permission to access this document" });
+      return;
+    }
+
     const doc = await restoreVersion(workspaceId, req.params.id as string, parseInt(req.params.version as string), userId);
     res.json(doc);
   } catch (err: any) {
@@ -373,7 +512,16 @@ router.post('/:id/versions/:version/restore', async (req: Request, res: Response
 
 router.get('/:id/tabs', async (req: Request, res: Response) => {
   try {
-    const { workspaceId } = getSessionUser(req);
+    const { workspaceId, userId } = getSessionUser(req);
+
+    // Check view permission
+    const doc = await getDocument(workspaceId, req.params.id as string);
+    if (!doc) { res.status(404).json({ error: 'Document not found' }); return; }
+    if (!(await checkDocPermission(workspaceId, userId, doc, 'view'))) {
+      res.status(403).json({ error: "You don't have permission to access this document" });
+      return;
+    }
+
     const tabs = await getSheetTabs(workspaceId, req.params.id as string);
     res.json(tabs);
   } catch (err: any) {
@@ -384,7 +532,16 @@ router.get('/:id/tabs', async (req: Request, res: Response) => {
 
 router.post('/:id/tabs', async (req: Request, res: Response) => {
   try {
-    const { workspaceId } = getSessionUser(req);
+    const { workspaceId, userId } = getSessionUser(req);
+
+    // Check modify permission
+    const doc = await getDocument(workspaceId, req.params.id as string);
+    if (!doc) { res.status(404).json({ error: 'Document not found' }); return; }
+    if (!(await checkDocPermission(workspaceId, userId, doc, 'modify'))) {
+      res.status(403).json({ error: "You don't have permission to access this document" });
+      return;
+    }
+
     const tab = await createSheetTab(workspaceId, req.params.id as string, req.body.name || 'New Sheet');
     res.status(201).json(tab);
   } catch (err: any) {
@@ -395,7 +552,16 @@ router.post('/:id/tabs', async (req: Request, res: Response) => {
 
 router.patch('/:id/tabs/:tabId', async (req: Request, res: Response) => {
   try {
-    const { workspaceId } = getSessionUser(req);
+    const { workspaceId, userId } = getSessionUser(req);
+
+    // Check modify permission on parent document
+    const doc = await getDocument(workspaceId, req.params.id as string);
+    if (!doc) { res.status(404).json({ error: 'Document not found' }); return; }
+    if (!(await checkDocPermission(workspaceId, userId, doc, 'modify'))) {
+      res.status(403).json({ error: "You don't have permission to access this document" });
+      return;
+    }
+
     const tab = await updateSheetTab(workspaceId, req.params.tabId as string, req.body);
     res.json(tab);
   } catch (err: any) {
@@ -406,7 +572,16 @@ router.patch('/:id/tabs/:tabId', async (req: Request, res: Response) => {
 
 router.delete('/:id/tabs/:tabId', async (req: Request, res: Response) => {
   try {
-    const { workspaceId } = getSessionUser(req);
+    const { workspaceId, userId } = getSessionUser(req);
+
+    // Check modify permission on parent document
+    const doc = await getDocument(workspaceId, req.params.id as string);
+    if (!doc) { res.status(404).json({ error: 'Document not found' }); return; }
+    if (!(await checkDocPermission(workspaceId, userId, doc, 'modify'))) {
+      res.status(403).json({ error: "You don't have permission to access this document" });
+      return;
+    }
+
     await deleteSheetTab(workspaceId, req.params.tabId as string);
     res.json({ ok: true });
   } catch (err: any) {
@@ -417,7 +592,16 @@ router.delete('/:id/tabs/:tabId', async (req: Request, res: Response) => {
 
 router.post('/:id/tabs/reorder', async (req: Request, res: Response) => {
   try {
-    const { workspaceId } = getSessionUser(req);
+    const { workspaceId, userId } = getSessionUser(req);
+
+    // Check modify permission on parent document
+    const doc = await getDocument(workspaceId, req.params.id as string);
+    if (!doc) { res.status(404).json({ error: 'Document not found' }); return; }
+    if (!(await checkDocPermission(workspaceId, userId, doc, 'modify'))) {
+      res.status(403).json({ error: "You don't have permission to access this document" });
+      return;
+    }
+
     await reorderSheetTabs(workspaceId, req.params.id as string, req.body.tabIds);
     res.json({ ok: true });
   } catch (err: any) {
@@ -428,7 +612,16 @@ router.post('/:id/tabs/reorder', async (req: Request, res: Response) => {
 
 router.patch('/:id/tabs/:tabId/cells', async (req: Request, res: Response) => {
   try {
-    const { workspaceId } = getSessionUser(req);
+    const { workspaceId, userId } = getSessionUser(req);
+
+    // Check modify permission on parent document
+    const doc = await getDocument(workspaceId, req.params.id as string);
+    if (!doc) { res.status(404).json({ error: 'Document not found' }); return; }
+    if (!(await checkDocPermission(workspaceId, userId, doc, 'modify'))) {
+      res.status(403).json({ error: "You don't have permission to access this document" });
+      return;
+    }
+
     const { cells } = req.body;
     if (!cells || typeof cells !== 'object') { res.status(400).json({ error: 'cells object is required' }); return; }
     if (Object.keys(cells).length > 10000) { res.status(400).json({ error: 'Too many cells in a single update (max 10,000)' }); return; }
@@ -444,7 +637,16 @@ router.patch('/:id/tabs/:tabId/cells', async (req: Request, res: Response) => {
 
 router.post('/:id/tabs/:tabId/rows', async (req: Request, res: Response) => {
   try {
-    const { workspaceId } = getSessionUser(req);
+    const { workspaceId, userId } = getSessionUser(req);
+
+    // Check modify permission on parent document
+    const doc = await getDocument(workspaceId, req.params.id as string);
+    if (!doc) { res.status(404).json({ error: 'Document not found' }); return; }
+    if (!(await checkDocPermission(workspaceId, userId, doc, 'modify'))) {
+      res.status(403).json({ error: "You don't have permission to access this document" });
+      return;
+    }
+
     const { rows } = req.body;
     if (!Array.isArray(rows)) { res.status(400).json({ error: 'rows array is required' }); return; }
     if (rows.length > 1000) { res.status(400).json({ error: 'Too many rows in a single append (max 1,000)' }); return; }

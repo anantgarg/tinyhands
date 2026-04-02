@@ -889,14 +889,16 @@ Native document management system. Three document types: **Docs** (rich text), *
 
 ### Access Control
 
-| Action | Superadmin | Admin | Member | Viewer |
-|--------|-----------|-------|--------|--------|
-| View all documents | Yes | Yes | Yes | Yes |
-| Create documents | Yes | Yes | Yes | No |
-| Edit documents | Yes | Yes | Yes | No |
-| Delete (archive) | Yes | Yes | Yes | No |
-| Permanent delete | Yes | Yes | No | No |
-| Toggle agent_editable | Yes | Yes | Yes | No |
+Documents are agent-scoped (they have `agent_id`), so permissions follow agent roles. Superadmin/Admin get owner-level access to ALL agents automatically. Documents without an agent_id (user-created standalone docs): admins can do everything, the creator (created_by) has owner-like access.
+
+| Action | Superadmin | Admin | Agent Owner | Agent Member | Viewer |
+|--------|-----------|-------|-------------|-------------|--------|
+| View all documents | Yes | Yes | Yes | Yes | Yes |
+| Create documents | Yes | Yes | Yes | No | No |
+| Edit documents | Yes | Yes | Yes | No | No |
+| Delete (archive) | Yes | Yes | Yes | No | No |
+| Permanent delete | Yes | Yes | No | No | No |
+| Toggle agent_editable | Yes | Yes | Yes | No | No |
 
 ---
 
