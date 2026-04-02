@@ -87,6 +87,12 @@ Admins currently can only see Team Connections and their own Personal Connection
 ### 18. Agent Diagnostics Assistant
 An AI-powered diagnostic agent (like Claude Code for TinyHands) that agent creators can talk to when an agent responds incorrectly. It would pull the agent's run logs, tool call history, system prompt, and tool schemas to diagnose why the agent behaved the way it did — e.g., "the HubSpot tool returned 0 results because search_contacts can't filter by blank properties, you need filter_contacts." Today when an agent gives a wrong answer, there's no way for the creator to know whether the problem is the prompt, the tool, the data, or the model — they just see the wrong output. This assistant would bridge that gap.
 
+### 19. Clean up orphaned Slack connect handlers
+The `connect_personal_apikey`, `connect_personal_oauth`, and `personal_connection_modal` handlers in `src/slack/commands.ts` are no longer triggered from execution errors (replaced with dashboard redirect). They're still referenced by `buildCredentialSelectionBlocks` during Slack agent creation. If Slack creation is fully deprecated, these handlers can be removed.
+
+### 20. Update PRODUCT_GUIDE.md and ADMIN_GUIDE.md for credential system changes
+The credential system was overhauled: `connectionModel` replaced with `supportedCredentialModes`, Slack connect flow removed, tool requests expanded to all team credential selections, runtime "Continue without tools?" confirmation added. PRODUCT_GUIDE.md and ADMIN_GUIDE.md may reference the old behavior.
+
 ---
 
 ## Completed
