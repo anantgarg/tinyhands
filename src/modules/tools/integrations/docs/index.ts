@@ -46,6 +46,7 @@ const WRITE_SCHEMA = JSON.stringify({
       description: 'Rows to append, each row is an array of cell values',
       items: { type: 'array', items: {} },
     },
+    expected_version: { type: 'number', description: 'Expected document version for update_doc/rename (from a previous read). Prevents overwriting concurrent changes.' },
     csv: { type: 'string', description: 'CSV data to populate a new sheet' },
     mime_type: { type: 'string', description: 'MIME type for file creation' },
     description: { type: 'string', description: 'Optional document description' },
@@ -186,7 +187,7 @@ async function main() {
         description: input.description, tags: input.tags,
         agent_id: agentId, run_id: runId,
       });
-      result = resp.status === 200 ? { message: 'Document created', id: resp.data.id, title: resp.data.title } : { error: 'Create failed: ' + (resp.data.error || 'HTTP ' + resp.status) };
+      result = resp.status === 200 ? { message: 'Document created', id: resp.data.id, title: resp.data.title, version: resp.data.version } : { error: 'Create failed: ' + (resp.data.error || 'HTTP ' + resp.status) };
       break;
     }
     case 'create_sheet': {
@@ -217,7 +218,7 @@ async function main() {
           await httpRequest('POST', '/internal/docs/sheet/' + resp.data.id + '/cells', { tab_id: getResp.data.tabs[0].id, cells: cells });
         }
       }
-      result = resp.status === 200 ? { message: 'Sheet created', id: resp.data.id, title: resp.data.title } : { error: 'Create failed: ' + (resp.data.error || 'HTTP ' + resp.status) };
+      result = resp.status === 200 ? { message: 'Sheet created', id: resp.data.id, title: resp.data.title, version: resp.data.version } : { error: 'Create failed: ' + (resp.data.error || 'HTTP ' + resp.status) };
       break;
     }
     case 'create_file': {
@@ -235,8 +236,9 @@ async function main() {
       var body = { agent_id: agentId };
       if (input.content) body.content = input.content;
       if (input.title) body.title = input.title;
+      if (input.expected_version) body.expected_version = input.expected_version;
       var resp = await httpRequest('POST', '/internal/docs/update/' + input.document_id, body);
-      result = resp.status === 200 ? { message: 'Document updated', id: resp.data.id } : { error: 'Update failed: ' + (resp.data.error || 'HTTP ' + resp.status) };
+      result = resp.status === 200 ? { message: 'Document updated', id: resp.data.id, version: resp.data.version } : { error: 'Update failed: ' + (resp.data.error || 'HTTP ' + resp.status) };
       break;
     }
     case 'update_cells': {
@@ -268,14 +270,17 @@ async function main() {
       break;
     }
     case 'delete_tab': {
-      // Not implemented via internal API yet — would need a DELETE endpoint
-      result = { error: 'delete_tab not yet supported via agent tool' };
+      if (!input.document_id || !input.tab_id) { result = { error: 'document_id and tab_id are required' }; break; }
+      var resp = await httpRequest('DELETE', '/internal/docs/sheet/' + input.document_id + '/tab/' + input.tab_id, null);
+      result = resp.status === 200 ? { message: 'Tab deleted' } : { error: 'Delete tab failed: ' + (resp.data.error || 'HTTP ' + resp.status) };
       break;
     }
     case 'rename': {
       if (!input.document_id || !input.title) { result = { error: 'document_id and title are required' }; break; }
-      var resp = await httpRequest('POST', '/internal/docs/update/' + input.document_id, { title: input.title, agent_id: agentId });
-      result = resp.status === 200 ? { message: 'Renamed to: ' + input.title } : { error: 'Rename failed: ' + (resp.data.error || 'HTTP ' + resp.status) };
+      var renameBody = { title: input.title, agent_id: agentId };
+      if (input.expected_version) renameBody.expected_version = input.expected_version;
+      var resp = await httpRequest('POST', '/internal/docs/update/' + input.document_id, renameBody);
+      result = resp.status === 200 ? { message: 'Renamed to: ' + input.title, version: resp.data.version } : { error: 'Rename failed: ' + (resp.data.error || 'HTTP ' + resp.status) };
       break;
     }
     case 'archive': {

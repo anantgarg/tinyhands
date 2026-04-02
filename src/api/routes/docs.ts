@@ -235,7 +235,7 @@ router.get('/:id/export', async (req: Request, res: Response) => {
       if (format === 'markdown' || format === 'md') {
         const md = doc.content ? slateJsonToMarkdown(doc.content) : '';
         res.setHeader('Content-Type', 'text/markdown');
-        res.setHeader('Content-Disposition', `attachment; filename="${doc.title}.md"`);
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(doc.title)}.md"`);
         res.send(md);
       } else if (format === 'html') {
         // Simple HTML export from Slate JSON
@@ -243,7 +243,7 @@ router.get('/:id/export', async (req: Request, res: Response) => {
         const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
         const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(doc.title)}</title></head><body><pre>${escapeHtml(md)}</pre></body></html>`;
         res.setHeader('Content-Type', 'text/html');
-        res.setHeader('Content-Disposition', `attachment; filename="${doc.title}.html"`);
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(doc.title)}.html"`);
         res.send(html);
       } else {
         res.status(400).json({ error: 'Supported formats: markdown, html' });
@@ -256,7 +256,7 @@ router.get('/:id/export', async (req: Request, res: Response) => {
         if (!tab) { res.status(404).json({ error: 'Sheet tab not found' }); return; }
         const csv = cellDataToCsv(tab.data);
         res.setHeader('Content-Type', 'text/csv');
-        res.setHeader('Content-Disposition', `attachment; filename="${doc.title} - ${tab.name}.csv"`);
+        res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(doc.title)} - ${encodeURIComponent(tab.name)}.csv"`);
         res.send(csv);
       } else {
         res.status(400).json({ error: 'Supported formats: csv' });
@@ -432,6 +432,8 @@ router.patch('/:id/tabs/:tabId/cells', async (req: Request, res: Response) => {
     const { cells } = req.body;
     if (!cells || typeof cells !== 'object') { res.status(400).json({ error: 'cells object is required' }); return; }
     if (Object.keys(cells).length > 10000) { res.status(400).json({ error: 'Too many cells in a single update (max 10,000)' }); return; }
+    const cellsPayloadSize = Buffer.byteLength(JSON.stringify(cells), 'utf-8');
+    if (cellsPayloadSize > 10 * 1024 * 1024) { res.status(400).json({ error: 'Cell data too large (max 10 MB)' }); return; }
     const tab = await updateCells(workspaceId, req.params.tabId as string, cells);
     res.json(tab);
   } catch (err: any) {

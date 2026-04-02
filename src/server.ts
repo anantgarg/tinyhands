@@ -447,7 +447,7 @@ export function createWebhookServer(): express.Application {
       const doc = await getDocument(workspaceId, req.params.id);
       if (!doc) { res.status(404).json({ error: 'Not found' }); return; }
 
-      const result: any = { id: doc.id, type: doc.type, title: doc.title, description: doc.description };
+      const result: any = { id: doc.id, type: doc.type, title: doc.title, description: doc.description, version: doc.version };
 
       if (doc.type === 'doc' && doc.content) {
         result.content = slateJsonToMarkdown(doc.content);
@@ -489,16 +489,22 @@ export function createWebhookServer(): express.Application {
         content = markdownToSlateJson(content);
       }
 
+      const expectedVersion = req.body.expected_version ?? doc.version;
+
       const updated = await updateDocument(workspaceId, req.params.id, {
         title: req.body.title,
         content,
         updatedBy: req.body.agent_id || 'agent',
-        expectedVersion: doc.version,
+        expectedVersion,
       });
       res.json(updated);
     } catch (err: any) {
-      logger.error('Internal docs update failed', { error: err.message });
-      res.status(500).json({ error: err.message });
+      if (err.message === 'VERSION_CONFLICT') {
+        res.status(409).json({ error: 'Document was modified concurrently. Re-read the document and try again.', currentVersion: err.currentVersion });
+      } else {
+        logger.error('Internal docs update failed', { error: err.message });
+        res.status(500).json({ error: err.message });
+      }
     }
   });
 
@@ -602,6 +608,25 @@ export function createWebhookServer(): express.Application {
     }
   });
 
+  app.delete('/internal/docs/sheet/:id/tab/:tabId', async (req, res) => {
+    const secret = req.headers['x-internal-secret'] as string;
+    if (config.server.internalSecret && secret !== config.server.internalSecret) {
+      res.status(401).json({ error: 'Unauthorized' }); return;
+    }
+    try {
+      const workspaceId = getDefaultWorkspaceId();
+      const { getDocument, deleteSheetTab } = await import('./modules/docs');
+      const doc = await getDocument(workspaceId, req.params.id);
+      if (!doc) { res.status(404).json({ error: 'Document not found' }); return; }
+      if (!doc.agent_editable) { res.status(403).json({ error: 'Document is not agent-editable' }); return; }
+      await deleteSheetTab(workspaceId, req.params.tabId);
+      res.json({ ok: true });
+    } catch (err: any) {
+      logger.error('Internal sheet delete tab failed', { error: err.message });
+      res.status(err.message === 'Cannot delete the last tab in a sheet' ? 400 : 500).json({ error: err.message });
+    }
+  });
+
   app.post('/internal/docs/sheet/:id/cells', async (req, res) => {
     const secret = req.headers['x-internal-secret'] as string;
     if (config.server.internalSecret && secret !== config.server.internalSecret) {
@@ -614,7 +639,16 @@ export function createWebhookServer(): express.Application {
       if (!doc) { res.status(404).json({ error: 'Not found' }); return; }
       if (!doc.agent_editable) { res.status(403).json({ error: 'Document is not agent-editable' }); return; }
 
-      const tab = await updateCells(workspaceId, req.body.tab_id, req.body.cells);
+      const cells = req.body.cells;
+      if (cells && typeof cells === 'object' && Object.keys(cells).length > 10000) {
+        res.status(400).json({ error: 'Too many cells in a single update (max 10,000)' }); return;
+      }
+      const cellsPayloadSize = Buffer.byteLength(JSON.stringify(cells), 'utf-8');
+      if (cellsPayloadSize > 10 * 1024 * 1024) {
+        res.status(400).json({ error: 'Cell data too large (max 10 MB)' }); return;
+      }
+
+      const tab = await updateCells(workspaceId, req.body.tab_id, cells);
       res.json({ ok: true, row_count: tab.row_count, col_count: tab.col_count });
     } catch (err: any) {
       logger.error('Internal sheet update cells failed', { error: err.message });

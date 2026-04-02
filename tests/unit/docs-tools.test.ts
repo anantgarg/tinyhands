@@ -127,6 +127,31 @@ describe('Docs Tools Module', () => {
       expect(schema.properties.rows).toBeDefined();
       expect(schema.properties.csv).toBeDefined();
     });
+
+    it('should include expected_version property for version conflict detection', () => {
+      const schema = JSON.parse(manifest.tools[1].schema);
+      expect(schema.properties.expected_version).toBeDefined();
+      expect(schema.properties.expected_version.type).toBe('number');
+    });
+
+    it('should have delete_tab in the write tool code that calls internal DELETE endpoint', () => {
+      const writeTool = manifest.tools[1];
+      expect(writeTool.code).toContain("case 'delete_tab'");
+      expect(writeTool.code).toContain('/internal/docs/sheet/');
+      expect(writeTool.code).not.toContain('not yet supported');
+    });
+
+    it('should pass expected_version in update_doc action', () => {
+      const writeTool = manifest.tools[1];
+      expect(writeTool.code).toContain('expected_version');
+      expect(writeTool.code).toContain("body.expected_version = input.expected_version");
+    });
+
+    it('should return version in create and update responses', () => {
+      const writeTool = manifest.tools[1];
+      // create_doc response
+      expect(writeTool.code).toContain("version: resp.data.version");
+    });
   });
 
   // ────────────────────────────────────────────────

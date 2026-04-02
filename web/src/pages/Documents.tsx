@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/table';
 import { Switch } from '@/components/ui/switch';
 import {
-  useDocuments, useDocStats, useCreateDocument, useArchiveDocument,
+  useDocuments, useDocStats, useCreateDocument, useArchiveDocument, useDeleteDocument,
   useUploadFile, useImportCsv, useImportDocx,
   type DocType,
 } from '@/api/docs';
@@ -91,6 +91,7 @@ export function Documents() {
   const { data: stats } = useDocStats();
   const createDoc = useCreateDocument();
   const archiveDoc = useArchiveDocument();
+  const deleteDoc = useDeleteDocument();
   const uploadFileMutation = useUploadFile();
   const importCsvMutation = useImportCsv();
   const importDocxMutation = useImportDocx();
@@ -273,9 +274,9 @@ export function Documents() {
                         </DropdownMenuItem>
                         {isAdmin && (
                           <DropdownMenuItem
-                            onClick={() => {
+                            onClick={async () => {
                               if (confirm('Permanently delete this document?')) {
-                                // Would call useDeleteDocument
+                                await deleteDoc.mutateAsync(doc.id);
                               }
                             }}
                             className="text-red-600"
