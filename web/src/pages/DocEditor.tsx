@@ -44,8 +44,16 @@ export function DocEditor({ document: doc }: DocEditorProps) {
   const [currentVersion, setCurrentVersion] = useState(doc.version);
 
   const saveTimeoutRef = useRef<NodeJS.Timeout>();
+  const titleRef = useRef(title);
+  const contentRef = useRef(content);
+  const agentEditableRef = useRef(agentEditable);
+  const versionRef = useRef(currentVersion);
+  titleRef.current = title;
+  contentRef.current = content;
+  agentEditableRef.current = agentEditable;
+  versionRef.current = currentVersion;
 
-  // Auto-save with 2s debounce
+  // Auto-save with 2s debounce — uses refs to avoid stale closures
   const scheduleAutoSave = useCallback(() => {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     saveTimeoutRef.current = setTimeout(async () => {
@@ -53,23 +61,23 @@ export function DocEditor({ document: doc }: DocEditorProps) {
         setSaving(true);
         await updateDoc.mutateAsync({
           id: doc.id,
-          title,
-          content: { type: 'doc', children: [{ type: 'p', children: [{ text: content }] }] },
-          agentEditable,
-          expectedVersion: currentVersion,
+          title: titleRef.current,
+          content: { type: 'doc', children: [{ type: 'p', children: [{ text: contentRef.current }] }] },
+          agentEditable: agentEditableRef.current,
+          expectedVersion: versionRef.current,
         });
         setCurrentVersion(v => v + 1);
+        versionRef.current = versionRef.current + 1;
         setLastSaved(new Date());
       } catch (err: any) {
         if (err.message?.includes('409') || err.message?.includes('modified')) {
-          // Version conflict — show notification
           alert('This document was modified elsewhere. Please refresh the page.');
         }
       } finally {
         setSaving(false);
       }
     }, 2000);
-  }, [doc.id, title, content, agentEditable, currentVersion, updateDoc]);
+  }, [doc.id, updateDoc]);
 
   useEffect(() => {
     return () => {

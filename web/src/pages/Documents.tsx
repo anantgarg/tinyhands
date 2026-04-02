@@ -112,6 +112,7 @@ export function Documents() {
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.size > 25 * 1024 * 1024) { alert('File must be under 25 MB'); e.target.value = ''; return; }
     await uploadFileMutation.mutateAsync({ file });
     e.target.value = '';
   }, [uploadFileMutation]);
@@ -119,6 +120,7 @@ export function Documents() {
   const handleCsvImport = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { alert('CSV file must be under 10 MB'); e.target.value = ''; return; }
     await importCsvMutation.mutateAsync({ file });
     e.target.value = '';
   }, [importCsvMutation]);
@@ -126,6 +128,7 @@ export function Documents() {
   const handleDocxImport = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.size > 25 * 1024 * 1024) { alert('DOCX file must be under 25 MB'); e.target.value = ''; return; }
     await importDocxMutation.mutateAsync({ file });
     e.target.value = '';
   }, [importDocxMutation]);

@@ -99,8 +99,8 @@ async function main() {
   switch (action) {
     case 'list': {
       var qs = '?limit=' + (input.limit || 10);
-      if (input.type) qs += '&type=' + input.type;
-      if (process.env.AGENT_ID) qs += '&agent_id=' + process.env.AGENT_ID;
+      if (input.type) qs += '&type=' + encodeURIComponent(input.type);
+      if (process.env.AGENT_ID) qs += '&agent_id=' + encodeURIComponent(process.env.AGENT_ID);
       var resp = await httpRequest('GET', '/internal/docs/list' + qs, null);
       result = resp.status === 200 ? resp.data : { error: 'List failed: HTTP ' + resp.status };
       break;

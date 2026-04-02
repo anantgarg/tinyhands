@@ -571,7 +571,10 @@ export function createWebhookServer(): express.Application {
     }
     try {
       const workspaceId = getDefaultWorkspaceId();
-      const { createSheetTab } = await import('./modules/docs');
+      const { getDocument, createSheetTab } = await import('./modules/docs');
+      const doc = await getDocument(workspaceId, req.params.id);
+      if (!doc) { res.status(404).json({ error: 'Document not found' }); return; }
+      if (!doc.agent_editable) { res.status(403).json({ error: 'Document is not agent-editable' }); return; }
       const tab = await createSheetTab(workspaceId, req.params.id, req.body.name || 'New Sheet');
       res.json(tab);
     } catch (err: any) {

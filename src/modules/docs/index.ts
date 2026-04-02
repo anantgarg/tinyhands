@@ -187,9 +187,11 @@ export async function updateDocument(
   );
 
   if (result.rowCount === 0) {
-    const exists = await queryOne('SELECT id FROM documents WHERE workspace_id = $1 AND id = $2', [workspaceId, docId]);
+    const exists = await queryOne<any>('SELECT id, version FROM documents WHERE workspace_id = $1 AND id = $2', [workspaceId, docId]);
     if (!exists) throw new Error('Document not found');
-    throw new Error('VERSION_CONFLICT');
+    const err = new Error('VERSION_CONFLICT') as any;
+    err.currentVersion = exists.version;
+    throw err;
   }
 
   // Create version snapshot
@@ -680,20 +682,25 @@ export async function getDocumentStats(workspaceId: string): Promise<{
 
 // ── Helpers ──
 
+function safeJsonParse(value: unknown, fallback: any): any {
+  if (typeof value !== 'string') return value ?? fallback;
+  try { return JSON.parse(value); } catch { return fallback; }
+}
+
 function parseDocumentRow(row: any): Document {
   return {
     ...row,
-    content: typeof row.content === 'string' ? JSON.parse(row.content) : row.content,
-    tags: typeof row.tags === 'string' ? JSON.parse(row.tags) : (row.tags || []),
+    content: safeJsonParse(row.content, row.content),
+    tags: safeJsonParse(row.tags, []),
   };
 }
 
 function parseSheetTabRow(row: any): SheetTab {
   return {
     ...row,
-    columns: typeof row.columns === 'string' ? JSON.parse(row.columns) : (row.columns || []),
-    data: typeof row.data === 'string' ? JSON.parse(row.data) : (row.data || {}),
-    metadata: typeof row.metadata === 'string' ? JSON.parse(row.metadata) : (row.metadata || {}),
+    columns: safeJsonParse(row.columns, []),
+    data: safeJsonParse(row.data, {}),
+    metadata: safeJsonParse(row.metadata, {}),
   };
 }
 

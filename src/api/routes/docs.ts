@@ -73,6 +73,8 @@ router.post('/', async (req: Request, res: Response) => {
     const { workspaceId, userId } = getSessionUser(req);
     const { type, title, description, content, tags, agentId } = req.body;
     if (!type || !title) { res.status(400).json({ error: 'type and title are required' }); return; }
+    if (title.length > 500) { res.status(400).json({ error: 'Title must be under 500 characters' }); return; }
+    if (description && description.length > 2000) { res.status(400).json({ error: 'Description must be under 2000 characters' }); return; }
 
     let docContent = content;
     if (type === 'doc' && typeof content === 'string') {
@@ -213,6 +215,7 @@ router.get('/:id/download', async (req: Request, res: Response) => {
     const { data, mimeType, title } = await getFileDownload(workspaceId, req.params.id as string);
     res.setHeader('Content-Type', mimeType);
     res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(title)}"`);
+    res.setHeader('X-Content-Type-Options', 'nosniff');
     res.send(data);
   } catch (err: any) {
     logger.error('Download file error', { error: err.message });
@@ -237,7 +240,8 @@ router.get('/:id/export', async (req: Request, res: Response) => {
       } else if (format === 'html') {
         // Simple HTML export from Slate JSON
         const md = doc.content ? slateJsonToMarkdown(doc.content) : '';
-        const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${doc.title}</title></head><body><pre>${md}</pre></body></html>`;
+        const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${escapeHtml(doc.title)}</title></head><body><pre>${escapeHtml(md)}</pre></body></html>`;
         res.setHeader('Content-Type', 'text/html');
         res.setHeader('Content-Disposition', `attachment; filename="${doc.title}.html"`);
         res.send(html);
@@ -266,12 +270,28 @@ router.get('/:id/export', async (req: Request, res: Response) => {
   }
 });
 
+// POST /docs/:id/replace — Replace file content
+router.post('/:id/replace', upload.single('file'), async (req: Request, res: Response) => {
+  try {
+    const { workspaceId, userId } = getSessionUser(req);
+    const file = (req as any).file;
+    if (!file) { res.status(400).json({ error: 'File is required' }); return; }
+    const doc = await updateFileContent(workspaceId, req.params.id as string, file.buffer, userId);
+    res.json(doc);
+  } catch (err: any) {
+    logger.error('Replace file error', { error: err.message });
+    res.status(400).json({ error: err.message || "Couldn't replace the file." });
+  }
+});
+
 // PATCH /docs/:id — Update document
 router.patch('/:id', async (req: Request, res: Response) => {
   try {
     const { workspaceId, userId } = getSessionUser(req);
     const { title, description, content, tags, agentEditable, expectedVersion } = req.body;
     if (!expectedVersion) { res.status(400).json({ error: 'expectedVersion is required' }); return; }
+    if (title && title.length > 500) { res.status(400).json({ error: 'Title must be under 500 characters' }); return; }
+    if (description && description.length > 2000) { res.status(400).json({ error: 'Description must be under 2000 characters' }); return; }
 
     const doc = await updateDocument(workspaceId, req.params.id as string, {
       title, description, content, tags, agentEditable,
@@ -281,7 +301,7 @@ router.patch('/:id', async (req: Request, res: Response) => {
     res.json(doc);
   } catch (err: any) {
     if (err.message === 'VERSION_CONFLICT') {
-      res.status(409).json({ error: 'Document was modified by someone else. Please refresh and try again.' });
+      res.status(409).json({ error: 'Document was modified by someone else. Please refresh and try again.', currentVersion: err.currentVersion });
     } else {
       logger.error('Update document error', { error: err.message });
       res.status(400).json({ error: err.message || "Couldn't update the document." });
@@ -409,7 +429,10 @@ router.post('/:id/tabs/reorder', async (req: Request, res: Response) => {
 router.patch('/:id/tabs/:tabId/cells', async (req: Request, res: Response) => {
   try {
     const { workspaceId } = getSessionUser(req);
-    const tab = await updateCells(workspaceId, req.params.tabId as string, req.body.cells);
+    const { cells } = req.body;
+    if (!cells || typeof cells !== 'object') { res.status(400).json({ error: 'cells object is required' }); return; }
+    if (Object.keys(cells).length > 10000) { res.status(400).json({ error: 'Too many cells in a single update (max 10,000)' }); return; }
+    const tab = await updateCells(workspaceId, req.params.tabId as string, cells);
     res.json(tab);
   } catch (err: any) {
     logger.error('Update cells error', { error: err.message });
@@ -420,7 +443,10 @@ router.patch('/:id/tabs/:tabId/cells', async (req: Request, res: Response) => {
 router.post('/:id/tabs/:tabId/rows', async (req: Request, res: Response) => {
   try {
     const { workspaceId } = getSessionUser(req);
-    const tab = await appendRows(workspaceId, req.params.tabId as string, req.body.rows);
+    const { rows } = req.body;
+    if (!Array.isArray(rows)) { res.status(400).json({ error: 'rows array is required' }); return; }
+    if (rows.length > 1000) { res.status(400).json({ error: 'Too many rows in a single append (max 1,000)' }); return; }
+    const tab = await appendRows(workspaceId, req.params.tabId as string, rows);
     res.json(tab);
   } catch (err: any) {
     logger.error('Append rows error', { error: err.message });

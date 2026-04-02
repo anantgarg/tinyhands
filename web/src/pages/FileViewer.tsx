@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { useUpdateDocument, useDocVersions, useRestoreVersion, type Document } from '@/api/docs';
+import { useUpdateDocument, useReplaceFile, useDocVersions, useRestoreVersion, type Document } from '@/api/docs';
 import {
   ArrowLeft, Download, History, Upload, FileText, Image, Code, File,
 } from 'lucide-react';
@@ -37,6 +37,7 @@ function formatFileSize(bytes: number | null): string {
 export function FileViewer({ document: doc }: FileViewerProps) {
   const navigate = useNavigate();
   const updateDoc = useUpdateDocument();
+  const replaceFile = useReplaceFile();
   const { data: versions } = useDocVersions(doc.id);
   const restoreVersion = useRestoreVersion();
 
@@ -56,11 +57,16 @@ export function FileViewer({ document: doc }: FileViewerProps) {
   const handleReplace = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const formData = new FormData();
-    formData.append('file', file);
-    // Would need a replace endpoint — for now, upload as new version
+    if (file.size > 25 * 1024 * 1024) {
+      alert('File must be under 25 MB');
+      e.target.value = '';
+      return;
+    }
+    replaceFile.mutate({ docId: doc.id, file }, {
+      onError: (err: any) => alert(err.message || 'Replace failed'),
+    });
     e.target.value = '';
-  }, []);
+  }, [doc.id, replaceFile]);
 
   return (
     <div className="space-y-4">

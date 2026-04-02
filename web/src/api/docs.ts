@@ -199,6 +199,25 @@ export function useImportDocx() {
   });
 }
 
+export function useReplaceFile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { docId: string; file: File }) => {
+      const formData = new FormData();
+      formData.append('file', data.file);
+      return fetch(`/api/v1/docs/${data.docId}/replace`, {
+        method: 'POST',
+        credentials: 'include',
+        body: formData,
+      }).then(async (res) => {
+        if (!res.ok) throw new Error((await res.json()).error || 'Replace failed');
+        return res.json();
+      });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['docs'] }),
+  });
+}
+
 export function useDocVersions(docId: string) {
   return useQuery<DocumentVersion[]>({
     queryKey: ['docs', 'versions', docId],
