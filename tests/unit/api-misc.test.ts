@@ -13,6 +13,7 @@ const mockDeleteConnection = vi.fn();
 const mockListAgentToolConnections = vi.fn();
 const mockSetAgentToolConnection = vi.fn();
 const mockGetToolAgentUsage = vi.fn();
+const mockGetTeamConnection = vi.fn();
 
 vi.mock('../../src/modules/connections', () => ({
   listTeamConnections: (...args: any[]) => mockListTeamConnections(...args),
@@ -23,6 +24,7 @@ vi.mock('../../src/modules/connections', () => ({
   listAgentToolConnections: (...args: any[]) => mockListAgentToolConnections(...args),
   setAgentToolConnection: (...args: any[]) => mockSetAgentToolConnection(...args),
   getToolAgentUsage: (...args: any[]) => mockGetToolAgentUsage(...args),
+  getTeamConnection: (...args: any[]) => mockGetTeamConnection(...args),
   getIntegrationIdForTool: (name: string) => name.split('-')[0],
 }));
 
@@ -441,6 +443,75 @@ describe('Connection Routes', () => {
 
       expect(res.status).toBe(400);
       expect(res.body).toEqual({ error: 'mode is required' });
+    });
+
+    it('non-admin read tool with existing team connection sets mode directly', async () => {
+      const memberApp = createApp(connectionRoutes, '/connections', 'member');
+      mockIsPlatformAdmin.mockResolvedValueOnce(false);
+      mockGetAgent.mockResolvedValueOnce({ tools: ['chargebee-read'] });
+      mockSetAgentToolConnection.mockResolvedValue({ ok: true });
+      mockGetTeamConnection.mockResolvedValueOnce({ id: 'conn-1', integration_id: 'chargebee' });
+
+      const res = await makeRequest(memberApp, 'PUT', '/connections/agent/a1/chargebee-read', {
+        mode: 'team',
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ ok: true, message: 'Team credentials configured.' });
+      expect(mockSetAgentToolConnection).toHaveBeenCalledWith('W123', 'a1', 'chargebee-read', 'team', null, 'U123');
+      expect(mockCreateToolRequest).not.toHaveBeenCalled();
+    });
+
+    it('non-admin read tool without team connection creates request and persists mode', async () => {
+      const memberApp = createApp(connectionRoutes, '/connections', 'member');
+      mockIsPlatformAdmin.mockResolvedValueOnce(false);
+      mockGetAgent.mockResolvedValueOnce({ tools: ['posthog-read'] });
+      mockSetAgentToolConnection.mockResolvedValue({ ok: true });
+      mockGetTeamConnection.mockResolvedValueOnce(null);
+      mockCreateToolRequest.mockResolvedValueOnce('req-1');
+      mockListPlatformAdmins.mockResolvedValueOnce([]);
+
+      const res = await makeRequest(memberApp, 'PUT', '/connections/agent/a1/posthog-read', {
+        mode: 'team',
+      });
+
+      expect(res.status).toBe(202);
+      expect(mockSetAgentToolConnection).toHaveBeenCalledWith('W123', 'a1', 'posthog-read', 'team', null, 'U123');
+      expect(mockCreateToolRequest).toHaveBeenCalledWith('W123', 'a1', 'posthog-read', 'read-only', 'U123', 'Team credentials not configured');
+    });
+
+    it('non-admin write tool always creates request and persists mode', async () => {
+      const memberApp = createApp(connectionRoutes, '/connections', 'member');
+      mockIsPlatformAdmin.mockResolvedValueOnce(false);
+      mockGetAgent.mockResolvedValueOnce({ tools: ['linear-write'] });
+      mockSetAgentToolConnection.mockResolvedValue({ ok: true });
+      mockCreateToolRequest.mockResolvedValueOnce('req-1');
+      mockListPlatformAdmins.mockResolvedValueOnce([]);
+
+      const res = await makeRequest(memberApp, 'PUT', '/connections/agent/a1/linear-write', {
+        mode: 'team',
+      });
+
+      expect(res.status).toBe(202);
+      expect(mockSetAgentToolConnection).toHaveBeenCalledWith('W123', 'a1', 'linear-write', 'team', null, 'U123');
+      expect(mockCreateToolRequest).toHaveBeenCalledWith('W123', 'a1', 'linear-write', 'read-write', 'U123', 'Requested team credentials');
+    });
+
+    it('non-admin team mode persists for sibling tools', async () => {
+      const memberApp = createApp(connectionRoutes, '/connections', 'member');
+      mockIsPlatformAdmin.mockResolvedValueOnce(false);
+      mockGetAgent.mockResolvedValueOnce({ tools: ['hubspot-read', 'hubspot-write'] });
+      mockSetAgentToolConnection.mockResolvedValue({ ok: true });
+      mockGetTeamConnection.mockResolvedValueOnce({ id: 'conn-1' });
+
+      const res = await makeRequest(memberApp, 'PUT', '/connections/agent/a1/hubspot-read', {
+        mode: 'team',
+      });
+
+      expect(res.status).toBe(200);
+      // Should set for both the requested tool and the sibling
+      expect(mockSetAgentToolConnection).toHaveBeenCalledWith('W123', 'a1', 'hubspot-read', 'team', null, 'U123');
+      expect(mockSetAgentToolConnection).toHaveBeenCalledWith('W123', 'a1', 'hubspot-write', 'team', null, 'U123');
     });
   });
 });

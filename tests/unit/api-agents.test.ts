@@ -1211,4 +1211,28 @@ describe('Agent Routes', () => {
       expect(res.body[0].blockers).toEqual(['email-send: Send emails']);
     });
   });
+
+  // ── POST /agents/:id/tool-requests/:requestId/approve ──
+
+  describe('POST /agents/:id/tool-requests/:requestId/approve', () => {
+    it('allows platform admin to approve tool request', async () => {
+      mockIsPlatformAdmin.mockResolvedValueOnce(true);
+      mockApproveToolRequest.mockResolvedValueOnce({ id: 'req-1', status: 'approved' });
+
+      const res = await makeRequest(app, 'POST', '/agents/a1/tool-requests/req-1/approve');
+
+      expect(res.status).toBe(200);
+      expect(mockApproveToolRequest).toHaveBeenCalledWith('W123', 'req-1', 'U123');
+    });
+
+    it('returns 403 when non-admin agent owner tries to approve', async () => {
+      const memberApp = createApp('member');
+      mockIsPlatformAdmin.mockResolvedValueOnce(false);
+
+      const res = await makeRequest(memberApp, 'POST', '/agents/a1/tool-requests/req-1/approve');
+
+      expect(res.status).toBe(403);
+      expect(mockApproveToolRequest).not.toHaveBeenCalled();
+    });
+  });
 });

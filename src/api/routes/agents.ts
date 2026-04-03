@@ -845,7 +845,7 @@ router.post('/:id/tool-requests/:requestId/approve', async (req: Request, res: R
   try {
     const { workspaceId, userId } = getSessionUser(req);
     const id = req.params.id as string;
-    if (!(await canModifyAgent(workspaceId, id, userId))) {
+    if (!(await isPlatformAdmin(workspaceId, userId))) {
       res.status(403).json({ error: 'Insufficient permissions' });
       return;
     }

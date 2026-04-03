@@ -652,6 +652,7 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
 
   const pendingToolRequests = (toolRequests ?? []).filter((r) => r.status === 'pending');
   const pendingWriteTools = new Set(pendingToolRequests.filter(r => r.toolName.endsWith('-write')).map(r => r.toolName));
+  const pendingCredentialTools = new Set(pendingToolRequests.map(r => r.toolName));
 
   // Derive integration ID from a tool group key (matches backend getIntegrationIdForTool logic)
   const getIntegrationId = (groupKey: string): string => {
@@ -799,6 +800,9 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                                       </span>
                                     );
                                   }
+                                  if (!group.writeTool && !isAdmin) {
+                                    return null;
+                                  }
                                   return (
                                     <button
                                       onClick={() => {
@@ -806,11 +810,6 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                                           handleRemoveTool(group.writeTool);
                                         } else if (isAdmin) {
                                           addAgentTool.mutate({ agentId, tool: writeName });
-                                        } else {
-                                          createToolRequest.mutate(
-                                            { agentId, toolName: writeName, accessLevel: 'read-write' },
-                                            { onSuccess: () => toast({ title: 'Write access requested — pending admin approval', variant: 'success' }) },
-                                          );
                                         }
                                       }}
                                       className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
@@ -830,6 +829,7 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                           </TableCell>
                           <TableCell>
                             {group.isInteg ? (
+                              <>
                               <Select
                                 value={currentMode}
                                 onValueChange={(v) => {
@@ -867,6 +867,17 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                               {(() => {
                                 const integId = getIntegrationId(group.key);
                                 const avail = connectionAvailability?.[integId];
+                                const credTool2 = group.readTool || group.writeTool || group.key;
+                                const hasPendingRequest = pendingCredentialTools.has(credTool2) ||
+                                  (group.writeTool && pendingCredentialTools.has(group.writeTool)) ||
+                                  (group.readTool && pendingCredentialTools.has(group.readTool));
+                                if (hasPendingRequest) {
+                                  return (
+                                    <span className="ml-1 text-[10px] text-amber-600 whitespace-nowrap">
+                                      Pending approval
+                                    </span>
+                                  );
+                                }
                                 if (currentMode === 'creator' && avail && !avail.creatorConnected) {
                                   return (
                                     <a
@@ -881,6 +892,7 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                                 }
                                 return null;
                               })()}
+                              </>
                             ) : (
                               <span className="text-xs text-warm-text-secondary">&mdash;</span>
                             )}

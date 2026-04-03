@@ -421,6 +421,14 @@ export async function approveToolRequest(workspaceId: string, requestId: string,
   const { addToolToAgent } = await import('../tools');
   await addToolToAgent(workspaceId, req.agent_id, req.tool_name, approvedBy);
 
+  // Set credential mode to 'team' for the approved tool
+  try {
+    const { setAgentToolConnection } = await import('../connections');
+    await setAgentToolConnection(workspaceId, req.agent_id, req.tool_name, 'team', null, approvedBy);
+  } catch (err: any) {
+    logger.warn('Failed to set credential mode on approval', { requestId, error: err.message });
+  }
+
   logger.info('Tool request approved', { requestId, toolName: req.tool_name, agentId: req.agent_id });
   return { ...req, status: 'approved', resolved_by: approvedBy };
 }

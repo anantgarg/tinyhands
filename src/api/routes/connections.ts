@@ -262,16 +262,43 @@ router.put('/agent/:agentId/:toolName', async (req: Request, res: Response) => {
       }
     } catch { /* best-effort validation */ }
 
-    // Non-admins cannot switch any tool to team credentials without approval
+    // Non-admins: team credential flow with read vs write rules
     if (resolvedMode === 'team') {
       const { isPlatformAdmin } = await import('../../modules/access-control');
       const isAdmin = await isPlatformAdmin(workspaceId, userId);
       if (!isAdmin) {
-        const { createToolRequest, listPlatformAdmins } = await import('../../modules/access-control');
+        const { getIntegrationIdForTool, getTeamConnection } = await import('../../modules/connections');
         const { getAgent } = await import('../../modules/agents');
         const agent = await getAgent(workspaceId, agentId);
-        const accessLevel = toolName.endsWith('-write') ? 'read-write' : 'read-only';
-        await createToolRequest(workspaceId, agentId, toolName, accessLevel, userId, 'Requested team credentials');
+        const integrationId = getIntegrationIdForTool(toolName);
+        const isWriteTool = toolName.endsWith('-write');
+
+        // Persist the mode immediately so it doesn't revert on refresh
+        await setAgentToolConnection(workspaceId, agentId, toolName, 'team', null, userId);
+        // Also set for sibling tools from the same integration
+        if (agent) {
+          const siblingTools = (agent.tools || []).filter(
+            (t: string) => t !== toolName && getIntegrationIdForTool(t) === integrationId
+          );
+          for (const sibling of siblingTools) {
+            await setAgentToolConnection(workspaceId, agentId, sibling, 'team', null, userId);
+          }
+        }
+
+        // Read tools with existing team connection: no request needed
+        if (!isWriteTool) {
+          const teamConn = await getTeamConnection(workspaceId, integrationId);
+          if (teamConn) {
+            res.json({ ok: true, message: 'Team credentials configured.' });
+            return;
+          }
+        }
+
+        // Write tools or read tools without team connection: create request
+        const { createToolRequest, listPlatformAdmins } = await import('../../modules/access-control');
+        const accessLevel = isWriteTool ? 'read-write' : 'read-only';
+        const reason = isWriteTool ? 'Requested team credentials' : 'Team credentials not configured';
+        await createToolRequest(workspaceId, agentId, toolName, accessLevel, userId, reason);
         // Notify admins
         try {
           const { sendDMBlocks } = await import('../../slack');

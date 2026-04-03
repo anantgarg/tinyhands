@@ -13,7 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   useUpgradeRequests, useApproveUpgrade, useDenyUpgrade, useAgents,
-  useToolRequests, useDenyToolRequest,
+  useToolRequests, useApproveToolRequest, useDenyToolRequest,
   useFeatureRequests, useDismissFeatureRequest,
   usePendingCounts,
 } from '@/api/agents';
@@ -329,6 +329,7 @@ function ToolRequestsTab() {
   const { data: agents } = useAgents();
   const { data: requests, isLoading } = useToolRequests('pending');
   const denyRequest = useDenyToolRequest();
+  const approveRequest = useApproveToolRequest();
   const [agentFilter, setAgentFilter] = useState('all');
 
   if (isLoading) return <Skeleton className="h-[300px]" />;
@@ -402,15 +403,26 @@ function ToolRequestsTab() {
                 </TableCell>
                 <TableCell>
                   <div className="flex gap-1">
-                    <Button
-                      size="sm"
-                      asChild
-                    >
-                      <Link to="/connections">
-                        <Wrench className="mr-1.5 h-3.5 w-3.5" />
-                        Configure
-                      </Link>
-                    </Button>
+                    {req.accessLevel === 'read-write' ? (
+                      <Button
+                        size="sm"
+                        onClick={() => approveRequest.mutate({ agentId: req.agentId, requestId: req.id })}
+                        disabled={approveRequest.isPending}
+                      >
+                        <CheckCircle className="mr-1.5 h-3.5 w-3.5" />
+                        Approve
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        asChild
+                      >
+                        <Link to="/connections">
+                          <Wrench className="mr-1.5 h-3.5 w-3.5" />
+                          Configure
+                        </Link>
+                      </Button>
+                    )}
                     <Button
                       variant="outline"
                       size="sm"

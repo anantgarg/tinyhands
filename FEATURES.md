@@ -416,8 +416,9 @@ Every integration exports a `manifest` from `src/modules/tools/integrations/<nam
 - During creation: wizard step 4 lets users select tools.
 - After creation: agent's Tools tab in dashboard.
 - When a non-admin adds a write tool and team credentials exist, a tool request is created (pending admin approval) instead of immediately attaching.
-- Separately, when a non-admin selects "Team credentials" as the credential mode for any tool (read or write), a credential request is created for admin review.
+- When a non-admin selects "Team credentials" as the credential mode: read tools with existing team connections are set immediately (no request); read tools without team connections or write tools create a credential request for admin review.
 - Admins can add any tool and set any credential mode immediately without approval.
+- Only platform admins (superadmin/admin) can approve credential requests — agent owners cannot self-approve.
 
 ### Existing Integrations
 
@@ -676,19 +677,33 @@ All non-realtime approvals happen in the **web dashboard**. Slack sends notifica
 
 **When it happens:** A non-admin user selects "Team credentials" for any tool (read or write) on their agent.
 
+**Credential Request Rules:**
+- **Read tool + team connection exists:** No request needed — mode set to "Team credentials" immediately. No admin approval required since credentials are already configured.
+- **Read tool + team connection missing:** Request created → Dashboard shows **Configure + Deny**. Admin must configure the team connection first.
+- **Write tool (any):** Request always created → Dashboard shows **Approve + Deny**. Write access is a privilege escalation requiring explicit admin approval.
+- **Only platform admins** (superadmin/admin) can approve requests. Agent owners cannot self-approve team credential requests.
+- **Mode persists immediately:** When a non-admin selects "Team credentials", the credential mode is saved to the database right away (so it doesn't revert on page refresh), even while the request is pending.
+
 **Flow:**
 1. Non-admin selects "Team credentials" in the credential dropdown
-2. System checks: is user an admin? If yes, credential mode set immediately.
-3. If not admin: credential request created (pending). Credential mode NOT set yet.
-4. All admins receive Slack DM with "View in Dashboard" link
-5. Admin reviews in **Requests > Credential Requests**
-6. Admin clicks **Configure** → navigates to Connections page to set up team credentials
-7. When the admin creates the team connection, all pending requests for that integration **auto-resolve** and credential modes are set to "Team credentials"
+2. System checks: is user an admin? If yes, credential mode set immediately. Done.
+3. If not admin: credential mode persisted to DB immediately (prevents revert on refresh)
+4. For read tools with existing team connection: done, no request needed
+5. For read tools without team connection or any write tool: credential request created (pending)
+6. All admins receive Slack DM with "View in Dashboard" link
+7. Admin reviews in **Requests > Credential Requests**:
+   - Read tools (missing connection): Admin clicks **Configure** → navigates to Connections page to set up team credentials
+   - Write tools: Admin clicks **Approve** → tool added to agent with team credential mode
 8. If admin clicks **Deny**:
-   - Read tools: credential mode reset to blank (not configured)
+   - Read tools: credential mode cleared (not configured)
    - Write tools: tool removed from agent entirely (write access is a privilege escalation)
+9. On approve: `approveToolRequest()` adds the tool AND sets credential mode to "team"
 
-**Why this exists:** Team credentials are shared company-wide. Non-admins should not use shared credentials without admin awareness. Admins resolve requests by configuring the connection, not by clicking "Approve."
+**Dashboard indicators:**
+- Agent tools page shows amber "Pending approval" badge next to credential dropdown for tools with pending requests
+- "Can make changes" button hidden for non-admins when write access is not active (only admins can add write tools directly)
+
+**Why this exists:** Team credentials are shared company-wide. Non-admins should not use shared credentials without admin awareness. Read tools with existing connections are safe (credentials already vetted). Write tools always require explicit approval since they grant mutation access.
 
 ### 3. Evolution Proposals
 
@@ -1389,7 +1404,7 @@ The non-streaming endpoint also accepts the legacy `{ "message": "..." }` format
 1. **Upgrade Requests** — Viewer→Member access requests
 2. **Action Approvals** — Write policy approval queue
 3. **Evolution Proposals** — Agent self-improvement proposals
-4. **Tool Requests** — Non-admin tool attachment requests
+4. **Credential Requests** — Non-admin team credential requests (Approve+Deny for write tools, Configure+Deny for read tools)
 5. **Feature Requests** — User-submitted feature/tool requests
 6. **KB Contributions** — Pending knowledge base entries
 
