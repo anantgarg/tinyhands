@@ -62,7 +62,7 @@ import { useAvailableTools, useIntegrations } from '@/api/tools';
 import { useBuiltinSkills, useWorkspaceSkills } from '@/api/skills';
 import { useUpdateTrigger, useDeleteTrigger } from '@/api/triggers';
 import { useAgentToolConnections, useSetAgentToolConnection, useConnectionAvailability } from '@/api/connections';
-import { useDocuments, type Document as DocType } from '@/api/docs';
+import { useDocuments, useCreateDocument, type Document as DocType } from '@/api/docs';
 import { useSlackChannels, useSlackUsers } from '@/api/slack';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { renderEmoji } from '@/lib/emoji';
@@ -828,7 +828,12 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                           </TableCell>
                           <TableCell>
                             {group.isInteg ? (
-                              <>
+                              (() => {
+                              const integCheck = integrationsList?.find(i => i.id === group.key);
+                              if (integCheck?.supportedCredentialModes && integCheck.supportedCredentialModes.length === 0) {
+                                return <span className="text-xs text-warm-text-secondary">Auto-configured</span>;
+                              }
+                              return <>
                               <Select
                                 value={currentMode}
                                 onValueChange={(v) => {
@@ -891,7 +896,8 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                                 }
                                 return null;
                               })()}
-                              </>
+                              </>;
+                              })()
                             ) : (
                               <span className="text-xs text-warm-text-secondary">&mdash;</span>
                             )}
@@ -2686,6 +2692,11 @@ function DocsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
   const hasAnyDocsTool = hasRead || hasWrite;
   const { data, isLoading } = useDocuments({ agentId, limit: 50 });
   const docs = data?.documents || [];
+  const createDoc = useCreateDocument();
+  const [showCreate, setShowCreate] = useState(false);
+  const [createType, setCreateType] = useState<'doc' | 'sheet'>('doc');
+  const [createTitle, setCreateTitle] = useState('');
+  const [createDesc, setCreateDesc] = useState('');
 
   const accessLabel = hasRead && hasWrite
     ? 'Can view and edit documents'
@@ -2708,6 +2719,7 @@ function DocsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
   }
 
   return (
+    <>
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <div>
@@ -2716,9 +2728,17 @@ function DocsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
             <p className="mt-1 text-sm text-warm-text-secondary">{accessLabel}</p>
           )}
         </div>
-        <Button size="sm" onClick={() => navigate('/documents')}>
-          View All Documents
-        </Button>
+        <div className="flex gap-2">
+          {hasWrite && (
+            <Button size="sm" onClick={() => setShowCreate(true)}>
+              <Plus className="mr-1.5 h-3.5 w-3.5" />
+              New Document
+            </Button>
+          )}
+          <Button size="sm" variant="outline" onClick={() => navigate('/documents')}>
+            View All Documents
+          </Button>
+        </div>
       </CardHeader>
       <CardContent>
         {!hasAnyDocsTool && (
@@ -2775,5 +2795,54 @@ function DocsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
         )}
       </CardContent>
     </Card>
+    {showCreate && (
+      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New Document</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Type</Label>
+              <Select value={createType} onValueChange={(v) => setCreateType(v as 'doc' | 'sheet')}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="doc">Document</SelectItem>
+                  <SelectItem value="sheet">Spreadsheet</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Title</Label>
+              <Input value={createTitle} onChange={(e) => setCreateTitle(e.target.value)} placeholder="Enter a title" />
+            </div>
+            <div>
+              <Label>Description (optional)</Label>
+              <Input value={createDesc} onChange={(e) => setCreateDesc(e.target.value)} placeholder="Brief description" />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
+            <Button
+              disabled={!createTitle.trim() || createDoc.isPending}
+              onClick={async () => {
+                await createDoc.mutateAsync({
+                  type: createType,
+                  title: createTitle.trim(),
+                  description: createDesc.trim() || undefined,
+                  agentId,
+                });
+                setShowCreate(false);
+                setCreateTitle('');
+                setCreateDesc('');
+              }}
+            >
+              Create
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    )}
+    </>
   );
 }

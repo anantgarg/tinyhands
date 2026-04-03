@@ -19,10 +19,14 @@ import {
 } from '@/components/ui/table';
 
 import {
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import {
   useDocuments, useDocStats, useCreateDocument, useArchiveDocument, useDeleteDocument,
   useUploadFile, useImportCsv, useImportDocx,
   type DocType,
 } from '@/api/docs';
+import { useAgents } from '@/api/agents';
 import { useAuthStore } from '@/store/auth';
 import {
   FileText, Table2, FileUp, Plus, Search, MoreHorizontal,
@@ -75,6 +79,8 @@ export function Documents() {
   const [createType, setCreateType] = useState<DocType>('doc');
   const [createTitle, setCreateTitle] = useState('');
   const [createDesc, setCreateDesc] = useState('');
+  const [createAgentId, setCreateAgentId] = useState('');
+  const { data: agents } = useAgents();
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const csvInputRef = useRef<HTMLInputElement>(null);
@@ -99,16 +105,18 @@ export function Documents() {
   const totalPages = Math.ceil((data?.total || 0) / 20);
 
   const handleCreate = useCallback(async () => {
-    if (!createTitle.trim()) return;
+    if (!createTitle.trim() || !createAgentId) return;
     await createDoc.mutateAsync({
       type: createType,
       title: createTitle.trim(),
       description: createDesc.trim() || undefined,
+      agentId: createAgentId,
     });
     setCreateOpen(false);
     setCreateTitle('');
     setCreateDesc('');
-  }, [createDoc, createType, createTitle, createDesc]);
+    setCreateAgentId('');
+  }, [createDoc, createType, createTitle, createDesc, createAgentId]);
 
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -321,6 +329,19 @@ export function Documents() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div>
+              <Label>Agent</Label>
+              <Select value={createAgentId} onValueChange={setCreateAgentId}>
+                <SelectTrigger className={!createAgentId ? 'text-warm-text-secondary' : ''}>
+                  <SelectValue placeholder="Select an agent" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(agents ?? []).map((a) => (
+                    <SelectItem key={a.id} value={a.id}>{a.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
               <Label>Title</Label>
               <Input
                 value={createTitle}
@@ -341,7 +362,7 @@ export function Documents() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreate} disabled={!createTitle.trim() || createDoc.isPending}>
+            <Button onClick={handleCreate} disabled={!createTitle.trim() || !createAgentId || createDoc.isPending}>
               {createDoc.isPending ? 'Creating...' : 'Create'}
             </Button>
           </DialogFooter>

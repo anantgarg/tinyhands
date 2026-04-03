@@ -254,7 +254,11 @@ router.put('/agent/:agentId/:toolName', async (req: Request, res: Response) => {
       const integId = getIntegrationIdForTool(toolName);
       const { getIntegration } = await import('../../modules/tools/integrations');
       const integ = getIntegration(integId);
-      if (integ?.supportedCredentialModes && integ.supportedCredentialModes.length > 0) {
+      if (integ?.supportedCredentialModes) {
+        if (integ.supportedCredentialModes.length === 0) {
+          res.status(400).json({ error: 'This tool is auto-configured and does not need credentials.' });
+          return;
+        }
         if (!integ.supportedCredentialModes.includes(resolvedMode as any)) {
           res.status(400).json({ error: `Mode '${resolvedMode}' is not supported for this integration. Supported: ${integ.supportedCredentialModes.join(', ')}` });
           return;

@@ -99,6 +99,10 @@ router.post('/', async (req: Request, res: Response) => {
     const { workspaceId, userId } = getSessionUser(req);
     const { type, title, description, content, tags, agentId } = req.body;
     if (!type || !title) { res.status(400).json({ error: 'type and title are required' }); return; }
+    if (!agentId) {
+      res.status(400).json({ error: 'agentId is required — every document must be associated with an agent' });
+      return;
+    }
     if (title.length > 500) { res.status(400).json({ error: 'Title must be under 500 characters' }); return; }
     if (description && description.length > 2000) { res.status(400).json({ error: 'Description must be under 2000 characters' }); return; }
 

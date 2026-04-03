@@ -345,15 +345,13 @@ describe('Document Routes Access Control', () => {
   // Create permission (POST /docs)
   // ────────────────────────────────────────────────
   describe('Create permission (POST /docs)', () => {
-    it('allows any user to create non-agent document', async () => {
-      const doc = makeDoc();
-      mockCreateDocument.mockResolvedValue(doc);
-
+    it('rejects document creation without agentId', async () => {
       const res = await makeRequest(app, 'POST', '/docs', {
         type: 'doc', title: 'New Doc',
       });
 
-      expect(res.status).toBe(201);
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('agentId is required');
     });
 
     it('allows agent owner to create agent-scoped document', async () => {

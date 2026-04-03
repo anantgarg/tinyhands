@@ -439,7 +439,7 @@ Every integration exports a `manifest` from `src/modules/tools/integrations/<nam
 | GitHub | `github` | read-only | OAuth |
 | Documents | `docs` | read + write | (auto-configured) |
 
-All integrations support all three credential modes (team, delegated, runtime). Future integrations can restrict this via `supportedCredentialModes` in their manifest.
+Most integrations support all three credential modes (team, delegated, runtime). Integrations can restrict this via `supportedCredentialModes` in their manifest. **Auto-configured tools** (Documents, Knowledge Base) have `supportedCredentialModes: []` — they don't need external credentials and the credential dropdown is hidden in the dashboard.
 
 **Google OAuth note:** All four Google integrations share a single OAuth config and callback (`/auth/callback/google`). One connection covers Drive, Sheets, Docs, and Gmail. Which services an agent uses depends on which tools are enabled. Legacy "Google Workspace" integration exists for backward compat but registers no tools (cleaned up by migration 019).
 
@@ -863,8 +863,8 @@ Native document management system. Three document types: **Docs** (rich text), *
 
 - **Documents page** (`/documents`): master list of all documents across all agents.
 - Filter by type (All / Docs / Sheets / Files), search by title/content, pagination.
-- Create new documents or spreadsheets, upload files, import CSV or DOCX.
-- Per-agent filtering available on the agent detail page (Docs tab).
+- Create new documents or spreadsheets, upload files, import CSV or DOCX. **Every document must be associated with an agent** — the create dialog requires selecting an agent.
+- **Agent Docs tab** (`/agents/:id` → Docs): shows documents scoped to that agent. Users with write access can create new documents directly from this tab (agentId is auto-filled).
 - Inline title editing, `agent_editable` toggle, version history, export/download.
 
 ### Version History
@@ -904,7 +904,7 @@ Native document management system. Three document types: **Docs** (rich text), *
 
 ### Access Control
 
-Documents are agent-scoped (they have `agent_id`), so permissions follow agent roles. Superadmin/Admin get owner-level access to ALL agents automatically. Documents without an agent_id (user-created standalone docs): admins can do everything, the creator (created_by) has owner-like access.
+Every document must be associated with an agent (`agent_id` is required). Permissions follow agent roles. Superadmin/Admin get owner-level access to ALL agents automatically.
 
 | Action | Superadmin | Admin | Agent Owner | Agent Member | Viewer |
 |--------|-----------|-------|-------------|-------------|--------|

@@ -108,7 +108,7 @@ export function useDocStats() {
 export function useCreateDocument() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (data: { type: DocType; title: string; description?: string; content?: any; tags?: string[] }) =>
+    mutationFn: (data: { type: DocType; title: string; description?: string; content?: any; tags?: string[]; agentId?: string }) =>
       api.post('/docs', data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['docs'] }),
   });
