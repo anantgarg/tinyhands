@@ -17,7 +17,7 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { Switch } from '@/components/ui/switch';
+
 import {
   useDocuments, useDocStats, useCreateDocument, useArchiveDocument, useDeleteDocument,
   useUploadFile, useImportCsv, useImportDocx,
@@ -233,7 +233,7 @@ export function Documents() {
                       <Icon className="h-4 w-4 text-warm-text-secondary shrink-0" />
                       <span className="truncate">{doc.title}</span>
                       {!doc.agentEditable && (
-                        <Badge variant="outline" className="text-xs shrink-0">Read-only</Badge>
+                        <Badge variant="secondary" className="text-xs shrink-0">Read-only</Badge>
                       )}
                     </div>
                   </TableCell>

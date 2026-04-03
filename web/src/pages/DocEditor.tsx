@@ -1,15 +1,15 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { PageHeader } from '@/components/layout/PageHeader';
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { RichTextEditor } from '@/components/RichTextEditor';
+import RichTextEditor from '@/components/RichTextEditor';
 import { useUpdateDocument, useDocVersions, useRestoreVersion, type Document } from '@/api/docs';
 import { slateJsonToMarkdown, markdownToSlateJson } from '@/lib/doc-convert';
-import { ArrowLeft, Save, History, Download, Clock } from 'lucide-react';
+import { ArrowLeft, History, Download, Clock } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
 } from '@/components/ui/dialog';

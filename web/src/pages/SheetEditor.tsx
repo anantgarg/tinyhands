@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,12 +9,12 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import {
-  useUpdateDocument, useUpdateSheetTab, useCreateSheetTab,
-  useDeleteSheetTab, useUpdateCells, useDocVersions, useRestoreVersion,
+  useUpdateDocument, useCreateSheetTab,
+  useUpdateCells, useDocVersions, useRestoreVersion,
   type Document, type SheetTab,
 } from '@/api/docs';
 import {
-  ArrowLeft, Plus, History, Download, Clock, Save, X,
+  ArrowLeft, Plus, History, Download, Clock,
 } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
@@ -31,10 +31,8 @@ interface SheetEditorProps {
 export function SheetEditor({ document: doc }: SheetEditorProps) {
   const navigate = useNavigate();
   const updateDoc = useUpdateDocument();
-  const updateTab = useUpdateSheetTab();
   const updateCells = useUpdateCells();
   const createTab = useCreateSheetTab();
-  const deleteTab = useDeleteSheetTab();
   const { data: versions } = useDocVersions(doc.id);
   const restoreVersion = useRestoreVersion();
 
@@ -68,8 +66,6 @@ export function SheetEditor({ document: doc }: SheetEditorProps) {
   const displayCols = Math.min(maxCol + 3, 26);
 
   const colLetter = (idx: number): string => String.fromCharCode(64 + idx);
-
-  const saveTimeoutRef = useRef<NodeJS.Timeout>();
 
   const saveCellData = useCallback(async (ref: string, value: string) => {
     if (!activeTab) return;

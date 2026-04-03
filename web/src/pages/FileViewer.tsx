@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,7 +7,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { useUpdateDocument, useReplaceFile, useDocVersions, useRestoreVersion, type Document } from '@/api/docs';
 import {
-  ArrowLeft, Download, History, Upload, FileText, Image, Code, File,
+  ArrowLeft, Download, History, Upload, File,
 } from 'lucide-react';
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle,
