@@ -50,7 +50,6 @@ import {
   useAgentTriggers,
   useAddAgentTrigger,
   useAgentToolRequests,
-  useCreateToolRequest,
   useAgentSkills,
   useAttachSkill,
   useDetachSkill,
@@ -644,7 +643,7 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
   const setToolConnection = useSetAgentToolConnection();
   const { data: connectionAvailability } = useConnectionAvailability(agentId);
   const { data: toolRequests } = useAgentToolRequests(agentId);
-  const createToolRequest = useCreateToolRequest();
+
   const isAdmin = useAuthStore((s) => s.user?.platformRole === 'superadmin' || s.user?.platformRole === 'admin');
   const [showAddTool, setShowAddTool] = useState(false);
   const [selectedToolsToAdd, setSelectedToolsToAdd] = useState<Set<string>>(new Set());
