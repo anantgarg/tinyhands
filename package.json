@@ -1,6 +1,6 @@
 {
   "name": "tinyhands",
-  "version": "1.45.2",
+  "version": "1.45.3",
   "description": "Extra hands for your Slack workspace — open-source, self-hosted AI agents powered by Claude",
   "main": "dist/index.js",
   "scripts": {

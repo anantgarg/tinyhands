@@ -145,7 +145,7 @@ async function main(): Promise<void> {
   logger.info('Sync process ready');
 
   // Graceful shutdown
-  process.on('SIGTERM', async () => {
+  const shutdown = async () => {
     logger.info('Sync process shutting down...');
     clearInterval(syncInterval);
     clearInterval(alertInterval);
@@ -154,7 +154,9 @@ async function main(): Promise<void> {
     if (updateInterval) clearInterval(updateInterval);
     await closeDb();
     process.exit(0);
-  });
+  };
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);
 }
 
 main().catch(err => {

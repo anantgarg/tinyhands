@@ -1,6 +1,6 @@
 process.env.PROCESS_TYPE = 'listener';
 import { createSlackApp } from './slack';
-import { startWebhookServer } from './server';
+import { startWebhookServer, closeSessionRedis } from './server';
 import { initDb, upsertWorkspace, setDefaultWorkspaceId, execute, closeDb } from './db';
 import { config } from './config';
 import { logger } from './utils/logger';
@@ -92,6 +92,7 @@ async function main(): Promise<void> {
       httpServer.close(() => resolve());
       setTimeout(resolve, 5000);
     });
+    await closeSessionRedis();
     await closeDb();
     logger.info('Listener shutdown complete');
     process.exit(0);

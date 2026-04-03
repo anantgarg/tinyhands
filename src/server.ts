@@ -13,6 +13,8 @@ import { verifyLinearSignature, verifyZendeskSignature, verifyIntercomSignature 
 import { logger } from './utils/logger';
 import { v4 as uuid } from 'uuid';
 
+let sessionRedisClient: import('ioredis').default | null = null;
+
 export function createWebhookServer(): express.Application {
   const app = express();
 
@@ -30,7 +32,8 @@ export function createWebhookServer(): express.Application {
   app.use(express.urlencoded({ extended: true }));
 
   // ── Session middleware (for web dashboard auth) ──
-  const redisClient = new Redis(config.redis.url);
+  sessionRedisClient = new Redis(config.redis.url);
+  const redisClient = sessionRedisClient;
   app.use(session({
     store: new RedisStore({ client: redisClient }),
     secret: config.server.sessionSecret,
@@ -674,4 +677,11 @@ export function startWebhookServer(): import('http').Server {
     logger.info(`Webhook server listening on port ${config.server.port}`);
   });
   return server;
+}
+
+export async function closeSessionRedis(): Promise<void> {
+  if (sessionRedisClient) {
+    await sessionRedisClient.quit();
+    sessionRedisClient = null;
+  }
 }

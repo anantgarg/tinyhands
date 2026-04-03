@@ -262,7 +262,10 @@ export async function closeDb(): Promise<void> {
     healthInterval = undefined;
   }
   if (pool) {
-    await pool.end();
+    await Promise.race([
+      pool.end(),
+      new Promise<void>(resolve => setTimeout(resolve, 5000)),
+    ]);
     pool = null;
   }
 }

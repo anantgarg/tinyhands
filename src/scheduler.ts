@@ -91,12 +91,14 @@ async function main(): Promise<void> {
 
   logger.info('Scheduler process ready');
 
-  process.on('SIGTERM', async () => {
+  const shutdown = async () => {
     logger.info('Scheduler process shutting down...');
     clearInterval(schedulerInterval);
     await closeDb();
     process.exit(0);
-  });
+  };
+  process.on('SIGTERM', shutdown);
+  process.on('SIGINT', shutdown);
 }
 
 main().catch(err => {

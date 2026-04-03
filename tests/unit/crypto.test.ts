@@ -57,8 +57,9 @@ describe('decrypt', () => {
   it('should detect tampered ciphertext', () => {
     const { encrypted, iv } = encrypt('secret data');
     const [ciphertext, authTag] = encrypted.split('.');
-    // Tamper with ciphertext
-    const tampered = 'ff' + ciphertext.slice(2) + '.' + authTag;
+    // Tamper with auth tag to guarantee GCM authentication failure
+    const flippedTag = authTag.split('').map((c: string) => c === '0' ? '1' : '0').join('');
+    const tampered = ciphertext + '.' + flippedTag;
 
     expect(() => decrypt(tampered, iv)).toThrow();
   });

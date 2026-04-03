@@ -3,6 +3,7 @@ import { createWorker } from './modules/execution';
 import { initSlackClient, getSlackApp } from './slack';
 import { initDb, upsertWorkspace, setDefaultWorkspaceId, execute, getDefaultWorkspaceId, closeDb } from './db';
 import { config } from './config';
+import { closeQueue } from './queue';
 import { processExpiredTimers } from './modules/workflows';
 import { expireOldProposals } from './modules/self-evolution';
 import { logger } from './utils/logger';
@@ -131,6 +132,7 @@ async function main(): Promise<void> {
     clearInterval(timerInterval);
     clearInterval(proposalInterval);
     clearInterval(orphanInterval);
+    await closeQueue();
     await closeDb();
     process.exit(0);
   };

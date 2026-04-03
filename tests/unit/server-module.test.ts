@@ -211,11 +211,13 @@ vi.mock('connect-redis', () => {
   };
 });
 
+const mockRedisQuit = vi.fn().mockResolvedValue('OK');
 vi.mock('ioredis', () => {
   return {
     default: vi.fn().mockImplementation(() => ({
       on: vi.fn(),
       status: 'ready',
+      quit: (...args: any[]) => mockRedisQuit(...args),
     })),
   };
 });
@@ -230,7 +232,7 @@ vi.mock('uuid', () => ({
   v4: () => 'test-uuid-1234',
 }));
 
-import { createWebhookServer } from '../../src/server';
+import { createWebhookServer, closeSessionRedis } from '../../src/server';
 
 // ── HTTP Test Helper ──
 
@@ -1047,6 +1049,26 @@ describe('Webhook Server', () => {
 
       expect(res.status).toBe(401);
       appConfig.server.internalSecret = origSecret;
+    });
+  });
+
+  // ────────────────────────────────────────────────
+  // closeSessionRedis
+  // ────────────────────────────────────────────────
+  describe('closeSessionRedis', () => {
+    it('calls quit on the session Redis client', async () => {
+      // createWebhookServer() was called in beforeEach, which sets the module-level client
+      await closeSessionRedis();
+
+      expect(mockRedisQuit).toHaveBeenCalledTimes(1);
+    });
+
+    it('is safe to call multiple times', async () => {
+      await closeSessionRedis();
+      mockRedisQuit.mockClear();
+      await closeSessionRedis(); // second call should be no-op (client already null)
+
+      expect(mockRedisQuit).not.toHaveBeenCalled();
     });
   });
 });
