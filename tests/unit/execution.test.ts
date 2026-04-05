@@ -155,13 +155,15 @@ const mockWorkerOn = vi.fn();
 const mockWorkerPause = vi.fn().mockResolvedValue(undefined);
 const mockWorkerResume = vi.fn().mockResolvedValue(undefined);
 let capturedWorkerProcessor: any = null;
+let capturedWorkerOpts: any = null;
 vi.mock('bullmq', () => ({
   Worker: class {
     on: any;
     pause: any;
     resume: any;
-    constructor(_queue: string, processor: any, _opts: any) {
+    constructor(_queue: string, processor: any, opts: any) {
       capturedWorkerProcessor = processor;
+      capturedWorkerOpts = opts;
       this.on = mockWorkerOn;
       this.pause = mockWorkerPause;
       this.resume = mockWorkerResume;
@@ -2176,6 +2178,16 @@ describe('Execution Module – createWorker', () => {
     // Should have registered 'completed' and 'failed' handlers
     expect(mockWorkerOn).toHaveBeenCalledWith('completed', expect.any(Function));
     expect(mockWorkerOn).toHaveBeenCalledWith('failed', expect.any(Function));
+  });
+
+  it('should configure stalled job protection settings', () => {
+    capturedWorkerOpts = null;
+    createWorker();
+
+    expect(capturedWorkerOpts).toBeDefined();
+    expect(capturedWorkerOpts.lockDuration).toBe(600000);       // 10 minutes
+    expect(capturedWorkerOpts.stalledInterval).toBe(120000);    // 2 minutes
+    expect(capturedWorkerOpts.maxStalledCount).toBe(3);
   });
 
   it('should log on job completion', () => {

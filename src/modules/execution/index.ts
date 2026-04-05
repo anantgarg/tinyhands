@@ -927,6 +927,9 @@ export function createWorker(): Worker<JobData> {
     {
       connection: getRedisConnection() as any,
       concurrency: 1,
+      lockDuration: 600000,          // 10 minutes — long enough for any agent turn
+      stalledInterval: 120000,       // Check every 2 minutes
+      maxStalledCount: 3,            // Allow 3 stalls before failing
       limiter: {
         max: 1,
         duration: 1000,
