@@ -22,6 +22,15 @@ import { config } from '../../config';
 
 const router = Router();
 
+/** Convert top-level snake_case keys to camelCase so both conventions are accepted. */
+function snakeToCamelKeys(obj: Record<string, unknown>): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(obj)) {
+    result[key.replace(/_([a-z])/g, (_, c: string) => c.toUpperCase())] = value;
+  }
+  return result;
+}
+
 // GET /agents — List agents
 router.get('/', async (req: Request, res: Response) => {
   try {
@@ -50,7 +59,7 @@ router.post('/', async (req: Request, res: Response) => {
   try {
     const { workspaceId, userId } = getSessionUser(req);
 
-    const params = { ...req.body, createdBy: userId };
+    const params = { ...(snakeToCamelKeys(req.body) as any), createdBy: userId };
 
     // If non-admin is creating an agent with write tools, filter them out
     // and create tool_requests for any that would use team credentials
