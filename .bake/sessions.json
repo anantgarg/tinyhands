@@ -42,6 +42,16 @@
       "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-004",
       "branch": "bake/plan/plan-004",
       "createdAt": "2026-04-16T11:19:33.058Z"
+    },
+    {
+      "id": "plan-005",
+      "type": "plan",
+      "name": "Test plan for commit verification",
+      "planId": "plan-005",
+      "planPath": "/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-005.md",
+      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-005",
+      "branch": "bake/plan/plan-005",
+      "createdAt": "2026-04-16T15:06:20.473Z"
     }
   ]
 }

@@ -1,0 +1,63 @@
+
+The default interactive shell is now zsh.
+To update your account to use zsh, please run `chsh -s /bin/zsh`.
+For more details, please visit https://support.apple.com/kb/HT208050.
+[?1034hMacBook-Pro-4:plan-005 anantgarg$ clear && claude
+[3J[H[2J[?25l[?2004h[?1004h[?2031h
+[38;2;255;193;7m────────────────────────────────────────────────────────────────────────────────[39m
+[2C[38;2;255;193;7m[1mNew[1CMCP[1Cserver[1Cfound[1Cin[1C.mcp.json:[1C21st-magic[22m[39m
+
+[2CMCP[1Cservers[1Cmay[1Cexecute[1Ccode[1Cor[1Caccess[1Csystem[1Cresources.[1CAll[1Ctool[1Ccalls
+[2Crequire[1Capproval.[1CLearn[1Cmore[1Cin[1Cthe[1CMCP[1Cdocumentation.
+
+[2C[38;2;177;185;249m❯[1C[38;2;153;153;153m1.[1C[38;2;177;185;249mUse[1Cthis[1Cand[1Call[1Cfuture[1CMCP[1Cservers[1Cin[1Cthis[1Cproject[39m
+[4C[38;2;153;153;153m2.[1C[39mUse[1Cthis[1CMCP[1Cserver
+[4C[38;2;153;153;153m3.[1C[39mContinue[1Cwithout[1Cusing[1Cthis[1CMCP[1Cserver
+
+[2C[38;2;153;153;153m[3mEnter[1Cto[1Cconfirm[1C·[1CEsc[1Cto[1Ccancel[23m[39m
+[2C[5A[>0q[c[2D[5B[2J[H
+[38;2;255;193;7m─────────────────────────────────────────────────────────────────────────[39m
+[2C[38;2;255;193;7m[1mNew[1CMCP[1Cserver[1Cfound[1Cin[1C.mcp.json:[1C21st-magic[22m[39m
+
+[2CMCP[1Cservers[1Cmay[1Cexecute[1Ccode[1Cor[1Caccess[1Csystem[1Cresources.[1CAll[1Ctool
+[2Ccalls[1Crequire[1Capproval.[1CLearn[1Cmore[1Cin[1Cthe[1CMCP[1Cdocumentation.
+
+[2C[38;2;177;185;249m❯[1C[38;2;153;153;153m1.[1C[38;2;177;185;249mUse[1Cthis[1Cand[1Call[1Cfuture[1CMCP[1Cservers[1Cin[1Cthis[1Cproject[39m
+[4C[38;2;153;153;153m2.[1C[39mUse[1Cthis[1CMCP[1Cserver
+[4C[38;2;153;153;153m3.[1C[39mContinue[1Cwithout[1Cusing[1Cthis[1CMCP[1Cserver
+
+[2C[38;2;153;153;153m[3mEnter[1Cto[1Cconfirm[1C·[1CEsc[1Cto[1Ccancel[23m[39m
+[2C[5A[2D[5B[2J[H
+[38;2;255;193;7m──────────────────────────────────────────────────────────────────────────[39m
+[2C[38;2;255;193;7m[1mNew[1CMCP[1Cserver[1Cfound[1Cin[1C.mcp.json:[1C21st-magic[22m[39m
+
+[2CMCP[1Cservers[1Cmay[1Cexecute[1Ccode[1Cor[1Caccess[1Csystem[1Cresources.[1CAll[1Ctool
+[2Ccalls[1Crequire[1Capproval.[1CLearn[1Cmore[1Cin[1Cthe[1CMCP[1Cdocumentation.
+
+[2C[38;2;177;185;249m❯[1C[38;2;153;153;153m1.[1C[38;2;177;185;249mUse[1Cthis[1Cand[1Call[1Cfuture[1CMCP[1Cservers[1Cin[1Cthis[1Cproject[39m
+[4C[38;2;153;153;153m2.[1C[39mUse[1Cthis[1CMCP[1Cserver
+[4C[38;2;153;153;153m3.[1C[39mContinue[1Cwithout[1Cusing[1Cthis[1CMCP[1Cserver
+
+[2C[38;2;153;153;153m[3mEnter[1Cto[1Cconfirm[1C·[1CEsc[1Cto[1Ccancel[23m[39m
+[2C[5A[2D[5B[2C[5A [4CUse this and all future MCP servers in this project[2C[1B[38;2;177;185;249m❯[4CUse this MCP server[39m
+
+
+
+[2C[4A[2D[4B[2C[4A [4CUse this MCP server[2C[1B[38;2;177;185;249m❯[4CContinue without using this MCP server[39m
+
+
+[2C[3A[2D[3B[7C[3A[38;2;78;186;101mContinue without using this MCP server[1C✔[39m
+
+
+[2C[3A[2D[3B[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[1A[2K[G[1A                                                                          [1B                                                                          [1B                                                                          [1B                                                                          [1B                                                                          [1B                                                                          [1B                                                                          [1B                                                                          [1B                                                                          [1B                                                                          [1B                                                                          [1B                                                                          [11A]0;✳ Claude Code[38;2;215;119;87m ▐[48;2;0;0;0m▛███▜[49m▌[3C[39m[1mClaude[1CCode[1C[22m[38;2;153;153;153mv2.1.110[39m
+[38;2;215;119;87m▝▜[48;2;0;0;0m█████[49m▛▘[2C[38;2;153;153;153mOpus[1C4.6[1C(1M[1Ccontext)[1Cwith[1Chigh[1Ceffort[1C·[1CClaude[1CMax[39m
+[38;2;215;119;87m [1C▘▘[1C▝▝[4C[38;2;153;153;153m~/Local/.bake-worktrees-tinyhands/plan-005[39m
+
+[38;2;136;136;136m──────────────────────────────────────────────────────────────────────────[39m
+❯ [7m [27m
+[38;2;136;136;136m──────────────────────────────────────────────────────────────────────────[39m
+[2C[38;2;175;135;255m⏵⏵[1Caccept[1Cedits[1Con[38;2;153;153;153m (shift+tab[1Cto[1Ccycle)[15C●[1Chigh[1C·[1C/effort[39m
+[2C[3A[2D[3B[2C[3A 
+
+
+[56C[1A                
