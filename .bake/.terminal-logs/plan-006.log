@@ -113,3 +113,35 @@ For more details, please visit https://support.apple.com/kb/HT208050.
 
 
 [2K[G[1A                                                                          
+The default interactive shell is now zsh.
+To update your account to use zsh, please run `chsh -s /bin/zsh`.
+For more details, please visit https://support.apple.com/kb/HT208050.
+[?1034hMacBook-Pro-4:plan-006 anantgarg$ clear && claude
+[3J[H[2J[?25l[?2004h[?1004h[?2031h[>0q[c]0;✳ Claude Code[11C[1mClaude[1CCode[1C[22m[38;2;153;153;153mv2.1.111[39m
+[38;2;215;119;87m ▐[48;2;0;0;0m▛███▜[49m▌[3C[38;2;153;153;153mOpus[1C4.7[1C(1M[1Ccontext)[1Cwith[1Chigh[1Ceffort[1C·[1CClaude[1CMax[39m
+[38;2;215;119;87m▝▜[48;2;0;0;0m█████[49m▛▘[2C[38;2;153;153;153m~/Local/.bake-worktrees-tinyhands/plan-006[39m
+[38;2;215;119;87m [1C▘▘[1C▝▝[4CWelcome[1Cto[1COpus[1C4.7[1Cxhigh![38;2;153;153;153m ·[1C/effort[1Cto[1Ctune[1Cspeed[1Cvs.[1Cintellige…[39m
+
+[38;2;136;136;136m────────────────────────────────────────────────────────────────────────────────[39m
+❯ 
+[38;2;136;136;136m────────────────────────────────────────────────────────────────────────────────[39m
+[2C[38;2;175;135;255m⏵⏵[1Caccept[1Cedits[1Con[38;2;153;153;153m (shift+tab[1Cto[1Ccycle)[21C●[1Chigh[1C·[1C/effort[39m
+[2J[H[11C[1mClaude[1CCode[1C[22m[38;2;153;153;153mv2.1.111[39m
+[38;2;215;119;87m ▐[48;2;0;0;0m▛███▜[49m▌[3C[38;2;153;153;153mOpus[1C4.7[1C(1M[1Ccontext)[1Cwith[1Chigh[1Ceffort[1C·[1CClaude[1CMax[39m
+[38;2;215;119;87m▝▜[48;2;0;0;0m█████[49m▛▘[2C[38;2;153;153;153m~/Local/.bake-worktrees-tinyhands/plan-006[39m
+[38;2;215;119;87m [1C▘▘[1C▝▝[4CWelcome[1Cto[1COpus[1C4.7[1Cxhigh![38;2;153;153;153m ·[1C/effort[1Cto[1Ctune[1Cspeed[1Cvs.[1Cin…[39m
+
+[38;2;136;136;136m─────────────────────────────────────────────────────────────────────────[39m
+❯ 
+[38;2;136;136;136m─────────────────────────────────────────────────────────────────────────[39m
+[2C[38;2;175;135;255m⏵⏵[1Caccept[1Cedits[1Con[38;2;153;153;153m (shift+tab[1Cto[1Ccycle)[14C●[1Chigh[1C·[1C/effort[39m
+[2J[H[11C[1mClaude[1CCode[1C[22m[38;2;153;153;153mv2.1.111[39m
+[38;2;215;119;87m ▐[48;2;0;0;0m▛███▜[49m▌[3C[38;2;153;153;153mOpus[1C4.7[1C(1M[1Ccontext)[1Cwith[1Chigh[1Ceffort[1C·[1CClaude[1CMax[39m
+[38;2;215;119;87m▝▜[48;2;0;0;0m█████[49m▛▘[2C[38;2;153;153;153m~/Local/.bake-worktrees-tinyhands/plan-006[39m
+[38;2;215;119;87m [1C▘▘[1C▝▝[4CWelcome[1Cto[1COpus[1C4.7[1Cxhigh![38;2;153;153;153m ·[1C/effort[1Cto[1Ctune[1Cspeed[1Cvs.[1Cint…[39m
+
+[38;2;136;136;136m──────────────────────────────────────────────────────────────────────────[39m
+❯ 
+[38;2;136;136;136m──────────────────────────────────────────────────────────────────────────[39m
+[2C[38;2;175;135;255m⏵⏵[1Caccept[1Cedits[1Con[38;2;153;153;153m (shift+tab[1Cto[1Ccycle)[15C●[1Chigh[1C·[1C/effort[39m
+[56C[1A                
