@@ -1,46 +1,40 @@
 ---
 id: plan-004
-title: Fix Create Trigger button not working on Agent Detail page
-status: complete
+title: New Plan
+status: draft
 created: 2026-04-16
-completed: 2026-04-16T11:46:00.000Z
 ---
 
 ## Summary
 
-The "Create Trigger" button on the Agent Detail → Triggers tab was non-functional. Clicking it appeared to do nothing because the frontend was sending the API request to the wrong endpoint.
+A plain-language description of what this plan does and why it matters. No file paths, no code, no jargon.
 
 ## Why
 
-Gaurav reported being unable to create triggers from the dashboard. The "Add Trigger" dialog opens correctly and the form is usable, but clicking "Create Trigger" silently fails because the API call hits a non-existent route.
+Why does this change matter? What prompted it — a user request, an incident, a constraint? Future-you will want this context when reviewing the plan months later.
 
 ## Approach
 
-The `useAddAgentTrigger` hook was posting to `POST /agents/{id}/triggers`, but the backend only defines a `GET` handler at that path (for listing triggers). The actual creation endpoint is `POST /triggers` in the triggers router, which expects `agentId` in the request body. Fixed by redirecting the API call to the correct endpoint.
+How will this be implemented? Which areas of the codebase are affected, what architectural decisions are involved, and what trade-offs are we making? A developer reading this should understand the shape of the work without needing to see line-by-line code instructions.
 
 ## Instructions for Claude Code
 
-1. In `web/src/api/agents.ts`, change the `useAddAgentTrigger` mutation to post to `/triggers` with `agentId` in the body instead of `/agents/${agentId}/triggers`.
+Step-by-step instructions detailed enough that an engineer (human or AI) who has never seen this codebase could implement the plan. Link to specific files and line numbers where possible. Call out non-obvious constraints, edge cases, and "do not touch" zones.
 
 As you complete each acceptance criterion below, edit this plan file and tick `- [ ]` → `- [x]` for the criteria you've satisfied. Do this as you go, not only at the very end — small honest updates beat one big sweep. If a criterion cannot be satisfied as written (ambiguous, wrong, or blocked), leave it unchecked and add a one-line note below it explaining why.
 
 ## Test Plan
 
-- [ ] Click "+ Add Trigger" on an agent's Triggers tab, fill in the schedule form, click "Create Trigger" — should succeed and show the new trigger in the list
-- [ ] Verify webhook and other trigger types also create successfully
-- [ ] Verify existing triggers still load correctly (GET endpoint unchanged)
+- [ ] What to test manually — describe the UI flow, expected behavior, and how to verify it works
+- [ ] What edge cases to check — unusual inputs, empty states, error scenarios
+- [ ] What regressions to watch for — existing features that could break
 
 ## Acceptance Criteria
 
-- [x] `useAddAgentTrigger` posts to `POST /triggers` with `agentId` in the body
-- [ ] Creating a schedule trigger from the Agent Detail page succeeds
-  _Deferred: requires manual browser testing_
-- [ ] Creating a webhook trigger from the Agent Detail page succeeds
-  _Deferred: requires manual browser testing_
-- [ ] Existing trigger listing on Agent Detail page still works
-  _Deferred: requires manual browser testing; GET route is unchanged so low risk_
+- [ ] First concrete, checkable outcome
+- [ ] Second concrete, checkable outcome
+- [ ] Third concrete, checkable outcome (three minimum — forces thinking about more than the happy path)
 
 ## Out of Scope
 
-- Refactoring the standalone Triggers page (`web/src/pages/Triggers.tsx`) — it already uses the correct `useCreateTrigger` hook that posts to `/triggers`.
-- Adding a `POST /agents/:id/triggers` backend route — unnecessary when the `/triggers` endpoint already handles creation.
+What this plan will deliberately NOT do. Prevents scope creep during implementation and makes it clear to reviewers that omissions are intentional, not oversights.
