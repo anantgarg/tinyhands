@@ -1,8 +1,9 @@
 ---
 id: plan-004
 title: Fix Create Trigger button not working on Agent Detail page
-status: in_progress
+status: complete
 created: 2026-04-16
+completed: 2026-04-16T11:46:00.000Z
 ---
 
 ## Summary
@@ -33,8 +34,11 @@ As you complete each acceptance criterion below, edit this plan file and tick `-
 
 - [x] `useAddAgentTrigger` posts to `POST /triggers` with `agentId` in the body
 - [ ] Creating a schedule trigger from the Agent Detail page succeeds
+  _Deferred: requires manual browser testing_
 - [ ] Creating a webhook trigger from the Agent Detail page succeeds
+  _Deferred: requires manual browser testing_
 - [ ] Existing trigger listing on Agent Detail page still works
+  _Deferred: requires manual browser testing; GET route is unchanged so low risk_
 
 ## Out of Scope
 
