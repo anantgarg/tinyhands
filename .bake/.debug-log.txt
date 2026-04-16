@@ -384,3 +384,11 @@
 [16:40:38.272] [AutoSwitch] non-plan/vibe → forcing main {"prevSession":"plan-006"}
 [16:40:38.319] [TerminalSwitch] transitioning {"from":"plan-006","to":"main","storeSessionsLen":7}
 [16:40:38.319] [Terminal] getOrCreate → returning cached {"sessionId":"main","cachedCwd":null}
+[16:42:01.540] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-006.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":169,"isPlanPath":true}
+[16:42:01.540] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-006.md","title":"Test plan for Fix 3 verification"}
+[16:42:01.542] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-006.md","sessionsLen":7,"activeSessionId":"main"}
+[16:42:01.542] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-006.md"}
+[16:42:01.546] [Editor] useLayoutEffect syncing h1 {"planTitle":"Test plan for Fix 3 verification","currentTextContent":""}
+[16:42:01.548] [AutoSwitch] plan → activating existing session {"itemId":"plan-006","sessionId":"plan-006","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-006","prevSession":"main"}
+[16:42:01.557] [TerminalSwitch] transitioning {"from":"main","to":"plan-006","storeSessionsLen":7}
+[16:42:01.557] [Terminal] getOrCreate → returning cached {"sessionId":"plan-006","cachedCwd":null}
