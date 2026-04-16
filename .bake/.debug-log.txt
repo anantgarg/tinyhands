@@ -235,3 +235,12 @@
 [15:31:02.069] [TerminalSwitch] no-op same session {"activeSessionId":"main"}
 [15:31:02.069] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/harness/plan-template.md","sessionsLen":7,"activeSessionId":"main"}
 [15:31:02.069] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/harness/plan-template.md"}
+[16:34:40.206] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-005.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":239,"isPlanPath":true}
+[16:34:40.207] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-005.md","title":"Test plan for commit verification"}
+[16:34:40.213] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-005.md","sessionsLen":7,"activeSessionId":"main"}
+[16:34:40.213] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-005.md"}
+[16:34:40.217] [Editor] useLayoutEffect syncing h1 {"planTitle":"Test plan for commit verification","currentTextContent":""}
+[16:34:40.220] [AutoSwitch] plan → activating existing session {"itemId":"plan-005","sessionId":"plan-005","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-005","prevSession":"main"}
+[16:34:40.231] [TerminalSwitch] transitioning {"from":"main","to":"plan-005","storeSessionsLen":7}
+[16:34:40.231] [Terminal] getOrCreate → creating new {"sessionId":"plan-005","sessionFound":true,"sessionType":"plan","sessionPlanId":"plan-005","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-005","sessionsLen":7,"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[16:34:40.551] [Terminal] resolved cwd {"sessionId":"plan-005","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-005","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-005","projectPath":"/Users/anantgarg/Local/tinyhands"}
