@@ -338,3 +338,35 @@ Docker Compose orchestrates PostgreSQL, Redis, and the app. The app container ru
 cp .env.example .env     # Configure credentials
 docker compose up -d     # Start everything
 ```
+
+## Project Documentation (.bake)
+
+Detailed project documentation lives in `.bake/`:
+
+### Product
+- `.bake/product/vision.md` — Product vision, value proposition, differentiators
+- `.bake/product/features.md` — Complete feature index with modules and entry points
+- `.bake/product/api/overview.md` — API route overview and authentication
+- `.bake/product/api/agents.md` — Agents API (40+ endpoints)
+- `.bake/product/api/kb.md` — Knowledge Base API
+- `.bake/product/api/docs.md` — Documents API (CRUD, sheets, versions)
+- `.bake/product/api/tools.md` — Tools & Integrations API
+- `.bake/product/api/connections.md` — Connections & OAuth API
+- `.bake/product/api/remaining.md` — All other API routes
+- `.bake/product/design/overview.md` — Design system theme and principles
+- `.bake/product/design/components.md` — Component patterns and UI architecture
+
+### Harness (Development Infrastructure)
+- `.bake/harness/tech-stack.md` — Full technology stack reference
+- `.bake/harness/dependencies.md` — Runtime and dev dependencies with purposes
+- `.bake/harness/data-model.md` — Database schema, entities, relationships
+- `.bake/harness/preview.md` — Dev server commands and ports
+- `.bake/harness/deploy.md` — Deployment overview
+- `.bake/harness/deployment/ci-cd.md` — Build pipeline, hooks, test pipeline
+- `.bake/harness/deployment/infrastructure.md` — Docker, PM2, nginx, Packer
+- `.bake/harness/deployment/environment.md` — Environment variables reference
+- `.bake/harness/testing/strategy.md` — Test framework, patterns, rules
+
+### Configuration
+- `.bake/config.yml` — Project type, preview commands, build/test/lint config
+- `.claude/rules/code-conventions.md` — Code style, naming, patterns

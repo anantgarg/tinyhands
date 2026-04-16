@@ -1,0 +1,36 @@
+project:
+  name: tinyhands
+  type: fullstack
+  description: Self-hosted AI agent platform for Slack, powered by Claude
+
+stack:
+  language: typescript
+  runtime: node
+  version: "20"
+  framework: express
+  frontend: react
+  build_tool: tsc
+  package_manager: npm
+
+preview:
+  command: npm run dev
+  port_start: 3000
+  web_command: npm run dev:web
+  web_port: 5173
+
+test:
+  command: npm test
+  integration_command: npm run test:integration
+  framework: vitest
+
+lint:
+  command: npm run lint
+  typecheck: npm run typecheck
+
+build:
+  command: npm run build
+  web_command: npm run build:web
+
+deploy:
+  method: docker-compose
+  production_command: docker compose up -d
