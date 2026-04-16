@@ -368,3 +368,5 @@
 [16:39:38.685] [AutoSwitch] non-plan/vibe → forcing main {"prevSession":"plan-006"}
 [16:39:38.736] [TerminalSwitch] transitioning {"from":"plan-006","to":"main","storeSessionsLen":7}
 [16:39:38.736] [Terminal] getOrCreate → returning cached {"sessionId":"main","cachedCwd":null}
+[16:39:47.860] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/harness/deploy.md","isReadOnly":false,"parsedStatus":null,"editorContentLen":2748,"isPlanPath":false}
+[16:39:47.861] [Editor] editorContent changed externally — reloading body {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/harness/deploy.md","title":null}
