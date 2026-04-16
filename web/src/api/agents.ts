@@ -454,7 +454,7 @@ export function useAddAgentTrigger() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ agentId, type, config }: { agentId: string; type: string; config: Record<string, unknown> }) =>
-      api.post(`/agents/${agentId}/triggers`, { type, config }),
+      api.post('/triggers', { agentId, type, config }),
     onSuccess: (_data, variables) => {
       qc.invalidateQueries({ queryKey: ['agents', variables.agentId, 'triggers'] });
       qc.invalidateQueries({ queryKey: ['triggers'] });
