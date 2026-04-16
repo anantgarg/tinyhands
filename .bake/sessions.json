@@ -1,0 +1,47 @@
+{
+  "sessions": [
+    {
+      "id": "soft-raven",
+      "type": "vibe",
+      "name": "soft-raven",
+      "worktreePath": null,
+      "createdAt": "2026-04-16T11:11:53.571Z"
+    },
+    {
+      "id": "plan-001",
+      "type": "plan",
+      "name": "New Plan",
+      "planId": "plan-001",
+      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-001",
+      "branch": "bake/plan/plan-001",
+      "createdAt": "2026-04-16T11:19:33.057Z"
+    },
+    {
+      "id": "plan-002",
+      "type": "plan",
+      "name": "Fix agent creation not saving instructions (or any multi-word settings)",
+      "planId": "plan-002",
+      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-002",
+      "branch": "bake/plan/plan-002",
+      "createdAt": "2026-04-16T11:19:33.058Z"
+    },
+    {
+      "id": "plan-003",
+      "type": "plan",
+      "name": "Cloud SaaS Conversion — Signup, Workspaces & Dashboard API Keys",
+      "planId": "plan-003",
+      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-003",
+      "branch": "bake/plan/plan-003",
+      "createdAt": "2026-04-16T11:19:33.058Z"
+    },
+    {
+      "id": "plan-004",
+      "type": "plan",
+      "name": "Scan & populate project docs",
+      "planId": "plan-004",
+      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-004",
+      "branch": "bake/plan/plan-004",
+      "createdAt": "2026-04-16T11:19:33.058Z"
+    }
+  ]
+}
