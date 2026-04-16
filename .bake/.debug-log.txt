@@ -362,3 +362,9 @@
 [16:38:45.194] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-006.md"}
 [16:38:45.202] [AutoSwitch] plan → already on correct session, no-op {"itemId":"plan-006","activeSessionId":"plan-006"}
 [16:38:45.496] [Terminal] resolved cwd {"sessionId":"plan-006","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-006","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-006","projectPath":"/Users/anantgarg/Local/tinyhands"}
+[16:39:38.591] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/harness/deploy.md","isReadOnly":false,"parsedStatus":null,"editorContentLen":824,"isPlanPath":false}
+[16:39:38.685] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/harness/deploy.md","sessionsLen":7,"activeSessionId":"plan-006"}
+[16:39:38.685] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/harness/deploy.md"}
+[16:39:38.685] [AutoSwitch] non-plan/vibe → forcing main {"prevSession":"plan-006"}
+[16:39:38.736] [TerminalSwitch] transitioning {"from":"plan-006","to":"main","storeSessionsLen":7}
+[16:39:38.736] [Terminal] getOrCreate → returning cached {"sessionId":"main","cachedCwd":null}
