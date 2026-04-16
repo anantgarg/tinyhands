@@ -431,3 +431,45 @@
 [16:42:52.648] [AutoSwitch] non-plan/vibe → forcing main {"prevSession":"plan-006"}
 [16:42:52.659] [TerminalSwitch] transitioning {"from":"plan-006","to":"main","storeSessionsLen":7}
 [16:42:52.659] [Terminal] getOrCreate → returning cached {"sessionId":"main","cachedCwd":null}
+[17:16:32.772] [Restore] setProjectPath {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/harness/deploy.md","activeSessionId":"main","openTabsLen":5}
+[17:16:32.802] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":null,"sessionsLen":0,"activeSessionId":""}
+[17:16:32.802] [AutoSwitch] early-bail (no project/path) {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":null}
+[17:16:32.802] [LoadSessions] start {"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[17:16:32.802] [Layout] App mounted {"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[17:16:33.156] [LoadSessions] reconcile returned {"len":7}
+[17:16:33.156] [ApplySessions] setSessions {"incomingLen":8,"prevActive":"","currentIsValid":false,"willForceMain":true,"planIds":["plan-001","plan-002","plan-003","plan-004","plan-005","plan-006"]}
+[17:16:33.156] [LoadSessions] applied reconcile result
+[17:16:33.162] [TerminalSwitch] transitioning {"from":null,"to":"main","storeSessionsLen":8}
+[17:16:33.162] [Terminal] getOrCreate → creating new {"sessionId":"main","sessionFound":true,"sessionType":"vibe","worktreePath":null,"sessionsLen":8,"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[17:16:33.184] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":null,"sessionsLen":8,"activeSessionId":"main"}
+[17:16:33.184] [AutoSwitch] early-bail (no project/path) {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":null}
+[17:16:33.275] [Restore] setTimeout fired — restoring tabs {"sessionsLen":8}
+[17:16:33.306] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/harness/deploy.md","isReadOnly":false,"parsedStatus":null,"editorContentLen":0,"isPlanPath":false}
+[17:16:33.309] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/harness/deploy.md","sessionsLen":8,"activeSessionId":"main"}
+[17:16:33.309] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/harness/deploy.md"}
+[17:16:33.311] [Restore] switchTab {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/harness/deploy.md","contentLen":2748}
+[17:16:33.311] [Restore] setActiveSessionId (from persistence) {"activeSessionId":"main","prevActive":"main"}
+[17:16:33.322] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/harness/deploy.md","isReadOnly":false,"parsedStatus":null,"editorContentLen":2748,"isPlanPath":false}
+[17:16:33.323] [Editor] editorContent changed externally — reloading body {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/harness/deploy.md","title":null}
+[17:16:33.494] [Terminal] resolved cwd {"sessionId":"main","cwd":"/Users/anantgarg/Local/tinyhands","cwdSource":"project-fallback","worktreePath":null,"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[17:17:01.151] [Restore] setProjectPath {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/harness/deploy.md","activeSessionId":"main","openTabsLen":5}
+[17:17:01.172] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":null,"sessionsLen":0,"activeSessionId":""}
+[17:17:01.172] [AutoSwitch] early-bail (no project/path) {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":null}
+[17:17:01.172] [LoadSessions] start {"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[17:17:01.172] [Layout] App mounted {"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[17:17:01.471] [LoadSessions] reconcile returned {"len":7}
+[17:17:01.471] [ApplySessions] setSessions {"incomingLen":8,"prevActive":"","currentIsValid":false,"willForceMain":true,"planIds":["plan-001","plan-002","plan-003","plan-004","plan-005","plan-006"]}
+[17:17:01.471] [LoadSessions] applied reconcile result
+[17:17:01.477] [TerminalSwitch] transitioning {"from":null,"to":"main","storeSessionsLen":8}
+[17:17:01.477] [Terminal] getOrCreate → creating new {"sessionId":"main","sessionFound":true,"sessionType":"vibe","worktreePath":null,"sessionsLen":8,"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[17:17:01.504] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":null,"sessionsLen":8,"activeSessionId":"main"}
+[17:17:01.504] [AutoSwitch] early-bail (no project/path) {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":null}
+[17:17:01.653] [Restore] setTimeout fired — restoring tabs {"sessionsLen":8}
+[17:17:01.684] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/harness/deploy.md","isReadOnly":false,"parsedStatus":null,"editorContentLen":0,"isPlanPath":false}
+[17:17:01.687] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/harness/deploy.md","sessionsLen":8,"activeSessionId":"main"}
+[17:17:01.687] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/harness/deploy.md"}
+[17:17:01.690] [Restore] switchTab {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/harness/deploy.md","contentLen":2748}
+[17:17:01.691] [Restore] setActiveSessionId (from persistence) {"activeSessionId":"main","prevActive":"main"}
+[17:17:01.702] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/harness/deploy.md","isReadOnly":false,"parsedStatus":null,"editorContentLen":2748,"isPlanPath":false}
+[17:17:01.702] [Editor] editorContent changed externally — reloading body {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/harness/deploy.md","title":null}
+[17:17:01.837] [Terminal] resolved cwd {"sessionId":"main","cwd":"/Users/anantgarg/Local/tinyhands","cwdSource":"project-fallback","worktreePath":null,"projectPath":"/Users/anantgarg/Local/tinyhands"}
