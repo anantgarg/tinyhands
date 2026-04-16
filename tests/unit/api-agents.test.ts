@@ -331,7 +331,7 @@ describe('Agent Routes', () => {
   // ── POST /agents ──
 
   describe('POST /agents', () => {
-    it('creates an agent', async () => {
+    it('creates an agent with camelCase body', async () => {
       const newAgent = { id: 'a1', name: 'NewBot' };
       mockCreateAgent.mockResolvedValueOnce(newAgent);
 
@@ -345,6 +345,42 @@ describe('Agent Routes', () => {
       expect(res.body).toEqual(newAgent);
       expect(mockCreateAgent).toHaveBeenCalledWith('W123', expect.objectContaining({
         name: 'NewBot',
+        systemPrompt: 'You are helpful',
+        channelId: 'C123',
+        createdBy: 'U123',
+      }));
+    });
+
+    it('creates an agent with snake_case body (web dashboard format)', async () => {
+      const newAgent = { id: 'a2', name: 'DashBot', system_prompt: 'Custom instructions' };
+      mockCreateAgent.mockResolvedValueOnce(newAgent);
+
+      const res = await makeRequest(app, 'POST', '/agents', {
+        name: 'DashBot',
+        system_prompt: 'Custom instructions',
+        channel_ids: ['C123', 'C456'],
+        max_turns: 25,
+        memory_enabled: true,
+        mentions_only: true,
+        respond_to_all_messages: false,
+        default_access: 'member',
+        write_policy: 'confirm',
+        avatar_emoji: ':rocket:',
+      });
+
+      expect(res.status).toBe(201);
+      // Verify snake_case keys were converted to camelCase for createAgent
+      expect(mockCreateAgent).toHaveBeenCalledWith('W123', expect.objectContaining({
+        name: 'DashBot',
+        systemPrompt: 'Custom instructions',
+        channelIds: ['C123', 'C456'],
+        maxTurns: 25,
+        memoryEnabled: true,
+        mentionsOnly: true,
+        respondToAllMessages: false,
+        defaultAccess: 'member',
+        writePolicy: 'confirm',
+        avatarEmoji: ':rocket:',
         createdBy: 'U123',
       }));
     });
