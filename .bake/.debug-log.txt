@@ -285,3 +285,19 @@
 [16:35:47.938] [AutoSwitch] plan → activating existing session {"itemId":"plan-005","sessionId":"plan-005","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-005","prevSession":"plan-004"}
 [16:35:47.946] [TerminalSwitch] transitioning {"from":"plan-004","to":"plan-005","storeSessionsLen":13}
 [16:35:47.946] [Terminal] getOrCreate → returning cached {"sessionId":"plan-005","cachedCwd":null}
+[16:36:15.201] [TerminalSwitch] no-op same session {"activeSessionId":"plan-005"}
+[16:36:15.201] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-005.md","sessionsLen":14,"activeSessionId":"plan-005"}
+[16:36:15.201] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-005.md"}
+[16:36:15.219] [AutoSwitch] plan → already on correct session, no-op {"itemId":"plan-005","activeSessionId":"plan-005"}
+[16:36:15.894] [TerminalSwitch] no-op same session {"activeSessionId":"plan-005"}
+[16:36:15.894] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-005.md","sessionsLen":15,"activeSessionId":"plan-005"}
+[16:36:15.894] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-005.md"}
+[16:36:15.911] [AutoSwitch] plan → already on correct session, no-op {"itemId":"plan-005","activeSessionId":"plan-005"}
+[16:36:16.063] [TerminalSwitch] no-op same session {"activeSessionId":"plan-005"}
+[16:36:16.063] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-005.md","sessionsLen":16,"activeSessionId":"plan-005"}
+[16:36:16.063] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-005.md"}
+[16:36:16.081] [AutoSwitch] plan → already on correct session, no-op {"itemId":"plan-005","activeSessionId":"plan-005"}
+[16:36:16.217] [TerminalSwitch] no-op same session {"activeSessionId":"plan-005"}
+[16:36:16.217] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-005.md","sessionsLen":17,"activeSessionId":"plan-005"}
+[16:36:16.217] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-005.md"}
+[16:36:16.235] [AutoSwitch] plan → already on correct session, no-op {"itemId":"plan-005","activeSessionId":"plan-005"}
