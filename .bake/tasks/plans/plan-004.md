@@ -1,70 +1,46 @@
 ---
 id: plan-004
-title: Scan & populate project docs
-status: building
+title: Fix Create Trigger button not working on Agent Detail page
+status: complete
 created: 2026-04-16
+completed: 2026-04-16T11:46:00.000Z
 ---
 
 ## Summary
 
-Scan the codebase and set up the project's development infrastructure. This plan reads the entire project structure, detects the stack, populates documentation, and sets up testing/deployment/linting as needed.
+The "Create Trigger" button on the Agent Detail → Triggers tab was non-functional. Clicking it appeared to do nothing because the frontend was sending the API request to the wrong endpoint.
+
+## Why
+
+Gaurav reported being unable to create triggers from the dashboard. The "Add Trigger" dialog opens correctly and the form is usable, but clicking "Create Trigger" silently fails because the API call hits a non-existent route.
+
+## Approach
+
+The `useAddAgentTrigger` hook was posting to `POST /agents/{id}/triggers`, but the backend only defines a `GET` handler at that path (for listing triggers). The actual creation endpoint is `POST /triggers` in the triggers router, which expects `agentId` in the request body. Fixed by redirecting the API call to the correct endpoint.
 
 ## Instructions for Claude Code
 
-### Step 1: Detect and document (no user input needed)
+1. In `web/src/api/agents.ts`, change the `useAddAgentTrigger` mutation to post to `/triggers` with `agentId` in the body instead of `/agents/${agentId}/triggers`.
 
-1. Read the project root to identify the stack:
-   - Check for package.json, Podfile, Cargo.toml, go.mod, pyproject.toml, build.gradle, CMakeLists.txt, etc.
-   - Identify framework (Next.js, React Native, Electron, Flask, Rails, etc.)
-   - Identify language(s), package manager, build tool
+As you complete each acceptance criterion below, edit this plan file and tick `- [ ]` → `- [x]` for the criteria you've satisfied. Do this as you go, not only at the very end — small honest updates beat one big sweep. If a criterion cannot be satisfied as written (ambiguous, wrong, or blocked), leave it unchecked and add a one-line note below it explaining why.
 
-2. Populate these files with ACTUAL content from what you find:
-   - `.bake/product/vision.md` — infer from README, package.json description, or ask user
-   - `.bake/harness/tech-stack.md` — framework, language, build tool, key libraries
-   - `.bake/harness/dependencies.md` — parse lock file, list runtime vs dev deps with purpose
-   - `.bake/harness/data-model.md` — find interfaces/types/schemas, document core data structures
-   - `.bake/product/features.md` — scan for routes/components/modules, create feature index
-   - `.bake/harness/preview.md` — fill in the real start command and port
-   - `CLAUDE.md` — update @ references to include all created files
+## Test Plan
 
-3. Write code conventions to `.claude/rules/code-conventions.md`:
-   - Detect: TypeScript vs JavaScript, tabs vs spaces, semicolons, import style
-   - Detect: component patterns (functional vs class, hooks vs HOCs)
-   - Detect: naming conventions from existing code
-   - Detect: test patterns if tests exist
-
-### Step 2: Set up infrastructure (ask user for choices)
-
-For each of these, check if it already exists. If not, ask the user whether to set it up:
-
-**Testing:**
-- "I found [no tests / Jest tests / etc]. Want me to set up [recommended framework]?"
-- If yes: install test deps, create config, write `.bake/harness/testing/strategy.md`, add test script to package.json
-- Add rule to `.claude/rules/`: "Write tests for all new features using {framework}. Run tests before every merge."
-
-**Deployment:**
-- "I found [no CI / GitHub Actions / Vercel config / Dockerfile / etc]. Want me to set up deployment?"
-- If yes: fill in `.bake/harness/deploy.md` with the real deploy steps, and optionally create sub-docs under `.bake/harness/deployment/` (ci-cd.md, infrastructure.md, environment.md) for complex cases — `deploy.md` should link to them.
-
-**API documentation:**
-- Only if API routes/handlers exist: "I found API routes. Want me to document the API patterns?"
-- If yes: create `.bake/product/api/` with endpoint docs
-
-**Design system:**
-- Only if UI components exist: "I found UI components. Want me to document the design patterns?"
-- If yes: create `.bake/product/design/` with component/styling docs
-
-### Step 3: Final sync
-
-- Update `CLAUDE.md` with @ references to ALL created files
-- Update `.bake/config.yml` with detected project type and settings (particularly `preview.command` and `preview.port_start`)
-- Commit all changes
+- [ ] Click "+ Add Trigger" on an agent's Triggers tab, fill in the schedule form, click "Create Trigger" — should succeed and show the new trigger in the list
+- [ ] Verify webhook and other trigger types also create successfully
+- [ ] Verify existing triggers still load correctly (GET endpoint unchanged)
 
 ## Acceptance Criteria
 
-- [ ] Tech stack lists the actual framework, language, and build tool
-- [ ] Dependencies reflect what's actually installed
-- [ ] Data model covers the primary entities used in the codebase
-- [ ] Features index is populated
-- [ ] Preview command and port are filled in
-- [ ] No application code was modified
+- [x] `useAddAgentTrigger` posts to `POST /triggers` with `agentId` in the body
+- [ ] Creating a schedule trigger from the Agent Detail page succeeds
+  _Deferred: requires manual browser testing_
+- [ ] Creating a webhook trigger from the Agent Detail page succeeds
+  _Deferred: requires manual browser testing_
+- [ ] Existing trigger listing on Agent Detail page still works
+  _Deferred: requires manual browser testing; GET route is unchanged so low risk_
+
+## Out of Scope
+
+- Refactoring the standalone Triggers page (`web/src/pages/Triggers.tsx`) — it already uses the correct `useCreateTrigger` hook that posts to `/triggers`.
+- Adding a `POST /agents/:id/triggers` backend route — unnecessary when the `/triggers` endpoint already handles creation.
