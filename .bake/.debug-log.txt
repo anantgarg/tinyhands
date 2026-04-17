@@ -819,3 +819,26 @@
 [09:40:28.067] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-010.md","isReadOnly":false,"parsedStatus":"building","editorContentLen":20558,"isPlanPath":true}
 [10:43:01.022] [Poll] External change detected {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-010.md","resolvedPath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-010/.bake/tasks/plans/plan-010.md","newTitle":"Multi-Tenant Workspaces","currentH1":"Multi-Tenant Workspaces","refExists":true}
 [10:43:01.047] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-010.md","isReadOnly":false,"parsedStatus":"review","editorContentLen":21802,"isPlanPath":true}
+[10:44:55.160] [Restore] setProjectPath {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-004.md","activeSessionId":"calm-tiger","openTabsLen":12}
+[10:44:55.206] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":null,"sessionsLen":0,"activeSessionId":""}
+[10:44:55.206] [AutoSwitch] early-bail (no project/path) {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":null}
+[10:44:55.206] [LoadSessions] start {"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[10:44:55.207] [Layout] App mounted {"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[10:44:55.661] [Restore] setTimeout fired — restoring tabs {"sessionsLen":0}
+[10:44:55.715] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-004.md","isReadOnly":false,"parsedStatus":null,"editorContentLen":0,"isPlanPath":false}
+[10:44:55.720] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-004.md","sessionsLen":0,"activeSessionId":""}
+[10:44:55.720] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":true,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-004.md"}
+[10:44:55.720] [AutoSwitch] deferred — sessions not loaded for plan/vibe {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-004.md"}
+[10:44:55.726] [Restore] switchTab {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-004.md","contentLen":111}
+[10:44:55.726] [Restore] setActiveSessionId (from persistence) {"activeSessionId":"calm-tiger","prevActive":""}
+[10:44:55.749] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-004.md","isReadOnly":false,"parsedStatus":"archived","editorContentLen":111,"isPlanPath":false}
+[10:44:55.751] [Editor] editorContent changed externally — reloading body {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-004.md","title":"Calm Tiger"}
+[10:44:55.757] [TerminalSwitch] deferred — sessions not loaded {"activeSessionId":"calm-tiger"}
+[10:44:55.851] [LoadSessions] reconcile returned {"len":21}
+[10:44:55.851] [ApplySessions] setSessions {"incomingLen":21,"prevActive":"calm-tiger","currentIsValid":true,"willForceMain":false,"planIds":["plan-001","plan-002","plan-003","plan-004","plan-004","plan-004","plan-005","plan-006","plan-007","plan-008"]}
+[10:44:55.851] [LoadSessions] applied reconcile result
+[10:44:55.870] [TerminalSwitch] transitioning {"from":null,"to":"calm-tiger","storeSessionsLen":21}
+[10:44:55.870] [Terminal] getOrCreate → creating new {"sessionId":"calm-tiger","sessionFound":true,"sessionType":"vibe","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/calm-tiger","sessionsLen":21,"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[10:44:55.906] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-004.md","sessionsLen":21,"activeSessionId":"calm-tiger"}
+[10:44:55.906] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":true,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-004.md"}
+[10:44:56.207] [Terminal] resolved cwd {"sessionId":"calm-tiger","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/calm-tiger","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/calm-tiger","projectPath":"/Users/anantgarg/Local/tinyhands"}
