@@ -295,7 +295,10 @@ workspaces
   │     │     └── workflow_runs
   │     ├── evolution_proposals
   │     └── sources → source_chunks
-  ├── platform_roles
+  ├── users
+  │     ├── workspace_memberships
+  │     └── (platform_admins, via user_id)
+  ├── platform_roles (legacy, read-only)
   ├── connections
   ├── custom_tools → tool_versions, tool_runs
   ├── kb_entries
