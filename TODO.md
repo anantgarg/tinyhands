@@ -120,9 +120,6 @@ In v1.48.0 we skipped four test files at the vitest config level: `tests/unit/sl
 ### `ensureBotInAllAgentChannels()` is not workspace-aware
 Called at listener boot. Iterates every active agent across every workspace and calls `conversations.join` via `getSystemSlackClient()` (env SLACK_BOT_TOKEN = primary workspace's bot). Join attempts for channels in other workspaces always fail with `channel_not_found` because that token can't see them. Cosmetic for runtime — per-workspace installs already do the join via their own OAuth flow — but fills logs with warnings on every boot. Fix: group agents by workspace_id, then call `ensureBotInChannels(channelIds, workspaceId)` per-group with the correct `getBotClient(workspaceId)`.
 
-### v1.48.0 deferred to v1.49
-- **Dashboard raw Slack IDs** — Access & Roles "Platform Admins" table and Dashboard "Top Users" / "Top Creators" show raw IDs (e.g. `U01ABCDEF`). `CLAUDE.md` line 334 and `FEATURES.md` line 1167 require resolved display names. Plumb `user-resolver.resolveUserNames()` through `src/api/routes/agents.ts` pending-counts / dashboard / platform endpoints.
-- **Workspace Name auto-populate + Settings GET/PATCH** — `GET /settings` returns a flat `workspace_settings` key-value map but the Settings page expects a nested `{general, defaults, rateLimits, alerts}` shape, and there is no `PATCH /settings`. Rewrite the route to return the nested shape (pulling `workspaceName` from `workspaces.team_name`) and add a PATCH that writes `team_name` + `workspace_settings` atomically.
 
 ---
 
