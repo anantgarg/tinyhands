@@ -16,7 +16,7 @@ router.get('/platform-roles', requireAdmin, async (req: Request, res: Response) 
     const { workspaceId } = getSessionUser(req);
     const admins = await listPlatformAdmins(workspaceId);
     const userIds = (admins as any[]).map((a: any) => a.user_id).concat((admins as any[]).map((a: any) => a.granted_by)).filter(Boolean);
-    const names = await resolveUserNames(userIds);
+    const names = await resolveUserNames(userIds, workspaceId);
     res.json((admins as any[]).map((a: any) => ({
       ...a,
       displayName: names[a.user_id] || a.user_id,

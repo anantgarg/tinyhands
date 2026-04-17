@@ -165,7 +165,7 @@ describe('Dashboard Routes', () => {
       expect(res.body).toEqual([
         { userId: 'U1', displayName: 'Alice', runCount: 10, agentNames: ['Bot1', 'Bot2'] },
       ]);
-      expect(mockResolveUserNames).toHaveBeenCalledWith(['U1']);
+      expect(mockResolveUserNames).toHaveBeenCalledWith(['U1'], expect.any(String));
     });
 
     it('handles null agent_names', async () => {
@@ -202,7 +202,7 @@ describe('Dashboard Routes', () => {
       expect(res.body).toEqual([
         { userId: 'U1', displayName: 'Bob', agentCount: 3, agentNames: ['Bot1'] },
       ]);
-      expect(mockResolveUserNames).toHaveBeenCalledWith(['U1']);
+      expect(mockResolveUserNames).toHaveBeenCalledWith(['U1'], expect.any(String));
     });
 
     it('handles null agent_names', async () => {

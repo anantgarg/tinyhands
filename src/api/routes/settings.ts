@@ -7,17 +7,52 @@ import { logger } from '../../utils/logger';
 
 const router = Router();
 
-// GET /settings — Get all workspace settings (admin-only)
+// GET /settings — Get all workspace settings nested by section, matching the
+// web form. workspaceName is resolved from the workspaces.team_name column
+// (kept in sync with the Slack team name on install and via PATCH /settings).
 router.get('/', requireAdmin, async (req: Request, res: Response) => {
   try {
     const { workspaceId } = getSessionUser(req);
-    const settings = await getAllSettings(workspaceId);
-    // Convert to key-value map for easier consumption
+    const [settings, workspace] = await Promise.all([
+      getAllSettings(workspaceId),
+      (async () => { const { getWorkspace } = await import('../../db'); return getWorkspace(workspaceId); })(),
+    ]);
     const map: Record<string, string> = {};
-    for (const s of settings) {
-      map[s.key] = s.value;
-    }
-    res.json(map);
+    for (const s of settings) map[s.key] = s.value;
+
+    const asNumber = (v: string | undefined, fallback: number): number => {
+      if (v === undefined || v === null || v === '') return fallback;
+      const n = Number(v);
+      return Number.isFinite(n) ? n : fallback;
+    };
+    const asBool = (v: string | undefined, fallback: boolean): boolean => {
+      if (v === undefined || v === null || v === '') return fallback;
+      return v === 'true';
+    };
+
+    res.json({
+      general: {
+        workspaceName: workspace?.team_name ?? '',
+        defaultModel: map.default_model ?? 'sonnet',
+        dailyBudgetUsd: asNumber(map.daily_budget_usd, 50),
+      },
+      defaults: {
+        defaultAccess: map.default_access ?? 'member',
+        writePolicy: map.write_policy ?? 'allow',
+        maxTurns: asNumber(map.max_turns, 25),
+        memoryEnabled: asBool(map.memory_enabled, false),
+      },
+      rateLimits: {
+        tpmLimit: asNumber(map.tpm_limit, 100000),
+        rpmLimit: asNumber(map.rpm_limit, 60),
+        concurrentRunsLimit: asNumber(map.concurrent_runs_limit, 10),
+      },
+      alerts: {
+        errorRateThreshold: asNumber(map.error_rate_threshold, 0.1),
+        costAlertThreshold: asNumber(map.cost_alert_threshold, 10),
+        durationAlertThreshold: asNumber(map.duration_alert_threshold, 60000),
+      },
+    });
   } catch (err: any) {
     logger.error('Get settings error', { error: err.message });
     res.status(500).json({ error: 'Failed to get settings' });

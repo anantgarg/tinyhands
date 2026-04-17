@@ -44,7 +44,7 @@ router.get('/power-users', async (req: Request, res: Response) => {
     `, [since, workspaceId, limit]);
 
     const userIds = rows.map((r: any) => r.slack_user_id);
-    const names = await resolveUserNames(userIds);
+    const names = await resolveUserNames(userIds, workspaceId);
 
     res.json(rows.map((r: any) => ({
       userId: r.slack_user_id,
@@ -75,7 +75,7 @@ router.get('/agent-creators', async (req: Request, res: Response) => {
     `, [workspaceId, limit]);
 
     const userIds = rows.map((r: any) => r.created_by);
-    const names = await resolveUserNames(userIds);
+    const names = await resolveUserNames(userIds, workspaceId);
 
     res.json(rows.map((r: any) => ({
       userId: r.created_by,
@@ -149,7 +149,7 @@ router.get('/recent-runs', async (req: Request, res: Response) => {
     `, [workspaceId, limit]);
 
     const userIds = (runs as any[]).map((r: any) => r.slack_user_id).filter(Boolean);
-    const names = await resolveUserNames(userIds);
+    const names = await resolveUserNames(userIds, workspaceId);
 
     res.json((runs as any[]).map((r: any) => ({
       id: r.id,
@@ -180,7 +180,7 @@ router.get('/recent-activity', async (req: Request, res: Response) => {
     const entries = await getAuditLog(workspaceId, { limit });
 
     const userIds = (entries as any[]).map((e: any) => e.actor_user_id).filter(Boolean);
-    const names = await resolveUserNames(userIds);
+    const names = await resolveUserNames(userIds, workspaceId);
 
     res.json((entries as any[]).map((e: any) => ({
       id: e.id,

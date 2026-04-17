@@ -41,7 +41,7 @@ router.get('/', async (req: Request, res: Response) => {
 
     // Resolve creator display names
     const creatorIds = (agents as any[]).map((a: any) => a.created_by).filter(Boolean);
-    const names = await resolveUserNames(creatorIds);
+    const names = await resolveUserNames(creatorIds, workspaceId);
     const enriched = (agents as any[]).map((a: any) => ({
       ...a,
       createdByDisplayName: names[a.created_by] || undefined,
@@ -203,7 +203,7 @@ router.get('/upgrade-requests', async (req: Request, res: Response) => {
     const rows = await query('SELECT ur.*, a.name as agent_name FROM upgrade_requests ur LEFT JOIN agents a ON ur.agent_id = a.id WHERE ur.workspace_id = $1 AND ur.status = \'pending\' ORDER BY ur.created_at DESC', [workspaceId]);
     // Resolve user display names
     const userIds = [...new Set((rows as any[]).map((r: any) => r.user_id))];
-    const names = await resolveUserNames(userIds);
+    const names = await resolveUserNames(userIds, workspaceId);
     res.json((rows as any[]).map((r: any) => ({
       id: r.id, userId: r.user_id, displayName: names[r.user_id] || r.user_id,
       agentId: r.agent_id, agentName: r.agent_name, requestedRole: r.requested_role,
@@ -222,7 +222,7 @@ router.get('/tool-requests', async (req: Request, res: Response) => {
     const status = req.query.status as string | undefined;
     const requests = await listToolRequests(workspaceId, status);
     const userIds = (requests as any[]).map((r: any) => r.requested_by).filter(Boolean);
-    const names = await resolveUserNames(userIds);
+    const names = await resolveUserNames(userIds, workspaceId);
     const agentIds = (requests as any[]).map((r: any) => r.agent_id).filter(Boolean);
     const agentRows = agentIds.length > 0
       ? await query('SELECT id, name FROM agents WHERE id = ANY($1)', [agentIds])
@@ -254,7 +254,7 @@ router.get('/feature-requests', async (req: Request, res: Response) => {
       [workspaceId]
     );
     const userIds = (rows as any[]).map((r: any) => r.data?.requestedBy).filter(Boolean);
-    const names = await resolveUserNames(userIds);
+    const names = await resolveUserNames(userIds, workspaceId);
     res.json((rows as any[]).map((r: any) => {
       const isNewToolRequest = r.data.type === 'new_tool_request';
       return {
@@ -399,7 +399,7 @@ router.get('/:id/versions', async (req: Request, res: Response) => {
     }
     const versions = await getAgentVersions(workspaceId, id);
     const userIds = (versions as any[]).map((v: any) => v.changed_by).filter(Boolean);
-    const names = await resolveUserNames(userIds);
+    const names = await resolveUserNames(userIds, workspaceId);
     res.json((versions as any[]).map((v: any) => ({
       id: v.id,
       agentId: v.agent_id,
@@ -620,7 +620,7 @@ router.get('/:id/runs', async (req: Request, res: Response) => {
     }
 
     const userIds = (runs as any[]).map((r: any) => r.slack_user_id).filter(Boolean);
-    const names = await resolveUserNames(userIds);
+    const names = await resolveUserNames(userIds, workspaceId);
 
     res.json({
       runs: (runs as any[]).map((r: any) => ({
@@ -667,7 +667,7 @@ router.get('/:id/roles', async (req: Request, res: Response) => {
     }
     const roles = await getAgentRoles(workspaceId, id);
     const userIds = (roles as any[]).map((r: any) => r.user_id).concat((roles as any[]).map((r: any) => r.granted_by)).filter(Boolean);
-    const names = await resolveUserNames(userIds);
+    const names = await resolveUserNames(userIds, workspaceId);
     res.json((roles as any[]).map((r: any) => ({
       ...r,
       displayName: names[r.user_id] || r.user_id,
@@ -820,7 +820,7 @@ router.get('/:id/tool-requests', async (req: Request, res: Response) => {
     }
     const requests = await listAgentToolRequests(workspaceId, id);
     const userIds = (requests as any[]).map((r: any) => r.requested_by).filter(Boolean);
-    const names = await resolveUserNames(userIds);
+    const names = await resolveUserNames(userIds, workspaceId);
     res.json((requests as any[]).map((r: any) => ({
       ...r,
       requestedByName: names[r.requested_by] || r.requested_by,
