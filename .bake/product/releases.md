@@ -2,6 +2,18 @@
 
 One entry per deploy to production. Each entry names the version, the date, the merges included since the previous release, and the exact rollback command. Updated automatically by the Deploy button (see `.bake/harness/deploy.md` for the post-deploy step that appends here).
 
+## v1.48.3 — 2026-04-17
+
+Deployed to the production host. Hotfix rollup making multi-tenant Slack workspaces work end-to-end. Three cascading bugs surfaced after v1.48.0:
+
+- **v1.48.1** — Winston `redactSecrets` format returned a spread-copy of the info object, stripping winston's Symbol-keyed internal properties, so the Console transport emitted zero log lines and runtime debugging was impossible. Fixed to mutate info in place. Also adds the missing `PATCH /settings` route so the Workspace Settings form can save.
+- **v1.48.2** — Message handler's `isMentioned` check used a single `ownBotUserId` cached at startup (primary workspace only). Any other workspace's `@mention` didn't match → events dropped silently at the thread-reply guard. Fixed with per-workspace `bot_user_id` lookup from the `workspaces` row.
+- **v1.48.3** — Worker could process runs in other workspaces but Slack posts for replies / status messages / cleanup all fell through to `getSystemSlackClient()` (env token), so every call hit Slack with the wrong bot → `channel_not_found`. Fixed by wrapping `executeAgentRun` in `runInSlackContext` with the workspace-scoped client.
+
+Verified end-to-end: second workspace's user @mentions an agent → listener receives event → authorize resolves correct bot token → agent lookup → job enqueued → worker runs container with per-workspace Anthropic key → reply posts in-thread.
+
+Rollback: SSH to production, `cd $APP_DIR && git checkout v1.48.0 && NODE_ENV=development npm install && NODE_ENV=development npm run build && NODE_ENV=development npm run build:web && pm2 reload ecosystem.config.js --force`.
+
 ## v1.48.0 — 2026-04-17
 
 Deployed to the production host. Includes:
