@@ -753,3 +753,10 @@
 [09:25:57.060] [AutoSwitch] plan → activating existing session {"itemId":"plan-010","sessionId":"plan-010","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-010","prevSession":"plan-011"}
 [09:25:57.061] [TerminalSwitch] transitioning {"from":"plan-011","to":"plan-010","storeSessionsLen":20}
 [09:25:57.061] [Terminal] getOrCreate → returning cached {"sessionId":"plan-010","cachedCwd":null}
+[09:27:03.713] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-011.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":7675,"isPlanPath":true}
+[09:27:03.713] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-011.md","title":"Add PostHog and CustomerIO Integrations"}
+[09:27:03.728] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-011.md","sessionsLen":20,"activeSessionId":"plan-010"}
+[09:27:03.728] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-011.md"}
+[09:27:03.739] [AutoSwitch] plan → activating existing session {"itemId":"plan-011","sessionId":"plan-011","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-011","prevSession":"plan-010"}
+[09:27:03.741] [TerminalSwitch] transitioning {"from":"plan-010","to":"plan-011","storeSessionsLen":20}
+[09:27:03.741] [Terminal] getOrCreate → returning cached {"sessionId":"plan-011","cachedCwd":null}
