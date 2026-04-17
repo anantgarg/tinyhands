@@ -28,6 +28,18 @@ async function migrateAnthropicKey(workspaceId: string): Promise<void> {
     logger.info('No ANTHROPIC_API_KEY in env — workspace admin must set it via dashboard', { workspaceId });
     return;
   }
+  // Guard: only copy the env key into a workspace if there's exactly ONE
+  // workspace in the whole deployment. That is the legacy single-tenant
+  // install case — the env key belongs to the operator and should be lifted
+  // into their workspace's encrypted settings exactly once. With multiple
+  // workspaces already present, the env key is not automatically anyone's
+  // property; each workspace admin must paste their own key via Settings.
+  const countRow = await queryOne<{ count: number }>('SELECT count(*)::int as count FROM workspaces');
+  const wsCount = countRow?.count ?? 0;
+  if (wsCount > 1) {
+    logger.info('Skipping ANTHROPIC_API_KEY migration — multi-tenant deployment (workspace admin must set their own key)', { workspaceId, workspaceCount: wsCount });
+    return;
+  }
   try {
     await setAnthropicApiKey(workspaceId, envKey, 'system-migration');
     logger.info('Migrated ANTHROPIC_API_KEY from env to workspace_settings', { workspaceId });
