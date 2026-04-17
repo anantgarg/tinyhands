@@ -1,5 +1,22 @@
 # Features Index
 
+## Multi-Tenancy
+
+| Feature | Module | Entry Points |
+|---------|--------|-------------|
+| Multi-tenant workspaces | `src/modules/users/`, `src/db/migrations/024_multitenant.sql` | `users`, `workspace_memberships`, `platform_admins` tables |
+| Sign in with Slack | `src/api/routes/auth.ts` | `GET /auth/slack`, `/auth/slack/callback`, `/auth/me` |
+| Workspace switcher | `web/src/components/layout/WorkspaceSwitcher.tsx` | `GET /auth/workspaces`, `POST /auth/switch-workspace` |
+| Slack OAuth install | `src/api/routes/auth.ts` | `/auth/slack/install`, `/auth/slack/install/callback` |
+| Per-workspace Anthropic key | `src/modules/anthropic/` | `/settings/anthropic-key/{status,test}`, `PUT /settings/anthropic-key` |
+| Multi-tenant bootstrap | `src/modules/multitenant-migration/` | Runs on every startup; idempotent |
+| Platform admin health | `src/api/routes/platform.ts`, `web/src/pages/Platform.tsx` | `/platform/workspaces` |
+| Per-run container isolation | `src/docker/index.ts` | Per-workspace+run temp dir, RO mount, `finally` cleanup |
+| Log secret redaction | `src/utils/logger.ts` | `redactSecrets()` applied at logger boundary |
+| OAuth state signing | `src/utils/oauth-state.ts` | `encodeOAuthState` / `decodeOAuthState` |
+| Workspace-scoped webhooks | `src/server.ts` | `/webhooks/w/{slug}/agent/{slug}` (+ legacy 301) |
+| Queue fairness | `src/queue/index.ts` | Priority offsets per workspace; `WORKER_CONCURRENCY` env |
+
 ## Agent Management
 
 | Feature | Module | Entry Points |
