@@ -74,7 +74,7 @@ export async function authorTool(
   let finalCode = code;
   if (testResult && !testResult.passed) {
     try {
-      const fixed = await autoFixToolCode(code, spec, testResult.error || 'Unknown error', agent.name);
+      const fixed = await autoFixToolCode(workspaceId, code, spec, testResult.error || 'Unknown error', agent.name);
       validateToolCode(fixed, spec.language);
       const retestResult = await sandboxTest(fixed, spec.language, spec.inputSchema);
       if (retestResult.passed) {
@@ -297,13 +297,14 @@ function generateSampleInput(schema: Record<string, any>): Record<string, any> {
 // ══════════════════════════════════════════════════
 
 async function autoFixToolCode(
+  workspaceId: string,
   brokenCode: string,
   spec: ToolSpec,
   errorMessage: string,
   agentName: string,
 ): Promise<string> {
-  const Anthropic = (await import('@anthropic-ai/sdk')).default;
-  const client = new Anthropic();
+  const { createAnthropicClient } = await import('../anthropic');
+  const client = await createAnthropicClient(workspaceId);
 
   const response = await client.messages.create({
     model: 'claude-sonnet-4-6',
@@ -532,7 +533,7 @@ export async function authorSkill(
   const agent = await getAgent(workspaceId, agentId);
   if (!agent) throw new Error(`Agent ${agentId} not found`);
 
-  const { name, description, template } = await generateSkillTemplate(taskDescription, agent.name);
+  const { name, description, template } = await generateSkillTemplate(workspaceId, taskDescription, agent.name);
 
   const id = uuid();
   const needsApproval = agent.self_evolution_mode === 'approve-first';
@@ -651,8 +652,8 @@ async function generateToolCode(
   taskDescription: string,
   agentName: string
 ): Promise<{ spec: ToolSpec; code: string }> {
-  const Anthropic = (await import('@anthropic-ai/sdk')).default;
-  const client = new Anthropic();
+  const { createAnthropicClient } = await import('../anthropic');
+  const client = await createAnthropicClient(workspaceId);
 
   const existingTools = (await listCustomTools(workspaceId)).map(t => t.name).join(', ');
 
@@ -715,11 +716,12 @@ Rules:
 }
 
 async function generateSkillTemplate(
+  workspaceId: string,
   taskDescription: string,
   agentName: string
 ): Promise<{ name: string; description: string; template: string }> {
-  const Anthropic = (await import('@anthropic-ai/sdk')).default;
-  const client = new Anthropic();
+  const { createAnthropicClient } = await import('../anthropic');
+  const client = await createAnthropicClient(workspaceId);
 
   const response = await client.messages.create({
     model: 'claude-haiku-4-5-20251001',

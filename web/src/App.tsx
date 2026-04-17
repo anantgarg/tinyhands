@@ -29,6 +29,7 @@ const Skills = lazy(() => import('@/pages/Skills').then(m => ({ default: m.Skill
 const Evolution = lazy(() => import('@/pages/Evolution').then(m => ({ default: m.Evolution })));
 const Documents = lazy(() => import('@/pages/Documents').then(m => ({ default: m.Documents })));
 const DocumentDetail = lazy(() => import('@/pages/DocumentDetail').then(m => ({ default: m.DocumentDetail })));
+const Platform = lazy(() => import('@/pages/Platform').then(m => ({ default: m.Platform })));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -126,6 +127,7 @@ export function App() {
                 <Route path="audit" element={<Suspense fallback={<PageLoader />}><AuditLog /></Suspense>} />
                 <Route path="access" element={<Suspense fallback={<PageLoader />}><AccessRoles /></Suspense>} />
                 <Route path="settings" element={<Suspense fallback={<PageLoader />}><Settings /></Suspense>} />
+                <Route path="platform" element={<Suspense fallback={<PageLoader />}><Platform /></Suspense>} />
               </Route>
             </Routes>
           </Suspense>

@@ -597,6 +597,7 @@ describe('Slack Events -- registerEvents', () => {
       await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockCheckMessageRelevance).toHaveBeenCalledWith(
+        'W_TEST_123',
         'deploy to production',
         ['deploy', 'release'],
         'You deploy things',
@@ -857,6 +858,7 @@ describe('Slack Events -- registerEvents', () => {
       await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
 
       expect(mockCheckMessageRelevance).toHaveBeenCalledWith(
+        'W_TEST_123',
         'help me with billing',
         expect.any(Array),
         expect.any(String),

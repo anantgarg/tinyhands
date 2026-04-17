@@ -369,6 +369,12 @@ vi.mock('@anthropic-ai/sdk', () => ({
   })),
 }));
 
+// handleUpdateRequest now uses createAnthropicClient from modules/anthropic;
+// route that factory to the same mockAnthropicCreate so existing tests work.
+vi.mock('../../src/modules/anthropic', () => ({
+  createAnthropicClient: vi.fn(async () => ({ messages: { create: (...args: any[]) => mockAnthropicCreate(...args) } })),
+}));
+
 import {
   registerCommands,
   registerInlineActions,

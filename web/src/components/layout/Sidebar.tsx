@@ -24,6 +24,7 @@ import { useSidebarStore } from '@/store/sidebar';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { usePendingCounts } from '@/api/agents';
 import { useExpiredConnectionCount } from '@/api/connections';
+import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 
 interface NavItem {
   label: string;
@@ -187,6 +188,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
           <ChevronsLeft className="h-3.5 w-3.5" />
         </button>
       </div>
+
+      {/* Workspace switcher (renders nothing if user has just one workspace) */}
+      <WorkspaceSwitcher />
 
       {/* Navigation */}
       <div className="flex-1 overflow-y-auto pt-1 pb-3">

@@ -6,10 +6,15 @@ const TEST_WORKSPACE_ID = 'W_TEST_123';
 
 const mockCreateKBEntry = vi.fn();
 const mockApproveKBEntry = vi.fn();
+const mockAnthropicCreate = vi.fn();
 
 vi.mock('../../src/modules/knowledge-base', () => ({
   createKBEntry: (...args: any[]) => mockCreateKBEntry(...args),
   approveKBEntry: (...args: any[]) => mockApproveKBEntry(...args),
+}));
+
+vi.mock('../../src/modules/anthropic', () => ({
+  createAnthropicClient: vi.fn(async () => ({ messages: { create: (...args: any[]) => mockAnthropicCreate(...args) } })),
 }));
 
 vi.mock('../../src/utils/logger', () => ({
@@ -187,17 +192,19 @@ describe('KB Wizard', () => {
   // ── generateSuggestions (AI-powered with fallback) ──
 
   describe('generateSuggestions', () => {
-    it('should fall back to heuristics when Anthropic import fails', async () => {
-      // The Anthropic SDK is dynamically imported, and in test env won't be configured
-      // so it will throw and fall back to heuristics
+    it('should fall back to heuristics when Anthropic call fails', async () => {
+      mockAnthropicCreate.mockRejectedValueOnce(new Error('Anthropic unavailable'));
       const content = 'Fallback test content for heuristic generation.';
-      const result = await generateSuggestions(content);
+      const result = await generateSuggestions(TEST_WORKSPACE_ID, content);
       expect(result.title).toBeTruthy();
       expect(result.category).toBe('General');
     });
 
     it('should return valid WizardSuggestions shape', async () => {
-      const result = await generateSuggestions('Some content here.');
+      mockAnthropicCreate.mockResolvedValueOnce({
+        content: [{ type: 'text', text: JSON.stringify({ title: 'T', summary: 'S', category: 'General', tags: ['a'] }) }],
+      });
+      const result = await generateSuggestions(TEST_WORKSPACE_ID, 'Some content here.');
       expect(result).toHaveProperty('title');
       expect(result).toHaveProperty('summary');
       expect(result).toHaveProperty('category');
@@ -206,7 +213,7 @@ describe('KB Wizard', () => {
     });
 
     it('should return AI-generated suggestions when Anthropic SDK succeeds', async () => {
-      const mockAnthropicCreate = vi.fn().mockResolvedValue({
+      mockAnthropicCreate.mockResolvedValueOnce({
         content: [{
           type: 'text',
           text: JSON.stringify({
@@ -218,15 +225,7 @@ describe('KB Wizard', () => {
         }],
       });
 
-      vi.doMock('@anthropic-ai/sdk', () => ({
-        default: vi.fn().mockImplementation(() => ({
-          messages: { create: mockAnthropicCreate },
-        })),
-      }));
-
-      // Re-import to pick up mock
-      const { generateSuggestions: freshGenerateSuggestions } = await import('../../src/modules/kb-wizard');
-      const result = await freshGenerateSuggestions('Some deployment content about Docker and Kubernetes.');
+      const result = await generateSuggestions(TEST_WORKSPACE_ID, 'Some deployment content about Docker and Kubernetes.');
 
       expect(result.title).toBe('AI Generated Title');
       expect(result.summary).toBe('AI generated summary of the content.');
@@ -235,26 +234,11 @@ describe('KB Wizard', () => {
     });
 
     it('should handle AI response with missing fields and use fallbacks', async () => {
-      const mockAnthropicCreate = vi.fn().mockResolvedValue({
-        content: [{
-          type: 'text',
-          text: JSON.stringify({
-            // Missing title, summary, category
-            tags: 'not-an-array',
-          }),
-        }],
+      mockAnthropicCreate.mockResolvedValueOnce({
+        content: [{ type: 'text', text: JSON.stringify({ tags: 'not-an-array' }) }],
       });
 
-      vi.doMock('@anthropic-ai/sdk', () => ({
-        default: vi.fn().mockImplementation(() => ({
-          messages: { create: mockAnthropicCreate },
-        })),
-      }));
-
-      const { generateSuggestions: freshGenerateSuggestions } = await import('../../src/modules/kb-wizard');
-      const result = await freshGenerateSuggestions('First line of content\nSecond line.');
-
-      // Fallback for title: first line sliced to 80 chars
+      const result = await generateSuggestions(TEST_WORKSPACE_ID, 'First line of content\nSecond line.');
       expect(result.title).toBe('First line of content');
       expect(result.summary).toBe('');
       expect(result.category).toBe('General');
@@ -262,55 +246,26 @@ describe('KB Wizard', () => {
     });
 
     it('should use "Untitled" when AI title is empty and content has no first line', async () => {
-      const mockAnthropicCreate = vi.fn().mockResolvedValue({
+      mockAnthropicCreate.mockResolvedValueOnce({
         content: [{
           type: 'text',
-          text: JSON.stringify({
-            title: '',
-            summary: 'Some summary',
-            category: 'Engineering',
-            tags: ['tag1'],
-          }),
+          text: JSON.stringify({ title: '', summary: 'Some summary', category: 'Engineering', tags: ['tag1'] }),
         }],
       });
 
-      vi.doMock('@anthropic-ai/sdk', () => ({
-        default: vi.fn().mockImplementation(() => ({
-          messages: { create: mockAnthropicCreate },
-        })),
-      }));
-
-      const { generateSuggestions: freshGenerateSuggestions } = await import('../../src/modules/kb-wizard');
-      // Pass empty content so content.split('\n')[0] is '' (falsy)
-      const result = await freshGenerateSuggestions('');
-
-      // '' || '' || 'Untitled' = 'Untitled'
+      const result = await generateSuggestions(TEST_WORKSPACE_ID, '');
       expect(result.title).toBe('Untitled');
     });
 
     it('should handle AI response with null content fields', async () => {
-      const mockAnthropicCreate = vi.fn().mockResolvedValue({
+      mockAnthropicCreate.mockResolvedValueOnce({
         content: [{
           type: 'text',
-          text: JSON.stringify({
-            title: null,
-            summary: null,
-            category: null,
-            tags: ['valid-tag'],
-          }),
+          text: JSON.stringify({ title: null, summary: null, category: null, tags: ['valid-tag'] }),
         }],
       });
 
-      vi.doMock('@anthropic-ai/sdk', () => ({
-        default: vi.fn().mockImplementation(() => ({
-          messages: { create: mockAnthropicCreate },
-        })),
-      }));
-
-      const { generateSuggestions: freshGenerateSuggestions } = await import('../../src/modules/kb-wizard');
-      const result = await freshGenerateSuggestions('Test content line\nMore content.');
-
-      // null || fallback
+      const result = await generateSuggestions(TEST_WORKSPACE_ID, 'Test content line\nMore content.');
       expect(result.title).toBe('Test content line');
       expect(result.category).toBe('General');
       expect(result.tags).toEqual(['valid-tag']);
@@ -322,14 +277,14 @@ describe('KB Wizard', () => {
   describe('advanceWizard', () => {
     it('should move to "metadata" step on "suggest" action', async () => {
       const state = makeWizardState({ content: 'Meaningful content about software deployment.' });
-      const next = await advanceWizard(state, 'suggest');
+      const next = await advanceWizard(TEST_WORKSPACE_ID, state, 'suggest');
       expect(next.step).toBe('metadata');
       expect(next.suggestions).not.toBeNull();
     });
 
     it('should preserve content when advancing', async () => {
       const state = makeWizardState({ content: 'My precious content' });
-      const next = await advanceWizard(state, 'suggest');
+      const next = await advanceWizard(TEST_WORKSPACE_ID, state, 'suggest');
       expect(next.content).toBe('My precious content');
     });
 
@@ -337,7 +292,7 @@ describe('KB Wizard', () => {
       const state = makeWizardState({
         overrides: { title: 'Original' },
       });
-      const next = await advanceWizard(state, 'override', { category: 'Engineering' });
+      const next = await advanceWizard(TEST_WORKSPACE_ID, state, 'override', { category: 'Engineering' });
       expect(next.overrides).toEqual({ title: 'Original', category: 'Engineering' });
     });
 
@@ -345,20 +300,20 @@ describe('KB Wizard', () => {
       const state = makeWizardState({
         overrides: { title: 'Old Title' },
       });
-      const next = await advanceWizard(state, 'override', { title: 'New Title' });
+      const next = await advanceWizard(TEST_WORKSPACE_ID, state, 'override', { title: 'New Title' });
       expect(next.overrides.title).toBe('New Title');
     });
 
     it('should not change step on "override" action', async () => {
       const state = makeWizardState({ step: 'metadata' });
-      const next = await advanceWizard(state, 'override', { title: 'Override' });
+      const next = await advanceWizard(TEST_WORKSPACE_ID, state, 'override', { title: 'Override' });
       expect(next.step).toBe('metadata');
     });
 
     it('should move to "confirm" step on "confirm" action', async () => {
       const suggestions = makeSuggestions();
       const state = makeWizardState({ step: 'metadata', suggestions });
-      const next = await advanceWizard(state, 'confirm');
+      const next = await advanceWizard(TEST_WORKSPACE_ID, state, 'confirm');
       expect(next.step).toBe('confirm');
     });
 
@@ -369,7 +324,7 @@ describe('KB Wizard', () => {
         suggestions,
         overrides: { title: 'Overridden Title' },
       });
-      const next = await advanceWizard(state, 'confirm');
+      const next = await advanceWizard(TEST_WORKSPACE_ID, state, 'confirm');
       expect(next.suggestions!.title).toBe('Overridden Title');
     });
 
@@ -379,14 +334,14 @@ describe('KB Wizard', () => {
         suggestions: null,
         content: 'Content without prior suggestions for generation.',
       });
-      const next = await advanceWizard(state, 'confirm');
+      const next = await advanceWizard(TEST_WORKSPACE_ID, state, 'confirm');
       expect(next.step).toBe('confirm');
       expect(next.suggestions).not.toBeNull();
     });
 
     it('should return state unchanged for unknown actions', async () => {
       const state = makeWizardState();
-      const next = await advanceWizard(state, 'unknown' as any);
+      const next = await advanceWizard(TEST_WORKSPACE_ID, state, 'unknown' as any);
       expect(next).toEqual(state);
     });
   });

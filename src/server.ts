@@ -62,15 +62,26 @@ export function createWebhookServer(): express.Application {
   // ── GitHub Deploy Webhook ──
   app.post('/webhooks/github-deploy', deployWebhookHandler);
 
-  // ── Generic Agent Webhook Triggers ──
-  app.post('/webhooks/agent-:agentName', async (req, res) => {
-    const { agentName } = req.params;
-    const workspaceId = getDefaultWorkspaceId();
+  // ── Generic Agent Webhook Triggers (workspace-scoped) ──
+  // New URL: /webhooks/w/:workspaceSlug/agent/:agentSlug
+  // Legacy URL: /webhooks/agent-:agentName — returns 301 to new URL if we can
+  // resolve it to a single workspace, 404 otherwise.
+  app.post('/webhooks/w/:workspaceSlug/agent/:agentSlug', async (req, res) => {
+    const { workspaceSlug, agentSlug } = req.params;
+    const { queryOne } = await import('./db');
+    const ws = await queryOne<{ id: string }>(
+      'SELECT id FROM workspaces WHERE workspace_slug = $1 AND status = $2',
+      [workspaceSlug, 'active'],
+    );
+    if (!ws) {
+      res.status(404).json({ error: 'Unknown workspace' });
+      return;
+    }
 
-    const webhookTriggers = await getActiveTriggersByType(workspaceId, 'webhook');
-    const matching = webhookTriggers.filter(t => {
+    const webhookTriggers = await getActiveTriggersByType(ws.id, 'webhook');
+    const matching = webhookTriggers.filter((t) => {
       const cfg = JSON.parse(t.config_json);
-      return cfg.agent_name === agentName;
+      return cfg.agent_slug === agentSlug || cfg.agent_name === agentSlug;
     });
 
     if (matching.length === 0) {
@@ -79,7 +90,7 @@ export function createWebhookServer(): express.Application {
     }
 
     for (const trigger of matching) {
-      const idempotencyKey = `webhook:${agentName}:${req.body.id || uuid()}`;
+      const idempotencyKey = `webhook:${agentSlug}:${req.body?.id || uuid()}`;
       await fireTrigger(trigger.workspace_id, {
         triggerId: trigger.id,
         idempotencyKey,
@@ -90,79 +101,123 @@ export function createWebhookServer(): express.Application {
     res.status(202).json({ message: 'Trigger fired', count: matching.length });
   });
 
-  // ── Linear Webhook (with signature verification) ──
+  // Legacy global webhook endpoint — redirect (if unambiguous) or accept on the
+  // default workspace for backwards compatibility during migration.
+  app.post('/webhooks/agent-:agentName', async (req, res) => {
+    const { agentName } = req.params;
+    const { query: dbQuery, getDefaultWorkspaceIdOrNull } = await import('./db');
+    const matchingWs = await dbQuery<{ workspace_slug: string }>(
+      `SELECT DISTINCT w.workspace_slug
+         FROM triggers t
+         JOIN workspaces w ON w.id = t.workspace_id
+        WHERE t.type = 'webhook' AND t.active = TRUE AND w.status = 'active'
+          AND (t.config_json::jsonb ->> 'agent_name' = $1 OR t.config_json::jsonb ->> 'agent_slug' = $1)`,
+      [agentName],
+    );
+
+    if (matchingWs.length === 1) {
+      res.redirect(301, `/webhooks/w/${matchingWs[0].workspace_slug}/agent/${agentName}`);
+      return;
+    }
+
+    // Fall back to default workspace if set (self-hosted compatibility)
+    const defaultWs = getDefaultWorkspaceIdOrNull();
+    if (!defaultWs) {
+      res.status(404).json({ error: 'No workspace context — use /webhooks/w/{workspaceSlug}/agent/{agentSlug}' });
+      return;
+    }
+
+    const webhookTriggers = await getActiveTriggersByType(defaultWs, 'webhook');
+    const matching = webhookTriggers.filter((t) => {
+      const cfg = JSON.parse(t.config_json);
+      return cfg.agent_name === agentName || cfg.agent_slug === agentName;
+    });
+    if (matching.length === 0) {
+      res.status(404).json({ error: 'No active webhook trigger found for this agent' });
+      return;
+    }
+    for (const trigger of matching) {
+      const idempotencyKey = `webhook:${agentName}:${req.body?.id || uuid()}`;
+      await fireTrigger(trigger.workspace_id, { triggerId: trigger.id, idempotencyKey, payload: req.body });
+    }
+    res.status(202).json({ message: 'Trigger fired', count: matching.length });
+  });
+
+  // Generic helper: run a signed webhook against every workspace that has an
+  // active trigger of the given type. Each trigger's config may carry its own
+  // signing secret; fall back to the global env-level secret if none.
+  // If a global env secret is configured, the signature must verify against it
+  // or we return 401 immediately — that's the legacy single-tenant contract.
+  async function dispatchSignedWebhook(opts: {
+    req: any;
+    res: express.Response;
+    type: 'linear' | 'zendesk' | 'intercom';
+    signatureHeader: string;
+    envSecret: string;
+    verify: (body: string, sig: string, secret: string) => boolean;
+    idempotencyKeyFor: (body: any) => string;
+  }): Promise<void> {
+    const { req, res, type, signatureHeader, envSecret, verify, idempotencyKeyFor } = opts;
+    const signature = req.headers[signatureHeader] as string;
+
+    if (envSecret && !verify(req.rawBody || '', signature, envSecret)) {
+      res.status(401).json({ error: 'Invalid signature' });
+      return;
+    }
+
+    const { listActiveWorkspaces } = await import('./db');
+    const workspaces = await listActiveWorkspaces();
+
+    let totalTriggers = 0;
+    for (const ws of workspaces) {
+      const triggers = await getActiveTriggersByType(ws.id, type);
+      for (const trigger of triggers) {
+        const cfg = JSON.parse(trigger.config_json || '{}') as Record<string, string | undefined>;
+        // Per-trigger secret override: if set, must verify against the payload
+        if (cfg.webhook_secret && signature && !verify(req.rawBody || '', signature, cfg.webhook_secret)) {
+          continue;
+        }
+        const idempotencyKey = idempotencyKeyFor(req.body);
+        await fireTrigger(trigger.workspace_id, { triggerId: trigger.id, idempotencyKey, payload: req.body });
+        totalTriggers++;
+      }
+    }
+
+    if (totalTriggers === 0) {
+      res.status(200).json({ message: `No active ${type.charAt(0).toUpperCase() + type.slice(1)} triggers` });
+      return;
+    }
+    res.status(200).json({ message: 'OK' });
+  }
+
   app.post('/webhooks/linear', async (req: any, res) => {
-    const signature = req.headers['linear-signature'] as string;
-    const secret = process.env.LINEAR_WEBHOOK_SECRET || '';
-
-    if (secret && !verifyLinearSignature(req.rawBody || '', signature, secret)) {
-      res.status(401).json({ error: 'Invalid signature' });
-      return;
-    }
-
-    const workspaceId = getDefaultWorkspaceId();
-    const triggers = await getActiveTriggersByType(workspaceId, 'linear');
-    if (triggers.length === 0) {
-      res.status(200).json({ message: 'No active Linear triggers' });
-      return;
-    }
-
-    for (const trigger of triggers) {
-      const idempotencyKey = `linear:${req.body.action}:${req.body.data?.id || uuid()}`;
-      await fireTrigger(trigger.workspace_id, {
-        triggerId: trigger.id,
-        idempotencyKey,
-        payload: req.body,
-      });
-    }
-
-    res.status(200).json({ message: 'OK' });
+    await dispatchSignedWebhook({
+      req, res, type: 'linear',
+      signatureHeader: 'linear-signature',
+      envSecret: process.env.LINEAR_WEBHOOK_SECRET || '',
+      verify: verifyLinearSignature,
+      idempotencyKeyFor: (b) => `linear:${b.action}:${b.data?.id || uuid()}`,
+    });
   });
 
-  // ── Zendesk Webhook (with signature verification) ──
   app.post('/webhooks/zendesk', async (req: any, res) => {
-    const signature = req.headers['x-zendesk-webhook-signature'] as string;
-    const secret = process.env.ZENDESK_WEBHOOK_SECRET || '';
-
-    if (secret && !verifyZendeskSignature(req.rawBody || '', signature, secret)) {
-      res.status(401).json({ error: 'Invalid signature' });
-      return;
-    }
-
-    const workspaceId = getDefaultWorkspaceId();
-    const triggers = await getActiveTriggersByType(workspaceId, 'zendesk');
-    for (const trigger of triggers) {
-      const idempotencyKey = `zendesk:${req.body.ticket_id || uuid()}:${req.body.updated_at || ''}`;
-      await fireTrigger(trigger.workspace_id, {
-        triggerId: trigger.id,
-        idempotencyKey,
-        payload: req.body,
-      });
-    }
-    res.status(200).json({ message: 'OK' });
+    await dispatchSignedWebhook({
+      req, res, type: 'zendesk',
+      signatureHeader: 'x-zendesk-webhook-signature',
+      envSecret: process.env.ZENDESK_WEBHOOK_SECRET || '',
+      verify: verifyZendeskSignature,
+      idempotencyKeyFor: (b) => `zendesk:${b.ticket_id || uuid()}:${b.updated_at || ''}`,
+    });
   });
 
-  // ── Intercom Webhook (with signature verification) ──
   app.post('/webhooks/intercom', async (req: any, res) => {
-    const signature = req.headers['x-hub-signature'] as string;
-    const secret = process.env.INTERCOM_WEBHOOK_SECRET || '';
-
-    if (secret && !verifyIntercomSignature(req.rawBody || '', signature, secret)) {
-      res.status(401).json({ error: 'Invalid signature' });
-      return;
-    }
-
-    const workspaceId = getDefaultWorkspaceId();
-    const triggers = await getActiveTriggersByType(workspaceId, 'intercom');
-    for (const trigger of triggers) {
-      const idempotencyKey = `intercom:${req.body.id || uuid()}`;
-      await fireTrigger(trigger.workspace_id, {
-        triggerId: trigger.id,
-        idempotencyKey,
-        payload: req.body,
-      });
-    }
-    res.status(200).json({ message: 'OK' });
+    await dispatchSignedWebhook({
+      req, res, type: 'intercom',
+      signatureHeader: 'x-hub-signature',
+      envSecret: process.env.INTERCOM_WEBHOOK_SECRET || '',
+      verify: verifyIntercomSignature,
+      idempotencyKeyFor: (b) => `intercom:${b.id || uuid()}`,
+    });
   });
 
   // ── OAuth Callback ──
@@ -232,8 +287,8 @@ export function createWebhookServer(): express.Application {
       return;
     }
 
-    const { agentId, agentName, toolName, details, userId, channelId, threadTs, writePolicy } = req.body;
-    if (!agentId || !toolName || !channelId) {
+    const { workspaceId, agentId, agentName, toolName, details, userId, channelId, threadTs, writePolicy } = req.body;
+    if (!agentId || !toolName || !channelId || !workspaceId) {
       res.status(400).json({ error: 'Missing required fields' });
       return;
     }
@@ -242,7 +297,7 @@ export function createWebhookServer(): express.Application {
       const requestId = uuid();
       const { setApprovalState } = await import('./queue');
       const ttl = writePolicy === 'confirm' ? 300 : undefined; // 5 min for user confirm, no TTL for admin
-      await setApprovalState(requestId, 'pending', ttl);
+      await setApprovalState(workspaceId, requestId, 'pending', ttl);
 
       // Post approval message in Slack thread
       const { postBlocks: postApprovalBlocks } = await import('./slack');
@@ -261,14 +316,14 @@ export function createWebhookServer(): express.Application {
               text: { type: 'plain_text', text: ':white_check_mark: Approve' },
               style: 'primary',
               action_id: 'approve_write_action',
-              value: JSON.stringify({ requestId, writePolicy, agentName, toolName }),
+              value: JSON.stringify({ workspaceId, requestId, writePolicy, agentName, toolName }),
             },
             {
               type: 'button',
               text: { type: 'plain_text', text: ':x: Deny' },
               style: 'danger',
               action_id: 'deny_write_action',
-              value: JSON.stringify({ requestId, writePolicy, agentName, toolName }),
+              value: JSON.stringify({ workspaceId, requestId, writePolicy, agentName, toolName }),
             },
           ],
         },
@@ -288,9 +343,15 @@ export function createWebhookServer(): express.Application {
       return;
     }
 
+    const workspaceId = (req.query.workspaceId as string) || '';
+    if (!workspaceId) {
+      res.status(400).json({ error: 'workspaceId query param required' });
+      return;
+    }
+
     try {
       const { getApprovalState } = await import('./queue');
-      const state = await getApprovalState(req.params.requestId);
+      const state = await getApprovalState(workspaceId, req.params.requestId);
       res.json({ status: state || 'expired' });
     } catch (err: any) {
       res.status(500).json({ error: 'Failed to check approval state' });

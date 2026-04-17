@@ -1,5 +1,6 @@
 import Dockerode from 'dockerode';
 import fs from 'fs';
+import path from 'path';
 import { PassThrough } from 'stream';
 import { config } from '../config';
 import type { Agent } from '../types';
@@ -9,7 +10,10 @@ const docker = new Dockerode();
 
 export interface ContainerConfig {
   agent: Agent;
+  workspaceId: string;
+  runId: string;              // canonical per-run identifier (trace_id or run row id)
   traceId: string;
+  anthropicApiKey: string;    // resolved per-workspace; never fall back to process env
   workingDir: string;
   envVars: Record<string, string>;
   networkAllowlist?: string[];
@@ -22,43 +26,74 @@ export interface ContainerResult {
   stderr: string;
 }
 
+// Per-run secret directory. Not bind-mounted any more — secrets are passed via
+// env vars. The path is returned so callers can clean it up in a `finally`
+// block even if the container errors out.
+export interface RunDirs {
+  runSecretsDir: string;    // /tmp/tinyhands-runs/{workspaceId}/{runId}/
+  sourcesCacheDir: string;  // per-agent, read-only
+  memoryDir: string;        // per-agent, read-only
+}
+
+export function runDirsFor(workspaceId: string, agentId: string, runId: string): RunDirs {
+  return {
+    runSecretsDir: `/tmp/tinyhands-runs/${workspaceId}/${runId}/`,
+    sourcesCacheDir: `/tmp/tinyhands-sources-cache/${workspaceId}/${agentId}`,
+    memoryDir: `/tmp/tinyhands-memory/${workspaceId}/${agentId}`,
+  };
+}
+
+export function cleanupRunSecretsDir(runSecretsDir: string): void {
+  try {
+    fs.rmSync(runSecretsDir, { recursive: true, force: true });
+  } catch (err: any) {
+    // Not fatal — log and move on; the parent dir will be cleaned up by cron
+    // on long-lived hosts. We never want a cleanup failure to mask a run error.
+    logger.warn('Failed to clean run secrets dir', { runSecretsDir, error: err.message });
+  }
+}
+
 export async function createAgentContainer(cfg: ContainerConfig): Promise<Dockerode.Container> {
   const image = cfg.agent.docker_image || config.docker.baseImage;
 
   const envList = [
-    `ANTHROPIC_API_KEY=${config.anthropic.apiKey}`,
+    `ANTHROPIC_API_KEY=${cfg.anthropicApiKey}`,
+    `WORKSPACE_ID=${cfg.workspaceId}`,
+    `RUN_ID=${cfg.runId}`,
     `AGENT_ID=${cfg.agent.id}`,
     `AGENT_NAME=${cfg.agent.name}`,
     `TRACE_ID=${cfg.traceId}`,
     ...Object.entries(cfg.envVars).map(([k, v]) => `${k}=${v}`),
   ];
 
+  const dirs = runDirsFor(cfg.workspaceId, cfg.agent.id, cfg.runId);
   // Ensure directories exist
-  const sourcesCacheDir = `/tmp/tinyhands-sources-cache/${cfg.agent.id}`;
-  const memoryDir = `/tmp/tinyhands-memory/${cfg.agent.id}`;
-  for (const dir of [cfg.workingDir, sourcesCacheDir, memoryDir]) {
+  for (const dir of [cfg.workingDir, dirs.sourcesCacheDir, dirs.memoryDir, dirs.runSecretsDir]) {
     fs.mkdirSync(dir, { recursive: true });
   }
+  // Mode 0700: owner-only access on the secrets dir
+  fs.chmodSync(dirs.runSecretsDir, 0o700);
   // Ensure the workspace dir is writable by the container's agent user (uid 999)
   try {
     fs.chownSync(cfg.workingDir, 999, 999);
   } catch {
-    // Fallback: make world-writable if chown fails
     fs.chmodSync(cfg.workingDir, 0o777);
   }
 
   const container = await docker.createContainer({
+    name: `tinyhands-runner-${sanitizeLabel(cfg.workspaceId)}-${sanitizeLabel(cfg.runId)}`,
     Image: image,
     Env: envList,
     WorkingDir: '/workspace',
     HostConfig: {
       Binds: [
         `${cfg.workingDir}:/workspace:rw`,
-        `${sourcesCacheDir}:/sources:ro`,
-        `${memoryDir}:/memory:ro`,
+        `${dirs.sourcesCacheDir}:/sources:ro`,
+        `${dirs.memoryDir}:/memory:ro`,
+        `${dirs.runSecretsDir}:/run-secrets:ro`,
       ],
-      Memory: 4 * 1024 * 1024 * 1024, // 4GB
-      NanoCpus: 1e9, // 1 CPU
+      Memory: 4 * 1024 * 1024 * 1024,
+      NanoCpus: 1e9,
       NetworkMode: 'bridge',
       ExtraHosts: ['host.docker.internal:host-gateway'],
       SecurityOpt: ['no-new-privileges:true'],
@@ -66,20 +101,34 @@ export async function createAgentContainer(cfg: ContainerConfig): Promise<Docker
       AutoRemove: false,
     },
     Labels: {
+      'tinyhands.workspace_id': cfg.workspaceId,
       'tinyhands.agent_id': cfg.agent.id,
+      'tinyhands.run_id': cfg.runId,
       'tinyhands.trace_id': cfg.traceId,
     },
   });
 
   logger.info('Container created', {
     containerId: container.id,
+    workspaceId: cfg.workspaceId,
     agentId: cfg.agent.id,
+    runId: cfg.runId,
     traceId: cfg.traceId,
     image,
   });
 
   return container;
 }
+
+// Docker container names must match [a-zA-Z0-9][a-zA-Z0-9_.-]+. Slack team_ids
+// (e.g. T01ABC123) and UUIDs are already safe, but sanitize defensively.
+function sanitizeLabel(s: string): string {
+  return s.replace(/[^a-zA-Z0-9_.-]/g, '-').slice(0, 48);
+}
+
+// Re-export for path composition callers.
+export const RUN_SECRETS_ROOT = '/tmp/tinyhands-runs';
+export { path };
 
 export async function startContainer(container: Dockerode.Container): Promise<void> {
   await container.start();

@@ -79,7 +79,8 @@ export async function streamChat(
       content: m.content,
     }));
 
-    const client = new Anthropic();
+    const { createAnthropicClient } = await import('../anthropic');
+    const client = await createAnthropicClient(workspaceId);
     const toolCallsUsed: string[] = [];
     let toolCallCount = 0;
 

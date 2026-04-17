@@ -196,13 +196,44 @@ capabilities:
 6. Worker reads stream → buffers → posts to Slack thread in real-time
 7. Run record updated (tokens, cost, duration) → container cleaned up
 
+## Multi-Tenancy
+
+TinyHands is multi-tenant. A single deployment hosts many Slack workspaces side by side, with hard isolation between them.
+
+- **Platform-owned (TinyHands):** Slack app + app-level token + OAuth client, PostgreSQL, Redis, worker/listener/scheduler/sync processes, Docker runner image, deploy infra.
+- **Workspace-owned (admin):** Anthropic API key, tool connections, agents, KB, documents, triggers, memory, audit log.
+
+### Core modules
+
+- `src/modules/users/` — `users`, `workspace_memberships`, `platform_admins`. Slack-sign-in produces a `users` row; memberships govern which workspaces a user can access.
+- `src/modules/anthropic/` — `getAnthropicApiKey(workspaceId)`, `setAnthropicApiKey`, `testAnthropicApiKey`, `createAnthropicClient(workspaceId)`. Every Anthropic SDK call at runtime must go through `createAnthropicClient` — `new Anthropic()` with a default env key is forbidden and will bleed credentials across tenants.
+- `src/modules/multitenant-migration/` — idempotent startup bootstrap that migrates `ANTHROPIC_API_KEY` from env into workspace 1's encrypted settings and backfills users/memberships from legacy `platform_roles`.
+- `src/utils/oauth-state.ts` — signed `state` encoding/verification for third-party OAuth flows. Every integration must use this so callbacks can safely prove they belong to the originating workspace.
+- `src/utils/logger.ts` — the winston logger now runs a `redactSecrets()` pass before each log line so API keys, bot tokens, and OAuth secrets can never leak to stdout.
+
+### Redis key discipline
+
+Every tenant-scoped Redis key must include the workspace id. Use `rkey(workspaceId, ...parts)` from `src/queue/index.ts`. Existing scoped keys: rate-limit buckets, trigger dedup keys, approval-state keys, buffer keys.
+
+### Sign in with Slack
+
+Dashboard auth is Slack OAuth. Identity scopes (user-level) on `/auth/slack`; bot scopes for workspace install on `/auth/slack/install`. Sessions carry `dbUserId`, `slackUserId`, `workspaceId` (active), `homeWorkspaceId`, `platformAdmin`. The workspace switcher (`web/src/components/layout/WorkspaceSwitcher.tsx`) calls `/auth/workspaces` and `/auth/switch-workspace`.
+
+### Per-run runner isolation
+
+Each agent run gets its own container: per-run temp directory `/tmp/tinyhands-runs/{workspaceId}/{runId}/` mounted read-only, deleted in a `finally` block. Container names `tinyhands-runner-{workspaceId}-{runId}`. Workspace-scoped secrets (Anthropic key, tool credentials) are passed via env vars into that container; nothing is persisted across runs.
+
+### Platform admin
+
+`src/modules/users/isPlatformAdmin(userId)` and the `/platform` route show per-workspace health (runs in 24h, error rate, whether a Claude key is configured). No per-run content access.
+
 ## Key Patterns
 
 ### Slack Commands
 Defined in `src/slack/commands.ts`. Each command opens modals or sends DM blocks. Interactive flows use `pending_confirmations` table for multi-step wizard state.
 
 ### Webhooks
-Express routes in `src/server.ts`. Signature verification for GitHub, Linear, Zendesk, Intercom. Generic agent webhooks at `/webhooks/agent-{name}`.
+Express routes in `src/server.ts`. Signature verification for GitHub, Linear, Zendesk, Intercom. Per-workspace agent webhooks at `/webhooks/w/{workspaceSlug}/agent/{agentSlug}`; the legacy `/webhooks/agent-{name}` URL redirects (301) when unambiguous or falls back to the default workspace for self-hosted compatibility. Signed webhooks fan out across all workspaces that have an active trigger of that type, with each trigger's `webhook_secret` verified independently.
 
 ### Rate Limiting
 Redis-backed token bucket in `src/queue/index.ts`. Pre-flight check at 90% TPM capacity. Per-minute tracking for both TPM and RPM.
@@ -271,12 +302,15 @@ Core required vars (see `.env.example` for full list):
 
 ```
 SLACK_BOT_TOKEN, SLACK_APP_TOKEN, SLACK_SIGNING_SECRET
-ANTHROPIC_API_KEY
+SLACK_CLIENT_ID, SLACK_CLIENT_SECRET  # for Sign in with Slack + OAuth install
 DATABASE_URL (PostgreSQL)
 REDIS_URL
+ENCRYPTION_KEY   # 32+ chars, used for workspace-scoped credential encryption
 ```
 
-Optional: `GITHUB_TOKEN`, `PORT` (default 3000), `LOG_LEVEL`, `DOCKER_BASE_IMAGE`, `DAILY_BUDGET_USD`, `AUTO_UPDATE_ENABLED`, `ENCRYPTION_KEY` (32+ chars, for credential encryption), `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `NOTION_OAUTH_CLIENT_ID`, `NOTION_OAUTH_CLIENT_SECRET`, `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`, `OAUTH_REDIRECT_BASE_URL`.
+`ANTHROPIC_API_KEY` is bootstrap-only: if present on first boot, the multi-tenant migration copies it into workspace 1's encrypted `workspace_settings` and never reads it again. After that, each workspace admin sets their own key via the dashboard (validated via `/settings/anthropic-key/test`).
+
+Optional: `GITHUB_TOKEN`, `PORT` (default 3000), `LOG_LEVEL`, `DOCKER_BASE_IMAGE`, `DAILY_BUDGET_USD`, `AUTO_UPDATE_ENABLED`, `WORKER_CONCURRENCY` (jobs per worker process; default 1), `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `NOTION_OAUTH_CLIENT_ID`, `NOTION_OAUTH_CLIENT_SECRET`, `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`, `OAUTH_REDIRECT_BASE_URL`.
 
 ## Development Workflow
 

@@ -43,6 +43,12 @@ vi.mock('../../src/docker', () => ({
   waitForContainer: (...args: any[]) => mockWaitForContainer(...args),
   removeContainer: (...args: any[]) => mockRemoveContainer(...args),
   followContainerOutput: (...args: any[]) => mockFollowContainerOutput(...args),
+  runDirsFor: (wsId: string, agentId: string, runId: string) => ({
+    runSecretsDir: `/tmp/tinyhands-runs/${wsId}/${runId}/`,
+    sourcesCacheDir: `/tmp/tinyhands-sources-cache/${wsId}/${agentId}`,
+    memoryDir: `/tmp/tinyhands-memory/${wsId}/${agentId}`,
+  }),
+  cleanupRunSecretsDir: vi.fn(),
 }));
 
 const mockGetAgent = vi.fn();
@@ -139,6 +145,21 @@ vi.mock('@anthropic-ai/sdk', () => ({
   default: class {
     messages = { create: (...args: any[]) => mockAnthropicCreate(...args) };
   },
+}));
+
+// Mock the per-workspace Anthropic key resolver so every test has a valid key.
+// Tests that specifically need to exercise the missing-key path can override
+// mockGetAnthropicApiKey inside the test.
+const mockGetAnthropicApiKey = vi.fn().mockResolvedValue('sk-ant-test');
+vi.mock('../../src/modules/anthropic', () => ({
+  getAnthropicApiKey: (...args: any[]) => mockGetAnthropicApiKey(...args),
+  AnthropicKeyMissingError: class AnthropicKeyMissingError extends Error {
+    constructor(public workspaceId: string) { super(`Workspace ${workspaceId} has no Anthropic API key configured.`); this.name = 'AnthropicKeyMissingError'; }
+  },
+  createAnthropicClient: vi.fn(async () => ({ messages: { create: (...args: any[]) => mockAnthropicCreate(...args) } })),
+  setAnthropicApiKey: vi.fn(),
+  hasAnthropicApiKey: vi.fn().mockResolvedValue(true),
+  testAnthropicApiKey: vi.fn().mockResolvedValue({ ok: true }),
 }));
 
 // Mock Slack module for credential error posting

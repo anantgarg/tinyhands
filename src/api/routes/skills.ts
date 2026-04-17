@@ -96,8 +96,8 @@ router.post('/generate', requireAdmin, async (req: Request, res: Response) => {
     }
 
     // Use Claude to generate a skill template
-    const Anthropic = (await import('@anthropic-ai/sdk')).default;
-    const client = new Anthropic();
+    const { createAnthropicClient } = await import('../../modules/anthropic');
+    const client = await createAnthropicClient(workspaceId);
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 1024,

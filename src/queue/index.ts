@@ -36,11 +36,30 @@ export function getQueue(): Queue<JobData> {
   return queue;
 }
 
-const PRIORITY_MAP: Record<QueuePriority, number> = {
-  high: 1,
-  normal: 2,
-  low: 3,
+// Priority bands — BullMQ treats lower numbers as higher priority.
+// Base bands are widely spaced so per-workspace pending count offsets can fit
+// in the gap without a high-priority job ever falling behind a normal one.
+const PRIORITY_BASE: Record<QueuePriority, number> = {
+  high: 100,
+  normal: 10_000,
+  low: 100_000,
 };
+
+/**
+ * Compute an effective BullMQ priority that round-robins across workspaces.
+ * The more jobs a workspace already has waiting, the larger the offset, so a
+ * workspace with an empty queue is always picked ahead of a workspace with a
+ * backlog at the same user-visible priority band.
+ */
+async function computeEffectivePriority(
+  priority: QueuePriority,
+  workspaceId: string,
+): Promise<number> {
+  const q = getQueue();
+  const waiting = await q.getJobs(['waiting', 'prioritized', 'delayed'], 0, 500);
+  const sameWs = waiting.filter((j) => j?.data && (j.data as any).workspaceId === workspaceId).length;
+  return PRIORITY_BASE[priority] + sameWs;
+}
 
 export async function enqueueRun(
   data: JobData,
@@ -48,9 +67,10 @@ export async function enqueueRun(
   delayMs?: number
 ): Promise<Job<JobData>> {
   const q = getQueue();
+  const effectivePriority = await computeEffectivePriority(priority, data.workspaceId);
 
   const job = await q.add('agent-run', data, {
-    priority: PRIORITY_MAP[priority],
+    priority: effectivePriority,
     delay: delayMs,
     jobId: data.traceId,
     attempts: 1,
@@ -60,7 +80,9 @@ export async function enqueueRun(
     jobId: job.id,
     traceId: data.traceId,
     agentId: data.agentId,
+    workspaceId: data.workspaceId,
     priority,
+    effectivePriority,
   });
 
   return job;
@@ -168,14 +190,18 @@ export async function isDuplicateEvent(workspaceId: string, idempotencyKey: stri
 }
 
 // ── Approval State ──
+// Approval keys are workspace-scoped. Request IDs are globally unique UUIDs so
+// the workspace prefix is belt-and-suspenders protection against cross-tenant
+// reads via a crafted requestId.
 
 export async function setApprovalState(
+  workspaceId: string,
   requestId: string,
   state: 'pending' | 'approved' | 'denied',
   ttlSeconds?: number,
 ): Promise<void> {
   const redis = getRedisConnection();
-  const key = `tinyhands:approval:${requestId}`;
+  const key = `tinyhands:${workspaceId}:approval:${requestId}`;
   if (ttlSeconds) {
     await redis.set(key, state, 'EX', ttlSeconds);
   } else {
@@ -184,9 +210,17 @@ export async function setApprovalState(
   }
 }
 
-export async function getApprovalState(requestId: string): Promise<string | null> {
+export async function getApprovalState(workspaceId: string, requestId: string): Promise<string | null> {
   const redis = getRedisConnection();
-  return redis.get(`tinyhands:approval:${requestId}`);
+  return redis.get(`tinyhands:${workspaceId}:approval:${requestId}`);
+}
+
+/**
+ * Workspace-scoped Redis key helper. Every tenant-data Redis key must use this
+ * helper so cross-tenant leakage is impossible by construction.
+ */
+export function rkey(workspaceId: string, ...parts: string[]): string {
+  return ['tinyhands', workspaceId, ...parts].join(':');
 }
 
 // ── Queue Events ──

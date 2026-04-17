@@ -167,7 +167,7 @@ export function registerEvents(app: App): void {
         candidateAgents.map(async (agent: any) => {
           try {
             const isRelevant = await checkMessageRelevance(
-              cleanInput, agent.relevance_keywords, agent.system_prompt, agent.respond_to_all_messages
+              workspaceId, cleanInput, agent.relevance_keywords, agent.system_prompt, agent.respond_to_all_messages
             );
             return { agent, relevant: isRelevant };
           } catch {
@@ -225,6 +225,7 @@ export function registerEvents(app: App): void {
         // Relevance check for top-level messages (not @mentions, not mentions_only)
         if (!isMentioned && !agent.mentions_only) {
           const isRelevant = await checkMessageRelevance(
+            workspaceId,
             cleanInput,
             agent.relevance_keywords,
             agent.system_prompt,
@@ -240,7 +241,7 @@ export function registerEvents(app: App): void {
         if (msg.thread_ts && detectCritique(cleanInput)) {
           const { applyPromptDiff, generatePromptDiff, formatDiffForSlack } = await import('../modules/self-improvement');
 
-          const diff = await generatePromptDiff(agent.system_prompt, cleanInput, '');
+          const diff = await generatePromptDiff(workspaceId, agent.system_prompt, cleanInput, '');
           const diffText = formatDiffForSlack(diff.original, diff.proposed);
 
           await postMessage(
@@ -428,7 +429,7 @@ export function registerEvents(app: App): void {
           activeAgents.map(async (agent) => {
             try {
               const isRelevant = await checkMessageRelevance(
-                text, agent.relevance_keywords, agent.system_prompt, agent.respond_to_all_messages
+                workspaceId, text, agent.relevance_keywords, agent.system_prompt, agent.respond_to_all_messages
               );
               return { agent, relevant: isRelevant };
             } catch {

@@ -62,11 +62,11 @@ export function generateSuggestionsHeuristic(content: string): WizardSuggestions
   };
 }
 
-export async function generateSuggestions(content: string): Promise<WizardSuggestions> {
+export async function generateSuggestions(workspaceId: string, content: string): Promise<WizardSuggestions> {
   // Try AI-powered metadata generation, fall back to heuristics
   try {
-    const Anthropic = (await import('@anthropic-ai/sdk')).default;
-    const client = new Anthropic();
+    const { createAnthropicClient } = await import('../anthropic');
+    const client = await createAnthropicClient(workspaceId);
 
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
@@ -102,6 +102,7 @@ export async function generateSuggestions(content: string): Promise<WizardSugges
 }
 
 export async function advanceWizard(
+  workspaceId: string,
   state: WizardState,
   action: 'suggest' | 'confirm' | 'override',
   data?: Partial<WizardSuggestions>
@@ -111,7 +112,7 @@ export async function advanceWizard(
       return {
         ...state,
         step: 'metadata',
-        suggestions: await generateSuggestions(state.content),
+        suggestions: await generateSuggestions(workspaceId, state.content),
       };
 
     case 'override':
@@ -121,7 +122,7 @@ export async function advanceWizard(
       };
 
     case 'confirm': {
-      const suggestions = state.suggestions || await generateSuggestions(state.content);
+      const suggestions = state.suggestions || await generateSuggestions(workspaceId, state.content);
       const final = { ...suggestions, ...state.overrides };
       return {
         ...state,

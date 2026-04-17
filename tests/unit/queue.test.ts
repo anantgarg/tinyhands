@@ -28,12 +28,14 @@ vi.mock('ioredis', () => {
 
 const mockQueueAdd = vi.fn().mockResolvedValue({ id: 'job-1' });
 const mockQueueGetJobCounts = vi.fn().mockResolvedValue({ waiting: 5, active: 2, delayed: 1 });
+const mockQueueGetJobs = vi.fn().mockResolvedValue([]);
 const mockQueueClose = vi.fn();
 
 vi.mock('bullmq', () => ({
   Queue: vi.fn().mockImplementation(() => ({
     add: mockQueueAdd,
     getJobCounts: mockQueueGetJobCounts,
+    getJobs: mockQueueGetJobs,
     close: mockQueueClose,
   })),
   QueueEvents: vi.fn().mockImplementation(() => ({
@@ -142,29 +144,32 @@ describe('Queue Module', () => {
 
       expect(job.id).toBe('job-1');
       expect(mockQueueAdd).toHaveBeenCalledWith('agent-run', data, {
-        priority: 2, // normal maps to 2
+        // normal band base; offset depends on queue depth for this workspace
+        priority: expect.any(Number),
         delay: undefined,
         jobId: 'trace-abc',
         attempts: 1,
       });
+      const arg = mockQueueAdd.mock.calls[0][2];
+      expect(arg.priority).toBeGreaterThanOrEqual(10_000);
+      expect(arg.priority).toBeLessThan(100_000);
     });
 
-    it('maps high priority to 1', async () => {
+    it('high priority band is lower-numbered than normal', async () => {
       const data = makeJobData();
       await enqueueRun(data, 'high');
 
-      expect(mockQueueAdd).toHaveBeenCalledWith('agent-run', data, expect.objectContaining({
-        priority: 1,
-      }));
+      const arg = mockQueueAdd.mock.calls[0][2];
+      expect(arg.priority).toBeGreaterThanOrEqual(100);
+      expect(arg.priority).toBeLessThan(10_000);
     });
 
-    it('maps low priority to 3', async () => {
+    it('low priority band is higher-numbered than normal', async () => {
       const data = makeJobData();
       await enqueueRun(data, 'low');
 
-      expect(mockQueueAdd).toHaveBeenCalledWith('agent-run', data, expect.objectContaining({
-        priority: 3,
-      }));
+      const arg = mockQueueAdd.mock.calls[0][2];
+      expect(arg.priority).toBeGreaterThanOrEqual(100_000);
     });
 
     it('passes delay when provided', async () => {
@@ -543,10 +548,10 @@ describe('Queue Module', () => {
   // ────────────────────────────────────────────────
   describe('setApprovalState', () => {
     it('sets approval state with custom TTL', async () => {
-      await setApprovalState('req-1', 'pending', 300);
+      await setApprovalState('T1', 'req-1', 'pending', 300);
 
       expect(mockRedisSet).toHaveBeenCalledWith(
-        'tinyhands:approval:req-1',
+        'tinyhands:T1:approval:req-1',
         'pending',
         'EX',
         300,
@@ -554,23 +559,23 @@ describe('Queue Module', () => {
     });
 
     it('sets approval state with default 1 hour TTL when no TTL provided', async () => {
-      await setApprovalState('req-2', 'approved');
+      await setApprovalState('T1', 'req-2', 'approved');
 
       expect(mockRedisSet).toHaveBeenCalledWith(
-        'tinyhands:approval:req-2',
+        'tinyhands:T1:approval:req-2',
         'approved',
       );
       expect(mockRedisExpire).toHaveBeenCalledWith(
-        'tinyhands:approval:req-2',
+        'tinyhands:T1:approval:req-2',
         3600,
       );
     });
 
     it('sets denied state', async () => {
-      await setApprovalState('req-3', 'denied', 600);
+      await setApprovalState('T1', 'req-3', 'denied', 600);
 
       expect(mockRedisSet).toHaveBeenCalledWith(
-        'tinyhands:approval:req-3',
+        'tinyhands:T1:approval:req-3',
         'denied',
         'EX',
         600,
@@ -582,16 +587,16 @@ describe('Queue Module', () => {
     it('returns the current approval state', async () => {
       mockRedisGet.mockResolvedValueOnce('approved');
 
-      const result = await getApprovalState('req-1');
+      const result = await getApprovalState('T1', 'req-1');
 
       expect(result).toBe('approved');
-      expect(mockRedisGet).toHaveBeenCalledWith('tinyhands:approval:req-1');
+      expect(mockRedisGet).toHaveBeenCalledWith('tinyhands:T1:approval:req-1');
     });
 
     it('returns null when request ID does not exist (expired)', async () => {
       mockRedisGet.mockResolvedValueOnce(null);
 
-      const result = await getApprovalState('req-expired');
+      const result = await getApprovalState('T1', 'req-expired');
 
       expect(result).toBeNull();
     });
@@ -599,7 +604,7 @@ describe('Queue Module', () => {
     it('returns pending for a newly created request', async () => {
       mockRedisGet.mockResolvedValueOnce('pending');
 
-      const result = await getApprovalState('req-new');
+      const result = await getApprovalState('T1', 'req-new');
 
       expect(result).toBe('pending');
     });

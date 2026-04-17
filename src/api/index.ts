@@ -20,6 +20,7 @@ import skillRoutes from './routes/skills';
 import slackHelperRoutes from './routes/slack-helpers';
 import chatRoutes from './routes/chat';
 import docsRoutes from './routes/docs';
+import platformRoutes from './routes/platform';
 
 export function createApiRouter(): Router {
   const router = Router();
@@ -49,6 +50,8 @@ export function createApiRouter(): Router {
   router.use('/slack', requireAuth, slackHelperRoutes);
   router.use('/chat', requireAuth, chatRoutes);
   router.use('/docs', requireAuth, docsRoutes);
+  // Platform admin routes do their own auth check (platform_admins table)
+  router.use('/platform', requireAuth, platformRoutes);
 
   // Catch-all 404 for API routes (return JSON, not HTML)
   router.use((_req, res) => {

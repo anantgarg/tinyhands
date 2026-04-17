@@ -6,12 +6,23 @@ const mockGetAgent = vi.fn();
 const mockUpdateAgent = vi.fn();
 const mockGetAgentVersions = vi.fn();
 const mockRevertAgent = vi.fn();
+const mockAnthropicCreate = vi.fn();
 
 vi.mock('../../src/modules/agents', () => ({
   getAgent: (...args: any[]) => mockGetAgent(...args),
   updateAgent: (...args: any[]) => mockUpdateAgent(...args),
   getAgentVersions: (...args: any[]) => mockGetAgentVersions(...args),
   revertAgent: (...args: any[]) => mockRevertAgent(...args),
+}));
+
+vi.mock('@anthropic-ai/sdk', () => ({
+  default: vi.fn().mockImplementation(() => ({
+    messages: { create: (...args: any[]) => mockAnthropicCreate(...args) },
+  })),
+}));
+
+vi.mock('../../src/modules/anthropic', () => ({
+  createAnthropicClient: vi.fn(async () => ({ messages: { create: (...args: any[]) => mockAnthropicCreate(...args) } })),
 }));
 
 vi.mock('../../src/utils/logger', () => ({
@@ -188,20 +199,11 @@ describe('generatePromptDiff', () => {
   });
 
   it('should generate a prompt diff with AI-proposed changes', async () => {
-    const mockAnthropicCreate = vi.fn().mockResolvedValue({
-      content: [{
-        type: 'text',
-        text: 'You are an improved agent. Be concise and accurate.',
-      }],
+    mockAnthropicCreate.mockResolvedValueOnce({
+      content: [{ type: 'text', text: 'You are an improved agent. Be concise and accurate.' }],
     });
 
-    vi.doMock('@anthropic-ai/sdk', () => ({
-      default: vi.fn().mockImplementation(() => ({
-        messages: { create: mockAnthropicCreate },
-      })),
-    }));
-
-    const result = await generatePromptDiff(
+    const result = await generatePromptDiff(TEST_WORKSPACE_ID,
       'You are a helpful agent.',
       'You should be more concise.',
       'Some verbose output...'
@@ -215,33 +217,18 @@ describe('generatePromptDiff', () => {
 
   it('should truncate long critique in changeNote', async () => {
     const longCritique = 'x'.repeat(200);
-
-    const mockAnthropicCreate = vi.fn().mockResolvedValue({
+    mockAnthropicCreate.mockResolvedValueOnce({
       content: [{ type: 'text', text: 'Improved prompt.' }],
     });
 
-    vi.doMock('@anthropic-ai/sdk', () => ({
-      default: vi.fn().mockImplementation(() => ({
-        messages: { create: mockAnthropicCreate },
-      })),
-    }));
-
-    const result = await generatePromptDiff('Original', longCritique, 'Output');
-
-    // changeNote should truncate critique to 100 chars
+    const result = await generatePromptDiff(TEST_WORKSPACE_ID, 'Original', longCritique, 'Output');
     expect(result.changeNote.length).toBeLessThan(200);
   });
 
   it('should return original prompt unchanged when AI call fails', async () => {
-    vi.doMock('@anthropic-ai/sdk', () => ({
-      default: vi.fn().mockImplementation(() => ({
-        messages: {
-          create: vi.fn().mockRejectedValue(new Error('API rate limit exceeded')),
-        },
-      })),
-    }));
+    mockAnthropicCreate.mockRejectedValueOnce(new Error('API rate limit exceeded'));
 
-    const result = await generatePromptDiff(
+    const result = await generatePromptDiff(TEST_WORKSPACE_ID,
       'Original prompt here.',
       'Fix your tone.',
       'Output text'
@@ -254,19 +241,11 @@ describe('generatePromptDiff', () => {
   });
 
   it('should use original prompt when AI returns empty response', async () => {
-    const mockAnthropicCreate = vi.fn().mockResolvedValue({
+    mockAnthropicCreate.mockResolvedValueOnce({
       content: [{ type: 'text', text: '' }],
     });
 
-    vi.doMock('@anthropic-ai/sdk', () => ({
-      default: vi.fn().mockImplementation(() => ({
-        messages: { create: mockAnthropicCreate },
-      })),
-    }));
-
-    const result = await generatePromptDiff('My prompt.', 'Improve it.', 'Output');
-
-    // When proposed is empty, the code does `proposed || currentPrompt`
+    const result = await generatePromptDiff(TEST_WORKSPACE_ID, 'My prompt.', 'Improve it.', 'Output');
     expect(result.proposed).toBe('My prompt.');
   });
 });
