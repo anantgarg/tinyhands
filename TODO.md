@@ -100,6 +100,22 @@ The credential system was overhauled: `connectionModel` replaced with `supported
 
 ---
 
+## Infrastructure
+
+### Flaky test: `api-kb.test.ts > DELETE /kb/sources/:id > deletes source (admin)`
+Passes in isolation (`npx vitest run tests/unit/api-kb.test.ts`) but intermittently returns 404 instead of 200 when run inside the full `npm test` suite. Indicates test pollution from an earlier file mutating shared mock state. Blocks deploys occasionally via husky pre-commit. Discovered during v1.47.0 deploy.
+
+### Droplet `/root/tinyjobs/` untracked cruft
+Production droplet accumulated untracked files that should be cleaned up: `retrigger.js`, `retrigger2.js`, `retrigger4.js`, and a nested `src/src/` folder containing stale duplicates of repo-root files (`LICENSE`, `README.md`, `PLAN.md`, `.env.example`, `Dockerfile`, `ecosystem.config.js`, etc.). Safe to delete after confirming nothing references them, but not urgent.
+
+### `VERSION` file drifts from `package.json`
+`VERSION` is read by the pull-based auto-update checker (`src/modules/auto-update/index.ts`). It had drifted for multiple releases (`VERSION=1.43.1` while `package.json=1.46.3`) which would silently disable auto-update when it's on. Either add a pre-commit hook that asserts `VERSION` matches `package.json.version`, or remove `VERSION` entirely if pull-based auto-update stays disabled. Production currently runs deploys manually via SSH, so this is latent risk, not immediate.
+
+### OAuth redirect URIs still reference `cometchat.tinyhands.ai`
+After v1.47.0, the app's `OAUTH_REDIRECT_BASE_URL` is `https://app.tinyhands.ai`, but Slack / Google Cloud Console / Notion / GitHub OAuth apps still have `cometchat.tinyhands.ai` redirect URIs registered. Both domains currently resolve to the app, but new OAuth flows started from the dashboard will use `app.tinyhands.ai` and fail if the provider doesn't have that redirect URI whitelisted. Update all four third-party dashboards, then remove the `cometchat.tinyhands.ai` nginx block in a follow-up.
+
+---
+
 ## Completed
 - [x] Slack DM: Already works — routes to accessible agents via relevance check, shows picker for ambiguous
 - [x] Drive folder picker on Connections page (Set Folder / Change Folder per connection)
