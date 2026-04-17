@@ -111,6 +111,19 @@ export async function getRecentRuns(workspaceId: string, limit: number = 20): Pr
 export async function executeAgentRun(job: Job<JobData>): Promise<string> {
   const { data } = job;
   const workspaceId = data.workspaceId;
+  // Wrap the whole run in AsyncLocalStorage so every downstream Slack helper
+  // call (postMessage, updateMessage, deleteMessage, etc.) uses this
+  // workspace's bot token instead of falling through to getSystemSlackClient.
+  const { runInSlackContext, getBotClient } = await import('../../slack');
+  const scopedClient = await getBotClient(workspaceId).catch(() => null);
+  if (!scopedClient) {
+    // Workspace has no bot_token on file — very unlikely but surface clearly.
+    throw new Error(`No Slack bot token for workspace ${workspaceId}`);
+  }
+  return runInSlackContext({ workspaceId, client: scopedClient }, () => executeAgentRunInner(job, data, workspaceId));
+}
+
+async function executeAgentRunInner(job: Job<JobData>, data: JobData, workspaceId: string): Promise<string> {
   const startTime = Date.now();
   const agent = await getAgent(workspaceId, data.agentId);
 

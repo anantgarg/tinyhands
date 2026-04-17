@@ -169,6 +169,12 @@ vi.mock('../../src/slack', () => ({
   postBlocks: (...args: any[]) => mockPostBlocks(...args),
   postMessage: (...args: any[]) => mockPostMessage(...args),
   ensureBotInChannels: vi.fn(),
+  // v1.48.3: executeAgentRun wraps its body in runInSlackContext with a
+  // workspace-scoped client. Tests don't exercise that plumbing; the mocks
+  // just forward through so the inner work still runs.
+  runInSlackContext: (_ctx: any, fn: any) => fn(),
+  getBotClient: async () => ({}),
+  getSystemSlackClient: () => ({}),
 }));
 
 // Mock BullMQ Worker
