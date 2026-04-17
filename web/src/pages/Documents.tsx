@@ -69,7 +69,6 @@ function formatDate(dateStr: string): string {
 
 export function Documents() {
   const navigate = useNavigate();
-  const { user } = useAuthStore();
   const isAdmin = useAuthStore((s) => s.isAdmin());
 
   const [typeFilter, setTypeFilter] = useState<string>('all');

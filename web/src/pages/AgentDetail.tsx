@@ -172,7 +172,6 @@ export function AgentDetail() {
   const [activeTab, setActiveTab] = useState('overview');
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
-  const platformRole = useAuthStore((s) => s.user?.platformRole);
   const isAdmin = useAuthStore((s) => s.isAdmin());
 
   if (isLoading) {
