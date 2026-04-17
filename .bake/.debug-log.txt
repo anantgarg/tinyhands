@@ -746,3 +746,10 @@
 [09:25:31.334] [AutoSwitch] bailed — activeFilePath changed during await {"capturedPath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-010.md","currentActiveFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-011.md"}
 [09:25:31.336] [AutoSwitch] plan → already on correct session, no-op {"itemId":"plan-011","activeSessionId":"plan-011"}
 [09:25:31.628] [Terminal] resolved cwd {"sessionId":"plan-011","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-011","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-011","projectPath":"/Users/anantgarg/Local/tinyhands"}
+[09:25:57.040] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-010.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":6843,"isPlanPath":true}
+[09:25:57.040] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-010.md","title":"Multi-Tenant Workspaces"}
+[09:25:57.050] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-010.md","sessionsLen":20,"activeSessionId":"plan-011"}
+[09:25:57.050] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-010.md"}
+[09:25:57.060] [AutoSwitch] plan → activating existing session {"itemId":"plan-010","sessionId":"plan-010","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-010","prevSession":"plan-011"}
+[09:25:57.061] [TerminalSwitch] transitioning {"from":"plan-011","to":"plan-010","storeSessionsLen":20}
+[09:25:57.061] [Terminal] getOrCreate → returning cached {"sessionId":"plan-010","cachedCwd":null}
