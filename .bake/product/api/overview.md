@@ -42,7 +42,8 @@ Defined directly in `src/server.ts` with signature verification:
 | Method | Path | Purpose |
 |--------|------|---------|
 | POST | `/webhooks/github-deploy` | GitHub deploy webhook (signature verified) |
-| POST | `/webhooks/agent-:agentName` | Generic agent webhook trigger |
+| POST | `/webhooks/w/:workspaceSlug/agent/:agentSlug` | Generic agent webhook trigger (workspace-scoped) |
+| POST | `/webhooks/agent-:agentName` | Legacy agent webhook trigger — redirects 301 to the workspace-scoped form when unambiguous; falls back to the default workspace otherwise. To be removed in a future release. |
 | POST | `/webhooks/linear` | Linear issue events (signature verified) |
 | POST | `/webhooks/zendesk` | Zendesk ticket events (signature verified) |
 | POST | `/webhooks/intercom` | Intercom events (signature verified) |
