@@ -7,3 +7,6 @@
 2026-04-17T09:25:51.049Z [AiChatBar] no files found in clipboard items
 2026-04-17T09:25:51.785Z [AiChatBar] handleSend - savedPaths: [] savingCount: 0
 2026-04-17T09:25:51.786Z [AiChatBar] FINAL PROMPT: "In file \".bake/tasks/plans/plan-011.md\", make the following changes:\nNeed to add new integrations for posthog and CustomerIO."
+2026-04-17T09:28:30.342Z [AiChatBar] no files found in clipboard items
+2026-04-17T09:28:31.169Z [AiChatBar] handleSend - savedPaths: [] savingCount: 0
+2026-04-17T09:28:31.169Z [AiChatBar] FINAL PROMPT: "In file \".bake/tasks/plans/plan-012.md\", make the following changes:\nIn agent editor, I need to be able to tag people as normal at the rate, and it should give me a list. I should select the users from the list. When it shows me, the user should have an avatar plus the name in the dropdown list when I select, so it's easy for me to know. This list should be all the Slack members. Right now it shows at the rate along with some user ID directly, so obviously no one can use it."
