@@ -1,5 +1,5 @@
 process.env.PROCESS_TYPE = 'listener';
-import { createSlackApp } from './slack';
+import { createSlackApp, getSystemSlackClient } from './slack';
 import { startWebhookServer, closeSessionRedis } from './server';
 import { initDb, upsertWorkspace, setDefaultWorkspaceId, execute, closeDb } from './db';
 import { config } from './config';
@@ -20,7 +20,7 @@ async function main(): Promise<void> {
   logger.info('Slack app started (Socket Mode)');
 
   // Bootstrap workspace from bot token
-  const authResult = await app.client.auth.test();
+  const authResult = await getSystemSlackClient().auth.test();
   await upsertWorkspace({
     id: authResult.team_id as string,
     team_name: (authResult.team as string) || 'default',

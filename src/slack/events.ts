@@ -350,7 +350,7 @@ export function registerEvents(app: App): void {
         if (addMemberDmMatch || removeMemberDmMatch) {
           try {
             // Find agent ID from the thread's parent message fallback text: "Access & Roles [agentId]"
-            const parentMessages = await app.client.conversations.replies({
+            const parentMessages = await client.conversations.replies({
               channel: channelId,
               ts: msg.thread_ts,
               limit: 1,
