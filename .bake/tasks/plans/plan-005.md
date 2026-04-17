@@ -1,7 +1,8 @@
 ---
 id: plan-005
 title: New Plan
-status: draft
+status: archived
+previous_status: draft
 created: 2026-04-16
 ---
 
