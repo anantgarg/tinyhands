@@ -156,6 +156,16 @@
       "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-009",
       "branch": "bake/plan/plan-009",
       "createdAt": "2026-04-17T07:02:22.869Z"
+    },
+    {
+      "id": "plan-010",
+      "type": "plan",
+      "name": "New Plan",
+      "planId": "plan-010",
+      "planPath": "/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-010.md",
+      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-010",
+      "branch": "bake/plan/plan-010",
+      "createdAt": "2026-04-17T07:23:24.152Z"
     }
   ]
 }

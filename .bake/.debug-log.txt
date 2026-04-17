@@ -714,3 +714,24 @@
 [07:18:38.505] [TerminalSwitch] transitioning {"from":"main","to":"plan-002","storeSessionsLen":18}
 [07:18:38.505] [Terminal] getOrCreate → creating new {"sessionId":"plan-002","sessionFound":true,"sessionType":"plan","sessionPlanId":"plan-002","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-002","sessionsLen":18,"projectPath":"/Users/anantgarg/Local/tinyhands"}
 [07:18:38.822] [Terminal] resolved cwd {"sessionId":"plan-002","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-002","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-002","projectPath":"/Users/anantgarg/Local/tinyhands"}
+[07:23:20.971] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"__main__","sessionsLen":18,"activeSessionId":"plan-002"}
+[07:23:20.971] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":false,"activeFilePath":"__main__"}
+[07:23:20.971] [AutoSwitch] non-plan/vibe → forcing main {"prevSession":"plan-002"}
+[07:23:20.972] [TerminalSwitch] transitioning {"from":"plan-002","to":"main","storeSessionsLen":18}
+[07:23:20.972] [Terminal] getOrCreate → returning cached {"sessionId":"main","cachedCwd":null}
+[07:23:24.153] [TerminalSwitch] transitioning {"from":"main","to":"plan-010","storeSessionsLen":19}
+[07:23:24.153] [Terminal] getOrCreate → creating new {"sessionId":"plan-010","sessionFound":true,"sessionType":"plan","sessionPlanId":"plan-010","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-010","sessionsLen":19,"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[07:23:24.164] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"__main__","sessionsLen":19,"activeSessionId":"plan-010"}
+[07:23:24.164] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":false,"activeFilePath":"__main__"}
+[07:23:24.164] [AutoSwitch] non-plan/vibe → forcing main {"prevSession":"plan-010"}
+[07:23:24.165] [TerminalSwitch] transitioning {"from":"plan-010","to":"main","storeSessionsLen":19}
+[07:23:24.165] [Terminal] getOrCreate → returning cached {"sessionId":"main","cachedCwd":null}
+[07:23:24.179] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-010.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":1964,"isPlanPath":true}
+[07:23:24.180] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-010.md","title":"New Plan"}
+[07:23:24.188] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-010.md","sessionsLen":19,"activeSessionId":"main"}
+[07:23:24.188] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-010.md"}
+[07:23:24.189] [Editor] useLayoutEffect syncing h1 {"planTitle":"New Plan","currentTextContent":""}
+[07:23:24.195] [AutoSwitch] plan → activating existing session {"itemId":"plan-010","sessionId":"plan-010","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-010","prevSession":"main"}
+[07:23:24.197] [TerminalSwitch] transitioning {"from":"main","to":"plan-010","storeSessionsLen":19}
+[07:23:24.197] [Terminal] getOrCreate → returning cached {"sessionId":"plan-010","cachedCwd":null}
+[07:23:24.466] [Terminal] resolved cwd {"sessionId":"plan-010","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-010","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-010","projectPath":"/Users/anantgarg/Local/tinyhands"}
