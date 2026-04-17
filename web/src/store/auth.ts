@@ -10,6 +10,7 @@ export interface AuthUser {
   avatarUrl: string;
   platformRole: 'superadmin' | 'admin' | 'member';
   platformAdmin?: boolean;
+  workspaceRole?: 'admin' | 'member' | 'viewer';
 }
 
 export interface AuthState {
@@ -28,7 +29,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   clearUser: () => set({ user: null, isLoading: false }),
   isAdmin: () => {
     const { user } = get();
-    return user?.platformRole === 'superadmin' || user?.platformRole === 'admin';
+    if (!user) return false;
+    if (user.platformRole === 'superadmin' || user.platformRole === 'admin') return true;
+    return user.workspaceRole === 'admin';
   },
   isPlatformAdmin: () => {
     const { user } = get();

@@ -3,7 +3,7 @@ import { initDb, upsertWorkspace, setDefaultWorkspaceId, getDefaultWorkspaceId, 
 import { getSourcesDueForSync, updateSourceStatus, ingestContent, getSource } from './modules/sources';
 import { checkAlerts } from './modules/observability';
 import { generateDailyDigest } from './modules/observability';
-import { initSlackClient, getSlackApp } from './slack';
+import { initSlackClient, getSystemSlackClient } from './slack';
 import { config } from './config';
 import { logger } from './utils/logger';
 import { postMessage } from './slack';
@@ -25,7 +25,7 @@ async function main(): Promise<void> {
   initSlackClient();
 
   // Bootstrap workspace from bot token
-  const authResult = await getSlackApp().client.auth.test();
+  const authResult = await getSystemSlackClient().auth.test();
   await upsertWorkspace({
     id: authResult.team_id as string,
     team_name: (authResult.team as string) || 'default',

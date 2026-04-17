@@ -36,8 +36,8 @@ export async function resolveUserName(userId: string, workspaceId?: string): Pro
   }
 
   try {
-    const { getSlackApp } = await import('../../slack');
-    const client = getSlackApp().client;
+    const { getBotClient, getSystemSlackClient } = await import('../../slack');
+    const client = workspaceId ? await getBotClient(workspaceId) : getSystemSlackClient();
 
     let name: string = userId;
 

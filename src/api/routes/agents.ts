@@ -177,7 +177,7 @@ router.get('/pending-counts', async (req: Request, res: Response) => {
       queryOne<{count:number}>('SELECT count(*)::int as count FROM upgrade_requests WHERE workspace_id = $1 AND status = \'pending\'', [workspaceId]),
       queryOne<{count:number}>('SELECT count(*)::int as count FROM tool_requests WHERE workspace_id = $1 AND status = \'pending\'', [workspaceId]),
       queryOne<{count:number}>('SELECT count(*)::int as count FROM evolution_proposals WHERE workspace_id = $1 AND status = \'pending\'', [workspaceId]),
-      queryOne<{count:number}>('SELECT count(*)::int as count FROM pending_confirmations WHERE data->>\'type\' IN (\'feature_request\', \'new_tool_request\') AND expires_at > NOW()', []),
+      queryOne<{count:number}>('SELECT count(*)::int as count FROM pending_confirmations WHERE workspace_id = $1 AND data->>\'type\' IN (\'feature_request\', \'new_tool_request\') AND expires_at > NOW()', [workspaceId]),
       queryOne<{count:number}>('SELECT count(*)::int as count FROM kb_entries WHERE workspace_id = $1 AND approved = false', [workspaceId]),
     ]);
     const counts = {
@@ -316,8 +316,8 @@ router.get('/:id', async (req: Request, res: Response) => {
     const channelNames: Record<string, string> = {};
     try {
       if (channelIds.length > 0) {
-        const { getSlackApp } = await import('../../slack');
-        const client = getSlackApp().client;
+        const { getBotClient } = await import('../../slack');
+        const client = await getBotClient(workspaceId);
         const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000));
         const lookup = Promise.allSettled(channelIds.map(async (chId: string) => {
           const info = await client.conversations.info({ channel: chId });

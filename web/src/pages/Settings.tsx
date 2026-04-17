@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Loader2, AlertCircle, Shield, HelpCircle } from 'lucide-react';
+import { Loader2, AlertCircle, Shield, HelpCircle, Key, CheckCircle2 } from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,7 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useSettings, useUpdateSettings } from '@/api/settings';
+import { useSettings, useUpdateSettings, useAnthropicKeyStatus, useTestAnthropicKey, useSaveAnthropicKey } from '@/api/settings';
 import { useAuthStore } from '@/store/auth';
 import { toast } from '@/components/ui/use-toast';
 
@@ -128,6 +128,8 @@ function SettingsContent() {
   return (
     <div>
       <PageHeader title="Workspace Settings" description="Configure platform defaults and limits" />
+
+      <AnthropicKeyCard />
 
       {/* General */}
       <Card className="mb-6">
@@ -368,5 +370,127 @@ function SettingsContent() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+function AnthropicKeyCard() {
+  const { data: status, isLoading } = useAnthropicKeyStatus();
+  const testKey = useTestAnthropicKey();
+  const saveKey = useSaveAnthropicKey();
+
+  const [apiKey, setApiKey] = useState('');
+  const [testResult, setTestResult] = useState<{ ok: boolean; reason?: string } | null>(null);
+
+  const configured = status?.configured === true;
+
+  const handleTest = async () => {
+    if (!apiKey) return;
+    setTestResult(null);
+    try {
+      const result = await testKey.mutateAsync(apiKey);
+      setTestResult(result);
+    } catch (err: any) {
+      setTestResult({ ok: false, reason: err.message });
+    }
+  };
+
+  const handleSave = async () => {
+    if (!apiKey) return;
+    try {
+      await saveKey.mutateAsync(apiKey);
+      setApiKey('');
+      setTestResult(null);
+      toast({ title: 'Claude API key saved', variant: 'success' });
+    } catch (err: any) {
+      toast({ title: 'Failed to save key', description: err.message, variant: 'error' });
+    }
+  };
+
+  return (
+    <Card className="mb-6">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Key className="h-4 w-4" />
+              Claude API Key
+            </CardTitle>
+            <CardDescription>Used by every agent run in this workspace</CardDescription>
+          </div>
+          {!isLoading && (
+            <div
+              className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${
+                configured
+                  ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                  : 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
+              }`}
+            >
+              {configured ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
+              {configured ? 'Configured' : 'Not configured'}
+            </div>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {!configured && (
+          <p className="text-sm text-warm-text-secondary">
+            Agents can't run until an admin adds a Claude API key. Paste your key below, test it, and save.
+            Get one at{' '}
+            <a
+              href="https://console.anthropic.com/settings/keys"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline hover:text-warm-text"
+            >
+              console.anthropic.com
+            </a>
+            .
+          </p>
+        )}
+        <div>
+          <Label>API Key</Label>
+          <Input
+            type="password"
+            placeholder={configured ? '•••••••••••••••• (key is set — paste a new one to replace)' : 'sk-ant-...'}
+            value={apiKey}
+            onChange={(e) => {
+              setApiKey(e.target.value);
+              setTestResult(null);
+            }}
+            className="mt-1 font-mono text-sm"
+            autoComplete="off"
+          />
+          {testResult && (
+            <p
+              className={`text-xs mt-2 flex items-center gap-1.5 ${
+                testResult.ok ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+              }`}
+            >
+              {testResult.ok ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
+              {testResult.ok ? 'Valid key' : testResult.reason || 'Invalid key'}
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleTest}
+            disabled={!apiKey || testKey.isPending}
+          >
+            {testKey.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
+            Test
+          </Button>
+          <Button
+            size="sm"
+            onClick={handleSave}
+            disabled={!apiKey || saveKey.isPending || (testResult !== null && !testResult.ok)}
+          >
+            {saveKey.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
+            Save
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

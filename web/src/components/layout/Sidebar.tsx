@@ -19,7 +19,18 @@ import {
   ChevronsRight,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { useAuthStore } from '@/store/auth';
+import { useAuthStore, type AuthUser } from '@/store/auth';
+
+function formatUserRole(user: AuthUser | null): string {
+  if (!user) return 'Member';
+  // Platform-level roles take precedence — superadmin/admin implies full access
+  // across the workspace regardless of workspace_memberships.
+  if (user.platformRole === 'superadmin') return 'Super Admin';
+  if (user.platformAdmin) return 'Platform Admin';
+  if (user.workspaceRole === 'admin' || user.platformRole === 'admin') return 'Admin';
+  if (user.workspaceRole === 'viewer') return 'Viewer';
+  return 'Member';
+}
 import { useSidebarStore } from '@/store/sidebar';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { usePendingCounts } from '@/api/agents';
@@ -211,7 +222,7 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
           </Avatar>
           <div className="flex-1 min-w-0">
             <p className="truncate text-sm font-medium leading-tight">{user?.displayName ?? 'Unknown'}</p>
-            <p className="truncate text-xs text-warm-text-secondary capitalize">{(user?.platformRole ?? 'member').replace('superadmin', 'Super Admin').replace('admin', 'Admin').replace('member', 'Member')}</p>
+            <p className="truncate text-xs text-warm-text-secondary capitalize">{formatUserRole(user)}</p>
           </div>
           <button
             onClick={handleLogout}

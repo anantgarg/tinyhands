@@ -23,12 +23,14 @@ vi.mock('../../src/config', () => ({
 const mockUsersInfo = vi.fn();
 
 vi.mock('../../src/slack', () => ({
-  getSlackApp: () => ({
-    client: {
-      users: {
-        info: (...args: any[]) => mockUsersInfo(...args),
-      },
-    },
+  // Tests don't pass workspaceId, so resolver goes through getSystemSlackClient.
+  getSystemSlackClient: () => ({
+    users: { info: (...args: any[]) => mockUsersInfo(...args) },
+    bots: { info: vi.fn() },
+  }),
+  getBotClient: async () => ({
+    users: { info: (...args: any[]) => mockUsersInfo(...args) },
+    bots: { info: vi.fn() },
   }),
 }));
 

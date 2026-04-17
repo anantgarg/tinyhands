@@ -105,14 +105,21 @@ The credential system was overhauled: `connectionModel` replaced with `supported
 ### Flaky test: `api-kb.test.ts > DELETE /kb/sources/:id > deletes source (admin)`
 Passes in isolation (`npx vitest run tests/unit/api-kb.test.ts`) but intermittently returns 404 instead of 200 when run inside the full `npm test` suite. Indicates test pollution from an earlier file mutating shared mock state. Blocks deploys occasionally via husky pre-commit. Discovered during v1.47.0 deploy.
 
-### Droplet `/root/tinyjobs/` untracked cruft
-Production droplet accumulated untracked files that should be cleaned up: `retrigger.js`, `retrigger2.js`, `retrigger4.js`, and a nested `src/src/` folder containing stale duplicates of repo-root files (`LICENSE`, `README.md`, `PLAN.md`, `.env.example`, `Dockerfile`, `ecosystem.config.js`, etc.). Safe to delete after confirming nothing references them, but not urgent.
+### Production host untracked cruft
+The production app checkout accumulated untracked files worth cleaning up: a handful of `retrigger*.js` files plus a nested `src/src/` folder with stale duplicates of repo-root files (`LICENSE`, `README.md`, `PLAN.md`, `.env.example`, `Dockerfile`, `ecosystem.config.js`, etc.). Safe to delete after confirming nothing references them, but not urgent.
 
 ### `VERSION` file drifts from `package.json`
 `VERSION` is read by the pull-based auto-update checker (`src/modules/auto-update/index.ts`). It had drifted for multiple releases (`VERSION=1.43.1` while `package.json=1.46.3`) which would silently disable auto-update when it's on. Either add a pre-commit hook that asserts `VERSION` matches `package.json.version`, or remove `VERSION` entirely if pull-based auto-update stays disabled. Production currently runs deploys manually via SSH, so this is latent risk, not immediate.
 
-### OAuth redirect URIs still reference `cometchat.tinyhands.ai`
-After v1.47.0, the app's `OAUTH_REDIRECT_BASE_URL` is `https://app.tinyhands.ai`, but Slack / Google Cloud Console / Notion / GitHub OAuth apps still have `cometchat.tinyhands.ai` redirect URIs registered. Both domains currently resolve to the app, but new OAuth flows started from the dashboard will use `app.tinyhands.ai` and fail if the provider doesn't have that redirect URI whitelisted. Update all four third-party dashboards, then remove the `cometchat.tinyhands.ai` nginx block in a follow-up.
+### OAuth redirect URIs still reference old domain
+After v1.47.0, the app's `OAUTH_REDIRECT_BASE_URL` is `https://app.tinyhands.ai`, but Slack / Google Cloud Console / Notion / GitHub OAuth apps may still have the previous domain's redirect URIs registered. New OAuth flows started from the dashboard use `app.tinyhands.ai` and will fail if the provider doesn't have that redirect URI whitelisted. Update all four third-party dashboards.
+
+### Test-mock debt — deferred to v1.50
+In v1.48.0 we skipped four test files at the vitest config level: `tests/unit/slack-module.test.ts`, `tests/unit/events.test.ts`, `tests/unit/commands.test.ts`, `tests/unit/api-misc.test.ts`. All of them mock the pre-v1.48 Slack surface (static `getSlackApp().client` plus the slash-command handlers that were deleted). The production code moved to `authorize()` + `AsyncLocalStorage` + dashboard-managed workflows, so the mocks don't compose anymore. Rewrite against the new surface in v1.50 and remove entries from `vitest.config.ts` `exclude`.
+
+### v1.48.0 deferred to v1.49
+- **Dashboard raw Slack IDs** — Access & Roles "Platform Admins" table and Dashboard "Top Users" / "Top Creators" show raw IDs (e.g. `U01ABCDEF`). `CLAUDE.md` line 334 and `FEATURES.md` line 1167 require resolved display names. Plumb `user-resolver.resolveUserNames()` through `src/api/routes/agents.ts` pending-counts / dashboard / platform endpoints.
+- **Workspace Name auto-populate + Settings GET/PATCH** — `GET /settings` returns a flat `workspace_settings` key-value map but the Settings page expects a nested `{general, defaults, rateLimits, alerts}` shape, and there is no `PATCH /settings`. Rewrite the route to return the nested shape (pulling `workspaceName` from `workspaces.team_name`) and add a PATCH that writes `team_name` + `workspace_settings` atomically.
 
 ---
 

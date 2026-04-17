@@ -1,22 +1,83 @@
 import { App, LogLevel } from '@slack/bolt';
+import { WebClient } from '@slack/web-api';
+import { AsyncLocalStorage } from 'async_hooks';
 import { config } from '../config';
-import { registerCommands, registerModalHandlers, registerConfirmationActions, registerInlineActions, registerToolAndKBModals } from './commands';
+import { getWorkspace } from '../db';
+import { registerModalHandlers, registerConfirmationActions, registerInlineActions, registerToolAndKBModals } from './commands';
 import { registerEvents } from './events';
 import { registerActions } from './actions';
 import { logger } from '../utils/logger';
 
+// Per-event workspace context. Bolt's middleware wraps each handler in a run,
+// so any helper called below (postMessage, postBlocks, …) picks up the right
+// workspace-scoped WebClient automatically. Workers/sync/scheduler don't set
+// this context and fall through to getSystemSlackClient() (env token).
+interface SlackCtx {
+  workspaceId?: string;
+  client: WebClient;
+}
+const slackCtxStore = new AsyncLocalStorage<SlackCtx>();
+
+export function runInSlackContext<T>(ctx: SlackCtx, fn: () => Promise<T> | T): Promise<T> | T {
+  return slackCtxStore.run(ctx, fn);
+}
+
+function resolveClient(): WebClient {
+  const ctx = slackCtxStore.getStore();
+  if (ctx?.client) return ctx.client;
+  return getSystemSlackClient();
+}
+
 let app: App;
+
+// Multi-tenant authorize callback. Bolt invokes this for every incoming event
+// and uses the returned botToken to construct the WebClient passed to handlers
+// in their ctx.client, so per-workspace events respond with the correct bot.
+async function authorize({ teamId }: { teamId?: string }): Promise<{ botToken: string; botUserId?: string; botId?: string; teamId?: string }> {
+  if (!teamId) {
+    // No team context — very rare, fall back to env token
+    if (!config.slack.botToken) {
+      throw new Error('No teamId on incoming event and no fallback SLACK_BOT_TOKEN');
+    }
+    return { botToken: config.slack.botToken };
+  }
+  const ws = await getWorkspace(teamId);
+  if (ws?.bot_token && ws.status === 'active') {
+    return {
+      botToken: ws.bot_token,
+      botUserId: ws.bot_user_id,
+      botId: ws.bot_id ?? undefined,
+      teamId,
+    };
+  }
+  // Fallback: workspace not in DB yet (shouldn't happen once OAuth install ran)
+  if (config.slack.botToken) {
+    logger.warn('authorize: workspace missing from DB, falling back to env token', { teamId });
+    return { botToken: config.slack.botToken };
+  }
+  throw new Error(`No bot token available for workspace ${teamId}`);
+}
 
 /**
  * Create a full Slack app with Socket Mode (events, commands, actions).
- * Only the LISTENER process should use this.
+ * Only the LISTENER process should use this. Uses `authorize` for per-workspace
+ * bot token lookup so events from any installed workspace route correctly.
  */
 export function createSlackApp(): App {
   app = new App({
-    token: config.slack.botToken,
+    authorize,
     appToken: config.slack.appToken,
     socketMode: true,
     logLevel: LogLevel.INFO,
+  });
+
+  // Middleware: wrap every incoming event in an AsyncLocalStorage run so
+  // downstream helpers (postMessage, postBlocks, …) automatically use the
+  // authorize'd per-workspace WebClient instead of a hardcoded one.
+  app.use(async ({ client, context, next }) => {
+    await runInSlackContext({ workspaceId: context.teamId, client: client as WebClient }, async () => {
+      await next();
+    });
   });
 
   // Global error handler — catch any unhandled errors in event/action handlers
@@ -24,7 +85,6 @@ export function createSlackApp(): App {
     logger.error('Bolt global error handler', { error: String(error), message: (error as any)?.message, stack: (error as any)?.stack });
   });
 
-  registerCommands(app);
   registerModalHandlers(app);
   registerConfirmationActions(app);
   registerInlineActions(app);
@@ -43,7 +103,7 @@ export function createSlackApp(): App {
 export function initSlackClient(): void {
   if (app) return; // already initialized
   app = new App({
-    token: config.slack.botToken,
+    authorize,
     appToken: config.slack.appToken,
     socketMode: true,
     logLevel: LogLevel.INFO,
@@ -56,6 +116,29 @@ export function getSlackApp(): App {
   return app;
 }
 
+// ── Workspace-scoped Slack clients ──
+// With `authorize` in Bolt, `app.client` has no default token — every call must
+// pass `{ token }` explicitly. These helpers resolve the right bot token per
+// workspace. Use `getBotClient(workspaceId)` for workspace-scoped calls; use
+// `getSystemSlackClient()` only for boot-time verification where the env token
+// is the right authority (auth.test at process startup).
+
+const botClientCache = new Map<string, { client: WebClient; token: string }>();
+
+export async function getBotClient(workspaceId: string): Promise<WebClient> {
+  const ws = await getWorkspace(workspaceId);
+  if (!ws?.bot_token) throw new Error(`No bot token for workspace ${workspaceId}`);
+  const cached = botClientCache.get(workspaceId);
+  if (cached && cached.token === ws.bot_token) return cached.client;
+  const client = new WebClient(ws.bot_token);
+  botClientCache.set(workspaceId, { client, token: ws.bot_token });
+  return client;
+}
+
+export function getSystemSlackClient(): WebClient {
+  return new WebClient(config.slack.botToken);
+}
+
 export async function postMessage(
   channelId: string,
   text: string,
@@ -63,7 +146,7 @@ export async function postMessage(
   username?: string,
   iconEmoji?: string
 ): Promise<void> {
-  const client = getSlackApp().client;
+  const client = resolveClient();
   await client.chat.postMessage({
     channel: channelId,
     text,
@@ -78,7 +161,7 @@ export async function updateMessage(
   ts: string,
   text: string
 ): Promise<void> {
-  const client = getSlackApp().client;
+  const client = resolveClient();
   await client.chat.update({
     channel: channelId,
     ts,
@@ -88,7 +171,7 @@ export async function updateMessage(
 }
 
 export async function deleteMessage(channelId: string, ts: string): Promise<void> {
-  const client = getSlackApp().client;
+  const client = resolveClient();
   try {
     await client.chat.delete({ channel: channelId, ts });
   } catch (err: any) {
@@ -97,7 +180,7 @@ export async function deleteMessage(channelId: string, ts: string): Promise<void
 }
 
 export async function createChannel(name: string): Promise<string> {
-  const client = getSlackApp().client;
+  const client = resolveClient();
   const baseName = `tinyhands-${name.toLowerCase().replace(/[^a-z0-9-]/g, '-')}`.slice(0, 80);
 
   // Try the base name first, then add a suffix if taken
@@ -129,7 +212,7 @@ export async function postBlocks(
   username?: string,
   iconEmoji?: string,
 ): Promise<string | undefined> {
-  const client = getSlackApp().client;
+  const client = resolveClient();
   const result = await client.chat.postMessage({
     channel: channelId,
     blocks,
@@ -147,7 +230,7 @@ export async function postEphemeral(
   blocks: any[],
   text: string,
 ): Promise<void> {
-  const client = getSlackApp().client;
+  const client = resolveClient();
   await client.chat.postEphemeral({
     channel: channelId,
     user: userId,
@@ -157,7 +240,7 @@ export async function postEphemeral(
 }
 
 export async function openModal(triggerId: string, view: any): Promise<void> {
-  const client = getSlackApp().client;
+  const client = resolveClient();
   await client.views.open({
     trigger_id: triggerId,
     view,
@@ -165,7 +248,7 @@ export async function openModal(triggerId: string, view: any): Promise<void> {
 }
 
 export async function pushModal(triggerId: string, view: any): Promise<void> {
-  const client = getSlackApp().client;
+  const client = resolveClient();
   await client.views.push({
     trigger_id: triggerId,
     view,
@@ -173,7 +256,7 @@ export async function pushModal(triggerId: string, view: any): Promise<void> {
 }
 
 export async function updateModal(viewId: string, view: any): Promise<void> {
-  const client = getSlackApp().client;
+  const client = resolveClient();
   await client.views.update({
     view_id: viewId,
     view,
@@ -181,7 +264,7 @@ export async function updateModal(viewId: string, view: any): Promise<void> {
 }
 
 export async function publishHomeTab(userId: string, blocks: any[]): Promise<void> {
-  const client = getSlackApp().client;
+  const client = resolveClient();
   await client.views.publish({
     user_id: userId,
     view: {
@@ -192,7 +275,7 @@ export async function publishHomeTab(userId: string, blocks: any[]): Promise<voi
 }
 
 export async function sendDM(userId: string, text: string, blocks?: any[]): Promise<string | undefined> {
-  const client = getSlackApp().client;
+  const client = resolveClient();
   const conv = await client.conversations.open({ users: userId });
   const dmChannelId = conv.channel?.id;
   if (!dmChannelId) return undefined;
@@ -223,7 +306,7 @@ const UNJOINABLE_CHANNEL_ERRORS = new Set([
  * Silently skips channel types that don't support joining (Slack Connect, DMs, etc.).
  */
 export async function ensureBotInChannels(channelIds: string[]): Promise<void> {
-  const client = getSlackApp().client;
+  const client = resolveClient();
   for (const channelId of channelIds) {
     try {
       await client.conversations.join({ channel: channelId });
@@ -242,7 +325,7 @@ export async function ensureBotInChannels(channelIds: string[]): Promise<void> {
  * Returns messages formatted as a conversation transcript.
  */
 export async function getThreadHistory(channelId: string, threadTs: string, limit: number = 20): Promise<string> {
-  const client = getSlackApp().client;
+  const client = resolveClient();
   try {
     const result = await client.conversations.replies({
       channel: channelId,

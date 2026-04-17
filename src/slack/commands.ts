@@ -3,7 +3,7 @@ import { config } from '../config';
 import { v4 as uuid } from 'uuid';
 import { createAgent, listAgents, getAgent, getAgentByName, updateAgent, getAccessibleAgents, addAgentMembers, getAgentMembers, addAgentMember, removeAgentMember } from '../modules/agents';
 import { initSuperadmin, canModifyAgent, listPlatformAdmins, getAgentRole, getAgentRoles, isPlatformAdmin } from '../modules/access-control';
-import { createChannel, postMessage, postBlocks, getSlackApp, sendDMBlocks, openModal, pushModal } from './index';
+import { createChannel, postMessage, postBlocks, getSystemSlackClient, sendDMBlocks, openModal, pushModal } from './index';
 import { analyzeGoal } from '../modules/agents/goal-analyzer';
 import { attachSkillToAgent } from '../modules/skills';
 import { createTrigger } from '../modules/triggers';
@@ -150,7 +150,17 @@ function buildTemplateListingBlocks(): any[] {
   return blocks;
 }
 
-export function registerCommands(app: App): void {
+/**
+ * @deprecated Slash commands are no longer registered (v1.48.0). All
+ * workflows moved to the web dashboard. This export is retained solely to
+ * avoid breaking any third-party code that imports it; the function body is
+ * unreachable because the listener no longer calls it. Delete in a follow-up
+ * release once we're confident nothing references it.
+ */
+export function registerCommands(_app: App): void { return; /* slash commands removed */ }
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function _legacyRegisterCommands_removed(app: App): void {
   const requireDM = async (command: any, ack: () => Promise<void>, respond: (msg: any) => Promise<void>): Promise<boolean> => {
     if (command.channel_name !== 'directmessage') {
       await ack();
@@ -3066,7 +3076,7 @@ export function registerConfirmationActions(app: App): void {
 
       // Ensure bot can access all selected channels before creating the agent.
       // For private channels the bot isn't in yet, try to invite it automatically.
-      const slackClient = getSlackApp().client;
+      const slackClient = getSystemSlackClient();
       const botAuth = await slackClient.auth.test();
       const botUserId = botAuth.user_id as string;
       for (const chId of channelIds) {
@@ -3188,7 +3198,7 @@ export function registerConfirmationActions(app: App): void {
             try {
               if (trigger.type === 'schedule' && trigger.config?.timezone === 'auto') {
                 try {
-                  const userInfo = await withTimeout(getSlackApp().client.users.info({ user: userId }) as Promise<any>, 5000, 'users.info');
+                  const userInfo = await withTimeout(getSystemSlackClient().users.info({ user: userId }) as Promise<any>, 5000, 'users.info');
                   trigger.config.timezone = userInfo.user?.tz || 'UTC';
                 } catch { trigger.config.timezone = 'UTC'; }
               }
@@ -3324,7 +3334,7 @@ export function registerConfirmationActions(app: App): void {
             try {
               if (trigger.type === 'schedule' && trigger.config?.timezone === 'auto') {
                 try {
-                  const userInfo = await withTimeout(getSlackApp().client.users.info({ user: userId }) as Promise<any>, 5000, 'users.info');
+                  const userInfo = await withTimeout(getSystemSlackClient().users.info({ user: userId }) as Promise<any>, 5000, 'users.info');
                   trigger.config.timezone = userInfo.user?.tz || 'UTC';
                 } catch { trigger.config.timezone = 'UTC'; }
               }
@@ -3544,7 +3554,7 @@ export function registerConfirmationActions(app: App): void {
           // Auto-detect timezone for schedule triggers
           if (trigger.type === 'schedule' && trigger.config?.timezone === 'auto') {
             try {
-              const userInfo = await getSlackApp().client.users.info({ user: requestedBy });
+              const userInfo = await getSystemSlackClient().users.info({ user: requestedBy });
               trigger.config.timezone = userInfo.user?.tz || 'UTC';
             } catch { trigger.config.timezone = 'UTC'; }
           }

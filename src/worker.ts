@@ -1,6 +1,6 @@
 process.env.PROCESS_TYPE = 'worker';
 import { createWorker } from './modules/execution';
-import { initSlackClient, getSlackApp } from './slack';
+import { initSlackClient, getSystemSlackClient } from './slack';
 import { initDb, upsertWorkspace, setDefaultWorkspaceId, execute, getDefaultWorkspaceId, closeDb } from './db';
 import { config } from './config';
 import { closeQueue } from './queue';
@@ -54,7 +54,7 @@ async function cleanupOrphans(): Promise<void> {
 async function bootstrapWorkspace(): Promise<void> {
   for (let attempt = 1; attempt <= 10; attempt++) {
     try {
-      const authResult = await getSlackApp().client.auth.test();
+      const authResult = await getSystemSlackClient().auth.test();
       await upsertWorkspace({
         id: authResult.team_id as string,
         team_name: (authResult.team as string) || 'default',

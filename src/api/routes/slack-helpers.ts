@@ -1,5 +1,6 @@
 import { Router, Response } from 'express';
-import { getSlackApp } from '../../slack';
+import { getBotClient } from '../../slack';
+import { getSessionUser } from '../middleware/auth';
 import { logger } from '../../utils/logger';
 
 const router = Router();
@@ -7,7 +8,8 @@ const router = Router();
 // GET /slack/channels — List ALL Slack channels (auto-paginates)
 router.get('/channels', async (req, res: Response) => {
   try {
-    const client = getSlackApp().client;
+    const { workspaceId } = getSessionUser(req as any);
+    const client = await getBotClient(workspaceId);
     const types = (req.query.types as string) || 'public_channel,private_channel';
     const allChannels: any[] = [];
     let cursor: string | undefined;
@@ -52,7 +54,8 @@ router.get('/channels', async (req, res: Response) => {
 // GET /slack/users — List all Slack users (auto-paginates)
 router.get('/users', async (req, res: Response) => {
   try {
-    const client = getSlackApp().client;
+    const { workspaceId } = getSessionUser(req as any);
+    const client = await getBotClient(workspaceId);
     const allMembers: any[] = [];
     let cursor: string | undefined;
 

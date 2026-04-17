@@ -3,7 +3,7 @@ import { v4 as uuid } from 'uuid';
 import { getAgentByChannel, getAgentsByChannel, canAccessAgent, getDmConversation, touchDmConversation, createDmConversation, getAccessibleAgents } from '../modules/agents';
 import { enqueueRun } from '../queue';
 import { handleWizardMessage, isInWizard, handleConversationReply } from './commands';
-import { postMessage, postBlocks, publishHomeTab, updateMessage, getSlackApp, getThreadHistory } from './index';
+import { postMessage, postBlocks, publishHomeTab, updateMessage, getSystemSlackClient, getThreadHistory } from './index';
 import { detectCritique } from '../modules/self-improvement';
 import { parseModelOverride, stripModelOverride } from '../modules/model-selection';
 import { checkMessageRelevance } from '../modules/agents/goal-analyzer';
@@ -25,7 +25,7 @@ let ownBotId: string | null = null;
 async function getOwnBotIdentity(): Promise<void> {
   if (ownBotUserId) return;
   try {
-    const authResult = await getSlackApp().client.auth.test();
+    const authResult = await getSystemSlackClient().auth.test();
     ownBotUserId = authResult.user_id as string;
     ownBotId = authResult.bot_id as string || null;
   } catch { /* will retry next message */ }

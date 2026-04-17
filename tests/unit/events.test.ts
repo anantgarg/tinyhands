@@ -55,7 +55,18 @@ const mockPostMessage = vi.fn();
 const mockPostBlocks = vi.fn();
 const mockPublishHomeTab = vi.fn();
 const mockUpdateMessage = vi.fn();
+// v1.48: getSlackApp was replaced with getSystemSlackClient (returns WebClient
+// directly, not an App wrapping it). The shim below lets existing test setups
+// that wrap the client in `{ client: … }` keep working — we unwrap here.
 const mockGetSlackApp = vi.fn();
+const mockGetSystemSlackClient = () => {
+  const wrapper = mockGetSlackApp();
+  return wrapper?.client ?? wrapper;
+};
+const mockGetBotClient = async () => {
+  const wrapper = mockGetSlackApp();
+  return wrapper?.client ?? wrapper;
+};
 const mockGetThreadHistory = vi.fn();
 const mockSendDMBlocks = vi.fn();
 vi.mock('../../src/slack/index', () => ({

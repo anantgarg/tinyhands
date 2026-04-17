@@ -9,9 +9,12 @@ const router = Router();
 // Bot scopes required by the TinyHands Slack app. Listed in CLAUDE.md; must
 // match the Slack app manifest. Kept here so both the install and sign-in
 // flows reference the same list.
+// Note: `commands` scope was removed in v1.48.0 — slash commands are deprecated;
+// all workflows are in the web dashboard. Remove the Slash Commands section
+// from the Slack app config when you next rotate the app.
 const SLACK_BOT_SCOPES = [
   'app_mentions:read', 'channels:history', 'channels:join', 'channels:manage', 'channels:read',
-  'chat:write', 'chat:write.customize', 'commands', 'files:read',
+  'chat:write', 'chat:write.customize', 'files:read',
   'groups:history', 'groups:read', 'groups:write',
   'im:history', 'im:read', 'im:write', 'users:read',
 ].join(',');
@@ -209,12 +212,31 @@ router.get('/slack/callback', async (req: Request, res: Response) => {
       avatarUrl,
     });
 
-    // Ensure the user has a workspace membership for their home workspace. If
-    // platform_roles has an entry for them, mirror that (superadmin→admin).
+    // Ensure the user has a workspace membership for their home workspace.
+    // Ordering matters because workspaces can reach this path without an
+    // install-callback admin being set (e.g. Slack returned no authed_user.id,
+    // or the workspace pre-existed the multi-tenant migration):
+    //   1. existing membership → leave alone
+    //   2. legacy platform_roles row for this (workspace, slack_user) → mirror
+    //   3. workspace has no admin yet → make this user admin (bootstrap)
+    //   4. fall back to member
     const existing = await getMembership(workspaceId, dbUser.id);
     if (!existing) {
-      const oldRole = await getPlatformRole(workspaceId, slackUserId);
-      const membershipRole = oldRole === 'member' ? 'member' : 'admin';
+      const { queryOne: queryOneDb } = await import('../../db');
+      const legacy = await queryOneDb<{ role: string }>(
+        'SELECT role FROM platform_roles WHERE workspace_id = $1 AND user_id = $2',
+        [workspaceId, slackUserId],
+      );
+      let membershipRole: 'admin' | 'member';
+      if (legacy) {
+        membershipRole = legacy.role === 'member' ? 'member' : 'admin';
+      } else {
+        const anyAdmin = await queryOneDb<{ exists: boolean }>(
+          "SELECT EXISTS(SELECT 1 FROM workspace_memberships WHERE workspace_id = $1 AND role = 'admin') AS exists",
+          [workspaceId],
+        );
+        membershipRole = anyAdmin?.exists ? 'member' : 'admin';
+      }
       await setMembership(workspaceId, dbUser.id, membershipRole);
     }
 
@@ -233,6 +255,9 @@ router.get('/slack/callback', async (req: Request, res: Response) => {
       await setActiveWorkspace(dbUser.id, activeWorkspaceId);
     }
 
+    const activeMembership = await getMembership(activeWorkspaceId, dbUser.id);
+    const workspaceRole = activeMembership?.role ?? 'member';
+
     const session = (req as any).session;
     session.user = {
       userId: slackUserId,             // kept for backward compat with existing middleware
@@ -244,6 +269,7 @@ router.get('/slack/callback', async (req: Request, res: Response) => {
       avatarUrl,
       platformRole,
       platformAdmin,
+      workspaceRole,
     };
 
     // Explicitly save session before redirect to avoid race condition

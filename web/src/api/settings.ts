@@ -39,3 +39,24 @@ export function useUpdateSettings() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['settings'] }),
   });
 }
+
+export function useAnthropicKeyStatus() {
+  return useQuery<{ configured: boolean }>({
+    queryKey: ['settings', 'anthropic-key', 'status'],
+    queryFn: () => api.get('/settings/anthropic-key/status'),
+  });
+}
+
+export function useTestAnthropicKey() {
+  return useMutation<{ ok: boolean; reason?: string }, Error, string>({
+    mutationFn: (apiKey: string) => api.post('/settings/anthropic-key/test', { apiKey }),
+  });
+}
+
+export function useSaveAnthropicKey() {
+  const qc = useQueryClient();
+  return useMutation<{ ok: true }, Error, string>({
+    mutationFn: (apiKey: string) => api.put('/settings/anthropic-key', { apiKey }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['settings', 'anthropic-key', 'status'] }),
+  });
+}

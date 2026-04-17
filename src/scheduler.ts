@@ -1,6 +1,6 @@
 process.env.PROCESS_TYPE = 'scheduler';
 import { initDb, upsertWorkspace, setDefaultWorkspaceId, closeDb, queryOne } from './db';
-import { initSlackClient, getSlackApp } from './slack';
+import { initSlackClient, getSystemSlackClient } from './slack';
 import { config } from './config';
 import { getScheduledTriggersDue, fireTrigger, updateTriggerLastFired, getTriggerLastFiredAt } from './modules/triggers';
 import { logger } from './utils/logger';
@@ -15,7 +15,7 @@ async function main(): Promise<void> {
   initSlackClient();
 
   // Bootstrap workspace from bot token
-  const authResult = await getSlackApp().client.auth.test();
+  const authResult = await getSystemSlackClient().auth.test();
   await upsertWorkspace({
     id: authResult.team_id as string,
     team_name: (authResult.team as string) || 'default',

@@ -1164,7 +1164,7 @@ description: Short description
 
 The dashboard is for a **non-technical audience**. Follow these rules without exception:
 
-- **No user IDs** -- never show raw Slack user IDs (e.g., `UH6TP67FB`). Always resolve to display names.
+- **No user IDs** -- never show raw Slack user IDs (e.g., `U01ABCDEF`). Always resolve to display names.
 - **No technical identifiers** -- no trace IDs, database IDs, internal names, or API slugs.
 - **Friendly labels** -- "Effort" not "maxTurns". "Web Search" not "WebSearch". "Ask Owner/Admins" not "admin_confirm".
 - **No jargon** -- avoid "built-in", "integration", "token bucket", "tsvector". Say what it does, not how it works.
@@ -1542,17 +1542,7 @@ The non-streaming endpoint also accepts the legacy `{ "message": "..." }` format
 
 ### Slash Commands
 
-| Command | Where | Who | What it does |
-|---------|-------|-----|--------------|
-| `/agents` | Anywhere | All | Link to web dashboard |
-| `/new-agent` | Anywhere | All | Redirect to agent creation on dashboard |
-| `/update-agent` | Anywhere | All | Redirect to agent management on dashboard |
-| `/tools` | Anywhere | All | Redirect to tools page on dashboard |
-| `/kb` | Anywhere | All | Redirect to KB page on dashboard |
-| `/audit` | Anywhere | All | Redirect to audit log on dashboard |
-| `/templates` | Anywhere | All | Redirect to agent templates on dashboard |
-| `/connect` | Bot DM | All | Manage personal tool connections |
-| `add @user as superadmin` | Bot DM | Superadmins | Grant superadmin access |
+**Removed in v1.48.0.** All workflows previously exposed as slash commands (`/agents`, `/new-agent`, `/update-agent`, `/tools`, `/kb`, `/audit`, `/templates`, `/connect`) are now managed directly in the web dashboard at `https://app.tinyhands.ai`. The Slack app no longer registers any slash commands, and the `commands` OAuth scope is no longer requested. Existing installs can leave the Slash Commands section of their Slack app configuration populated — the listener ignores slash-command events — but new installs can (and should) omit them entirely.
 
 ### Event Subscriptions (Socket Mode)
 
