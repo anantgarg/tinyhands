@@ -567,3 +567,71 @@
 [17:40:54.376] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-009.md","sessionsLen":8,"activeSessionId":"plan-005"}
 [17:40:54.376] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-009.md"}
 [17:40:54.392] [AutoSwitch] plan → NO SESSION found, creating lazily {"itemId":"plan-009","sessionsLen":8}
+[17:41:06.446] [TerminalSwitch] transitioning {"from":"plan-005","to":"plan-009","storeSessionsLen":9}
+[17:41:06.446] [Terminal] getOrCreate → creating new {"sessionId":"plan-009","sessionFound":true,"sessionType":"plan","sessionPlanId":"plan-009","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-009","sessionsLen":9,"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[17:41:06.460] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-009.md","sessionsLen":9,"activeSessionId":"plan-009"}
+[17:41:06.460] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-009.md"}
+[17:41:06.476] [AutoSwitch] plan → already on correct session, no-op {"itemId":"plan-009","activeSessionId":"plan-009"}
+[17:41:06.762] [Terminal] resolved cwd {"sessionId":"plan-009","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-009","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-009","projectPath":"/Users/anantgarg/Local/tinyhands"}
+[17:41:07.050] [AutoSwitch] plan → created new session {"itemId":"plan-009","sessionId":"plan-009"}
+[18:03:01.029] [TerminalSwitch] transitioning {"from":"plan-009","to":"fast-lynx","storeSessionsLen":10}
+[18:03:01.029] [Terminal] getOrCreate → creating new {"sessionId":"fast-lynx","sessionFound":true,"sessionType":"vibe","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/fast-lynx","sessionsLen":10,"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[18:03:01.045] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-009.md","sessionsLen":10,"activeSessionId":"fast-lynx"}
+[18:03:01.045] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-009.md"}
+[18:03:01.057] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-001.md","isReadOnly":false,"parsedStatus":"active","editorContentLen":84,"isPlanPath":false}
+[18:03:01.057] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-001.md","title":"Fast Lynx"}
+[18:03:01.063] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-001.md","sessionsLen":10,"activeSessionId":"fast-lynx"}
+[18:03:01.063] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":true,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-001.md"}
+[18:03:01.071] [AutoSwitch] bailed — activeFilePath changed during await {"capturedPath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-009.md","currentActiveFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-001.md"}
+[18:03:01.337] [TerminalSwitch] transitioning {"from":"fast-lynx","to":"kind-finch","storeSessionsLen":11}
+[18:03:01.337] [Terminal] getOrCreate → creating new {"sessionId":"kind-finch","sessionFound":true,"sessionType":"vibe","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/kind-finch","sessionsLen":11,"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[18:03:01.349] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-001.md","sessionsLen":11,"activeSessionId":"kind-finch"}
+[18:03:01.349] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":true,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-001.md"}
+[18:03:01.359] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-001.md","isReadOnly":false,"parsedStatus":"active","editorContentLen":85,"isPlanPath":false}
+[18:03:01.381] [TerminalSwitch] transitioning {"from":"kind-finch","to":"fast-lynx","storeSessionsLen":11}
+[18:03:01.381] [Terminal] getOrCreate → returning cached {"sessionId":"fast-lynx","cachedCwd":null}
+[18:03:01.384] [Terminal] resolved cwd {"sessionId":"fast-lynx","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/fast-lynx","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/fast-lynx","projectPath":"/Users/anantgarg/Local/tinyhands"}
+[18:03:01.651] [Terminal] resolved cwd {"sessionId":"kind-finch","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/kind-finch","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/kind-finch","projectPath":"/Users/anantgarg/Local/tinyhands"}
+[18:03:04.544] [TerminalSwitch] transitioning {"from":"fast-lynx","to":"azure-otter","storeSessionsLen":12}
+[18:03:04.544] [Terminal] getOrCreate → creating new {"sessionId":"azure-otter","sessionFound":true,"sessionType":"vibe","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/azure-otter","sessionsLen":12,"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[18:03:04.560] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-001.md","sessionsLen":12,"activeSessionId":"azure-otter"}
+[18:03:04.560] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":true,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-001.md"}
+[18:03:04.578] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-002.md","isReadOnly":false,"parsedStatus":"active","editorContentLen":86,"isPlanPath":false}
+[18:03:04.578] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-002.md","title":"Azure Otter"}
+[18:03:04.579] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-002.md","sessionsLen":12,"activeSessionId":"azure-otter"}
+[18:03:04.579] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":true,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-002.md"}
+[18:03:04.586] [AutoSwitch] bailed — activeFilePath changed during await {"capturedPath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-001.md","currentActiveFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-002.md"}
+[18:03:04.862] [Terminal] resolved cwd {"sessionId":"azure-otter","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/azure-otter","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/azure-otter","projectPath":"/Users/anantgarg/Local/tinyhands"}
+[18:03:15.874] [Tab] Clicked tab {"tabPath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-001.md","resolvedPath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-001.md","title":"Kind Finch","contentLen":85}
+[18:03:15.892] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-001.md","isReadOnly":false,"parsedStatus":"active","editorContentLen":85,"isPlanPath":false}
+[18:03:15.892] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-001.md","title":"Kind Finch"}
+[18:03:15.894] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-001.md","sessionsLen":12,"activeSessionId":"azure-otter"}
+[18:03:15.894] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":true,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-001.md"}
+[18:03:15.921] [TerminalSwitch] transitioning {"from":"azure-otter","to":"fast-lynx","storeSessionsLen":12}
+[18:03:15.921] [Terminal] getOrCreate → returning cached {"sessionId":"fast-lynx","cachedCwd":null}
+[18:03:18.049] [Tab] Clicked tab {"tabPath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-002.md","resolvedPath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-002.md","title":"Azure Otter","contentLen":86}
+[18:03:18.063] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-002.md","isReadOnly":false,"parsedStatus":"active","editorContentLen":86,"isPlanPath":false}
+[18:03:18.063] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-002.md","title":"Azure Otter"}
+[18:03:18.065] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-002.md","sessionsLen":12,"activeSessionId":"fast-lynx"}
+[18:03:18.065] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":true,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-002.md"}
+[18:03:18.089] [TerminalSwitch] transitioning {"from":"fast-lynx","to":"azure-otter","storeSessionsLen":12}
+[18:03:18.089] [Terminal] getOrCreate → returning cached {"sessionId":"azure-otter","cachedCwd":null}
+[18:03:22.085] [TerminalSwitch] transitioning {"from":"azure-otter","to":"silver-otter","storeSessionsLen":13}
+[18:03:22.085] [Terminal] getOrCreate → creating new {"sessionId":"silver-otter","sessionFound":true,"sessionType":"vibe","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/silver-otter","sessionsLen":13,"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[18:03:22.096] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-002.md","sessionsLen":13,"activeSessionId":"silver-otter"}
+[18:03:22.096] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":true,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-002.md"}
+[18:03:22.115] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-003.md","isReadOnly":false,"parsedStatus":"active","editorContentLen":87,"isPlanPath":false}
+[18:03:22.116] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-003.md","title":"Silver Otter"}
+[18:03:22.116] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-003.md","sessionsLen":13,"activeSessionId":"silver-otter"}
+[18:03:22.116] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":true,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-003.md"}
+[18:03:22.122] [AutoSwitch] bailed — activeFilePath changed during await {"capturedPath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-002.md","currentActiveFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-003.md"}
+[18:03:22.397] [Terminal] resolved cwd {"sessionId":"silver-otter","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/silver-otter","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/silver-otter","projectPath":"/Users/anantgarg/Local/tinyhands"}
+[18:32:30.482] [TerminalSwitch] transitioning {"from":"silver-otter","to":"calm-tiger","storeSessionsLen":14}
+[18:32:30.482] [Terminal] getOrCreate → creating new {"sessionId":"calm-tiger","sessionFound":true,"sessionType":"vibe","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/calm-tiger","sessionsLen":14,"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[18:32:30.498] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-003.md","sessionsLen":14,"activeSessionId":"calm-tiger"}
+[18:32:30.498] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":true,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-003.md"}
+[18:32:30.513] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-004.md","isReadOnly":false,"parsedStatus":"active","editorContentLen":85,"isPlanPath":false}
+[18:32:30.513] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-004.md","title":"Calm Tiger"}
+[18:32:30.515] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-004.md","sessionsLen":14,"activeSessionId":"calm-tiger"}
+[18:32:30.515] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":true,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-004.md"}
+[18:32:30.800] [Terminal] resolved cwd {"sessionId":"calm-tiger","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/calm-tiger","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/calm-tiger","projectPath":"/Users/anantgarg/Local/tinyhands"}

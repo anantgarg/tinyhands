@@ -1,0 +1,42 @@
+
+The default interactive shell is now zsh.
+To update your account to use zsh, please run `chsh -s /bin/zsh`.
+For more details, please visit https://support.apple.com/kb/HT208050.
+[?1034hMacBook-Pro-4:silver-otter anantgarg$ clear && claude
+[3J[H[2J[?25l[?2004h[?1004h[?2031h
+[38;2;255;193;7m────────────────────────────────────────────────────────────────────────────────[39m
+[2C[38;2;255;193;7m[1mNew[1CMCP[1Cserver[1Cfound[1Cin[1C.mcp.json:[1C21st-magic[22m[39m
+
+[2CMCP[1Cservers[1Cmay[1Cexecute[1Ccode[1Cor[1Caccess[1Csystem[1Cresources.[1CAll[1Ctool[1Ccalls
+[2Crequire[1Capproval.[1CLearn[1Cmore[1Cin[1Cthe[1CMCP[1Cdocumentation.
+
+[2C[38;2;177;185;249m❯[1C[38;2;153;153;153m1.[1C[38;2;177;185;249mUse[1Cthis[1Cand[1Call[1Cfuture[1CMCP[1Cservers[1Cin[1Cthis[1Cproject[39m
+[4C[38;2;153;153;153m2.[1C[39mUse[1Cthis[1CMCP[1Cserver
+[4C[38;2;153;153;153m3.[1C[39mContinue[1Cwithout[1Cusing[1Cthis[1CMCP[1Cserver
+
+[2C[38;2;153;153;153m[3mEnter[1Cto[1Cconfirm[1C·[1CEsc[1Cto[1Ccancel[23m[39m
+[2C[5A[>0q[c[2D[5B[2J[H
+[38;2;255;193;7m─────────────────────────────────────────────────────────────────────────[39m
+[2C[38;2;255;193;7m[1mNew[1CMCP[1Cserver[1Cfound[1Cin[1C.mcp.json:[1C21st-magic[22m[39m
+
+[2CMCP[1Cservers[1Cmay[1Cexecute[1Ccode[1Cor[1Caccess[1Csystem[1Cresources.[1CAll[1Ctool
+[2Ccalls[1Crequire[1Capproval.[1CLearn[1Cmore[1Cin[1Cthe[1CMCP[1Cdocumentation.
+
+[2C[38;2;177;185;249m❯[1C[38;2;153;153;153m1.[1C[38;2;177;185;249mUse[1Cthis[1Cand[1Call[1Cfuture[1CMCP[1Cservers[1Cin[1Cthis[1Cproject[39m
+[4C[38;2;153;153;153m2.[1C[39mUse[1Cthis[1CMCP[1Cserver
+[4C[38;2;153;153;153m3.[1C[39mContinue[1Cwithout[1Cusing[1Cthis[1CMCP[1Cserver
+
+[2C[38;2;153;153;153m[3mEnter[1Cto[1Cconfirm[1C·[1CEsc[1Cto[1Ccancel[23m[39m
+[2C[5A[2D[5B[2J[H
+[38;2;255;193;7m──────────────────────────────────────────────────────────────────────────[39m
+[2C[38;2;255;193;7m[1mNew[1CMCP[1Cserver[1Cfound[1Cin[1C.mcp.json:[1C21st-magic[22m[39m
+
+[2CMCP[1Cservers[1Cmay[1Cexecute[1Ccode[1Cor[1Caccess[1Csystem[1Cresources.[1CAll[1Ctool
+[2Ccalls[1Crequire[1Capproval.[1CLearn[1Cmore[1Cin[1Cthe[1CMCP[1Cdocumentation.
+
+[2C[38;2;177;185;249m❯[1C[38;2;153;153;153m1.[1C[38;2;177;185;249mUse[1Cthis[1Cand[1Call[1Cfuture[1CMCP[1Cservers[1Cin[1Cthis[1Cproject[39m
+[4C[38;2;153;153;153m2.[1C[39mUse[1Cthis[1CMCP[1Cserver
+[4C[38;2;153;153;153m3.[1C[39mContinue[1Cwithout[1Cusing[1Cthis[1CMCP[1Cserver
+
+[2C[38;2;153;153;153m[3mEnter[1Cto[1Cconfirm[1C·[1CEsc[1Cto[1Ccancel[23m[39m
+[2C[5A

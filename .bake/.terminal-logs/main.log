@@ -35338,3 +35338,502 @@ For more details, please visit https://support.apple.com/kb/HT208050.
 [56C[1A                
 [52C[1A[38;2;153;153;153mChecking for updates[39m
 [52C[1A                    
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[2J[H[38;2;215;119;87m ▐[48;2;0;0;0m▛███▜[49m▌[3C[39m[1mClaude[1CCode[1C[22m[38;2;153;153;153mv2.1.110[39m
+[38;2;215;119;87m▝▜[48;2;0;0;0m█████[49m▛▘[2C[38;2;153;153;153mOpus[1C4.6[1C(1M[1Ccontext)[1Cwith[1Chigh[1Ceffort[1C·[1CClaude[1CMax[39m
+[38;2;215;119;87m [1C▘▘[1C▝▝[4C[38;2;153;153;153m~/Local/tinyhands[39m
+
+[48;2;55;55;55m[38;2;80;80;80m❯ [38;2;255;255;255mRead .bake/harness/deploy.md and follow it.[39m                                                             [49m
+
+[2C[38;2;153;153;153mRead[1C[1m2[22m files[1C(ctrl+o[1Cto[1Cexpand)[39m
+
+[38;2;255;255;255m⏺[1C[39mLet[1Cme[1Cread[1Cthe[1Cdetailed[1Cdeployment[1Cguides.
+
+[2C[38;2;153;153;153mRead[1C[1m3[22m files[1C(ctrl+o[1Cto[1Cexpand)[39m
+
+[38;2;255;255;255m⏺[1C[39mLet[1Cme[1Ccheck[1Cthe[1Cproduction[1Cserver[1Cdetails[1Cfrom[1Cmemory[1Cand[1Cthe[1Ccurrent[1Cproject[1Cstate.
+
+[2C[38;2;153;153;153mRecalled[1C[1m1[22m memory[1C(ctrl+o[1Cto[1Cexpand)[39m
+
+[38;2;78;186;101m⏺[1C[39m[1mBash[22m(gh[1Crelease[1Clist[1C--limit[1C1)
+[38;2;153;153;153m [1C⎿[1C [39mv1.46.1[1C--[1CFix[1Csheet[1Cindexing[1Cand[1Cstalled[1Cjob
+[5Cprotection[1CLatest[2Cv1.46.1[1C2026-04-05T04:23:27Z
+
+[38;2;78;186;101m⏺[1C[39m[1mBash[22m(git[1Clog[1C--oneline[1C-5)
+[38;2;153;153;153m [1C⎿[1C [39m2017da6[1CMerge[1Cbake/plan/plan-002:[1CFix[1Cagent[1Ccreation[1Cnot[1Csaving[1Cinstructions
+[5Cb48af81[1CFix[1Cweb[1Cdashboard[1Cagent[1Ccreation[1Cignoring[1Cinstructions[1Cand[1Cmulti-word[1Csettings
+[5C5cd0a15[1CScan[1C&[1Cpopulate[1Cproject[1Cdocumentation[1C(.bake)
+[5C[2m…[1C+3[1Clines[1C(ctrl+o[1Cto[1Cexpand)[22m
+
+[38;2;255;255;255m⏺[1C[39mLet[1Cme[1Csee[1Cwhat's[1Cchanged[1Csince[1Cthe[1Clast[1Crelease.
+
+[38;2;255;107;128m⏺[1C[39m[1mBash[22m(git[1Clog[1Cv1.46.1..HEAD[1C--oneline)
+[38;2;153;153;153m [1C⎿[1C [38;2;255;107;128mError:[1CExit[1Ccode[1C128[39m
+[5C[38;2;255;107;128mfatal:[1Cambiguous[1Cargument[1C'v1.46.1..HEAD':[1Cunknown[1Crevision[1Cor[1Cpath[1Cnot[1Cin[1Cthe[1Cworking[1Ctree.[39m
+[5C[38;2;255;107;128mUse[1C'--'[1Cto[1Cseparate[1Cpaths[1Cfrom[1Crevisions,[1Clike[1Cthis:[39m
+[5C[38;2;255;107;128m'git[1C<command>[1C[<revision>...][1C--[1C[<file>...]'[39m
+
+[2C[38;2;153;153;153mRead[1C[1m1[22m file[1C(ctrl+o[1Cto[1Cexpand)[39m
+
+[38;2;78;186;101m⏺[1C[39m[1mBash[22m(git[1Ctag[1C-l[1C'v1.46*')
+[38;2;153;153;153m [1C⎿[1C (No[1Coutput)[39m
+
+[38;2;78;186;101m⏺[1C[39m[1mBash[22m(git[1Clog[1C--oneline[1C--all[1C|[1Chead[1C-20)
+[38;2;153;153;153m [1C⎿[1C [39m2017da6[1CMerge[1Cbake/plan/plan-002:[1CFix[1Cagent[1Ccreation[1Cnot[1Csaving[1Cinstructions
+[5Cb48af81[1CFix[1Cweb[1Cdashboard[1Cagent[1Ccreation[1Cignoring[1Cinstructions[1Cand[1Cmulti-word[1Csettings
+[5C5cd0a15[1CScan[1C&[1Cpopulate[1Cproject[1Cdocumentation[1C(.bake)
+[5C[2m…[1C+15[1Clines[1C(ctrl+o[1Cto[1Cexpand)[22m
+
+[38;2;78;186;101m⏺[1C[39m[1mBash[22m(git[1Cfetch[1C--tags[1C2>&1[1C|[1Chead[1C-5)
+[38;2;153;153;153m [1C⎿[1C [39mFrom[1Chttps://github.com/anantgarg/tinyhands
+[6C*[1C[new[1Ctag][9Cv1.45.3[4C->[1Cv1.45.3
+[6C*[1C[new[1Ctag][9Cv1.45.4[4C->[1Cv1.45.4
+[5C[2m…[1C+2[1Clines[1C(ctrl+o[1Cto[1Cexpand)[22m
+
+[38;2;78;186;101m⏺[1C[39m[1mBash[22m(git[1Clog[1Cv1.46.1..HEAD[1C--oneline)
+[38;2;153;153;153m [1C⎿[1C [39m2017da6[1CMerge[1Cbake/plan/plan-002:[1CFix[1Cagent[1Ccreation[1Cnot[1Csaving[1Cinstructions
+[5Cb48af81[1CFix[1Cweb[1Cdashboard[1Cagent[1Ccreation[1Cignoring[1Cinstructions[1Cand[1Cmulti-word[1Csettings
+[5C5cd0a15[1CScan[1C&[1Cpopulate[1Cproject[1Cdocumentation[1C(.bake)
+
+[38;2;255;255;255m⏺[1C[39mThere[1Care[1C3[1Ccommits[1Csince[1Cthe[1Clast[1Crelease[1C(v1.46.1).[1CThe[1Cmeaningful[1Cchange[1Cis[1Cthe[1Cfix[1Cfor[1Cagent
+[2Ccreation[1Cnot[1Csaving[1Cinstructions.[1CThe[1C[38;2;177;185;249m5cd0a15[1C[39mcommit[1Cis[1Cjust[1Cdocs.
+
+[2CBefore[1Cdeploying,[1Clet[1Cme[1Crun[1Cthe[1Ctest[1Csuite[1Cand[1Ctype[1Cchecks[1Cto[1Cmake[1Csure[1Ceverything[1Cis[1Chealthy.
+
+[38;2;78;186;101m⏺[1C[39m[1mBash[22m(npm[1Crun[1Ctypecheck[1C2>&1[1C|[1Ctail[1C-5)
+[38;2;153;153;153m [1C⎿[1C [39m>[1Ctinyhands@1.46.1[1Ctypecheck
+[5C>[1Ctsc[1C--noEmit
+[38;2;153;153;153m [1C⎿[1C (timeout[1C2m)[39m
+
+[38;2;78;186;101m⏺[1C[39m[1mBash[22m(npm[1Ctest[1C2>&1[1C|[1Ctail[1C-30)
+[38;2;153;153;153m [1C⎿[1C [1C[39m✓[1Ctests/unit/user-resolver.test.ts[1C(11[1Ctests)[1C27ms
+[6C✓[1Ctests/unit/tool-integrations-index.test.ts[1C(8[1Ctests)[1C146ms
+[6C✓[1Ctests/unit/api-access.test.ts[1C(14[1Ctests)[1C698ms
+[5C[2m…[1C+23[1Clines[1C(ctrl+o[1Cto[1Cexpand)[22m
+[38;2;153;153;153m [1C⎿[1C (timeout[1C2m)[39m
+
+[38;2;255;255;255m⏺[1C[39mAll[1C81[1Ctest[1Cfiles[1Cpass[1C(3262[1Ctests),[1Cand[1Ctype[1Cchecking[1Cis[1Cclean.[1CNow[1Clet[1Cme[1Ccreate[1Cthe[1Crelease[1Cand[1Cpush
+[2Cto[1Ctrigger[1Cauto-update[1Con[1Cthe[1Cproduction[1Cserver.
+
+[2CFirst,[1Clet[1Cme[1Cbump[1Cthe[1Cversion[1Csince[1Cthis[1Cincludes[1Ca[1Cbug[1Cfix.
+
+[38;2;78;186;101m⏺[1C[39m[1mUpdate[22m(package.json)
+[38;2;153;153;153m [1C⎿[1C [39mAdded[1C[1m1[1C[22mline,[1Cremoved[1C[1m1[1C[22mline
+[5C[38;2;248;248;242m[2m 1[1C[22m {[39m
+[5C[38;2;248;248;242m[2m 2[1C[22m [2C[38;2;230;219;116m"name"[38;2;248;248;242m:[1C[38;2;230;219;116m"tinyhands"[38;2;248;248;242m,[39m
+[5C[38;2;220;90;90m[48;2;61;1;0m 3 -[38;2;248;248;242m  "version": "1.46.[48;2;92;2;0m1[48;2;61;1;0m",                                                                    [49m[39m
+[5C[38;2;80;200;80m[48;2;2;40;0m 3 +[38;2;248;248;242m  [38;2;230;219;116m"version"[38;2;248;248;242m: [38;2;230;219;116m"1.46.[48;2;4;71;0m2[48;2;2;40;0m"[38;2;248;248;242m,                                                                    [49m[39m
+[5C[38;2;248;248;242m[2m 4[1C[22m [2C[38;2;230;219;116m"description"[38;2;248;248;242m:[1C[38;2;230;219;116m"Extra[1Chands[1Cfor[1Cyour[1CSlack[1Cworkspace[1C—[1Copen-source,[1Cself-hosted[1CAI[1Cagent[39m
+[5C[38;2;248;248;242m[2m [2C[22m [38;2;230;219;116ms[1Cpowered[1Cby[1CClaude"[38;2;248;248;242m,[39m
+[5C[38;2;248;248;242m[2m 5[1C[22m [2C[38;2;230;219;116m"main"[38;2;248;248;242m:[1C[38;2;230;219;116m"dist/index.js"[38;2;248;248;242m,[39m
+[5C[38;2;248;248;242m[2m 6[1C[22m [2C[38;2;230;219;116m"scripts"[38;2;248;248;242m:[1C{[39m
+
+[38;2;78;186;101m⏺[1C[39m[1mBash[22m(git[1Cadd[1Cpackage.json[1C&&[1Cgit[1Ccommit[1C-m[1C"$(cat[1C<<'EOF'
+[6CBump[1Cversion[1Cto[1Cv1.46.2…)
+[38;2;153;153;153m [1C⎿[1C [39mhusky[1C-[1CDEPRECATED
+
+[5CPlease[1Cremove[1Cthe[1Cfollowing[1Ctwo[1Clines[1Cfrom[1C.husky/pre-commit:
+[5C[2m…[1C+230[1Clines[1C(ctrl+o[1Cto[1Cexpand)[22m
+
+[38;2;255;255;255m⏺[1C[39mGood,[1Cthe[1Cversion[1Cbump[1Ccommitted[1Csuccessfully.[1CNow[1Clet[1Cme[1Cpush[1Cto[1CGitHub[1Cand[1Ccreate[1Cthe[1Crelease.
+
+[38;2;78;186;101m⏺[1C[39m[1mBash[22m(git[1Cpush[1Corigin[1Cmain[1C2>&1)
+[38;2;153;153;153m [1C⎿[1C [39mTo[1Chttps://github.com/anantgarg/tinyhands.git
+[8Cda29b48..0aa9640[2Cmain[1C->[1Cmain
+
+[38;2;78;186;101m⏺[1C[39m[1mBash[22m(gh[1Crelease[1Ccreate[1Cv1.46.2[1C--title[1C"v1.46.2[1C--[1CFix[1Cagent[1Ccreation[1Cnot[1Csaving[1Cinstructions"[1C--notes
+[6C"$(cat[1C<<'EOF'
+[6C##[1CChanges…)
+[38;2;153;153;153m [1C⎿[1C [39mhttps://github.com/anantgarg/tinyhands/releases/tag/v1.46.2
+
+[38;2;255;255;255m⏺[1C[39mRelease[1Ccreated.[1CNow[1Clet[1Cme[1Cupdate[1Cthe[1Creleases[1Clog[1Cper[1Cthe[1Cdeploy.md[1Cinstructions.
+
+[2C[38;2;153;153;153mRead[1C[1m1[22m file[1C(ctrl+o[1Cto[1Cexpand)[39m
+
+[38;2;78;186;101m⏺[1C[39m[1mUpdate[22m(.bake/product/releases.md)
+[38;2;153;153;153m [1C⎿[1C [39mAdded[1C[1m6[1C[22mlines,[1Cremoved[1C[1m1[1C[22mline
+[5C[38;2;248;248;242m[2m [1C2[1C[22m [39m
+[5C[38;2;248;248;242m[2m [1C3[1C[22m One[1Centry[1Cper[1Cdeploy[1Cto[1Cproduction.[1CEach[1Centry[1Cnames[1Cthe[1Cversion,[1Cthe[1Cdate,[1Cthe[1Cmerges[1Cin[39m
+[5C[38;2;248;248;242m[2m [3C[22m cluded[1Csince[1Cthe[1Cprevious[1Crelease,[1Cand[1Cthe[1Cexact[1Crollback[1Ccommand.[1CUpdated[1Cautomatically[39m
+[5C[38;2;248;248;242m[2m [3C[22m by[1Cthe[1CDeploy[1Cbutton[1C(see[1C`.bake/harness/deploy.md`[1Cfor[1Cthe[1Cpost-deploy[1Cstep[1Cthat[1Cappends[39m
+[5C[38;2;248;248;242m[2m [3C[22m [1Chere).[39m
+[5C[38;2;248;248;242m[2m [1C4[1C[22m [39m
+[5C[38;2;220;90;90m[48;2;61;1;0m  5 -[38;2;248;248;242m_No releases yet. The first deploy will create the first entry._                         [49m[39m
+[5C[38;2;80;200;80m[48;2;2;40;0m  5 +[38;2;248;248;242m## v1.46.2 — 2026-04-16                                                                  [49m[39m
+[5C[38;2;80;200;80m[48;2;2;40;0m  6 +[38;2;248;248;242m                                                                                         [49m[39m
+[5C[38;2;80;200;80m[48;2;2;40;0m  7 +[38;2;248;248;242m- Fix agent creation not saving instructions and multi-word settings                     [49m[39m
+[5C[38;2;80;200;80m[48;2;2;40;0m  8 +[38;2;248;248;242m- Populated `.bake/` project documentation                                               [49m[39m
+[5C[38;2;80;200;80m[48;2;2;40;0m  9 +[38;2;248;248;242m                                                                                         [49m[39m
+[5C[38;2;80;200;80m[48;2;2;40;0m 10 +[38;2;248;248;242mRollback: `git revert 0aa9640..HEAD && git push`                                         [49m[39m
+
+[38;2;255;255;255m⏺[1C[39mNow[1Clet[1Cme[1Cverify[1Cthe[1Cproduction[1Cserver[1Cpicks[1Cup[1Cthe[1Cupdate.[1CSince[1Cauto-update[1Cis[1Cenabled,[1Cit[1Cchecks[1Cfor
+[3Cversion[1Cchanges[1Cin[1C[38;2;177;185;249mpackage.json[1C[39mand[1Cdeploys[1Cautomatically.[1CLet[1Cme[1Cconfirm[1Cit's[1Cpulling.
+
+[38;2;78;186;101m⏺[1C[39m[1mBash[22m(ssh[1C-i[1C~/.ssh/tinyjobs_deploy[1Croot@45.55.157.4[1C"cd[1C/root/tinyjobs[1C&&[1Cgit[1Clog[1C--oneline[1C-3"[1C2>&1)
+[38;2;153;153;153m [1C⎿[1C [39mda29b48[1CFix[1Csheet[1Csearch[1Cindexing[1Cconstraint[1Cand[1CBullMQ[1Cstalled[1Cjob[1Cprotection
+[5Cf5a5ea2[1CDocuments:[1Crequire[1Cagent[1Cassociation,[1Cadd[1Ccreate[1CUI,[1Cfix[1Cauto-configured[1Ctool[1Ccredential
+[5Cs
+[5Cbe01c26[1CRemove[1Cunused[1CcreateToolRequest[1Cimport[1Cfrom[1CAgentDetail
+[38;2;153;153;153m [1C⎿[1C (timeout[1C30s)[39m
+
+[38;2;255;255;255m⏺[1C[39mProduction[1Cis[1Cat[1C[38;2;177;185;249mda29b48[1C[39m(v1.46.1).[1CThe[1Cauto-update[1Cshould[1Cpick[1Cup[1Cthe[1Cnew[1Cversion[1Con[1Cits[1Cnext[1Ccheck.
+[2CLet[1Cme[1Ctrigger[1Cit[1Cmanually[1Cvia[1Cthe[1Cdeploy[1Cwebhook.
+
+[38;2;78;186;101m⏺[1C[39m[1mBash[22m(ssh[1C-i[1C~/.ssh/tinyjobs_deploy[1Croot@45.55.157.4[1C"cd[1C/root/tinyjobs[1C&&[1Cgit[1Cfetch[1Corigin[1C&&[1Cgit[1Clog
+[6C--oneline[1Corigin/main[1C-3"[1C2>&1)
+[38;2;153;153;153m [1C⎿[1C [39mFrom[1Cgithub.com:anantgarg/tinyhands
+[6C*[1C[new[1Ctag][9Cv1.46.2[4C->[1Cv1.46.2
+[5C0aa9640[1CBump[1Cversion[1Cto[1Cv1.46.2
+[5C[2m…[1C+2[1Clines[1C(ctrl+o[1Cto[1Cexpand)[22m
+[38;2;153;153;153m [1C⎿[1C (timeout[1C30s)[39m
+
+[38;2;255;255;255m⏺[1C[39mGood,[1Cthe[1Cproduction[1Cserver[1Ccan[1Csee[1Cthe[1Cnew[1Ccommits.[1CLet[1Cme[1Ctrigger[1Cthe[1Cupdate[1Cnow.
+
+[38;2;255;107;128m⏺[1C[39m[1mBash[22m(ssh[1C-i[1C~/.ssh/tinyjobs_deploy[1Croot@45.55.157.4[1C"cd[1C/root/tinyjobs[1C&&[1Cgit[1Cpull[1Corigin[1Cmain[1C&&[1Cnpm
+[6Cinstall[1C&&[1Cnpm[1Crun[1Cbuild[1C&&[1Cnpm[1Crun[1Cbuild:web[1C&&[1Cnode[1C-e[1C\"requ…)
+[38;2;153;153;153m [1C⎿[1C [38;2;255;107;128mError:[1CExit[1Ccode[1C1[39m
+[5C[38;2;255;107;128mUpdating[1Cda29b48..0aa9640[39m
+[5C[38;2;255;107;128mFrom[1Cgithub.com:anantgarg/tinyhands[39m
+[5C[38;2;255;107;128m *[1Cbranch[12Cmain[7C->[1CFETCH_HEAD[39m
+[5C[38;2;255;107;128merror:[1CYour[1Clocal[1Cchanges[1Cto[1Cthe[1Cfollowing[1Cfiles[1Cwould[1Cbe[1Coverwritten[1Cby[1Cmerge:[39m
+[8C[38;2;255;107;128mpackage-lock.json[39m
+[5C[38;2;255;107;128mPlease[1Ccommit[1Cyour[1Cchanges[1Cor[1Cstash[1Cthem[1Cbefore[1Cyou[1Cmerge.[39m
+[5C[38;2;255;107;128mAborting[39m
+
+[38;2;255;255;255m⏺[1C[39mThere's[1Ca[1Clocal[1Cchange[1Cto[1C[38;2;177;185;249mpackage-lock.json[1C[39mon[1Cthe[1Cserver.[1CLet[1Cme[1Cstash[1Cit[1Cand[1Cretry.
+
+[38;2;78;186;101m⏺[1C[39m[1mBash[22m(ssh[1C-i[1C~/.ssh/tinyjobs_deploy[1Croot@45.55.157.4[1C"cd[1C/root/tinyjobs[1C&&[1Cgit[1Cstash[1C&&[1Cgit[1Cpull[1Corigin
+[6Cmain"[1C2>&1)
+[38;2;153;153;153m [1C⎿[1C [39mSaved[1Cworking[1Cdirectory[1Cand[1Cindex[1Cstate[1CWIP[1Con[1Cmain:[1Cda29b48[1CFix[1Csheet[1Csearch[1Cindexing[1Cconstrain
+[5Ct[1Cand[1CBullMQ[1Cstalled[1Cjob[1Cprotection
+[5CFrom[1Cgithub.com:anantgarg/tinyhands
+[5C[2m…[1C+47[1Clines[1C(ctrl+o[1Cto[1Cexpand)[22m
+[38;2;153;153;153m [1C⎿[1C (timeout[1C1m)[39m
+
+[38;2;255;255;255m⏺[1C[39mCode[1Cpulled.[1CNow[1Clet[1Cme[1Cbuild[1Cand[1Creload.
+
+[38;2;78;186;101m⏺[1C[39m[1mBash[22m(ssh[1C-i[1C~/.ssh/tinyjobs_deploy[1Croot@45.55.157.4[1C"cd[1C/root/tinyjobs[1C&&[1Cnpm[1Cinstall[1C--production=false
+[7C2>&1[1C|[1Ctail[1C-3"[1C2>&1)
+[38;2;153;153;153m [1C⎿[1C [39mnpm[1Cnotice[1CChangelog:[1Chttps://github.com/npm/cli/releases/tag/v11.12.1
+[5Cnpm[1Cnotice[1CTo[1Cupdate[1Crun:[1Cnpm[1Cinstall[1C-g[1Cnpm@11.12.1
+[5Cnpm[1Cnotice
+[38;2;153;153;153m [1C⎿[1C (timeout[1C2m)[39m
+
+[38;2;78;186;101m⏺[1C[39m[1mBash[22m(ssh[1C-i[1C~/.ssh/tinyjobs_deploy[1Croot@45.55.157.4[1C"cd[1C/root/tinyjobs[1C&&[1Cnpm[1Crun[1Cbuild[1C2>&1[1C|[1Ctail[1C-5"
+[6C2>&1)
+[38;2;153;153;153m [1C⎿[1C [39m>[1Ctinyhands@1.46.2[1Cbuild
+[5C>[1Ctsc
+[38;2;153;153;153m [1C⎿[1C (timeout[1C2m)[39m
+
+[38;2;78;186;101m⏺[1C[39m[1mBash[22m(ssh[1C-i[1C~/.ssh/tinyjobs_deploy[1Croot@45.55.157.4[1C"cd[1C/root/tinyjobs[1C&&[1Cnpm[1Crun[1Cbuild:web[1C2>&1[1C|[1Ctail
+[6C-10"[1C2>&1)
+[38;2;153;153;153m [1C⎿[1C [39m../dist/web/assets/DocumentDetail-BxyVSmbm.js[6C17.52[1CkB[1C│[1Cgzip:[3C5.05[1CkB
+[5C../dist/web/assets/Tools-tSD3wAl6.js[15C29.67[1CkB[1C│[1Cgzip:[3C8.37[1CkB
+[5C../dist/web/assets/vendor-query-CD4WrROn.js[8C42.12[1CkB[1C│[1Cgzip:[2C12.75[1CkB
+[5C[2m…[1C+7[1Clines[1C(ctrl+o[1Cto[1Cexpand)[22m
+[38;2;153;153;153m [1C⎿[1C (timeout[1C2m)[39m
+
+[38;2;255;107;128m⏺[1C[39m[1mBash[22m(ssh[1C-i[1C~/.ssh/tinyjobs_deploy[1Croot@45.55.157.4[1C"cd[1C/root/tinyjobs[1C&&[1Cnode[1C-e
+[6C\"require('./dist/db/migrate').runMigrations().then(()[1C=>[1Cprocess.exit(0)).catch(e…)
+[38;2;153;153;153m [1C⎿[1C [38;2;255;107;128mError:[1CExit[1Ccode[1C1[39m
+[5C[38;2;255;107;128mTypeError:[1CCannot[1Cread[1Cproperties[1Cof[1Cundefined[1C(reading[1C'query')[39m
+[5C[38;2;255;107;128m [3Cat[1CObject.runMigrations[1C(/root/tinyjobs/dist/db/migrate.js:45:16)[39m
+[5C[38;2;255;107;128m [3Cat[1C[eval]:1:30[39m
+[5C[38;2;255;107;128m [3Cat[1CrunScriptInThisContext[1C(node:internal/vm:209:10)[39m
+[5C[38;2;255;107;128m [3Cat[1Cnode:internal/process/execution:118:14[39m
+[5C[38;2;255;107;128m [3Cat[1C[eval]-wrapper:6:24[39m
+[5C[38;2;255;107;128m [3Cat[1CrunScript[1C(node:internal/process/execution:101:62)[39m
+[5C[38;2;255;107;128m [3Cat[1CevalScript[1C(node:internal/process/execution:133:3)[39m
+[5C[38;2;255;107;128m [3Cat[1Cnode:internal/main/eval_string:51:3[39m
+
+[38;2;255;255;255m⏺[1C[39mThe[1Cmigration[1Cscript[1Cneeds[1Cthe[1CDB[1Cpool[1Cinitialized.[1CLet[1Cme[1Ccheck[1Chow[1Cmigrations[1Care[1Ctypically[1Crun[1Con
+[2Cthis[1Cserver.
+
+[38;2;78;186;101m⏺[1C[39m[1mBash[22m(ssh[1C-i[1C~/.ssh/tinyjobs_deploy[1Croot@45.55.157.4[1C"cd[1C/root/tinyjobs[1C&&[1Ccat
+[6Cdeploy/docker-entrypoint.sh[1C2>/dev/null[1C||[1Cecho[1C'no[1Centrypoint[1Cscript';[1Cls[1Cdeploy/[1C2>/d…)
+[38;2;153;153;153m [1C⎿[1C [39m#!/bin/bash
+[5Cset[1C-e
+[5C[2m…[1C+27[1Clines[1C(ctrl+o[1Cto[1Cexpand)[22m
+[38;2;153;153;153m [1C⎿[1C (timeout[1C15s)[39m
+
+[38;2;255;255;255m⏺[1C[39mMigrations[1Crun[1Cvia[1C[38;2;177;185;249mnode[1Cdist/db/migrate.js[1C[39mdirectly.[1CLet[1Cme[1Cdo[1Cthat.
+
+[38;2;78;186;101m⏺[1C[39m[1mBash[22m(ssh[1C-i[1C~/.ssh/tinyjobs_deploy[1Croot@45.55.157.4[1C"cd[1C/root/tinyjobs[1C&&[1Cnode[1Cdist/db/migrate.js"[1C2>&1)
+[38;2;153;153;153m [1C⎿[1C [39m[dotenv@17.3.1][1Cinjecting[1Cenv[1C(30)[1Cfrom[1C.env[1C--[1Ctip:[1C🔐[1Cprevent[1Cbuilding[1C.env[1Cin[1Cdocker:[1Chttps:/
+[5C/dotenvx.com/prebuild
+[5CAll[1Cmigrations[1Capplied
+[38;2;153;153;153m [1C⎿[1C (timeout[1C1m)[39m
+
+[38;2;255;255;255m⏺[1C[39mGood,[1Cmigrations[1Care[1Cup[1Cto[1Cdate.[1CNow[1Creload[1CPM2.
+
+[38;2;78;186;101m⏺[1C[39m[1mBash[22m(ssh[1C-i[1C~/.ssh/tinyjobs_deploy[1Croot@45.55.157.4[1C"cd[1C/root/tinyjobs[1C&&[1Cpm2[1Creload
+[6Cecosystem.config.js"[1C2>&1)
+[38;2;153;153;153m [1C⎿[1C [39m[dotenv@17.3.1][1Cinjecting[1Cenv[1C(30)[1Cfrom[1C.env[1C--[1Ctip:[1C🔐[1Cencrypt[1Cwith[1CDotenvx:[1Chttps://dotenvx.co
+[5Cm
+[5C[PM2][1CApplying[1Caction[1CreloadProcessId[1Con[1Capp[1C[tinyhands-listener](ids:[1C[[1C0[1C])
+[5C[2m…[1C+11[1Clines[1C(ctrl+o[1Cto[1Cexpand)[22m
+[38;2;153;153;153m [1C⎿[1C (timeout[1C1m)[39m
+
+[38;2;255;255;255m⏺[1C[39mAll[1C6[1Cprocesses[1Creloaded[1Csuccessfully.[1CLet[1Cme[1Cverify[1Ceverything[1Cis[1Crunning.
+
+[38;2;78;186;101m⏺[1C[39m[1mBash[22m(ssh[1C-i[1C~/.ssh/tinyjobs_deploy[1Croot@45.55.157.4[1C"cd[1C/root/tinyjobs[1C&&[1Cpm2[1Clist[1C&&[1Cecho[1C'---'[1C&&[1Cnode
+[7C-e[1C\"console.log(require('./package.json').version)\""[1C2>&1)
+[38;2;153;153;153m [1C⎿[1C [39m┌────┬────────────────────────┬─────────────┬─────────┬─────────┬──────────┬────────┬──────┬────
+[5C───────┬──────────┬──────────┬──────────┬──────────┐
+[5C│[1Cid[1C│[1Cname[19C│[1Cnamespace[3C│[1Cversion[1C│[1Cmode[4C│[1Cpid[6C│[1Cuptime[1C│[1C↺[4C│[1Csta
+[5C[2m…[1C+13[1Clines[1C(ctrl+o[1Cto[1Cexpand)[22m
+[38;2;153;153;153m [1C⎿[1C (timeout[1C15s)[39m
+
+[38;2;255;255;255m⏺[1C[39mDeploy[1Ccomplete.[1CHere's[1Cthe[1Csummary:
+
+[2C[1mDeployed[1Cv1.46.2[1Cto[1Cproduction[1C[22m(45.55.157.4)
+
+[2C┌──────────────────┬─────────────────────────────────────────────────────────────┐
+[2C│[7CStep[7C│[27CStatus[28C│
+[2C├──────────────────┼─────────────────────────────────────────────────────────────┤
+[2C│[1CType[1Ccheck[7C│[1CPassed[54C│
+[2C├──────────────────┼─────────────────────────────────────────────────────────────┤
+[2C│[1CUnit[1Ctests[7C│[1C3262[1Cpassed[1C(81[1Cfiles)[38C│
+[2C├──────────────────┼─────────────────────────────────────────────────────────────┤
+[2C│[1CVersion[1Cbump[5C│[1C1.46.1[1C→[1C1.46.2[45C│
+[2C├──────────────────┼─────────────────────────────────────────────────────────────┤
+[2C│[1CGit[1Cpush[9C│[1CDone[56C│
+[2C├──────────────────┼─────────────────────────────────────────────────────────────┤
+[2C│[1CGitHub[1Crelease[3C│[1Chttps://github.com/anantgarg/tinyhands/releases/tag/v1.46.2[1C│
+[2C├──────────────────┼─────────────────────────────────────────────────────────────┤
+[2C│[1CPull[1Con[1Cserver[3C│[1CFast-forward[1Cto[1C[38;2;177;185;249m0aa9640[37C[39m│
+[2C├──────────────────┼─────────────────────────────────────────────────────────────┤
+[2C│[1Cnpm[1Cinstall[6C│[1CDone[56C│
+[2C├──────────────────┼─────────────────────────────────────────────────────────────┤
+[2C│[1CBuild[1C(TS[1C+[1Cweb)[1C│[1CDone[56C│
+[2C├──────────────────┼─────────────────────────────────────────────────────────────┤
+[2C│[1CMigrations[7C│[1CAll[1Capplied[49C│
+[2C├──────────────────┼─────────────────────────────────────────────────────────────┤
+[2C│[1CPM2[1Creload[7C│[1CAll[1C6[1Cprocesses[1Conline[1Cat[1Cv1.46.2[27C│
+[2C└──────────────────┴─────────────────────────────────────────────────────────────┘
+
+[2C[1mWhat[1Cshipped:[1C[22mFix[1Cfor[1Cagent[1Ccreation[1Cnot[1Csaving[1Cinstructions[1Cand[1Cmulti-word[1Csettings[1C(like[1Cwrite[1Cpolicy)
+[3Cfrom[1Cthe[1CAI[1Cchat[1Ccreation[1Cflow.
+
+[38;2;153;153;153m✻[1CBaked[1Cfor[1C5m[1C1s[39m
+
+[38;2;153;153;153m※[1C[1mrecap:[1C[22m[3mDeployed[1Cv1.46.2[1Cto[1Cproduction.[1CAll[1C6[1CPM2[1Cprocesses[1Care[1Conline[1Cand[1Crunning[1Cthe[1Cnew[1Cversion.[1CNo[23m[39m
+[2C[38;2;153;153;153m[3mfurther[1Caction[1Cneeded[1Cunless[1Cyou[1Cwant[1Cto[1Cverify[1Cthe[1Cagent[1Ccreation[1Cfix[1Cin[1CSlack.[1C(disable[1Crecaps[1Cin[23m[39m
+[2C[38;2;153;153;153m[3m/config)[23m[39m
+
+[48;2;55;55;55m[38;2;80;80;80m❯ [38;2;255;255;255mRead .bake/harness/deploy.md and follow it.[39m                                                             [49m
+
+[38;2;78;186;101m⏺[1C[39m[1mBash[22m(gh[1Crelease[1Clist[1C--limit[1C1)
+[38;2;153;153;153m [1C⎿[1C [39mv1.46.2[1C--[1CFix[1Cagent[1Ccreation[1Cnot[1Csaving[1Cinstructions[6CLatest[2Cv1.46.2[1C2026-04-16T11:21:55Z
+
+[38;2;78;186;101m⏺[1C[39m[1mBash[22m(git[1Clog[1C--oneline[1C-5)
+[38;2;153;153;153m [1C⎿[1C [39m5be9ae0[1CPost-merge[1Cdocs:[1Cchangelog[1Cand[1Cbacklog[1Cfor[1Cplan-004
+[5C9505061[1CMerge[1Cbake/plan/plan-004:[1CFix[1CCreate[1CTrigger[1Cbutton[1Con[1CAgent[1CDetail[1Cpage
+[5C73dc33f[1CMark[1Cplan-004[1Ccomplete[1Cfor[1Cmerge
+[5C[2m…[1C+2[1Clines[1C(ctrl+o[1Cto[1Cexpand)[22m
+
+[38;2;255;107;128m⏺[1C[39m[1mBash[22m(git[1Clog[1Cv1.46.2..HEAD[1C--oneline)
+[38;2;153;153;153m [1C⎿[1C [38;2;255;107;128mError:[1CExit[1Ccode[1C128[39m
+[5C[38;2;255;107;128mfatal:[1Cambiguous[1Cargument[1C'v1.46.2..HEAD':[1Cunknown[1Crevision[1Cor[1Cpath[1Cnot[1Cin[1Cthe[1Cworking[1Ctree.[39m
+[5C[38;2;255;107;128mUse[1C'--'[1Cto[1Cseparate[1Cpaths[1Cfrom[1Crevisions,[1Clike[1Cthis:[39m
+[5C[38;2;255;107;128m'git[1C<command>[1C[<revision>...][1C--[1C[<file>...]'[39m
+
+[38;2;78;186;101m⏺[1C[39m[1mBash[22m(git[1Cfetch[1C--tags[1C2>&1[1C&&[1Cgit[1Clog[1Cv1.46.2..HEAD[1C--oneline)
+[38;2;153;153;153m [1C⎿[1C [39mFrom[1Chttps://github.com/anantgarg/tinyhands
+[6C*[1C[new[1Ctag][9Cv1.46.2[4C->[1Cv1.46.2
+[5C5be9ae0[1CPost-merge[1Cdocs:[1Cchangelog[1Cand[1Cbacklog[1Cfor[1Cplan-004
+[5C[2m…[1C+3[1Clines[1C(ctrl+o[1Cto[1Cexpand)[22m
+
+[38;2;255;255;255m⏺[1C[39m4[1Ccommits[1Csince[1Cv1.46.2[1C—[1Ca[1Cbug[1Cfix[1Cfor[1Cthe[1CCreate[1CTrigger[1Cbutton[1Con[1Cthe[1CAgent[1CDetail[1Cpage.[1CLet[1Cme[1Crun
+[2Cchecks,[1Cbump[1Cversion,[1Cand[1Cdeploy.
+
+[38;2;78;186;101m⏺[1C[39m[1mBash[22m(npm[1Crun[1Ctypecheck[1C2>&1[1C|[1Ctail[1C-5)
+[38;2;153;153;153m [1C⎿[1C [39m>[1Ctinyhands@1.46.2[1Ctypecheck
+[5C>[1Ctsc[1C--noEmit
+[38;2;153;153;153m [1C⎿[1C (timeout[1C2m)[39m
+
+[38;2;78;186;101m⏺[1C[39m[1mBash[22m(npm[1Ctest[1C2>&1[1C|[1Ctail[1C-10)
+[38;2;153;153;153m [1C⎿[1C [39mstdout[1C|[1Ctests/unit/logger.test.ts[1C>[1ClogRunEvent[1C>[1Cshould[1Ccall[1Clogger.info[1Cwith[1Crun_event
+[5C{
+[7C"agentId":[1C"a1",
+[5C[2m…[1C+14[1Clines[1C(ctrl+o[1Cto[1Cexpand)[22m
+[38;2;153;153;153m [1C⎿[1C (timeout[1C2m)[39m
+
+[38;2;255;255;255m⏺[1C[39mType[1Ccheck[1Cclean,[1Call[1C3262[1Ctests[1Cpass.[1CBumping[1Cversion[1Cand[1Cdeploying.
+
+[2C[38;2;153;153;153mRead[1C[1m1[22m file[1C(ctrl+o[1Cto[1Cexpand)[39m
+
+[38;2;78;186;101m⏺[1C[39m[1mUpdate[22m(package.json)
+[38;2;153;153;153m [1C⎿[1C [39mAdded[1C[1m1[1C[22mline,[1Cremoved[1C[1m1[1C[22mline
+[5C[38;2;248;248;242m[2m 1[1C[22m {[39m
+[5C[38;2;248;248;242m[2m 2[1C[22m [2C[38;2;230;219;116m"name"[38;2;248;248;242m:[1C[38;2;230;219;116m"tinyhands"[38;2;248;248;242m,[39m
+[5C[38;2;220;90;90m[48;2;61;1;0m 3 -[38;2;248;248;242m  "version": "1.46.[48;2;92;2;0m2[48;2;61;1;0m",                                                                    [49m[39m
+[5C[38;2;80;200;80m[48;2;2;40;0m 3 +[38;2;248;248;242m  [38;2;230;219;116m"version"[38;2;248;248;242m: [38;2;230;219;116m"1.46.[48;2;4;71;0m3[48;2;2;40;0m"[38;2;248;248;242m,                                                                    [49m[39m
+[5C[38;2;248;248;242m[2m 4[1C[22m [2C[38;2;230;219;116m"description"[38;2;248;248;242m:[1C[38;2;230;219;116m"Extra[1Chands[1Cfor[1Cyour[1CSlack[1Cworkspace[1C—[1Copen-source,[1Cself-hosted[1CAI[1Cagent[39m
+[5C[38;2;248;248;242m[2m [2C[22m [38;2;230;219;116ms[1Cpowered[1Cby[1CClaude"[38;2;248;248;242m,[39m
+[5C[38;2;248;248;242m[2m 5[1C[22m [2C[38;2;230;219;116m"main"[38;2;248;248;242m:[1C[38;2;230;219;116m"dist/index.js"[38;2;248;248;242m,[39m
+[5C[38;2;248;248;242m[2m 6[1C[22m [2C[38;2;230;219;116m"scripts"[38;2;248;248;242m:[1C{[39m
+
+[38;2;78;186;101m⏺[1C[39m[1mBash[22m(git[1Cadd[1Cpackage.json[1C&&[1Cgit[1Ccommit[1C-m[1C"$(cat[1C<<'EOF'
+[6CBump[1Cversion[1Cto[1Cv1.46.3…)
+[38;2;153;153;153m [1C⎿[1C [39mhusky[1C-[1CDEPRECATED
+
+[5CPlease[1Cremove[1Cthe[1Cfollowing[1Ctwo[1Clines[1Cfrom[1C.husky/pre-commit:
+[5C[2m…[1C+223[1Clines[1C(ctrl+o[1Cto[1Cexpand)[22m
+
+[38;2;255;255;255m⏺[1C[39mVersion[1Cbump[1Conly[1C—[1Cno[1Cfeature/workflow[1Cchanges,[1Cno[1Cnew[1Citems[1Cdiscovered.[1CContinuing[1Cwith[1Cpush[1Cand
+[2Crelease.
+
+[38;2;78;186;101m⏺[1C[39m[1mBash[22m(git[1Cpush[1Corigin[1Cmain[1C2>&1)
+[38;2;153;153;153m [1C⎿[1C [39mTo[1Chttps://github.com/anantgarg/tinyhands.git
+[8C0aa9640..7f72e98[2Cmain[1C->[1Cmain
+
+[38;2;78;186;101m⏺[1C[39m[1mBash[22m(gh[1Crelease[1Ccreate[1Cv1.46.3[1C--title[1C"v1.46.3[1C--[1CFix[1CCreate[1CTrigger[1Cbutton[1Con[1CAgent[1CDetail[1Cpage"
+[6C--notes[1C"$(cat[1C<<'EOF'
+[6C##[1CChanges…)
+[38;2;153;153;153m [1C⎿[1C [39mhttps://github.com/anantgarg/tinyhands/releases/tag/v1.46.3
+
+[38;2;255;255;255m⏺[1C[39mNow[1Cdeploying[1Cto[1Cproduction.
+
+[38;2;78;186;101m⏺[1C[39m[1mBash[22m(ssh[1C-i[1C~/.ssh/tinyjobs_deploy[1Croot@45.55.157.4[1C"cd[1C/root/tinyjobs[1C&&[1Cgit[1Cpull[1Corigin[1Cmain[1C2>&1[1C|
+[6Ctail[1C-5")
+[38;2;153;153;153m [1C⎿[1C [39mFrom[1Cgithub.com:anantgarg/tinyhands
+[6C*[1Cbranch[12Cmain[7C->[1CFETCH_HEAD
+[5CAlready[1Cup[1Cto[1Cdate.
+[38;2;153;153;153m [1C⎿[1C (timeout[1C30s)[39m
+
+[38;2;78;186;101m⏺[1C[39m[1mBash[22m(ssh[1C-i[1C~/.ssh/tinyjobs_deploy[1Croot@45.55.157.4[1C"cd[1C/root/tinyjobs[1C&&[1Cgit[1Clog[1C--oneline[1C-3[1C&&[1Cecho
+[6C'---'[1C&&[1Cnode[1C-e[1C\"console.log(require('./package.json').versi…)
+[38;2;153;153;153m [1C⎿[1C [39m7f72e98[1CBump[1Cversion[1Cto[1Cv1.46.3
+[5C5be9ae0[1CPost-merge[1Cdocs:[1Cchangelog[1Cand[1Cbacklog[1Cfor[1Cplan-004
+[5C9505061[1CMerge[1Cbake/plan/plan-004:[1CFix[1CCreate[1CTrigger[1Cbutton[1Con[1CAgent[1CDetail[1Cpage
+[5C[2m…[1C+2[1Clines[1C(ctrl+o[1Cto[1Cexpand)[22m
+[38;2;153;153;153m [1C⎿[1C (timeout[1C15s)[39m
+
+[38;2;255;255;255m⏺[1C[39mThe[1Cauto-update[1Calready[1Cpulled[1Cthe[1Ccode[1C(it[1Cdetected[1Cthe[1Cversion[1Cchange[1Cfrom[1Cthe[1Cearlier[1Cpush).[1CThe
+[2Csource[1Cis[1Cat[1Cv1.46.3.[1CLet[1Cme[1Cbuild[1Cand[1Creload.
+
+[38;2;78;186;101m⏺[1C[39m[1mBash[22m(ssh[1C-i[1C~/.ssh/tinyjobs_deploy[1Croot@45.55.157.4[1C"cd[1C/root/tinyjobs[1C&&[1Cnpm[1Crun[1Cbuild[1C2>&1[1C|[1Ctail[1C-3
+[6C&&[1Cnpm[1Crun[1Cbuild:web[1C2>&1[1C|[1Ctail[1C-3")
+[38;2;153;153;153m [1C⎿[1C [39m>[1Ctinyhands@1.46.3[1Cbuild
+[5C>[1Ctsc
+[5C[2m…[1C+3[1Clines[1C(ctrl+o[1Cto[1Cexpand)[22m
+[38;2;153;153;153m [1C⎿[1C (timeout[1C3m)[39m
+
+[38;2;78;186;101m⏺[1C[39m[1mBash[22m(ssh[1C-i[1C~/.ssh/tinyjobs_deploy[1Croot@45.55.157.4[1C"cd[1C/root/tinyjobs[1C&&[1Cnode[1Cdist/db/migrate.js[1C&&[1Cpm2
+[7Creload[1Cecosystem.config.js"[1C2>&1)
+[38;2;153;153;153m [1C⎿[1C [39m[dotenv@17.3.1][1Cinjecting[1Cenv[1C(30)[1Cfrom[1C.env[1C--[1Ctip:[1C🔐[1Cprevent[1Cbuilding[1C.env[1Cin[1Cdocker:[1Chttps:/
+[5C/dotenvx.com/prebuild
+[5CAll[1Cmigrations[1Capplied
+[5C[2m…[1C+14[1Clines[1C(ctrl+o[1Cto[1Cexpand)[22m
+[38;2;153;153;153m [1C⎿[1C (timeout[1C1m)[39m
+
+[38;2;78;186;101m⏺[1C[39m[1mBash[22m(ssh[1C-i[1C~/.ssh/tinyjobs_deploy[1Croot@45.55.157.4[1C"pm2[1Clist"[1C2>&1)
+[38;2;153;153;153m [1C⎿[1C [39m┌────┬────────────────────────┬─────────────┬─────────┬─────────┬──────────┬────────┬──────┬────
+[5C───────┬──────────┬──────────┬──────────┬──────────┐
+[5C│[1Cid[1C│[1Cname[19C│[1Cnamespace[3C│[1Cversion[1C│[1Cmode[4C│[1Cpid[6C│[1Cuptime[1C│[1C↺[4C│[1Csta
+[5C[2m…[1C+13[1Clines[1C(ctrl+o[1Cto[1Cexpand)[22m
+[38;2;153;153;153m [1C⎿[1C (timeout[1C15s)[39m
+
+[38;2;255;255;255m⏺[1C[39mDeploy[1Ccomplete.[1CNow[1Cupdating[1Cthe[1Creleases[1Clog.
+
+[2C[38;2;153;153;153mRead[1C[1m1[22m file[1C(ctrl+o[1Cto[1Cexpand)[39m
+
+[38;2;78;186;101m⏺[1C[39m[1mUpdate[22m(.bake/product/releases.md)
+[38;2;153;153;153m [1C⎿[1C [39mAdded[1C[1m5[1C[22mlines,[1Cremoved[1C[1m1[1C[22mline
+[5C[38;2;248;248;242m[2m 2[1C[22m [39m
+[5C[38;2;248;248;242m[2m 3[1C[22m One[1Centry[1Cper[1Cdeploy[1Cto[1Cproduction.[1CEach[1Centry[1Cnames[1Cthe[1Cversion,[1Cthe[1Cdate,[1Cthe[1Cmerges[1Cinc[39m
+[5C[38;2;248;248;242m[2m [2C[22m luded[1Csince[1Cthe[1Cprevious[1Crelease,[1Cand[1Cthe[1Cexact[1Crollback[1Ccommand.[1CUpdated[1Cautomatically[1Cby[39m
+[5C[38;2;248;248;242m[2m [2C[22m [1Cthe[1CDeploy[1Cbutton[1C(see[1C`.bake/harness/deploy.md`[1Cfor[1Cthe[1Cpost-deploy[1Cstep[1Cthat[1Cappends[1Che[39m
+[5C[38;2;248;248;242m[2m [2C[22m re).[39m
+[5C[38;2;248;248;242m[2m 4[1C[22m [39m
+[5C[38;2;220;90;90m[48;2;61;1;0m 5 -[38;2;248;248;242m_No releases yet. The first deploy will create the first entry._                          [49m[39m
+[5C[38;2;80;200;80m[48;2;2;40;0m 5 +[38;2;248;248;242m## v1.46.3 — 2026-04-16                                                                   [49m[39m
+[5C[38;2;80;200;80m[48;2;2;40;0m 6 +[38;2;248;248;242m                                                                                          [49m[39m
+[5C[38;2;80;200;80m[48;2;2;40;0m 7 +[38;2;248;248;242m- Fix Create Trigger button on Agent Detail page                                          [49m[39m
+[5C[38;2;80;200;80m[48;2;2;40;0m 8 +[38;2;248;248;242m                                                                                          [49m[39m
+[5C[38;2;80;200;80m[48;2;2;40;0m 9 +[38;2;248;248;242mRollback: `git checkout v1.46.2 -- . && git commit -m "Rollback to v1.46.2" && git push`  [49m[39m
+
+[38;2;255;255;255m⏺[1C[39m[1mDeployed[1Cv1.46.3[1Cto[1Cproduction[1C[22m(45.55.157.4)
+
+[2C┌──────────────────┬─────────────────────────────────────────────────────────────┐
+[2C│[7CStep[7C│[27CStatus[28C│
+[2C├──────────────────┼─────────────────────────────────────────────────────────────┤
+[2C│[1CType[1Ccheck[7C│[1CPassed[54C│
+[2C├──────────────────┼─────────────────────────────────────────────────────────────┤
+[2C│[1CUnit[1Ctests[7C│[1C3262[1Cpassed[1C(81[1Cfiles)[38C│
+[2C├──────────────────┼─────────────────────────────────────────────────────────────┤
+[2C│[1CVersion[1Cbump[5C│[1C1.46.2[1C→[1C1.46.3[45C│
+[2C├──────────────────┼─────────────────────────────────────────────────────────────┤
+[2C│[1CGit[1Cpush[9C│[1CDone[56C│
+[2C├──────────────────┼─────────────────────────────────────────────────────────────┤
+[2C│[1CGitHub[1Crelease[3C│[1Chttps://github.com/anantgarg/tinyhands/releases/tag/v1.46.3[1C│
+[2C├──────────────────┼─────────────────────────────────────────────────────────────┤
+[2C│[1CBuild[1C(TS[1C+[1Cweb)[1C│[1CDone[56C│
+[2C├──────────────────┼─────────────────────────────────────────────────────────────┤
+[2C│[1CMigrations[7C│[1CAll[1Capplied[49C│
+[2C├──────────────────┼─────────────────────────────────────────────────────────────┤
+[2C│[1CPM2[1Creload[7C│[1CAll[1C6[1Cprocesses[1Conline[1Cat[1Cv1.46.3[27C│
+[2C└──────────────────┴─────────────────────────────────────────────────────────────┘
+
+[2C[1mWhat[1Cshipped:[1C[22mFix[1Cfor[1Cthe[1Cbroken[1C"Create[1CTrigger"[1Cbutton[1Con[1Cthe[1CAgent[1CDetail[1CTriggers[1Ctab.
+
+[38;2;153;153;153m✻[1CCrunched[1Cfor[1C4m[1C24s[39m
+
+[38;2;153;153;153m※[1C[1mrecap:[1C[22m[3mDeployed[1Cv1.46.3[1Cto[1Cproduction,[1Cfixing[1Cthe[1Cbroken[1CCreate[1CTrigger[1Cbutton[1Con[1Cthe[1CAgent[1CDetail[1Cpage.[23m[39m
+[2C[38;2;153;153;153m[3m All[1C6[1CPM2[1Cprocesses[1Care[1Conline[1Cand[1Chealthy.[1CNo[1Cfurther[1Caction[1Cneeded[1Cunless[1Cyou[1Chave[1Canother[1Ctask.[23m[39m
+[2C[38;2;153;153;153m[3m(disable[1Crecaps[1Cin[1C/config)[23m[39m
+
+[38;2;136;136;136m──────────────────────────────────────────────────────────────────────────────────────────────────────────[39m
+❯ 
+[38;2;136;136;136m──────────────────────────────────────────────────────────────────────────────────────────────────────────[39m
+[2C[38;2;255;107;128m⏵⏵[1Cdon't[1Cask[1Con[38;2;153;153;153m (shift+tab[1Cto[1Ccycle)[39m

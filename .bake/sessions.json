@@ -1,11 +1,19 @@
 {
   "sessions": [
     {
+      "id": "main",
+      "type": "vibe",
+      "name": "main",
+      "worktreePath": null,
+      "createdAt": "2026-04-16T11:19:33.058Z"
+    },
+    {
       "id": "soft-raven",
       "type": "vibe",
       "name": "soft-raven",
       "worktreePath": null,
-      "createdAt": "2026-04-16T11:11:53.571Z"
+      "createdAt": "2026-04-16T11:11:53.571Z",
+      "vibeId": "vibe-001"
     },
     {
       "id": "plan-001",
@@ -37,41 +45,56 @@
     {
       "id": "plan-004",
       "type": "plan",
-      "name": "Scan & populate project docs",
+      "name": "New Plan",
       "planId": "plan-004",
       "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-004",
       "branch": "bake/plan/plan-004",
       "createdAt": "2026-04-16T11:19:33.058Z"
     },
     {
-      "id": "plan-005",
-      "type": "plan",
-      "name": "Test plan for commit verification",
-      "planId": "plan-005",
-      "planPath": "/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-005.md",
-      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-005",
-      "branch": "bake/plan/plan-005",
-      "createdAt": "2026-04-16T15:06:20.473Z"
-    },
-    {
-      "id": "plan-006",
-      "type": "plan",
-      "name": "Test plan for Fix 3 verification",
-      "planId": "plan-006",
-      "planPath": "/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-006.md",
-      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-006",
-      "branch": "bake/plan/plan-006",
-      "createdAt": "2026-04-16T16:38:45.170Z"
-    },
-    {
-      "id": "plan-008",
+      "id": "plan-004",
       "type": "plan",
       "name": "New Plan",
-      "planId": "plan-008",
-      "planPath": "/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-008.md",
-      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-008",
-      "branch": "bake/plan/plan-008",
-      "createdAt": "2026-04-16T17:18:08.570Z"
+      "planId": "plan-004",
+      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-004",
+      "branch": "bake/plan/plan-004",
+      "createdAt": "2026-04-16T11:19:33.058Z"
+    },
+    {
+      "id": "plan-004",
+      "type": "plan",
+      "name": "New Plan",
+      "planId": "plan-004",
+      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-004",
+      "branch": "bake/plan/plan-004",
+      "createdAt": "2026-04-16T11:19:33.058Z"
+    },
+    {
+      "id": "azure-otter",
+      "type": "vibe",
+      "name": "Azure Otter",
+      "vibeId": "vibe-002",
+      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/azure-otter",
+      "branch": "bake/vibe/azure-otter",
+      "createdAt": "2026-04-16T18:03:04.535Z"
+    },
+    {
+      "id": "silver-otter",
+      "type": "vibe",
+      "name": "Silver Otter",
+      "vibeId": "vibe-003",
+      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/silver-otter",
+      "branch": "bake/vibe/silver-otter",
+      "createdAt": "2026-04-16T18:03:22.074Z"
+    },
+    {
+      "id": "calm-tiger",
+      "type": "vibe",
+      "name": "Calm Tiger",
+      "vibeId": "vibe-004",
+      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/calm-tiger",
+      "branch": "bake/vibe/calm-tiger",
+      "createdAt": "2026-04-16T18:32:30.470Z"
     }
   ]
 }
