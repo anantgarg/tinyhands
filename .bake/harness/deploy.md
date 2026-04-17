@@ -4,11 +4,9 @@ Steps to deploy TinyHands to production. This is the single entry point the Depl
 
 ## Deploy Target
 
-DigitalOcean droplet `tinyjobs-prod` (45.55.157.4). Runs PM2 directly on the host (not Docker Compose for the app) with 6 processes: listener, workers ×3, scheduler, sync. System nginx reverse-proxies `127.0.0.1:3000`. Let's Encrypt via certbot, renewed automatically. Cloudflare proxies `*.tinyhands.ai` to the origin (orange cloud, "Full" SSL mode).
+A single Linux host running PM2 directly on the host (not Docker Compose for the app) with 6 processes: listener, workers ×3, scheduler, sync. System nginx reverse-proxies `127.0.0.1:3000`. Let's Encrypt via certbot, renewed automatically. Cloudflare proxies the primary domain to the origin.
 
-Primary domain: `https://app.tinyhands.ai`. `cometchat.tinyhands.ai` is kept live for OAuth redirects that haven't been migrated yet.
-
-SSH access: `doctl compute ssh tinyjobs-prod --ssh-key-path ~/.ssh/tinyjobs_deploy --ssh-command "..."`. App directory: `/root/tinyjobs`.
+**Host-specific values** (droplet name, public IP, SSH key path, app checkout directory, primary domain, admin email for certbot) are kept out of this public repo. Claude Code resolves them from the operator's private environment — in this project, user memory at `~/.claude/projects/-Users-anantgarg-Local-tinyhands/memory/reference_digitalocean.md`. When shown placeholders like `$DROPLET`, `$APP_DIR`, or `$ADMIN_EMAIL` below, substitute from that reference before running.
 
 ## Instructions for Claude Code
 
