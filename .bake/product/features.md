@@ -80,7 +80,9 @@
 
 | Feature | Module | Entry Points |
 |---------|--------|-------------|
-| Platform roles | `src/modules/access-control/` | superadmin / admin / member |
+| Workspace memberships | `src/modules/users/` | admin / member per workspace (via `workspace_memberships`) |
+| Platform admins | `src/modules/users/` | Operators of the deployment (via `platform_admins`), `/platform` view |
+| Legacy platform roles | `src/modules/access-control/` | superadmin / admin / member (retained read-only; being phased out) |
 | Agent roles | `src/modules/access-control/` | owner / member / viewer per agent |
 | Write policy gates | `src/modules/permissions/` | auto / confirm / admin_confirm / deny |
 | Upgrade requests | `src/modules/access-control/` | Viewer→member escalation |
