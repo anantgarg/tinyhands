@@ -99,6 +99,10 @@ vi.mock('@anthropic-ai/sdk', () => ({
   })),
 }));
 
+vi.mock('../../src/modules/anthropic', () => ({
+  createAnthropicClient: vi.fn(async () => ({ messages: { create: (...args: any[]) => mockAnthropicCreate(...args) } })),
+}));
+
 vi.mock('uuid', () => ({
   v4: vi.fn().mockReturnValue('test-uuid-1234'),
 }));

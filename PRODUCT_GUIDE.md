@@ -4,6 +4,14 @@ We're excited to launch TinyHands, a platform that lets you create and manage AI
 
 ---
 
+## One Platform, Many Workspaces
+
+TinyHands is designed so one deployment can host many Slack workspaces. Your workspace's agents, tools, knowledge base, and Claude API key all stay private to your workspace. If you belong to more than one Slack workspace that uses TinyHands, you'll see a workspace switcher in the dashboard sidebar — pick the one you want to work in and every page updates accordingly.
+
+Adding TinyHands to a new Slack workspace is a one-click install from the dashboard's "Add to Slack" button. The first person to install TinyHands in their Slack workspace becomes that workspace's admin. From there, the workspace admin adds their Claude API key (under **Workspace Settings → Claude API key**, with a "Test key" button that verifies it works before saving) and the workspace is ready to go.
+
+---
+
 ## Getting Started
 
 ### Step 1: Create Your First Agent

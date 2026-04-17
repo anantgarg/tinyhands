@@ -905,7 +905,7 @@ router.post('/:id/suggest-improvement', async (req: Request, res: Response) => {
       return;
     }
     const { generatePromptDiff } = await import('../../modules/self-improvement');
-    const diff = await generatePromptDiff((agent as any).system_prompt, feedback, '');
+    const diff = await generatePromptDiff(workspaceId, (agent as any).system_prompt, feedback, '');
     res.json(diff);
   } catch (err: any) {
     logger.error('Suggest improvement error', { error: err.message });

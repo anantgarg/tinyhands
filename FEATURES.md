@@ -5,6 +5,37 @@ Claude MUST check this before making changes and update it after commits.
 
 ---
 
+## Multi-Tenant Workspaces
+
+TinyHands is multi-tenant: one deployment serves many Slack workspaces. A user can belong to multiple workspaces and switch between them in the dashboard.
+
+### Ownership split
+
+- **Platform (TinyHands deployment operator):** Slack app + app-level token + OAuth client, PostgreSQL, Redis, worker/listener/scheduler/sync processes, Docker runner image, deploy infrastructure.
+- **Workspace (admin):** Anthropic API key, tool connections (Linear, Zendesk, HubSpot, etc.), agents, KB sources, documents, triggers, memory, audit log.
+
+### Onboarding a new workspace
+
+Admins visit the deployment's "Add to Slack" button (which links to `/api/v1/auth/slack/install`), authorize the TinyHands Slack app, and the workspace is created automatically. The installing user becomes the first workspace admin. They then set the workspace's Anthropic API key in **Workspace Settings** (with a "Test key" button that validates it before saving).
+
+### Sign in with Slack
+
+Dashboard auth is Slack OAuth. Users who belong to multiple workspaces see a workspace switcher in the sidebar header. Switching changes the active workspace across every page in the dashboard; dashboard API routes enforce membership checks on every request.
+
+### Platform admin
+
+Operators of the TinyHands deployment (rows in `platform_admins`) can view per-workspace health aggregates at `/platform` — runs in the last 24 hours, error rate, whether a Claude key is configured. No cross-workspace data access beyond those aggregates.
+
+### Isolation invariants
+
+- Every tenant-data Redis key is prefixed with the workspace id (via `rkey(workspaceId, ...parts)` in `src/queue/index.ts`).
+- Every agent run gets its own Docker container with a per-run secrets temp dir mounted read-only, deleted in a `finally` block on completion.
+- Webhook URLs for agent triggers include the workspace slug: `/webhooks/w/{workspaceSlug}/agent/{agentSlug}`. The legacy `/webhooks/agent-{name}` form returns a 301 when it can resolve unambiguously.
+- OAuth flows for third-party tools use a signed `state` parameter that carries the workspace id; the signature is verified on callback.
+- The logger runs `redactSecrets()` on every log line so API keys, bot tokens, and OAuth secrets cannot leak to stdout.
+
+---
+
 ## Agent Lifecycle
 
 ### Creating Agents

@@ -1,20 +1,51 @@
 # TinyHands Admin Guide
 
-This guide covers setup, configuration, and ongoing management of TinyHands for workspace administrators (superadmins).
+This guide covers setup, configuration, and ongoing management of TinyHands for workspace administrators.
 
 ---
 
+## Multi-Tenant Overview
+
+A single TinyHands deployment hosts many Slack workspaces. TinyHands (the operator running this deployment) owns the Slack app, database, Redis, and hosting. Each workspace admin owns their workspace's Claude API key, tool connections, agents, knowledge base, triggers, and audit log. Data never crosses workspace boundaries.
+
+- **Sign in with Slack** — Users sign in with Slack OAuth. Users who belong to multiple Slack workspaces see a workspace switcher in the dashboard header.
+- **Installing in a new Slack workspace** — Admins click "Add to Slack" (`/api/v1/auth/slack/install`) to OAuth-install the bot into their Slack workspace. This creates a new TinyHands workspace automatically; no manual database edits are required.
+- **Workspace settings** — Each workspace admin sets their own Anthropic API key under **Workspace Settings → Claude API key** (with a **Test key** button that validates against Anthropic before saving).
+
+## Upgrading to Multi-Tenant
+
+If you are upgrading an existing single-tenant deployment, the multi-tenant migration runs automatically on first boot after the upgrade. It is idempotent — safe to run multiple times.
+
+What it does, for workspace 1 (your existing workspace):
+1. Reads `ANTHROPIC_API_KEY` from the environment and stores it encrypted in `workspace_settings`. After this, the env var is no longer read at runtime.
+2. Creates `users`, `workspace_memberships`, and `platform_admins` rows from your existing `platform_roles` table, using this role mapping:
+   - `superadmin` → `workspace_memberships(role=admin)` AND a row in `platform_admins`
+   - `admin` → `workspace_memberships(role=admin)`
+   - `member` → `workspace_memberships(role=member)`
+3. Generates a `workspace_slug` for each workspace from its team name.
+
+The old `platform_roles` table is retained read-only for one release as a safety net and will be dropped in a follow-up migration.
+
+**After migration you can delete `ANTHROPIC_API_KEY` from your `.env`** — it is ignored at runtime. Workspace admins manage their own keys in the dashboard.
+
 ## Initial Setup
 
-### Platform Roles
+### Workspace Roles
 
-TinyHands uses a three-tier platform role system:
+Each workspace has its own roles (stored in `workspace_memberships`):
 
 | Role | Permissions |
 |------|-------------|
-| **Superadmin** | Full platform control -- manage all agents, tools, KB, roles, audit log |
-| **Admin** | Manage tools, KB, and agents -- cannot change platform roles |
+| **Admin** | Full control over this workspace — agents, tools, KB, settings, roles |
 | **Member** | View and interact with agents (cannot create agents or manage integrations) |
+
+The person who installs TinyHands into a Slack workspace is automatically an admin of that workspace.
+
+### Platform Admins
+
+**Platform admins** are the operators running the TinyHands deployment. They can view per-workspace health aggregates at `/platform` (runs in the last 24 hours, error rate, whether a Claude key is configured). Platform admins cannot read any workspace's data — no impersonation, no cross-workspace search. It is an operational stub.
+
+On upgrade, any prior `superadmin` in the legacy `platform_roles` table becomes a platform admin.
 
 ### Becoming the First Superadmin
 

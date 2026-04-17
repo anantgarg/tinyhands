@@ -1,8 +1,9 @@
-import Anthropic from '@anthropic-ai/sdk';
+import type Anthropic from '@anthropic-ai/sdk';
 import { getBuiltinTools, listUserAvailableTools, listWriteTools } from '../tools';
 import { getIntegrations } from '../tools/integrations';
 import { getAvailableSkills } from '../skills';
 import { isSuperadmin } from '../access-control';
+import { createAnthropicClient } from '../anthropic';
 import { logger } from '../../utils/logger';
 
 export interface GoalAnalysis {
@@ -31,7 +32,7 @@ export interface GoalAnalysis {
 }
 
 export async function analyzeGoal(workspaceId: string, goal: string, existingPrompt?: string, requestingUserId?: string, currentAgentName?: string): Promise<GoalAnalysis> {
-  const client = new Anthropic();
+  const client = await createAnthropicClient(workspaceId);
   const builtinTools = getBuiltinTools();
   const availableSkills = getAvailableSkills();
 
@@ -300,6 +301,7 @@ IMPORTANT guidelines:
  * Uses keyword matching first, falls back to LLM for ambiguous cases.
  */
 export async function checkMessageRelevance(
+  workspaceId: string,
   message: string,
   agentGoalKeywords: string[],
   systemPrompt: string,
@@ -326,7 +328,7 @@ export async function checkMessageRelevance(
 
   // For messages that don't match keywords, use a fast LLM check
   try {
-    const client = new Anthropic();
+    const client = await createAnthropicClient(workspaceId);
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 10,

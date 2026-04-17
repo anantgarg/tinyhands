@@ -62,6 +62,16 @@ async function main(): Promise<void> {
     logger.warn('Credential re-encryption failed', { error: err.message })
   );
 
+  // Multi-tenant bootstrap: migrate ANTHROPIC_API_KEY into workspace_settings,
+  // backfill users/memberships/platform_admins from legacy platform_roles.
+  // Idempotent — safe on every startup.
+  try {
+    const { runMultiTenantBootstrap } = await import('./modules/multitenant-migration');
+    await runMultiTenantBootstrap(authResult.team_id as string);
+  } catch (err: any) {
+    logger.warn('Multi-tenant bootstrap failed', { error: err.message });
+  }
+
   // Ensure bot is a member of all agent channels (for receiving events)
   ensureBotInAllAgentChannels().catch(err =>
     logger.warn('Auto-join agent channels failed', { error: err.message })

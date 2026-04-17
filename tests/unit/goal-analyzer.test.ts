@@ -1,11 +1,16 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// ── Mock Anthropic SDK ──
+// ── Mock Anthropic SDK + the per-workspace createAnthropicClient helper ──
 const mockCreate = vi.fn();
 vi.mock('@anthropic-ai/sdk', () => ({
   default: vi.fn().mockImplementation(() => ({
     messages: { create: mockCreate },
   })),
+}));
+vi.mock('../../src/modules/anthropic', () => ({
+  createAnthropicClient: vi.fn(async () => ({ messages: { create: mockCreate } })),
+  getAnthropicApiKey: vi.fn().mockResolvedValue('sk-ant-test'),
+  AnthropicKeyMissingError: class AnthropicKeyMissingError extends Error {},
 }));
 
 // ── Mock tools module ──
@@ -422,7 +427,7 @@ describe('Goal Analyzer', () => {
     // ── respondToAll ──
 
     it('should return true when respondToAll is true', async () => {
-      const result = await checkMessageRelevance(
+      const result = await checkMessageRelevance(TEST_WORKSPACE_ID, 
         'absolutely anything',
         [],
         samplePrompt,
@@ -432,49 +437,49 @@ describe('Goal Analyzer', () => {
     });
 
     it('should return true for respondToAll even with empty message', async () => {
-      const result = await checkMessageRelevance('', [], samplePrompt, true);
+      const result = await checkMessageRelevance(TEST_WORKSPACE_ID, '', [], samplePrompt, true);
       expect(result).toBe(true);
     });
 
     it('should not call LLM when respondToAll is true', async () => {
-      await checkMessageRelevance('any message here', [], samplePrompt, true);
+      await checkMessageRelevance(TEST_WORKSPACE_ID, 'any message here', [], samplePrompt, true);
       expect(mockCreate).not.toHaveBeenCalled();
     });
 
     // ── Short messages ──
 
     it('should return false for messages shorter than 3 chars', async () => {
-      const result = await checkMessageRelevance('hi', ['hi'], samplePrompt, false);
+      const result = await checkMessageRelevance(TEST_WORKSPACE_ID, 'hi', ['hi'], samplePrompt, false);
       expect(result).toBe(false);
     });
 
     it('should return false for whitespace-padded short message', async () => {
-      const result = await checkMessageRelevance('  a ', [], samplePrompt, false);
+      const result = await checkMessageRelevance(TEST_WORKSPACE_ID, '  a ', [], samplePrompt, false);
       expect(result).toBe(false);
     });
 
     it('should not call LLM for short messages', async () => {
-      await checkMessageRelevance('ab', [], samplePrompt, false);
+      await checkMessageRelevance(TEST_WORKSPACE_ID, 'ab', [], samplePrompt, false);
       expect(mockCreate).not.toHaveBeenCalled();
     });
 
     // ── Domain/URL detection ──
 
     it('should return true for domain-like messages', async () => {
-      expect(await checkMessageRelevance('google.com', [], samplePrompt, false)).toBe(true);
-      expect(await checkMessageRelevance('ibm.com', [], samplePrompt, false)).toBe(true);
-      expect(await checkMessageRelevance('https://example.org', [], samplePrompt, false)).toBe(true);
+      expect(await checkMessageRelevance(TEST_WORKSPACE_ID, 'google.com', [], samplePrompt, false)).toBe(true);
+      expect(await checkMessageRelevance(TEST_WORKSPACE_ID, 'ibm.com', [], samplePrompt, false)).toBe(true);
+      expect(await checkMessageRelevance(TEST_WORKSPACE_ID, 'https://example.org', [], samplePrompt, false)).toBe(true);
     });
 
     it('should not call LLM for domain-like messages', async () => {
-      await checkMessageRelevance('google.com', [], samplePrompt, false);
+      await checkMessageRelevance(TEST_WORKSPACE_ID, 'google.com', [], samplePrompt, false);
       expect(mockCreate).not.toHaveBeenCalled();
     });
 
     // ── Keyword matching ──
 
     it('should return true when message contains a keyword', async () => {
-      const result = await checkMessageRelevance(
+      const result = await checkMessageRelevance(TEST_WORKSPACE_ID, 
         'I need help with my account',
         ['help', 'support', 'account'],
         samplePrompt,
@@ -484,7 +489,7 @@ describe('Goal Analyzer', () => {
     });
 
     it('should match keywords case-insensitively', async () => {
-      const result = await checkMessageRelevance(
+      const result = await checkMessageRelevance(TEST_WORKSPACE_ID, 
         'HELP ME WITH THIS ISSUE',
         ['help', 'support'],
         samplePrompt,
@@ -494,7 +499,7 @@ describe('Goal Analyzer', () => {
     });
 
     it('should match when keyword is uppercase and message lowercase', async () => {
-      const result = await checkMessageRelevance(
+      const result = await checkMessageRelevance(TEST_WORKSPACE_ID, 
         'i need some help please',
         ['HELP', 'SUPPORT'],
         samplePrompt,
@@ -504,7 +509,7 @@ describe('Goal Analyzer', () => {
     });
 
     it('should match partial keyword presence within words', async () => {
-      const result = await checkMessageRelevance(
+      const result = await checkMessageRelevance(TEST_WORKSPACE_ID, 
         'this is unhelpful content',
         ['help'],
         samplePrompt,
@@ -514,7 +519,7 @@ describe('Goal Analyzer', () => {
     });
 
     it('should not call LLM when keyword matches', async () => {
-      await checkMessageRelevance(
+      await checkMessageRelevance(TEST_WORKSPACE_ID, 
         'I need help with something',
         ['help'],
         samplePrompt,
@@ -530,7 +535,7 @@ describe('Goal Analyzer', () => {
         content: [{ type: 'text', text: 'yes' }],
       });
 
-      const result = await checkMessageRelevance(
+      const result = await checkMessageRelevance(TEST_WORKSPACE_ID, 
         'Can you explain the billing process?',
         ['deploy', 'code'],
         samplePrompt,
@@ -546,7 +551,7 @@ describe('Goal Analyzer', () => {
         content: [{ type: 'text', text: 'no' }],
       });
 
-      await checkMessageRelevance(
+      await checkMessageRelevance(TEST_WORKSPACE_ID, 
         'What is the meaning of life?',
         ['deploy'],
         samplePrompt,
@@ -563,7 +568,7 @@ describe('Goal Analyzer', () => {
         content: [{ type: 'text', text: 'no' }],
       });
 
-      const result = await checkMessageRelevance(
+      const result = await checkMessageRelevance(TEST_WORKSPACE_ID, 
         'Random unrelated message here',
         [],
         samplePrompt,
@@ -578,7 +583,7 @@ describe('Goal Analyzer', () => {
         content: [{ type: 'text', text: 'Yes, this is relevant.' }],
       });
 
-      const result = await checkMessageRelevance(
+      const result = await checkMessageRelevance(TEST_WORKSPACE_ID, 
         'Some ambiguous message here',
         [],
         samplePrompt,
@@ -593,7 +598,7 @@ describe('Goal Analyzer', () => {
         content: [{ type: 'text', text: 'YES' }],
       });
 
-      const result = await checkMessageRelevance(
+      const result = await checkMessageRelevance(TEST_WORKSPACE_ID, 
         'Some message that needs LLM check',
         [],
         samplePrompt,
@@ -608,7 +613,7 @@ describe('Goal Analyzer', () => {
         content: [{ type: 'text', text: 'no' }],
       });
 
-      await checkMessageRelevance(
+      await checkMessageRelevance(TEST_WORKSPACE_ID, 
         'This is a long enough message',
         [],
         samplePrompt,
@@ -624,7 +629,7 @@ describe('Goal Analyzer', () => {
         content: [{ type: 'text', text: 'no' }],
       });
 
-      await checkMessageRelevance(
+      await checkMessageRelevance(TEST_WORKSPACE_ID, 
         'Some message for LLM check',
         [],
         longPrompt,
@@ -643,7 +648,7 @@ describe('Goal Analyzer', () => {
         content: [{ type: 'text', text: 'no' }],
       });
 
-      await checkMessageRelevance(longMessage, [], samplePrompt, false);
+      await checkMessageRelevance(TEST_WORKSPACE_ID, longMessage, [], samplePrompt, false);
 
       const callArgs = mockCreate.mock.calls[0][0];
       const userContent = callArgs.messages[0].content;
@@ -655,7 +660,7 @@ describe('Goal Analyzer', () => {
     it('should return false when LLM call throws an error', async () => {
       mockCreate.mockRejectedValueOnce(new Error('API rate limit exceeded'));
 
-      const result = await checkMessageRelevance(
+      const result = await checkMessageRelevance(TEST_WORKSPACE_ID, 
         'Some message that triggers LLM',
         [],
         samplePrompt,
@@ -669,7 +674,7 @@ describe('Goal Analyzer', () => {
       const { logger } = await import('../../src/utils/logger');
       mockCreate.mockRejectedValueOnce(new Error('Network error'));
 
-      await checkMessageRelevance(
+      await checkMessageRelevance(TEST_WORKSPACE_ID, 
         'Some message that triggers LLM',
         [],
         samplePrompt,
@@ -685,7 +690,7 @@ describe('Goal Analyzer', () => {
     it('should return false on timeout/network errors without crashing', async () => {
       mockCreate.mockRejectedValueOnce(new Error('ETIMEDOUT'));
 
-      const result = await checkMessageRelevance(
+      const result = await checkMessageRelevance(TEST_WORKSPACE_ID, 
         'Another message that triggers LLM',
         [],
         samplePrompt,

@@ -2,7 +2,8 @@ import { v4 as uuid } from 'uuid';
 import { Worker, Job } from 'bullmq';
 import { query, queryOne, execute } from '../../db';
 import { getRedisConnection, recordTokenUsage, checkRateLimit, checkRequestRate } from '../../queue';
-import { createAgentContainer, startContainer, waitForContainer, removeContainer, followContainerOutput } from '../../docker';
+import { createAgentContainer, startContainer, waitForContainer, removeContainer, followContainerOutput, runDirsFor, cleanupRunSecretsDir } from '../../docker';
+import { getAnthropicApiKey, AnthropicKeyMissingError } from '../anthropic';
 import { getAgent } from '../agents';
 import { retrieveContext } from '../sources';
 import { retrieveMemories, storeMemories } from '../sources/memory';
@@ -116,6 +117,31 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
   if (!agent) throw new Error(`Agent ${data.agentId} not found`);
 
   const runRecord = await createRunRecord(workspaceId, data, job.id || '');
+
+  // Resolve per-workspace Anthropic API key. Fail fast with an admin-friendly
+  // Slack message if the workspace hasn't configured one.
+  let anthropicApiKey: string;
+  try {
+    anthropicApiKey = await getAnthropicApiKey(workspaceId);
+  } catch (err) {
+    if (err instanceof AnthropicKeyMissingError) {
+      await updateRunRecord(workspaceId, runRecord.id, {
+        status: 'failed',
+        output: err.message,
+        completed_at: new Date().toISOString(),
+      });
+      if (data.channelId) {
+        const { postMessage } = await import('../../slack');
+        await postMessage(
+          data.channelId,
+          `:warning: *${agent.name}* can't run — ${err.message}`,
+          data.threadTs,
+        );
+      }
+      return err.message;
+    }
+    throw err;
+  }
 
   // Check rate limit (TPM and RPM)
   const rateCheck = await checkRateLimit(workspaceId);
@@ -326,7 +352,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
       const { v4: confirmUuid } = await import('uuid');
       const { setApprovalState, getApprovalState } = await import('../../queue');
       const requestId = confirmUuid();
-      await setApprovalState(requestId, 'pending', 300); // 5-minute timeout
+      await setApprovalState(workspaceId, requestId, 'pending', 300); // 5-minute timeout
 
       const toolList = missingCredTools.map(t => `• ${t.name} — ${t.message}`).join('\n');
       if (data.channelId) {
@@ -350,7 +376,7 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
       const TIMEOUT_MS = 300_000;
       while (approvalResult === 'pending' && Date.now() - pollStart < TIMEOUT_MS) {
         await new Promise(resolve => setTimeout(resolve, 3000));
-        approvalResult = await getApprovalState(requestId);
+        approvalResult = await getApprovalState(workspaceId, requestId);
       }
 
       if (approvalResult !== 'approved') {
@@ -401,16 +427,18 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
     logger.warn('Failed to load skills/tools for agent', { agentId: agent.id, error: String(err) });
   }
 
-  // Ensure workspace directory exists
-  const workingDir = `/tmp/tinyhands-workspaces/${agent.id}`;
-  const sourcesCacheDir = `/tmp/tinyhands-sources-cache/${agent.id}`;
-  const memoryDir = `/tmp/tinyhands-memory/${agent.id}`;
+  // Ensure workspace directory exists (per-workspace + per-run isolation)
+  const workingDir = `/tmp/tinyhands-workspaces/${workspaceId}/${agent.id}/${runRecord.id}`;
+  const runDirs = runDirsFor(workspaceId, agent.id, runRecord.id);
 
   try {
     // Create Docker container with full security config applied
     const container = await createAgentContainer({
       agent,
+      workspaceId,
+      runId: runRecord.id,
       traceId: data.traceId,
+      anthropicApiKey,
       workingDir,
       envVars: {
         SYSTEM_PROMPT: systemPrompt + permissionContext,
@@ -764,6 +792,9 @@ export async function executeAgentRun(job: Job<JobData>): Promise<string> {
     });
 
     throw err;
+  } finally {
+    // Always remove per-run secrets dir — success, failure, or timeout.
+    cleanupRunSecretsDir(runDirs.runSecretsDir);
   }
 }
 
@@ -871,7 +902,8 @@ async function extractAndStoreMemories(
 ): Promise<void> {
   try {
     const Anthropic = (await import('@anthropic-ai/sdk')).default;
-    const client = new Anthropic();
+    const apiKey = await getAnthropicApiKey(workspaceId);
+    const client = new Anthropic({ apiKey });
 
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
@@ -919,6 +951,11 @@ Focus on: user preferences, corrections, entities mentioned, procedures learned.
 // ── Worker ──
 
 export function createWorker(): Worker<JobData> {
+  // Per-process concurrency is env-driven so operators can scale as tenants
+  // are added without deploying code. PM2 runs multiple worker processes; each
+  // picks up `WORKER_CONCURRENCY` jobs in parallel.
+  const concurrency = Math.max(1, parseInt(process.env.WORKER_CONCURRENCY || '1', 10));
+
   const worker = new Worker<JobData>(
     'tinyhands-runs',
     async (job) => {
@@ -926,12 +963,12 @@ export function createWorker(): Worker<JobData> {
     },
     {
       connection: getRedisConnection() as any,
-      concurrency: 1,
+      concurrency,
       lockDuration: 600000,          // 10 minutes — long enough for any agent turn
       stalledInterval: 120000,       // Check every 2 minutes
       maxStalledCount: 3,            // Allow 3 stalls before failing
       limiter: {
-        max: 1,
+        max: concurrency,
         duration: 1000,
       },
     }

@@ -28,6 +28,7 @@ export function detectCritique(message: string): boolean {
 }
 
 export async function generatePromptDiff(
+  workspaceId: string,
   currentPrompt: string,
   critique: string,
   runOutput: string
@@ -36,8 +37,8 @@ export async function generatePromptDiff(
 
   // Call Claude to analyze the critique and propose prompt changes
   try {
-    const Anthropic = (await import('@anthropic-ai/sdk')).default;
-    const client = new Anthropic();
+    const { createAnthropicClient } = await import('../anthropic');
+    const client = await createAnthropicClient(workspaceId);
 
     const response = await client.messages.create({
       model: 'claude-sonnet-4-6',

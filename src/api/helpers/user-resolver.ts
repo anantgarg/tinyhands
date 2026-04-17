@@ -16,12 +16,20 @@ function getRedis(): Redis {
 
 const CACHE_TTL = 3600; // 1 hour
 
-export async function resolveUserName(userId: string): Promise<string> {
+// Cache key takes an optional workspaceId so cross-tenant user lookups never
+// share cache entries. Slack user IDs (e.g. "U01ABC") are per-team-unique, so
+// without the workspace prefix two different people in different workspaces
+// could collide on the same ID.
+function cacheKey(userId: string, workspaceId?: string): string {
+  return workspaceId ? `user:name:${workspaceId}:${userId}` : `user:name:${userId}`;
+}
+
+export async function resolveUserName(userId: string, workspaceId?: string): Promise<string> {
   if (!userId) return userId;
 
   // Check Redis cache first
   try {
-    const cached = await getRedis().get(`user:name:${userId}`);
+    const cached = await getRedis().get(cacheKey(userId, workspaceId));
     if (cached) return cached;
   } catch {
     // Redis unavailable, proceed with Slack lookup
@@ -52,7 +60,7 @@ export async function resolveUserName(userId: string): Promise<string> {
 
     // Cache for 1 hour
     try {
-      await getRedis().set(`user:name:${userId}`, name, 'EX', CACHE_TTL);
+      await getRedis().set(cacheKey(userId, workspaceId), name, 'EX', CACHE_TTL);
     } catch {
       // Cache write failure is non-fatal
     }
@@ -60,22 +68,20 @@ export async function resolveUserName(userId: string): Promise<string> {
     return name;
   } catch (err) {
     logger.debug('Failed to resolve user name', { userId, error: String(err) });
-    // Return a cleaner fallback for unresolvable IDs
     if (userId.startsWith('B')) return `Bot ${userId.slice(0, 6)}`;
     return userId;
   }
 }
 
-export async function resolveUserNames(userIds: string[]): Promise<Record<string, string>> {
+export async function resolveUserNames(userIds: string[], workspaceId?: string): Promise<Record<string, string>> {
   const unique = [...new Set(userIds.filter(Boolean))];
   if (unique.length === 0) return {};
 
   const result: Record<string, string> = {};
 
-  // Check cache for all
   try {
     const pipeline = getRedis().pipeline();
-    for (const id of unique) pipeline.get(`user:name:${id}`);
+    for (const id of unique) pipeline.get(cacheKey(id, workspaceId));
     const cached = await pipeline.exec();
 
     const uncached: string[] = [];
@@ -88,14 +94,12 @@ export async function resolveUserNames(userIds: string[]): Promise<Record<string
       }
     }
 
-    // Resolve uncached via Slack API
     for (const id of uncached) {
-      result[id] = await resolveUserName(id);
+      result[id] = await resolveUserName(id, workspaceId);
     }
   } catch {
-    // Redis pipeline failed — resolve all individually
     for (const id of unique) {
-      result[id] = await resolveUserName(id);
+      result[id] = await resolveUserName(id, workspaceId);
     }
   }
 

@@ -31,6 +31,36 @@ export interface PlatformRoleRecord {
   granted_at: string;
 }
 
+// ── Multi-Tenant Types ──
+
+export type WorkspaceRole = 'admin' | 'member';
+
+export interface User {
+  id: string;
+  slack_user_id: string;
+  home_workspace_id: string | null;
+  display_name: string | null;
+  email: string | null;
+  avatar_url: string | null;
+  active_workspace_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WorkspaceMembership {
+  workspace_id: string;
+  user_id: string;
+  role: WorkspaceRole;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PlatformAdmin {
+  user_id: string;
+  email: string | null;
+  created_at: string;
+}
+
 export interface WorkspaceSetting {
   workspace_id: string;
   key: string;

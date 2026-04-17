@@ -10,6 +10,25 @@ vi.mock('../../src/modules/access-control', () => ({
   getPlatformRole: (...args: any[]) => mockGetPlatformRole(...args),
 }));
 
+// Multi-tenant user module mocks
+const mockUpsertUser = vi.fn().mockResolvedValue({ id: 'U456_W789', active_workspace_id: 'W789' });
+const mockGetMembership = vi.fn().mockResolvedValue({ role: 'admin' });
+const mockSetMembership = vi.fn().mockResolvedValue(undefined);
+const mockSetActiveWorkspace = vi.fn().mockResolvedValue(undefined);
+const mockIsWorkspaceMember = vi.fn().mockResolvedValue(true);
+const mockIsPlatformAdmin = vi.fn().mockResolvedValue(false);
+const mockListUserWorkspaces = vi.fn().mockResolvedValue([]);
+
+vi.mock('../../src/modules/users', () => ({
+  upsertUser: (...args: any[]) => mockUpsertUser(...args),
+  getMembership: (...args: any[]) => mockGetMembership(...args),
+  setMembership: (...args: any[]) => mockSetMembership(...args),
+  setActiveWorkspace: (...args: any[]) => mockSetActiveWorkspace(...args),
+  isWorkspaceMember: (...args: any[]) => mockIsWorkspaceMember(...args),
+  isPlatformAdmin: (...args: any[]) => mockIsPlatformAdmin(...args),
+  listUserWorkspaces: (...args: any[]) => mockListUserWorkspaces(...args),
+}));
+
 vi.mock('../../src/config', () => ({
   config: {
     slack: { clientId: 'test-client-id', clientSecret: 'test-client-secret' },
@@ -315,9 +334,11 @@ describe('Auth Routes', () => {
 
       expect(res.status).toBe(302);
       expect(res.headers.location).toBe('/');
-      expect(mockSession.user).toEqual({
+      expect(mockSession.user).toMatchObject({
         userId: 'U456',
+        slackUserId: 'U456',
         workspaceId: 'W789',
+        homeWorkspaceId: 'W789',
         displayName: 'Jane',
         avatarUrl: 'https://example.com/jane.png',
         platformRole: 'admin',

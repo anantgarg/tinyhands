@@ -55,6 +55,13 @@ vi.mock('../../src/config', () => ({
   config: { docker: { baseImage: 'node:20-slim' } },
 }));
 
+// self-authoring dynamically imports ../anthropic at call time; mock it at the
+// top level so tests can seed responses via mockAnthropicCreateForSa.
+const mockAnthropicCreateForSa = vi.fn();
+vi.mock('../../src/modules/anthropic', () => ({
+  createAnthropicClient: vi.fn(async () => ({ messages: { create: (...args: any[]) => mockAnthropicCreateForSa(...args) } })),
+}));
+
 vi.mock('uuid', () => ({
   v4: () => 'test-uuid-1234',
 }));
@@ -1140,11 +1147,7 @@ describe('Self-Authoring Module', () => {
         }],
       });
 
-      vi.doMock('@anthropic-ai/sdk', () => ({
-        default: vi.fn().mockImplementation(() => ({
-          messages: { create: mockAnthropicCreate },
-        })),
-      }));
+      mockAnthropicCreateForSa.mockImplementation(mockAnthropicCreate);
 
       const registeredTool = makeCustomTool({ name: 'csv-parser' });
       mockRegisterCustomTool.mockResolvedValueOnce(registeredTool);
@@ -1179,11 +1182,7 @@ describe('Self-Authoring Module', () => {
         }],
       });
 
-      vi.doMock('@anthropic-ai/sdk', () => ({
-        default: vi.fn().mockImplementation(() => ({
-          messages: { create: mockAnthropicCreate },
-        })),
-      }));
+      mockAnthropicCreateForSa.mockImplementation(mockAnthropicCreate);
 
       mockRegisterCustomTool.mockResolvedValueOnce(makeCustomTool({ name: 'my-helper' }));
       mockExecute.mockResolvedValue({ rowCount: 1 });
@@ -1211,11 +1210,7 @@ describe('Self-Authoring Module', () => {
         }],
       });
 
-      vi.doMock('@anthropic-ai/sdk', () => ({
-        default: vi.fn().mockImplementation(() => ({
-          messages: { create: mockAnthropicCreate },
-        })),
-      }));
+      mockAnthropicCreateForSa.mockImplementation(mockAnthropicCreate);
 
       // Mock Docker container — exit code 0 (success)
       const mockContainer = {
@@ -1262,11 +1257,7 @@ describe('Self-Authoring Module', () => {
           }],
         });
 
-      vi.doMock('@anthropic-ai/sdk', () => ({
-        default: vi.fn().mockImplementation(() => ({
-          messages: { create: mockAnthropicCreate },
-        })),
-      }));
+      mockAnthropicCreateForSa.mockImplementation(mockAnthropicCreate);
 
       // Mock Docker container — exit code 1 (failure), then success on retry
       const mockContainer = {
@@ -1309,11 +1300,7 @@ describe('Self-Authoring Module', () => {
         }],
       });
 
-      vi.doMock('@anthropic-ai/sdk', () => ({
-        default: vi.fn().mockImplementation(() => ({
-          messages: { create: mockAnthropicCreate },
-        })),
-      }));
+      mockAnthropicCreateForSa.mockImplementation(mockAnthropicCreate);
 
       // Mock Docker container — start throws to trigger container cleanup catch
       const mockContainer = {
@@ -1351,11 +1338,7 @@ describe('Self-Authoring Module', () => {
         }],
       });
 
-      vi.doMock('@anthropic-ai/sdk', () => ({
-        default: vi.fn().mockImplementation(() => ({
-          messages: { create: mockAnthropicCreate },
-        })),
-      }));
+      mockAnthropicCreateForSa.mockImplementation(mockAnthropicCreate);
 
       // Make mkdtempSync throw to trigger the authorTool catch (lines 70-71)
       mockMkdtempSync.mockImplementationOnce(() => {
@@ -1391,11 +1374,7 @@ describe('Self-Authoring Module', () => {
         }],
       });
 
-      vi.doMock('@anthropic-ai/sdk', () => ({
-        default: vi.fn().mockImplementation(() => ({
-          messages: { create: mockAnthropicCreate },
-        })),
-      }));
+      mockAnthropicCreateForSa.mockImplementation(mockAnthropicCreate);
 
       // Mock Docker container — wait rejects
       const mockContainer = {
@@ -1433,11 +1412,7 @@ describe('Self-Authoring Module', () => {
         }],
       });
 
-      vi.doMock('@anthropic-ai/sdk', () => ({
-        default: vi.fn().mockImplementation(() => ({
-          messages: { create: mockAnthropicCreate },
-        })),
-      }));
+      mockAnthropicCreateForSa.mockImplementation(mockAnthropicCreate);
 
       mockRegisterCustomTool.mockResolvedValueOnce(makeCustomTool({ name: 'sandbox-lang' }));
       mockExecute.mockResolvedValue({ rowCount: 1 });
@@ -1475,11 +1450,7 @@ describe('Self-Authoring Module', () => {
           }],
         });
 
-      vi.doMock('@anthropic-ai/sdk', () => ({
-        default: vi.fn().mockImplementation(() => ({
-          messages: { create: mockAnthropicCreate },
-        })),
-      }));
+      mockAnthropicCreateForSa.mockImplementation(mockAnthropicCreate);
 
       // Container exits with code 1 and empty output
       const mockContainer = {
@@ -1531,11 +1502,7 @@ describe('Self-Authoring Module', () => {
         }],
       });
 
-      vi.doMock('@anthropic-ai/sdk', () => ({
-        default: vi.fn().mockImplementation(() => ({
-          messages: { create: mockAnthropicCreate },
-        })),
-      }));
+      mockAnthropicCreateForSa.mockImplementation(mockAnthropicCreate);
 
       mockExecute.mockResolvedValueOnce({ rowCount: 1 }); // INSERT authored_skills
       mockRegisterSkill.mockResolvedValueOnce(undefined);
@@ -1565,11 +1532,7 @@ describe('Self-Authoring Module', () => {
         }],
       });
 
-      vi.doMock('@anthropic-ai/sdk', () => ({
-        default: vi.fn().mockImplementation(() => ({
-          messages: { create: mockAnthropicCreate },
-        })),
-      }));
+      mockAnthropicCreateForSa.mockImplementation(mockAnthropicCreate);
 
       mockExecute.mockResolvedValueOnce({ rowCount: 1 });
       mockRegisterSkill.mockResolvedValueOnce(undefined);
@@ -1614,11 +1577,7 @@ describe('Self-Authoring Module', () => {
           }],
         });
 
-      vi.doMock('@anthropic-ai/sdk', () => ({
-        default: vi.fn().mockImplementation(() => ({
-          messages: { create: mockAnthropicCreate },
-        })),
-      }));
+      mockAnthropicCreateForSa.mockImplementation(mockAnthropicCreate);
 
       // Mock Docker for sandbox test — first test fails, second succeeds
       const mockDocker = await import('dockerode');
@@ -1707,11 +1666,7 @@ describe('Self-Authoring Module', () => {
         // autoFixToolCode throws
         .mockRejectedValueOnce(new Error('AI service unavailable'));
 
-      vi.doMock('@anthropic-ai/sdk', () => ({
-        default: vi.fn().mockImplementation(() => ({
-          messages: { create: mockAnthropicCreate },
-        })),
-      }));
+      mockAnthropicCreateForSa.mockImplementation(mockAnthropicCreate);
 
       mockRegisterCustomTool.mockResolvedValueOnce(makeCustomTool({ name: 'broken-tool' }));
       mockExecute.mockResolvedValue({ rowCount: 1 });
@@ -1740,11 +1695,7 @@ describe('Self-Authoring Module', () => {
         }],
       });
 
-      vi.doMock('@anthropic-ai/sdk', () => ({
-        default: vi.fn().mockImplementation(() => ({
-          messages: { create: mockAnthropicCreate },
-        })),
-      }));
+      mockAnthropicCreateForSa.mockImplementation(mockAnthropicCreate);
 
       // Container start throws AND remove also throws (branch 50: catch{} on container.remove)
       const mockContainer = {
@@ -1786,11 +1737,7 @@ describe('Self-Authoring Module', () => {
         }],
       });
 
-      vi.doMock('@anthropic-ai/sdk', () => ({
-        default: vi.fn().mockImplementation(() => ({
-          messages: { create: mockAnthropicCreate },
-        })),
-      }));
+      mockAnthropicCreateForSa.mockImplementation(mockAnthropicCreate);
 
       const mockContainer = {
         start: vi.fn().mockResolvedValue(undefined),
@@ -1838,11 +1785,7 @@ describe('Self-Authoring Module', () => {
         }],
       });
 
-      vi.doMock('@anthropic-ai/sdk', () => ({
-        default: vi.fn().mockImplementation(() => ({
-          messages: { create: mockAnthropicCreate },
-        })),
-      }));
+      mockAnthropicCreateForSa.mockImplementation(mockAnthropicCreate);
 
       // Docker container start throws error with empty message
       const mockContainer = {
@@ -1884,11 +1827,7 @@ describe('Self-Authoring Module', () => {
         }],
       });
 
-      vi.doMock('@anthropic-ai/sdk', () => ({
-        default: vi.fn().mockImplementation(() => ({
-          messages: { create: mockAnthropicCreate },
-        })),
-      }));
+      mockAnthropicCreateForSa.mockImplementation(mockAnthropicCreate);
 
       const mockContainer = {
         start: vi.fn().mockResolvedValue(undefined),
@@ -1934,11 +1873,7 @@ describe('Self-Authoring Module', () => {
         }],
       });
 
-      vi.doMock('@anthropic-ai/sdk', () => ({
-        default: vi.fn().mockImplementation(() => ({
-          messages: { create: mockAnthropicCreate },
-        })),
-      }));
+      mockAnthropicCreateForSa.mockImplementation(mockAnthropicCreate);
 
       // createContainer throws, so container is still null in catch
       mockDockerCreateContainer.mockRejectedValue(new Error('Docker daemon not available'));
@@ -1986,11 +1921,7 @@ describe('Self-Authoring Module', () => {
         }],
       });
 
-      vi.doMock('@anthropic-ai/sdk', () => ({
-        default: vi.fn().mockImplementation(() => ({
-          messages: { create: mockAnthropicCreate },
-        })),
-      }));
+      mockAnthropicCreateForSa.mockImplementation(mockAnthropicCreate);
 
       const mockContainer = {
         start: vi.fn().mockResolvedValue(undefined),
@@ -2045,11 +1976,7 @@ describe('Self-Authoring Module', () => {
         }],
       });
 
-      vi.doMock('@anthropic-ai/sdk', () => ({
-        default: vi.fn().mockImplementation(() => ({
-          messages: { create: mockAnthropicCreate },
-        })),
-      }));
+      mockAnthropicCreateForSa.mockImplementation(mockAnthropicCreate);
 
       const mockContainer = {
         start: vi.fn().mockResolvedValue(undefined),
@@ -2098,11 +2025,7 @@ describe('Self-Authoring Module', () => {
         }],
       });
 
-      vi.doMock('@anthropic-ai/sdk', () => ({
-        default: vi.fn().mockImplementation(() => ({
-          messages: { create: mockAnthropicCreate },
-        })),
-      }));
+      mockAnthropicCreateForSa.mockImplementation(mockAnthropicCreate);
 
       const mockContainer = {
         start: vi.fn().mockResolvedValue(undefined),
@@ -2148,11 +2071,7 @@ describe('Self-Authoring Module', () => {
         }],
       });
 
-      vi.doMock('@anthropic-ai/sdk', () => ({
-        default: vi.fn().mockImplementation(() => ({
-          messages: { create: mockAnthropicCreate },
-        })),
-      }));
+      mockAnthropicCreateForSa.mockImplementation(mockAnthropicCreate);
 
       const mockContainer = {
         start: vi.fn().mockResolvedValue(undefined),
@@ -2198,11 +2117,7 @@ describe('Self-Authoring Module', () => {
         }],
       });
 
-      vi.doMock('@anthropic-ai/sdk', () => ({
-        default: vi.fn().mockImplementation(() => ({
-          messages: { create: mockAnthropicCreate },
-        })),
-      }));
+      mockAnthropicCreateForSa.mockImplementation(mockAnthropicCreate);
 
       const mockContainer = {
         start: vi.fn().mockResolvedValue(undefined),
@@ -2245,11 +2160,7 @@ describe('Self-Authoring Module', () => {
         }],
       });
 
-      vi.doMock('@anthropic-ai/sdk', () => ({
-        default: vi.fn().mockImplementation(() => ({
-          messages: { create: mockAnthropicCreate },
-        })),
-      }));
+      mockAnthropicCreateForSa.mockImplementation(mockAnthropicCreate);
 
       await expect(authorSkill(TEST_WORKSPACE_ID, 'agent-1', 'something weird'))
         .rejects.toThrow('AI did not return valid JSON');
@@ -2271,11 +2182,7 @@ describe('Self-Authoring Module', () => {
         }],
       });
 
-      vi.doMock('@anthropic-ai/sdk', () => ({
-        default: vi.fn().mockImplementation(() => ({
-          messages: { create: mockAnthropicCreate },
-        })),
-      }));
+      mockAnthropicCreateForSa.mockImplementation(mockAnthropicCreate);
 
       await expect(authorTool(TEST_WORKSPACE_ID, 'agent-1', 'something impossible'))
         .rejects.toThrow('AI did not return valid JSON');

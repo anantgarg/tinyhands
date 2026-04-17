@@ -328,8 +328,8 @@ router.post('/custom/generate', requireAdmin, async (req: Request, res: Response
       return;
     }
 
-    const Anthropic = (await import('@anthropic-ai/sdk')).default;
-    const client = new Anthropic();
+    const { createAnthropicClient } = await import('../../modules/anthropic');
+    const client = await createAnthropicClient(workspaceId);
     const lang = language || 'javascript';
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',

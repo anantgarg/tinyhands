@@ -2,10 +2,14 @@ import { create } from 'zustand';
 
 export interface AuthUser {
   userId: string;
+  dbUserId?: string;
+  slackUserId?: string;
   workspaceId: string;
+  homeWorkspaceId?: string;
   displayName: string;
   avatarUrl: string;
   platformRole: 'superadmin' | 'admin' | 'member';
+  platformAdmin?: boolean;
 }
 
 export interface AuthState {
@@ -14,6 +18,7 @@ export interface AuthState {
   setUser: (user: AuthUser | null) => void;
   clearUser: () => void;
   isAdmin: () => boolean;
+  isPlatformAdmin: () => boolean;
 }
 
 export const useAuthStore = create<AuthState>((set, get) => ({
@@ -24,5 +29,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   isAdmin: () => {
     const { user } = get();
     return user?.platformRole === 'superadmin' || user?.platformRole === 'admin';
+  },
+  isPlatformAdmin: () => {
+    const { user } = get();
+    return !!user?.platformAdmin;
   },
 }));

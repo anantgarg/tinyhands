@@ -128,7 +128,10 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
 function makeContainerConfig(overrides: Partial<ContainerConfig> = {}): ContainerConfig {
   return {
     agent: makeAgent(),
+    workspaceId: 'T_WORKSPACE_1',
+    runId: 'run-123',
     traceId: 'trace-123',
+    anthropicApiKey: 'test-key',
     workingDir: '/tmp/tinyhands-workspaces/agent-1',
     envVars: {
       SYSTEM_PROMPT: 'You are a test agent',
@@ -229,14 +232,15 @@ describe('Docker Module', () => {
       expect(createOpts.WorkingDir).toBe('/workspace');
     });
 
-    it('should bind-mount workspace, sources, and memory directories', async () => {
+    it('should bind-mount workspace, sources, memory, and per-run secrets directories', async () => {
       const cfg = makeContainerConfig();
       await createAgentContainer(cfg);
 
       const binds: string[] = mockCreateContainer.mock.calls[0][0].HostConfig.Binds;
       expect(binds).toContain('/tmp/tinyhands-workspaces/agent-1:/workspace:rw');
-      expect(binds).toContain('/tmp/tinyhands-sources-cache/agent-1:/sources:ro');
-      expect(binds).toContain('/tmp/tinyhands-memory/agent-1:/memory:ro');
+      expect(binds).toContain('/tmp/tinyhands-sources-cache/T_WORKSPACE_1/agent-1:/sources:ro');
+      expect(binds).toContain('/tmp/tinyhands-memory/T_WORKSPACE_1/agent-1:/memory:ro');
+      expect(binds).toContain('/tmp/tinyhands-runs/T_WORKSPACE_1/run-123/:/run-secrets:ro');
     });
 
     it('should apply standard security config', async () => {
@@ -274,8 +278,9 @@ describe('Docker Module', () => {
       await createAgentContainer(cfg);
 
       expect(fs.mkdirSync).toHaveBeenCalledWith('/tmp/tinyhands-workspaces/agent-1', { recursive: true });
-      expect(fs.mkdirSync).toHaveBeenCalledWith('/tmp/tinyhands-sources-cache/agent-1', { recursive: true });
-      expect(fs.mkdirSync).toHaveBeenCalledWith('/tmp/tinyhands-memory/agent-1', { recursive: true });
+      expect(fs.mkdirSync).toHaveBeenCalledWith('/tmp/tinyhands-sources-cache/T_WORKSPACE_1/agent-1', { recursive: true });
+      expect(fs.mkdirSync).toHaveBeenCalledWith('/tmp/tinyhands-memory/T_WORKSPACE_1/agent-1', { recursive: true });
+      expect(fs.mkdirSync).toHaveBeenCalledWith('/tmp/tinyhands-runs/T_WORKSPACE_1/run-123/', { recursive: true });
     });
 
     it('should attempt chown on workspace dir and fall back to chmod on failure', async () => {

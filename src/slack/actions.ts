@@ -99,23 +99,25 @@ export function registerActions(app: App): void {
   });
 
   // ── Skip Missing Tools Approval ──
-  app.action('approve_skip_tools', async ({ action, ack }) => {
+  app.action('approve_skip_tools', async ({ action, ack, body }) => {
     await ack();
     try {
       const { setApprovalState } = await import('../queue');
       const { requestId } = JSON.parse((action as any).value);
-      await setApprovalState(requestId, 'approved');
+      const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
+      await setApprovalState(workspaceId, requestId, 'approved');
     } catch (err: any) {
       logger.error('Skip tools approval failed', { error: err.message });
     }
   });
 
-  app.action('deny_skip_tools', async ({ action, ack }) => {
+  app.action('deny_skip_tools', async ({ action, ack, body }) => {
     await ack();
     try {
       const { setApprovalState } = await import('../queue');
       const { requestId } = JSON.parse((action as any).value);
-      await setApprovalState(requestId, 'denied');
+      const workspaceId = (body as any).team?.id || getDefaultWorkspaceId();
+      await setApprovalState(workspaceId, requestId, 'denied');
     } catch (err: any) {
       logger.error('Skip tools denial failed', { error: err.message });
     }

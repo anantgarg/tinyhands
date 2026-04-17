@@ -2758,8 +2758,8 @@ async function handleUpdateRequest(workspaceId: string, agentId: string, userMes
 
   // Use Haiku to classify intent
   try {
-    const Anthropic = (await import('@anthropic-ai/sdk')).default;
-    const client = new Anthropic();
+    const { createAnthropicClient } = await import('../modules/anthropic');
+    const client = await createAnthropicClient(workspaceId);
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 500,
@@ -3726,7 +3726,8 @@ export function registerConfirmationActions(app: App): void {
     try {
       const data = JSON.parse((action as any).value);
       const { setApprovalState } = await import('../queue');
-      await setApprovalState(data.requestId, 'approved');
+      const workspaceId = data.workspaceId || (body as any).team?.id || getDefaultWorkspaceId();
+      await setApprovalState(workspaceId, data.requestId, 'approved');
 
       if (data.writePolicy === 'admin_confirm') {
         await replyToAction(body, `:white_check_mark: Approved by <@${body.user.id}>. Continuing...`);
@@ -3744,7 +3745,8 @@ export function registerConfirmationActions(app: App): void {
     try {
       const data = JSON.parse((action as any).value);
       const { setApprovalState } = await import('../queue');
-      await setApprovalState(data.requestId, 'denied');
+      const workspaceId = data.workspaceId || (body as any).team?.id || getDefaultWorkspaceId();
+      await setApprovalState(workspaceId, data.requestId, 'denied');
 
       if (data.writePolicy === 'admin_confirm') {
         await replyToAction(body, `:no_entry: Denied by <@${body.user.id}>. Skipping this action.`);
