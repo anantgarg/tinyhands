@@ -95,6 +95,67 @@
       "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/calm-tiger",
       "branch": "bake/vibe/calm-tiger",
       "createdAt": "2026-04-16T18:32:30.470Z"
+    },
+    {
+      "id": "fast-lynx",
+      "type": "vibe",
+      "name": "fast-lynx",
+      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/fast-lynx",
+      "branch": "bake/vibe/fast-lynx",
+      "createdAt": "2026-04-17T07:02:22.867Z"
+    },
+    {
+      "id": "kind-finch",
+      "type": "vibe",
+      "name": "kind-finch",
+      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/kind-finch",
+      "branch": "bake/vibe/kind-finch",
+      "createdAt": "2026-04-17T07:02:22.867Z"
+    },
+    {
+      "id": "plan-005",
+      "type": "plan",
+      "name": "New Plan",
+      "planId": "plan-005",
+      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-005",
+      "branch": "bake/plan/plan-005",
+      "createdAt": "2026-04-17T07:02:22.867Z"
+    },
+    {
+      "id": "plan-006",
+      "type": "plan",
+      "name": "Test plan for Fix 3 verification",
+      "planId": "plan-006",
+      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-006",
+      "branch": "bake/plan/plan-006",
+      "createdAt": "2026-04-17T07:02:22.868Z"
+    },
+    {
+      "id": "plan-007",
+      "type": "plan",
+      "name": "New Plan",
+      "planId": "plan-007",
+      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-007",
+      "branch": "bake/plan/plan-007",
+      "createdAt": "2026-04-17T07:02:22.868Z"
+    },
+    {
+      "id": "plan-008",
+      "type": "plan",
+      "name": "New Plan",
+      "planId": "plan-008",
+      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-008",
+      "branch": "bake/plan/plan-008",
+      "createdAt": "2026-04-17T07:02:22.869Z"
+    },
+    {
+      "id": "plan-009",
+      "type": "plan",
+      "name": "New Plan",
+      "planId": "plan-009",
+      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-009",
+      "branch": "bake/plan/plan-009",
+      "createdAt": "2026-04-17T07:02:22.869Z"
     }
   ]
 }
