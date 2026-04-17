@@ -2,6 +2,15 @@
 
 One entry per deploy to production. Each entry names the version, the date, the merges included since the previous release, and the exact rollback command. Updated automatically by the Deploy button (see `.bake/harness/deploy.md` for the post-deploy step that appends here).
 
+## v1.49.0 — 2026-04-17
+
+Deployed to the production host. Two long-standing UI bugs fixed, plus the v1.48.1-v1.48.5 hardening rollup.
+
+- `GET /settings` now returns the nested shape the web form expects — `workspaceName` is pulled from `workspaces.team_name`, other fields from `workspace_settings` with safe defaults. The Settings form populates and saves correctly for every workspace.
+- `resolveUserNames(ids, workspaceId)` is threaded through every dashboard / agents / access-control endpoint, so non-primary workspaces no longer show raw Slack IDs on Access & Roles, Dashboard Top Users, or Top Creators. Each ID resolves via the workspace's own bot token.
+
+Rollback: SSH to production, `cd $APP_DIR && git checkout v1.48.5 && NODE_ENV=development npm install && NODE_ENV=development npm run build && NODE_ENV=development npm run build:web && pm2 reload ecosystem.config.js --force`.
+
 ## v1.48.3 — 2026-04-17
 
 Deployed to the production host. Hotfix rollup making multi-tenant Slack workspaces work end-to-end. Three cascading bugs surfaced after v1.48.0:
