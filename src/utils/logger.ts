@@ -59,9 +59,21 @@ export function redactSecrets(value: unknown, depth = 0): unknown {
   return value;
 }
 
+// Winston formats must MUTATE the info object in place (or preserve its
+// Symbol-keyed internal properties like Symbol.for('level') and
+// Symbol.for('message')). A previous implementation that returned a
+// spread-copy stripped those symbols silently, which broke the Console
+// transport entirely — no log lines reached stdout. Keep this in-place.
 const redactFormat = winston.format((info) => {
-  const redacted = redactSecrets(info) as winston.Logform.TransformableInfo;
-  return redacted;
+  for (const k of Object.keys(info)) {
+    const v = (info as any)[k];
+    if (SECRET_FIELD_NAMES.has(k)) {
+      (info as any)[k] = '[REDACTED_SECRET]';
+    } else {
+      (info as any)[k] = redactSecrets(v);
+    }
+  }
+  return info;
 })();
 
 export const logger = winston.createLogger({
