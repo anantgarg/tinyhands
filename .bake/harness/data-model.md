@@ -1,6 +1,6 @@
 # Data Model
 
-PostgreSQL 16 with 23 SQL migrations. All IDs are UUIDs. Multi-tenant via `workspace_id` on all major tables.
+PostgreSQL 16 with 24 SQL migrations. Multi-tenant via `workspace_id` on all major tables.
 
 ## Core Entities
 
@@ -8,12 +8,30 @@ PostgreSQL 16 with 23 SQL migrations. All IDs are UUIDs. Multi-tenant via `works
 
 | Column | Type | Purpose |
 |--------|------|---------|
-| id | UUID | Primary key |
-| slack_team_id | TEXT | Slack workspace identifier |
-| name | TEXT | Workspace display name |
-| created_at | TIMESTAMP | Creation time |
+| id | TEXT | Primary key — Slack team ID |
+| team_name | TEXT | Slack workspace display name |
+| workspace_slug | TEXT | URL-safe slug (used in webhook routes) |
+| domain | TEXT | Slack workspace domain |
+| bot_token | TEXT | Per-install Slack bot token |
+| bot_user_id | TEXT | Bot's Slack user ID |
+| status | TEXT | active / suspended |
+| installed_at | TIMESTAMPTZ | When the Slack OAuth install completed |
 
 Foundation for multi-tenancy. All other tables reference `workspace_id`.
+
+### Users, Memberships, Platform Admins (plan-010)
+
+Cross-workspace user identity. A user who signs into two Slack workspaces has two `users` rows (one per `home_workspace_id`), each with their own set of memberships.
+
+`users` — (id, slack_user_id, home_workspace_id, display_name, email, avatar_url, active_workspace_id, created_at, updated_at). `id` is deterministic as `${home_workspace_id}:${slack_user_id}`.
+
+`workspace_memberships` — (workspace_id, user_id, role, created_at, updated_at). `role` is `admin | member`. Composite PK `(workspace_id, user_id)`. Supersedes legacy `platform_roles` table (retained read-only for one release).
+
+`platform_admins` — (user_id, email, created_at). Operators of the TinyHands deployment. Grants access to `/platform` health view; no per-workspace data access.
+
+### Workspace Settings (extended)
+
+Per-workspace key/value. After plan-010, stores the workspace's encrypted Anthropic API key under keys `anthropic_api_key` (ciphertext) and `anthropic_api_key_iv` (IV). Encrypted via AES-256-GCM with the platform-owned `ENCRYPTION_KEY`.
 
 ### Agents
 
