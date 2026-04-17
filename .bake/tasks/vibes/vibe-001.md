@@ -1,7 +1,8 @@
 ---
 id: vibe-001
 title: Kind Finch
-status: active
+status: archived
+previous_status: active
 created: 2026-04-16
 ---
 
