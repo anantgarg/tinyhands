@@ -807,3 +807,5 @@
 [09:35:07.062] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-010.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":16181,"isPlanPath":true}
 [09:35:17.057] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-010.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":16747,"isPlanPath":true}
 [09:35:17.061] [Editor] editorContent changed externally — reloading body {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-010.md","title":"Multi-Tenant Workspaces"}
+[09:35:37.993] [Poll] External change detected {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-010.md","resolvedPath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-010/.bake/tasks/plans/plan-010.md","newTitle":"Multi-Tenant Workspaces","currentH1":"Multi-Tenant Workspaces","refExists":true}
+[09:35:38.001] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-010.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":16747,"isPlanPath":true}
