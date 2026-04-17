@@ -691,3 +691,11 @@
 [07:08:47.019] [AutoSwitch] non-plan/vibe → forcing main {"prevSession":"plan-009"}
 [07:08:47.020] [TerminalSwitch] transitioning {"from":"plan-009","to":"main","storeSessionsLen":18}
 [07:08:47.020] [Terminal] getOrCreate → returning cached {"sessionId":"main","cachedCwd":null}
+[07:08:51.741] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-004.md","isReadOnly":false,"parsedStatus":"active","editorContentLen":85,"isPlanPath":false}
+[07:08:51.742] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-004.md","title":"Calm Tiger"}
+[07:08:51.743] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-004.md","sessionsLen":18,"activeSessionId":"main"}
+[07:08:51.743] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":true,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-004.md"}
+[07:08:51.744] [Editor] useLayoutEffect syncing h1 {"planTitle":"Calm Tiger","currentTextContent":""}
+[07:08:51.750] [TerminalSwitch] transitioning {"from":"main","to":"calm-tiger","storeSessionsLen":18}
+[07:08:51.750] [Terminal] getOrCreate → creating new {"sessionId":"calm-tiger","sessionFound":true,"sessionType":"vibe","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/calm-tiger","sessionsLen":18,"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[07:08:52.068] [Terminal] resolved cwd {"sessionId":"calm-tiger","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/calm-tiger","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/calm-tiger","projectPath":"/Users/anantgarg/Local/tinyhands"}
