@@ -331,7 +331,7 @@ Optional: `GITHUB_TOKEN`, `PORT` (default 3000), `LOG_LEVEL`, `DOCKER_BASE_IMAGE
 
 The web dashboard is designed for a **non-technical audience**. Follow these rules strictly:
 
-- **No user IDs** — Never show raw Slack user IDs (e.g., `UH6TP67FB`). Always resolve to display names.
+- **No user IDs** — Never show raw Slack user IDs (e.g., `U01ABCDEF`). Always resolve to display names.
 - **No technical identifiers** — No trace IDs, database IDs, internal names, or API slugs.
 - **Friendly labels** — Use plain English labels. "Effort" not "maxTurns". "Web Search" not "WebSearch". "Ask Owner/Admins" not "admin_confirm".
 - **No jargon** — Avoid terms like "built-in", "integration", "token bucket", "tsvector". Say what it does, not how it works.
