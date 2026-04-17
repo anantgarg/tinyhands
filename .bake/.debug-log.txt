@@ -778,3 +778,10 @@
 [09:30:16.129] [AutoSwitch] plan → activating existing session {"itemId":"plan-010","sessionId":"plan-010","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-010","prevSession":"plan-012"}
 [09:30:16.130] [TerminalSwitch] transitioning {"from":"plan-012","to":"plan-010","storeSessionsLen":21}
 [09:30:16.130] [Terminal] getOrCreate → returning cached {"sessionId":"plan-010","cachedCwd":null}
+[09:32:59.653] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-012.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":5479,"isPlanPath":true}
+[09:32:59.653] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-012.md","title":"User picker for agent editor mention fields"}
+[09:32:59.660] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-012.md","sessionsLen":21,"activeSessionId":"plan-010"}
+[09:32:59.660] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-012.md"}
+[09:32:59.660] [AutoSwitch] plan → activating existing session {"itemId":"plan-012","sessionId":"plan-012","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-012","prevSession":"plan-010"}
+[09:32:59.662] [TerminalSwitch] transitioning {"from":"plan-010","to":"plan-012","storeSessionsLen":21}
+[09:32:59.662] [Terminal] getOrCreate → returning cached {"sessionId":"plan-012","cachedCwd":null}
