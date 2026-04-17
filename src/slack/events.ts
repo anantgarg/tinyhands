@@ -18,17 +18,28 @@ import { logger } from '../utils/logger';
 
 const EVENT_BUFFER_INTERVAL_MS = 1500;
 
-// Cache our own bot user ID so we only ignore our own messages, not other bots
-let ownBotUserId: string | null = null;
-let ownBotId: string | null = null;
+// Per-workspace bot identity cache. Each Slack workspace the app is installed
+// in has its own bot user (different user_id and bot_id), so the cache must be
+// keyed by workspaceId — otherwise a multi-tenant deployment uses one
+// workspace's bot_user_id when checking @mentions in another workspace, which
+// silently drops events for every non-primary workspace.
+const botIdentityCache = new Map<string, { userId: string; botId: string | null }>();
 
-async function getOwnBotIdentity(): Promise<void> {
-  if (ownBotUserId) return;
-  try {
-    const authResult = await getSystemSlackClient().auth.test();
-    ownBotUserId = authResult.user_id as string;
-    ownBotId = authResult.bot_id as string || null;
-  } catch { /* will retry next message */ }
+async function getBotIdentity(workspaceId: string): Promise<{ userId: string; botId: string | null }> {
+  const cached = botIdentityCache.get(workspaceId);
+  if (cached) return cached;
+  const { getWorkspace } = await import('../db');
+  const ws = await getWorkspace(workspaceId);
+  if (ws?.bot_user_id) {
+    const identity = { userId: ws.bot_user_id, botId: ws.bot_id ?? null };
+    botIdentityCache.set(workspaceId, identity);
+    return identity;
+  }
+  // Fallback: env token's workspace (rare — workspace row should exist)
+  const authResult = await getSystemSlackClient().auth.test();
+  const identity = { userId: authResult.user_id as string, botId: (authResult.bot_id as string) || null };
+  botIdentityCache.set(workspaceId, identity);
+  return identity;
 }
 
 
@@ -56,8 +67,11 @@ export function registerEvents(app: App): void {
       return;
     }
 
+    // Resolve THIS workspace's bot identity (user_id + bot_id) so
+    // self-message skips and @mention detection use the right bot.
+    const { userId: ownBotUserId, botId: ownBotId } = await getBotIdentity(workspaceId);
+
     // Ignore our own bot's messages to prevent infinite loops
-    await getOwnBotIdentity();
     if (
       (msg.bot_id && msg.bot_id === ownBotId) ||
       (ownBotUserId && msg.user === ownBotUserId)
