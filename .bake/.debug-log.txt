@@ -885,3 +885,16 @@
 [12:40:12.086] [Editor] editorContent changed externally — reloading body {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/harness/deploy.md","title":null}
 [13:20:31.252] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/harness/deploy.md","isReadOnly":false,"parsedStatus":null,"editorContentLen":7626,"isPlanPath":false}
 [13:20:31.253] [Editor] editorContent changed externally — reloading body {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/harness/deploy.md","title":null}
+[14:12:51.200] [Restore] setProjectPath {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/harness/deploy.md","activeSessionId":"main","openTabsLen":6}
+[14:12:51.229] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":null,"sessionsLen":0,"activeSessionId":""}
+[14:12:51.229] [AutoSwitch] early-bail (no project/path) {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":null}
+[14:12:51.229] [LoadSessions] start {"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[14:12:51.229] [Layout] App mounted {"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[14:12:51.702] [Restore] setTimeout fired — restoring tabs {"sessionsLen":0}
+[14:12:51.758] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/harness/deploy.md","isReadOnly":false,"parsedStatus":null,"editorContentLen":0,"isPlanPath":false}
+[14:12:51.763] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/harness/deploy.md","sessionsLen":0,"activeSessionId":""}
+[14:12:51.763] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/harness/deploy.md"}
+[14:12:51.763] [AutoSwitch] non-plan/vibe → forcing main {"prevSession":""}
+[14:12:51.784] [TerminalSwitch] transitioning {"from":null,"to":"main","storeSessionsLen":0}
+[14:12:51.784] [Terminal] getOrCreate → creating new {"sessionId":"main","sessionFound":false,"worktreePath":null,"sessionsLen":0,"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[14:12:52.136] [Terminal] resolved cwd {"sessionId":"main","cwd":"/Users/anantgarg/Local/tinyhands","cwdSource":"project-fallback","worktreePath":null,"projectPath":"/Users/anantgarg/Local/tinyhands"}
