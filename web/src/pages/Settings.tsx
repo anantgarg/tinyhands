@@ -14,7 +14,7 @@ import { useAuthStore } from '@/store/auth';
 import { toast } from '@/components/ui/use-toast';
 
 export function Settings() {
-  const isAdmin = useAuthStore((s) => s.user?.platformRole === 'superadmin' || s.user?.platformRole === 'admin');
+  const isAdmin = useAuthStore((s) => s.isAdmin());
   if (!isAdmin) {
     return (
       <div className="flex flex-col items-center justify-center py-20">

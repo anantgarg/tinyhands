@@ -62,7 +62,7 @@ function fmtDetails(details: unknown): string {
 }
 
 export function AuditLog() {
-  const isAdmin = useAuthStore((s) => s.user?.platformRole === 'superadmin' || s.user?.platformRole === 'admin');
+  const isAdmin = useAuthStore((s) => s.isAdmin());
   if (!isAdmin) {
     return (
       <div className="flex flex-col items-center justify-center py-20">

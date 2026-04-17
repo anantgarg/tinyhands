@@ -26,7 +26,7 @@ import { toast } from '@/components/ui/use-toast';
 export function Agents() {
   const navigate = useNavigate();
   const currentUserId = useAuthStore((s) => s.user?.userId);
-  const isAdmin = useAuthStore((s) => s.user?.platformRole === 'superadmin' || s.user?.platformRole === 'admin');
+  const isAdmin = useAuthStore((s) => s.isAdmin());
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [modelFilter, setModelFilter] = useState<string>('all');

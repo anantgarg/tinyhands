@@ -7,6 +7,10 @@ export interface SessionUser {
   displayName: string;
   avatarUrl: string;
   platformRole: PlatformRole;
+  // v1.48.4: the user's role in the active workspace (workspace_memberships.role).
+  // Used by admin guards alongside platformRole so non-primary workspace admins
+  // aren't locked out of Settings / Access & Roles / Dashboard.
+  workspaceRole?: 'admin' | 'member' | 'viewer';
 }
 
 export interface AuthenticatedRequest extends Request {

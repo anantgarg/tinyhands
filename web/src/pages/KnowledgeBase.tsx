@@ -55,7 +55,7 @@ function getSourceTypeName(type: string | null): string {
 }
 
 export function KnowledgeBase() {
-  const isAdmin = useAuthStore((s) => s.user?.platformRole === 'superadmin' || s.user?.platformRole === 'admin');
+  const isAdmin = useAuthStore((s) => s.isAdmin());
   const [activeSource, setActiveSource] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<string>('all');

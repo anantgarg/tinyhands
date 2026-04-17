@@ -173,6 +173,7 @@ export function AgentDetail() {
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState('');
   const platformRole = useAuthStore((s) => s.user?.platformRole);
+  const isAdmin = useAuthStore((s) => s.isAdmin());
 
   if (isLoading) {
     return (
@@ -194,7 +195,7 @@ export function AgentDetail() {
     );
   }
 
-  const canEdit = agent.userRole === 'owner' || platformRole === 'superadmin' || platformRole === 'admin';
+  const canEdit = agent.userRole === 'owner' || isAdmin;
 
   const handleToggleStatus = () => {
     const newStatus = agent.status === 'active' ? 'paused' : 'active';
@@ -644,7 +645,7 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
   const { data: connectionAvailability } = useConnectionAvailability(agentId);
   const { data: toolRequests } = useAgentToolRequests(agentId);
 
-  const isAdmin = useAuthStore((s) => s.user?.platformRole === 'superadmin' || s.user?.platformRole === 'admin');
+  const isAdmin = useAuthStore((s) => s.isAdmin());
   const [showAddTool, setShowAddTool] = useState(false);
   const [selectedToolsToAdd, setSelectedToolsToAdd] = useState<Set<string>>(new Set());
   const [writePolicy, setWritePolicy] = useState(agent.writePolicy ?? 'auto');

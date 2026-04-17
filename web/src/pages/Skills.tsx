@@ -23,7 +23,7 @@ import { useAuthStore } from '@/store/auth';
 import { toast } from '@/components/ui/use-toast';
 
 export function Skills() {
-  const isAdmin = useAuthStore((s) => s.user?.platformRole === 'superadmin' || s.user?.platformRole === 'admin');
+  const isAdmin = useAuthStore((s) => s.isAdmin());
   const { data: builtin, isLoading: builtinLoading } = useBuiltinSkills();
   const { data: workspace, isLoading: workspaceLoading } = useWorkspaceSkills();
   const createSkill = useCreateSkill();

@@ -41,7 +41,7 @@ export function Connections() {
 }
 
 function ConnectionsContent() {
-  const isAdmin = useAuthStore((s) => s.user?.platformRole === 'superadmin' || s.user?.platformRole === 'admin');
+  const isAdmin = useAuthStore((s) => s.isAdmin());
   const { data: teamConns, isLoading: teamLoading, isError: teamError } = useTeamConnections();
   const { data: personalConns, isLoading: personalLoading, isError: personalError } = usePersonalConnections();
   const { data: oauthIntegrations } = useOAuthIntegrations();

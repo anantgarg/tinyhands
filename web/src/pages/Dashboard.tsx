@@ -59,7 +59,7 @@ function humanizeAction(action: unknown): string {
 }
 
 export function Dashboard() {
-  const isAdmin = useAuthStore((s) => s.user?.platformRole === 'superadmin' || s.user?.platformRole === 'admin');
+  const isAdmin = useAuthStore((s) => s.isAdmin());
   const [days, setDays] = useState(7);
   const metrics = useDashboardMetrics(days);
   const powerUsers = usePowerUsers(days);
