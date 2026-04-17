@@ -191,7 +191,17 @@ Native document system (docs, sheets, files).
 
 ### Access Control
 
-#### Platform Roles
+#### Workspace Memberships (current, plan-010)
+
+| Column | Type | Purpose |
+|--------|------|---------|
+| workspace_id | TEXT | FK → workspaces |
+| user_id | TEXT | FK → users.id |
+| role | TEXT | admin / member |
+
+#### Platform Roles (legacy, read-only)
+
+Superseded by `workspace_memberships` + `platform_admins`. Retained read-only for one release, then dropped in a follow-up migration.
 
 | Column | Type | Purpose |
 |--------|------|---------|
