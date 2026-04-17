@@ -1,51 +1,106 @@
 # Deploy
 
-Steps to deploy this project to its production environment. This is the single entry point the Deploy button reads — Claude Code follows whatever is written here.
-
-> ⚠️ This file is a stub. The setup plan (scan or define-your-product) will fill it in with real steps based on your project's stack and deployment target. Until then, clicking Deploy will ask you how you want to deploy.
-
-## Instructions for Claude Code
-
-1. Ensure you are on the `main` branch of the main project checkout (not a worktree). If not, switch before proceeding.
-2. Follow the Pre-deploy Checklist and Deploy Steps below in order.
-3. If this file is a stub and no deploy steps are configured, ask the user how they want to deploy before proceeding.
-4. After a successful deploy, append a release entry to `.bake/product/releases.md` per the Post-deploy format below.
-
-## Pre-deploy Checklist
-
-- [ ] All tests pass (see `.bake/harness/testing/strategy.md` if it exists)
-- [ ] `merge.md` has been run for any in-flight session branches
-- [ ] No uncommitted changes on the main branch
+Steps to deploy TinyHands to production. This is the single entry point the Deploy button reads — Claude Code follows whatever is written here.
 
 ## Deploy Target
 
-_(describe where this project deploys — e.g., Vercel, Fly.io, Railway, GitHub Pages, TestFlight, Cloud Run. Include the environment name and region if relevant.)_
+DigitalOcean droplet `tinyjobs-prod` (45.55.157.4). Runs PM2 directly on the host (not Docker Compose for the app) with 6 processes: listener, workers ×3, scheduler, sync. System nginx reverse-proxies `127.0.0.1:3000`. Let's Encrypt via certbot, renewed automatically. Cloudflare proxies `*.tinyhands.ai` to the origin (orange cloud, "Full" SSL mode).
 
-## Steps
+Primary domain: `https://app.tinyhands.ai`. `cometchat.tinyhands.ai` is kept live for OAuth redirects that haven't been migrated yet.
 
-1. _(first deploy step — e.g., `npm run build`)_
-2. _(second deploy step — e.g., `vercel --prod`)_
-3. _(verification step — e.g., curl the health endpoint, check the release dashboard)_
+SSH access: `doctl compute ssh tinyjobs-prod --ssh-key-path ~/.ssh/tinyjobs_deploy --ssh-command "..."`. App directory: `/root/tinyjobs`.
+
+## Instructions for Claude Code
+
+1. Ensure you are on `main` in the main project checkout (not a worktree). If not, switch before proceeding.
+2. Run the Pre-deploy Checklist.
+3. Run the Deploy Steps in order.
+4. On success, append a release entry to `.bake/product/releases.md` per the Post-deploy format below, and tag a GitHub release via `gh release create`.
+5. If anything fails mid-deploy, stop and surface the error — do not retry destructively.
+
+## Pre-deploy Checklist
+
+- [ ] On `main`, working tree clean (or only `VERSION` + `package.json` about to be bumped).
+- [ ] All commits that should ship are on `main` locally.
+- [ ] `npm test` passes locally (husky pre-commit enforces this). Rarely-flaky tests (e.g. `api-kb.test.ts > DELETE /kb/sources/:id`) can be re-run; pre-existing flakiness is fine, a consistent failure is a stop-ship.
+- [ ] Decide the version bump (see `CLAUDE.md` → Versioning). Patch for bug fixes, minor for new features, major for breaking changes.
+
+## Deploy Steps
+
+### 1. Bump version and push
+
+```bash
+# Bump both files to the same value (auto-update reads VERSION, package.json drives releases)
+echo "1.X.Y" > VERSION
+# Edit package.json "version" to the same value
+git add VERSION package.json
+git commit -m "Bump version to v1.X.Y"  # husky runs full test suite
+git push origin main
+```
+
+### 2. Deploy to droplet
+
+```bash
+doctl compute ssh tinyjobs-prod --ssh-key-path ~/.ssh/tinyjobs_deploy --ssh-command "cd /root/tinyjobs && git checkout -- package-lock.json web/tsconfig.tsbuildinfo 2>/dev/null; git pull origin main && NODE_ENV=development npm install && cd web && NODE_ENV=development npm install && cd .. && NODE_ENV=development npm run build && NODE_ENV=development npm run build:web && npm run migrate && pm2 reload ecosystem.config.js --force"
+```
+
+Notes:
+- `NODE_ENV=development` during install/build is intentional — TypeScript, Vite, and `@types/*` are devDependencies. PM2 sets `NODE_ENV=production` at runtime regardless.
+- The initial `git checkout -- …` discards regeneratable drift in `package-lock.json` / `web/tsconfig.tsbuildinfo` that can accumulate from local `npm install` runs. Never discard other files without checking — untracked files in `/root/tinyjobs/` may be pre-existing operator state.
+- If the pull fails with "local changes would be overwritten" on other files, inspect with `git status` and decide file by file — do not blanket-discard.
+- Migrations are idempotent; running `npm run migrate` when nothing is pending is safe and fast.
+- `pm2 reload --force` does a graceful per-process reload (SIGTERM → wait for shutdown → start new), so in-flight agent runs complete cleanly. Use `--update-env` if you changed `.env`.
+
+### 3. Verify
+
+```bash
+# App health from outside Cloudflare
+curl -sS -o /dev/null -w 'HTTP %{http_code}\n' https://app.tinyhands.ai/
+
+# From droplet: listener port + PM2 versions
+doctl compute ssh tinyjobs-prod --ssh-key-path ~/.ssh/tinyjobs_deploy --ssh-command "curl -sS -o /dev/null -w 'origin-local HTTP %{http_code}\n' http://127.0.0.1:3000/ && pm2 list | grep tinyhands"
+```
+
+Every process should show the new version in the `version` column. External HTTP should be 200. If Cloudflare returns 522, Cloudflare cannot reach origin — check the zone's DNS records point to `45.55.157.4` and that the proxy setting is working (both CF Universal SSL and Full SSL mode have historically worked against this origin).
+
+## Environment changes
+
+`.env` lives at `/root/tinyjobs/.env`. Bump a value with `sed -i` + `pm2 reload all --update-env`:
+
+```bash
+doctl compute ssh tinyjobs-prod --ssh-key-path ~/.ssh/tinyjobs_deploy --ssh-command "cd /root/tinyjobs && cp .env .env.bak-\$(date +%Y%m%d-%H%M%S) && sed -i 's|^KEY=.*|KEY=newvalue|' .env && pm2 reload all --update-env"
+```
+
+## Domain changes
+
+To add a new domain (e.g. a new tenant subdomain):
+
+1. Ensure Cloudflare DNS has an A/AAAA record for the domain pointing to `45.55.157.4`.
+2. Create `/etc/nginx/sites-available/<domain>` with both a port-80 block (serving `/.well-known/acme-challenge/` from `/var/www/html` + 301 to HTTPS) and a port-443 block (proxy_pass `http://127.0.0.1:3000`, set the proxy_* headers, large proxy_buffers).
+3. Symlink it into `/etc/nginx/sites-enabled/`.
+4. `nginx -t && systemctl reload nginx`.
+5. `certbot --nginx -d <domain> --non-interactive --agree-tos --email me@anantgarg.com`. Certbot may leave a broken redirect loop inside the 443 block — re-check the config afterwards.
+6. If this becomes the new primary OAuth domain, update `OAUTH_REDIRECT_BASE_URL` in `.env` and `pm2 reload all --update-env`. Update OAuth redirect URIs in Slack, Google Cloud Console, Notion, and GitHub OAuth apps by hand — those live in third-party dashboards.
 
 ## Rollback
 
-_(how to revert a bad deploy — e.g., "redeploy the previous git tag with `vercel rollback`", "`fly releases rollback <version>`", "restore the previous Cloud Run revision")_
+Code rollback (safe at any time; migrations are additive):
+
+```bash
+doctl compute ssh tinyjobs-prod --ssh-key-path ~/.ssh/tinyjobs_deploy --ssh-command "cd /root/tinyjobs && git checkout vX.Y.Z && NODE_ENV=development npm install && NODE_ENV=development npm run build && NODE_ENV=development npm run build:web && pm2 reload ecosystem.config.js --force"
+```
+
+If a migration itself is the problem, write a new compensating migration and ship it as a new version — do not hand-edit the `migrations` table.
 
 ## Post-deploy
 
-After a successful deploy, append a release entry to `.bake/product/releases.md` with:
-
-- Version tag or commit SHA that was deployed
-- Deploy date (ISO format)
-- A bulleted list of merges since the previous release (read `.bake/product/changelog.md` for the per-merge history and summarize entries since the previous release entry)
-- The exact rollback command to use if this release needs to be reverted
-
-Format:
+1. `gh release create vX.Y.Z --title "…" --notes "…"` — notes should summarize merges since the previous release (read `.bake/product/changelog.md`) and include the exact rollback command.
+2. Append a matching entry to `.bake/product/releases.md`:
 
 ```
 ## {version} — {YYYY-MM-DD}
 
-Deployed to {target}. Includes:
+Deployed to DigitalOcean droplet `tinyjobs-prod` (45.55.157.4). Includes:
 - {one-line summary per merge since the previous release}
 - ...
 
@@ -54,10 +109,12 @@ Rollback: `{exact command}`
 
 See `.bake/product/releases.md` for the full history.
 
+## Auto-update (currently disabled)
+
+`src/modules/auto-update/index.ts` can pull-deploy on VERSION changes when `AUTO_UPDATE_ENABLED=true`. Production has this off — deploys are manual via the steps above. If re-enabling: bump `VERSION` alongside `package.json` on every commit that should ship (they must match), otherwise pull-based auto-update drifts silently (the `VERSION` file drifted behind `package.json` for several releases before auto-update was turned off).
+
 ## Related Docs
 
-If this project's deployment is complex enough to warrant splitting details out, link to them here. The scan plan creates these only when needed — don't create empty files:
-
-- `.bake/harness/deployment/ci-cd.md` — CI/CD pipeline rules (what runs on push, merge, tag)
-- `.bake/harness/deployment/infrastructure.md` — hosting, CDN, database provisioning
-- `.bake/harness/deployment/environment.md` — environment variables, secrets, service config
+- `.bake/harness/deployment/ci-cd.md` — CI rules (if/when we add a CI pipeline)
+- `.bake/harness/deployment/infrastructure.md` — droplet provisioning, PM2 ecosystem, nginx base config
+- `.bake/harness/deployment/environment.md` — full environment variable reference
