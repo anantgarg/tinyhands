@@ -914,3 +914,6 @@
 [11:29:54.055] [TerminalSwitch] transitioning {"from":"main","to":"plan-013","storeSessionsLen":22}
 [11:29:54.055] [Terminal] getOrCreate → returning cached {"sessionId":"plan-013","cachedCwd":null}
 [11:29:54.335] [Terminal] resolved cwd {"sessionId":"plan-013","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-013","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-013","projectPath":"/Users/anantgarg/Local/tinyhands"}
+[11:30:48.049] [Poll] External change detected {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-013.md","resolvedPath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-013/.bake/tasks/plans/plan-013.md","newTitle":"Fix Google OAuth redirect_uri_mismatch after multi-tenant move","currentH1":"New Plan","refExists":true}
+[11:30:48.049] [Poll] Updated h1 DOM {"newTitle":"Fix Google OAuth redirect_uri_mismatch after multi-tenant move"}
+[11:30:48.062] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-013.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":5006,"isPlanPath":true}
