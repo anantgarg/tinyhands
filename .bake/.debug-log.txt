@@ -995,3 +995,16 @@
 [08:56:33.163] [AutoSwitch] plan → activating existing session {"itemId":"plan-014","sessionId":"plan-014","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-014","prevSession":"plan-012"}
 [08:56:33.164] [TerminalSwitch] transitioning {"from":"plan-012","to":"plan-014","storeSessionsLen":23}
 [08:56:33.164] [Terminal] getOrCreate → returning cached {"sessionId":"plan-014","cachedCwd":null}
+[08:56:36.961] [Tab] Clicked tab {"tabPath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-010.md","resolvedPath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-010/.bake/tasks/plans/plan-010.md","title":"Multi-Tenant Workspaces","contentLen":21840}
+[08:56:36.965] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-010.md","isReadOnly":true,"parsedStatus":"complete","editorContentLen":21840,"isPlanPath":true}
+[08:56:36.968] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-010.md","title":"Multi-Tenant Workspaces"}
+[08:56:36.984] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-010.md","sessionsLen":23,"activeSessionId":"plan-014"}
+[08:56:36.984] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-010.md"}
+[08:56:37.012] [AutoSwitch] plan → activating existing session {"itemId":"plan-010","sessionId":"plan-010","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-010","prevSession":"plan-014"}
+[08:56:37.013] [TerminalSwitch] transitioning {"from":"plan-014","to":"plan-010","storeSessionsLen":23}
+[08:56:37.013] [Terminal] getOrCreate → returning cached {"sessionId":"plan-010","cachedCwd":null}
+[08:56:39.877] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"__main__","sessionsLen":23,"activeSessionId":"plan-010"}
+[08:56:39.877] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":false,"activeFilePath":"__main__"}
+[08:56:39.877] [AutoSwitch] non-plan/vibe → forcing main {"prevSession":"plan-010"}
+[08:56:39.878] [TerminalSwitch] transitioning {"from":"plan-010","to":"main","storeSessionsLen":23}
+[08:56:39.878] [Terminal] getOrCreate → returning cached {"sessionId":"main","cachedCwd":null}
