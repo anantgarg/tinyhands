@@ -1523,3 +1523,7 @@
 [13:35:04.709] [AutoSwitch] plan → activating existing session {"itemId":"plan-015","sessionId":"plan-015","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-015","prevSession":"plan-016"}
 [13:35:04.712] [TerminalSwitch] transitioning {"from":"plan-016","to":"plan-015","storeSessionsLen":25}
 [13:35:04.712] [Terminal] getOrCreate → returning cached {"sessionId":"plan-015","cachedCwd":null}
+[13:40:47.698] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-015.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":15795,"isPlanPath":true}
+[13:40:47.721] [Editor] editorContent changed externally — reloading body {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-015.md","title":"Bring-your-own Google OAuth app (per-workspace OAuth credentials)"}
+[13:40:49.686] [Poll] External change detected {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-015.md","resolvedPath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-015/.bake/tasks/plans/plan-015.md","newTitle":"Bring-your-own Google OAuth app (per-workspace OAuth credentials)","currentH1":"Bring-your-own Google OAuth app (per-workspace OAuth credentials)","refExists":true}
+[13:40:49.699] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-015.md","isReadOnly":false,"parsedStatus":"review","editorContentLen":18637,"isPlanPath":true}
