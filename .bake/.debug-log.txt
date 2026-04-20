@@ -1087,3 +1087,5 @@
 [09:03:05.750] [AutoSwitch] plan → activating existing session {"itemId":"plan-011","sessionId":"plan-011","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-011","prevSession":"plan-012"}
 [09:03:05.752] [TerminalSwitch] transitioning {"from":"plan-012","to":"plan-011","storeSessionsLen":23}
 [09:03:05.752] [Terminal] getOrCreate → returning cached {"sessionId":"plan-011","cachedCwd":null}
+[09:04:24.544] [Poll] External change detected {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-011.md","resolvedPath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-011/.bake/tasks/plans/plan-011.md","newTitle":"Add PostHog and CustomerIO Integrations","currentH1":"Add PostHog and CustomerIO Integrations","refExists":true}
+[09:04:24.553] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-011.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":9961,"isPlanPath":true}
