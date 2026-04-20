@@ -1127,3 +1127,6 @@
 [09:06:49.584] [AutoSwitch] plan → activating existing session {"itemId":"plan-012","sessionId":"plan-012","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-012","prevSession":"plan-014"}
 [09:06:49.585] [TerminalSwitch] transitioning {"from":"plan-014","to":"plan-012","storeSessionsLen":23}
 [09:06:49.585] [Terminal] getOrCreate → returning cached {"sessionId":"plan-012","cachedCwd":null}
+[09:07:38.545] [Poll] External change detected {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-012.md","resolvedPath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-012/.bake/tasks/plans/plan-012.md","newTitle":"Remove raw IDs and jargon from user-facing UI (agent editor user picker + sweep)","currentH1":"User picker for agent editor mention fields","refExists":true}
+[09:07:38.551] [Poll] Updated h1 DOM {"newTitle":"Remove raw IDs and jargon from user-facing UI (agent editor user picker + sweep)"}
+[09:07:38.565] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-012.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":9183,"isPlanPath":true}
