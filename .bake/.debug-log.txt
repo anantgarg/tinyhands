@@ -1152,3 +1152,10 @@
 [09:10:50.794] [AutoSwitch] plan → activating existing session {"itemId":"plan-013","sessionId":"plan-013","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-013","prevSession":"plan-012"}
 [09:10:50.795] [TerminalSwitch] transitioning {"from":"plan-012","to":"plan-013","storeSessionsLen":23}
 [09:10:50.795] [Terminal] getOrCreate → returning cached {"sessionId":"plan-013","cachedCwd":null}
+[09:12:12.537] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-012.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":9872,"isPlanPath":true}
+[09:12:12.537] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-012.md","title":"Remove raw IDs and jargon from user-facing UI (agent editor user picker + sweep)"}
+[09:12:12.547] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-012.md","sessionsLen":23,"activeSessionId":"plan-013"}
+[09:12:12.547] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-012.md"}
+[09:12:12.563] [AutoSwitch] plan → activating existing session {"itemId":"plan-012","sessionId":"plan-012","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-012","prevSession":"plan-013"}
+[09:12:12.564] [TerminalSwitch] transitioning {"from":"plan-013","to":"plan-012","storeSessionsLen":23}
+[09:12:12.565] [Terminal] getOrCreate → returning cached {"sessionId":"plan-012","cachedCwd":null}
