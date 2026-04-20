@@ -1213,3 +1213,17 @@
 [09:20:13.251] [AutoSwitch] plan → activating existing session {"itemId":"plan-016","sessionId":"plan-016","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-016","prevSession":"plan-015"}
 [09:20:13.252] [TerminalSwitch] transitioning {"from":"plan-015","to":"plan-016","storeSessionsLen":25}
 [09:20:13.253] [Terminal] getOrCreate → returning cached {"sessionId":"plan-016","cachedCwd":null}
+[09:21:33.836] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-015.md","isReadOnly":false,"parsedStatus":"building","editorContentLen":16841,"isPlanPath":true}
+[09:21:33.837] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-015.md","title":"Bring-your-own Google OAuth app (per-workspace OAuth credentials)"}
+[09:21:33.853] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-015.md","sessionsLen":25,"activeSessionId":"plan-016"}
+[09:21:33.853] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-015.md"}
+[09:21:33.876] [AutoSwitch] plan → activating existing session {"itemId":"plan-015","sessionId":"plan-015","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-015","prevSession":"plan-016"}
+[09:21:33.877] [TerminalSwitch] transitioning {"from":"plan-016","to":"plan-015","storeSessionsLen":25}
+[09:21:33.877] [Terminal] getOrCreate → returning cached {"sessionId":"plan-015","cachedCwd":null}
+[09:21:36.527] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-014.md","isReadOnly":false,"parsedStatus":"building","editorContentLen":19142,"isPlanPath":true}
+[09:21:36.528] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-014.md","title":"WhatsApp Integration via Twilio"}
+[09:21:36.536] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-014.md","sessionsLen":25,"activeSessionId":"plan-015"}
+[09:21:36.536] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-014.md"}
+[09:21:36.554] [AutoSwitch] plan → activating existing session {"itemId":"plan-014","sessionId":"plan-014","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-014","prevSession":"plan-015"}
+[09:21:36.555] [TerminalSwitch] transitioning {"from":"plan-015","to":"plan-014","storeSessionsLen":25}
+[09:21:36.555] [Terminal] getOrCreate → returning cached {"sessionId":"plan-014","cachedCwd":null}
