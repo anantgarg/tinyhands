@@ -1307,3 +1307,6 @@
 [09:26:13.940] [AutoSwitch] plan → activating existing session {"itemId":"plan-016","sessionId":"plan-016","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-016","prevSession":"plan-012"}
 [09:26:13.942] [TerminalSwitch] transitioning {"from":"plan-012","to":"plan-016","storeSessionsLen":25}
 [09:26:13.942] [Terminal] getOrCreate → returning cached {"sessionId":"plan-016","cachedCwd":null}
+[09:26:55.922] [Poll] External change detected {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-016.md","resolvedPath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-016/.bake/tasks/plans/plan-016.md","newTitle":"Unified Wiki-style Knowledge Base across KB, Documents, and Drive","currentH1":"Wiki-style Knowledge Base with Structured Parsing for Drive-synced Files","refExists":true}
+[09:26:55.922] [Poll] Updated h1 DOM {"newTitle":"Unified Wiki-style Knowledge Base across KB, Documents, and Drive"}
+[09:26:55.947] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-016.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":25067,"isPlanPath":true}
