@@ -1032,3 +1032,34 @@
 [08:56:54.464] [AutoSwitch] non-plan/vibe → forcing main {"prevSession":"plan-011"}
 [08:56:54.465] [TerminalSwitch] transitioning {"from":"plan-011","to":"main","storeSessionsLen":23}
 [08:56:54.465] [Terminal] getOrCreate → returning cached {"sessionId":"main","cachedCwd":null}
+[08:56:59.012] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"__main__","sessionsLen":23,"activeSessionId":"main"}
+[08:56:59.012] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":false,"activeFilePath":"__main__"}
+[08:57:01.453] [Tab] Clicked tab {"tabPath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-012.md","resolvedPath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-012/.bake/tasks/plans/plan-012.md","title":"User picker for agent editor mention fields","contentLen":5479}
+[08:57:01.460] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-012.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":5479,"isPlanPath":true}
+[08:57:01.460] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-012.md","title":"User picker for agent editor mention fields"}
+[08:57:01.466] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-012.md","sessionsLen":23,"activeSessionId":"main"}
+[08:57:01.466] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-012.md"}
+[08:57:01.467] [Editor] useLayoutEffect syncing h1 {"planTitle":"User picker for agent editor mention fields","currentTextContent":""}
+[08:57:01.475] [AutoSwitch] plan → activating existing session {"itemId":"plan-012","sessionId":"plan-012","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-012","prevSession":"main"}
+[08:57:01.477] [TerminalSwitch] transitioning {"from":"main","to":"plan-012","storeSessionsLen":23}
+[08:57:01.477] [Terminal] getOrCreate → returning cached {"sessionId":"plan-012","cachedCwd":null}
+[08:57:02.485] [Tab] Clicked tab {"tabPath":"/Users/anantgarg/Local/tinyhands/.bake/product/features.md","resolvedPath":"/Users/anantgarg/Local/tinyhands/.bake/product/features.md","title":null,"contentLen":11129}
+[08:57:02.488] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/product/features.md","isReadOnly":false,"parsedStatus":null,"editorContentLen":11129,"isPlanPath":false}
+[08:57:02.503] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/product/features.md","sessionsLen":23,"activeSessionId":"plan-012"}
+[08:57:02.503] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/product/features.md"}
+[08:57:02.503] [AutoSwitch] non-plan/vibe → forcing main {"prevSession":"plan-012"}
+[08:57:02.505] [TerminalSwitch] transitioning {"from":"plan-012","to":"main","storeSessionsLen":23}
+[08:57:02.505] [Terminal] getOrCreate → returning cached {"sessionId":"main","cachedCwd":null}
+[08:57:03.095] [Tab] Clicked tab {"tabPath":"/Users/anantgarg/Local/tinyhands/.bake/harness/deploy.md","resolvedPath":"/Users/anantgarg/Local/tinyhands/.bake/harness/deploy.md","title":null,"contentLen":7626}
+[08:57:03.098] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/harness/deploy.md","isReadOnly":false,"parsedStatus":null,"editorContentLen":7626,"isPlanPath":false}
+[08:57:03.110] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/harness/deploy.md","sessionsLen":23,"activeSessionId":"main"}
+[08:57:03.110] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/harness/deploy.md"}
+[08:57:05.184] [Tab] Clicked tab {"tabPath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-013.md","resolvedPath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-013/.bake/tasks/plans/plan-013.md","title":"Register production redirect URIs in Google Cloud Console (fix redirect_uri_mismatch)","contentLen":6543}
+[08:57:05.186] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-013.md","isReadOnly":false,"parsedStatus":"ready","editorContentLen":6543,"isPlanPath":true}
+[08:57:05.187] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-013.md","title":"Register production redirect URIs in Google Cloud Console (fix redirect_uri_mismatch)"}
+[08:57:05.202] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-013.md","sessionsLen":23,"activeSessionId":"main"}
+[08:57:05.202] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-013.md"}
+[08:57:05.203] [Editor] useLayoutEffect syncing h1 {"planTitle":"Register production redirect URIs in Google Cloud Console (fix redirect_uri_mismatch)","currentTextContent":""}
+[08:57:05.214] [AutoSwitch] plan → activating existing session {"itemId":"plan-013","sessionId":"plan-013","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-013","prevSession":"main"}
+[08:57:05.216] [TerminalSwitch] transitioning {"from":"main","to":"plan-013","storeSessionsLen":23}
+[08:57:05.216] [Terminal] getOrCreate → returning cached {"sessionId":"plan-013","cachedCwd":null}
