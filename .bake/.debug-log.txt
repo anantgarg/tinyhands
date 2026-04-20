@@ -1171,3 +1171,11 @@
 [09:12:24.690] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-014.md","sessionsLen":23,"activeSessionId":"plan-014"}
 [09:12:24.690] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-014.md"}
 [09:12:24.709] [AutoSwitch] plan → already on correct session, no-op {"itemId":"plan-014","activeSessionId":"plan-014"}
+[09:12:29.622] [Tab] Clicked tab {"tabPath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-013.md","resolvedPath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-013/.bake/tasks/plans/plan-013.md","title":"Register production redirect URIs in Google Cloud Console (fix redirect_uri_mismatch)","contentLen":6543}
+[09:12:29.625] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-013.md","isReadOnly":false,"parsedStatus":"ready","editorContentLen":6543,"isPlanPath":true}
+[09:12:29.625] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-013.md","title":"Register production redirect URIs in Google Cloud Console (fix redirect_uri_mismatch)"}
+[09:12:29.635] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-013.md","sessionsLen":23,"activeSessionId":"plan-014"}
+[09:12:29.635] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-013.md"}
+[09:12:29.655] [AutoSwitch] plan → activating existing session {"itemId":"plan-013","sessionId":"plan-013","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-013","prevSession":"plan-014"}
+[09:12:29.657] [TerminalSwitch] transitioning {"from":"plan-014","to":"plan-013","storeSessionsLen":23}
+[09:12:29.657] [Terminal] getOrCreate → returning cached {"sessionId":"plan-013","cachedCwd":null}

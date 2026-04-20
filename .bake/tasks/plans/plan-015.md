@@ -1,5 +1,5 @@
 ---
-id: plan-014
+id: plan-015
 title: Bring-your-own Google OAuth app (per-workspace OAuth credentials)
 status: draft
 created: 2026-04-20
