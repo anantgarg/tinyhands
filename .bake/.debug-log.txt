@@ -1310,3 +1310,17 @@
 [09:26:55.922] [Poll] External change detected {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-016.md","resolvedPath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-016/.bake/tasks/plans/plan-016.md","newTitle":"Unified Wiki-style Knowledge Base across KB, Documents, and Drive","currentH1":"Wiki-style Knowledge Base with Structured Parsing for Drive-synced Files","refExists":true}
 [09:26:55.922] [Poll] Updated h1 DOM {"newTitle":"Unified Wiki-style Knowledge Base across KB, Documents, and Drive"}
 [09:26:55.947] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-016.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":25067,"isPlanPath":true}
+[09:29:44.565] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-012.md","isReadOnly":false,"parsedStatus":"building","editorContentLen":9875,"isPlanPath":true}
+[09:29:44.566] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-012.md","title":"Remove raw IDs and jargon from user-facing UI (agent editor user picker + sweep)"}
+[09:29:44.573] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-012.md","sessionsLen":25,"activeSessionId":"plan-016"}
+[09:29:44.573] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-012.md"}
+[09:29:44.586] [AutoSwitch] plan → activating existing session {"itemId":"plan-012","sessionId":"plan-012","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-012","prevSession":"plan-016"}
+[09:29:44.588] [TerminalSwitch] transitioning {"from":"plan-016","to":"plan-012","storeSessionsLen":25}
+[09:29:44.588] [Terminal] getOrCreate → returning cached {"sessionId":"plan-012","cachedCwd":null}
+[09:29:45.439] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-014.md","isReadOnly":false,"parsedStatus":"building","editorContentLen":19142,"isPlanPath":true}
+[09:29:45.439] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-014.md","title":"WhatsApp Integration via Twilio"}
+[09:29:45.446] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-014.md","sessionsLen":25,"activeSessionId":"plan-012"}
+[09:29:45.446] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-014.md"}
+[09:29:45.447] [AutoSwitch] plan → activating existing session {"itemId":"plan-014","sessionId":"plan-014","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-014","prevSession":"plan-012"}
+[09:29:45.448] [TerminalSwitch] transitioning {"from":"plan-012","to":"plan-014","storeSessionsLen":25}
+[09:29:45.448] [Terminal] getOrCreate → returning cached {"sessionId":"plan-014","cachedCwd":null}
