@@ -1063,3 +1063,11 @@
 [08:57:05.214] [AutoSwitch] plan → activating existing session {"itemId":"plan-013","sessionId":"plan-013","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-013","prevSession":"main"}
 [08:57:05.216] [TerminalSwitch] transitioning {"from":"main","to":"plan-013","storeSessionsLen":23}
 [08:57:05.216] [Terminal] getOrCreate → returning cached {"sessionId":"plan-013","cachedCwd":null}
+[09:02:02.743] [Tab] Clicked tab {"tabPath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-014.md","resolvedPath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-014/.bake/tasks/plans/plan-014.md","title":"WhatsApp Integration via Twilio","contentLen":14353}
+[09:02:02.746] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-014.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":14353,"isPlanPath":true}
+[09:02:02.746] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-014.md","title":"WhatsApp Integration via Twilio"}
+[09:02:02.757] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-014.md","sessionsLen":23,"activeSessionId":"plan-013"}
+[09:02:02.757] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-014.md"}
+[09:02:02.766] [AutoSwitch] plan → activating existing session {"itemId":"plan-014","sessionId":"plan-014","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-014","prevSession":"plan-013"}
+[09:02:02.768] [TerminalSwitch] transitioning {"from":"plan-013","to":"plan-014","storeSessionsLen":23}
+[09:02:02.768] [Terminal] getOrCreate → returning cached {"sessionId":"plan-014","cachedCwd":null}
