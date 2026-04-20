@@ -1447,3 +1447,10 @@
 [09:34:40.130] [AutoSwitch] plan → activating existing session {"itemId":"plan-012","sessionId":"plan-012","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-012","prevSession":"plan-015"}
 [09:34:40.131] [TerminalSwitch] transitioning {"from":"plan-015","to":"plan-012","storeSessionsLen":25}
 [09:34:40.131] [Terminal] getOrCreate → returning cached {"sessionId":"plan-012","cachedCwd":null}
+[09:46:02.336] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-015.md","isReadOnly":false,"parsedStatus":"building","editorContentLen":16841,"isPlanPath":true}
+[09:46:02.336] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-015.md","title":"Bring-your-own Google OAuth app (per-workspace OAuth credentials)"}
+[09:46:02.350] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-015.md","sessionsLen":25,"activeSessionId":"plan-012"}
+[09:46:02.350] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-015.md"}
+[09:46:02.368] [AutoSwitch] plan → activating existing session {"itemId":"plan-015","sessionId":"plan-015","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-015","prevSession":"plan-012"}
+[09:46:02.370] [TerminalSwitch] transitioning {"from":"plan-012","to":"plan-015","storeSessionsLen":25}
+[09:46:02.370] [Terminal] getOrCreate → returning cached {"sessionId":"plan-015","cachedCwd":null}
