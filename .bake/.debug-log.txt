@@ -1806,3 +1806,8 @@
 [14:20:05.661] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-018.md"}
 [14:20:05.670] [AutoSwitch] plan → already on correct session, no-op {"itemId":"plan-018","activeSessionId":"plan-018"}
 [14:20:05.962] [Terminal] resolved cwd {"sessionId":"plan-018","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-018","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-018","projectPath":"/Users/anantgarg/Local/tinyhands"}
+[14:20:33.490] [TerminalSwitch] transitioning {"from":"plan-018","to":"main","storeSessionsLen":27}
+[14:20:33.490] [Terminal] getOrCreate → creating new {"sessionId":"main","sessionFound":true,"sessionType":"vibe","worktreePath":null,"sessionsLen":27,"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[14:20:33.502] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"__main__","sessionsLen":27,"activeSessionId":"main"}
+[14:20:33.502] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":false,"activeFilePath":"__main__"}
+[14:20:33.803] [Terminal] resolved cwd {"sessionId":"main","cwd":"/Users/anantgarg/Local/tinyhands","cwdSource":"project-fallback","worktreePath":null,"projectPath":"/Users/anantgarg/Local/tinyhands"}
