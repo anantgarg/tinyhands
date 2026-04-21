@@ -176,7 +176,7 @@ Once the legacy single-tenant workspace has been successfully migrated on produc
 - Remove the Google bootstrap step added in Step 7 from `src/modules/multitenant-migration/` (and its test).
 - Remove `config.oauth.googleClientId` and `config.oauth.googleClientSecret` from `src/config.ts`.
 - Remove `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` from `.env.example`, `ADMIN_GUIDE.md` env var references, and the CLAUDE.md env var list.
-- Unset those two env vars on the production droplet (see `reference_digitalocean.md`) and on any staging / DR hosts.
+- Unset those two env vars on the production host and on any staging / DR hosts.
 
 Keep `OAUTH_REDIRECT_BASE_URL` and the Notion / GitHub config fields — they are unrelated and still in use or reserved.
 
