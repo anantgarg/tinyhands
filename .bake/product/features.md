@@ -9,6 +9,7 @@
 | Workspace switcher | `web/src/components/layout/WorkspaceSwitcher.tsx` | `GET /auth/workspaces`, `POST /auth/switch-workspace` |
 | Slack OAuth install | `src/api/routes/auth.ts` | `/auth/slack/install`, `/auth/slack/install/callback` |
 | Per-workspace Anthropic key | `src/modules/anthropic/` | `/settings/anthropic-key/{status,test}`, `PUT /settings/anthropic-key` |
+| Per-workspace Google OAuth app (BYO) | `src/modules/workspace-oauth-apps/`, `web/src/pages/settings/integrations/google-oauth-app.tsx` | `GET/PUT/DELETE /workspace-oauth-apps/:provider`, `POST /workspace-oauth-apps/:provider/test` |
 | Multi-tenant bootstrap | `src/modules/multitenant-migration/` | Runs on every startup; idempotent |
 | Platform admin health | `src/api/routes/platform.ts`, `web/src/pages/Platform.tsx` | `/platform/workspaces` |
 | Per-run container isolation | `src/docker/index.ts` | Per-workspace+run temp dir, RO mount, `finally` cleanup |
