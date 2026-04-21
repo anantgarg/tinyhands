@@ -133,10 +133,16 @@ vi.mock('../../src/modules/connections/oauth', () => ({
   getSupportedOAuthIntegrations: vi.fn().mockReturnValue([]),
 }));
 
-// Mock tools/integrations for getIntegration
+// Mock tools/integrations for getIntegration + auto-configured lookups
 const mockGetIntegration = vi.fn().mockReturnValue(undefined);
+const mockFindManifestForTool = vi.fn().mockReturnValue(undefined);
+const mockIsAutoConfiguredTool = vi.fn().mockReturnValue(false);
+const mockGetIntegrations = vi.fn().mockReturnValue([]);
 vi.mock('../../src/modules/tools/integrations', () => ({
   getIntegration: (...args: any[]) => mockGetIntegration(...args),
+  findManifestForTool: (...args: any[]) => mockFindManifestForTool(...args),
+  isAutoConfiguredTool: (...args: any[]) => mockIsAutoConfiguredTool(...args),
+  getIntegrations: (...args: any[]) => mockGetIntegrations(...args),
 }));
 
 // Mock Anthropic SDK for memory extraction
@@ -217,7 +223,7 @@ vi.mock('../../src/config', () => ({
       maxConcurrentWorkers: 3,
     },
     anthropic: { apiKey: 'test' },
-    server: { webDashboardUrl: 'http://localhost:3000' },
+    server: { webDashboardUrl: 'http://localhost:3000', port: 3000, internalSecret: 'test-secret' },
   },
 }));
 
@@ -1229,6 +1235,52 @@ describe('Execution Module – executeAgentRun', () => {
     expect(customTools[0].schema).toEqual({ type: 'object' });
     expect(customTools[0].script_code).toBe('console.log("hello")');
     expect(customTools[0].config).toEqual({ api_key: 'resolved-key' });
+  });
+
+  it('should always provision auto-configured tools from manifest, bypassing custom_tools and credentials', async () => {
+    // Reproduces the production bug: ARK KB has tools:['kb-search'] but no
+    // custom_tools row in its workspace and no agent_tool_connections row.
+    // The old code path filtered kb-search out and the agent replied "kb-search
+    // tool isn't currently available in this session". The fix builds the tool
+    // entry directly from the manifest, so the container always sees it.
+    mockGetAgent.mockResolvedValue(makeAgent({ tools: ['kb-search'] }));
+    mockListCustomTools.mockResolvedValue([]); // No custom_tools row
+    mockIsAutoConfiguredTool.mockImplementation((name: string) => name === 'kb-search');
+    mockFindManifestForTool.mockImplementation((name: string) => {
+      if (name !== 'kb-search') return undefined;
+      return {
+        manifest: { id: 'kb', label: 'Knowledge Base', autoConfigured: true, tools: [] },
+        tool: {
+          name: 'kb-search',
+          schema: JSON.stringify({ type: 'object' }),
+          code: 'console.log("kb-search ran");',
+          accessLevel: 'read-only',
+          displayName: 'Searching knowledge base',
+        },
+      };
+    });
+
+    const container = { id: 'container-1' };
+    mockCreateAgentContainer.mockResolvedValue(container);
+    mockFollowContainerOutput.mockResolvedValue({
+      exitCode: 0,
+      allLogs: 'TINYHANDS_OUTPUT:{"output":"ok","input_tokens":10,"output_tokens":5,"tool_calls_count":1,"cost_usd":0}',
+    });
+
+    const job = makeFakeJob(makeJobData());
+    await executeAgentRun(job);
+
+    const containerCall = mockCreateAgentContainer.mock.calls[0][0];
+    const customTools = JSON.parse(containerCall.envVars.CUSTOM_TOOLS_CONFIG);
+    expect(customTools).toHaveLength(1);
+    expect(customTools[0].name).toBe('kb-search');
+    expect(customTools[0].script_code).toBe('console.log("kb-search ran");');
+    expect(customTools[0].config.api_url).toBe('http://host.docker.internal:3000');
+    expect(customTools[0].config.internal_secret).toBe('test-secret');
+    // Credential resolution must NOT be called for auto-configured tools
+    expect(mockResolveToolCredentials).not.toHaveBeenCalledWith(
+      expect.anything(), expect.anything(), 'kb-search', expect.anything()
+    );
   });
 
   it('should load approved MCP configs and merge with skills', async () => {

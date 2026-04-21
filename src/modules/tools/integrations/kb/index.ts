@@ -138,6 +138,7 @@ export const manifest: ToolManifest = {
   description: 'Search and browse the internal knowledge base. No API keys needed.',
   configKeys: [],
   supportedCredentialModes: [],
+  autoConfigured: true,
   tools: [
     { name: 'kb-search', schema: READ_SCHEMA, code: READ_CODE, accessLevel: 'read-only', displayName: 'Searching knowledge base' },
   ],

@@ -41,6 +41,19 @@ vi.mock('../../src/modules/access-control', () => ({
   getAgentRole: (...args: any[]) => mockGetAgentRole(...args),
 }));
 
+// Mock tools/integrations so the auto-configured branch in connections.ts
+// can resolve without pulling in the real manifests (which would run their
+// module-level side effects, e.g. config imports).
+const AUTO_CONFIGURED_TOOL_NAMES = new Set(['kb-search', 'docs-read', 'docs-write']);
+vi.mock('../../src/modules/tools/integrations', () => ({
+  isAutoConfiguredTool: (name: string) => AUTO_CONFIGURED_TOOL_NAMES.has(name),
+  findManifestForTool: () => undefined,
+  getIntegrations: () => [],
+  getIntegration: () => undefined,
+  getToolIntegrations: () => [],
+  getToolDisplayNames: () => ({}),
+}));
+
 import {
   createTeamConnection,
   createPersonalConnection,
@@ -327,6 +340,38 @@ describe('resolveToolCredentials', () => {
 
     expect(result).toBeNull();
   });
+
+  it('should short-circuit to empty-config for auto-configured tools regardless of atc row', async () => {
+    // Even with zero mockQueryOne responses (no atc, no connection), auto-configured
+    // tools must return a non-null config so the runtime doesn't treat them as
+    // missing credentials. This is the fix for the "kb-search tool isn't currently
+    // available in this session" bug.
+    const result = await resolveToolCredentials(TEST_WORKSPACE_ID, 'agent-1', 'kb-search');
+    expect(result).toEqual({});
+  });
+
+  it('should short-circuit docs tools as auto-configured', async () => {
+    const readResult = await resolveToolCredentials(TEST_WORKSPACE_ID, 'agent-1', 'docs-read');
+    const writeResult = await resolveToolCredentials(TEST_WORKSPACE_ID, 'agent-1', 'docs-write');
+    expect(readResult).toEqual({});
+    expect(writeResult).toEqual({});
+  });
+});
+
+describe('setAgentToolConnection for auto-configured tools', () => {
+  it('should reject setting a connection mode for kb-search', async () => {
+    await expect(
+      setAgentToolConnection(TEST_WORKSPACE_ID, 'agent-1', 'kb-search', 'team', null, 'U001')
+    ).rejects.toThrow(/auto-configured/);
+    // Must not have hit the INSERT
+    expect(mockQueryOne).not.toHaveBeenCalled();
+  });
+
+  it('should reject setting a connection mode for docs-write', async () => {
+    await expect(
+      setAgentToolConnection(TEST_WORKSPACE_ID, 'agent-1', 'docs-write', 'team', null, 'U001')
+    ).rejects.toThrow(/auto-configured/);
+  });
 });
 
 // ── New: listTeamConnections ──
@@ -446,6 +491,22 @@ describe('listAgentToolConnections', () => {
     const result = await listAgentToolConnections(TEST_WORKSPACE_ID, 'a1');
 
     expect(result).toHaveLength(0);
+  });
+
+  it('should filter out auto-configured tool rows (stale leftovers)', async () => {
+    // Stale rows exist in production for kb-search from before the
+    // auto-configured path — they must not reach the dashboard credentials UI.
+    const conns = [
+      { agent_id: 'a1', tool_name: 'chargebee-read', connection_mode: 'team' },
+      { agent_id: 'a1', tool_name: 'kb-search', connection_mode: 'team', connection_id: null },
+      { agent_id: 'a1', tool_name: 'docs-read', connection_mode: 'runtime', connection_id: null },
+    ];
+    mockQuery.mockResolvedValueOnce(conns);
+
+    const result = await listAgentToolConnections(TEST_WORKSPACE_ID, 'a1');
+
+    expect(result).toHaveLength(1);
+    expect(result[0].tool_name).toBe('chargebee-read');
   });
 });
 

@@ -280,13 +280,49 @@ async function executeAgentRunInner(job: Job<JobData>, data: JobData, workspaceI
       agentTools = agentTools.filter((t: string) => !t.endsWith('-write'));
       logger.info('Read-only run: stripped write tools', { agentId: agent.id, userId: data.userId });
     }
-    let agentCustomTools = customTools.filter(t => agentTools.includes(t.name));
 
-    // Auto-recovery: if agent references tools not in custom_tools, try registering from integration manifests
-    const missingTools = agentTools.filter((name: string) => !customTools.find(t => t.name === name));
+    // Auto-configured tools (KB, Docs) are provisioned directly from the
+    // manifest — no custom_tools row, no agent_tool_connections row, no
+    // credential resolution. They have no user-supplied credentials and the
+    // workspace-agnostic config (api_url + internal_secret) comes from app
+    // config. See ToolManifest.autoConfigured.
+    const { findManifestForTool, isAutoConfiguredTool } = await import('../tools/integrations');
+    const autoConfiguredToolNames = agentTools.filter(isAutoConfiguredTool);
+    const nonAutoConfiguredToolNames = agentTools.filter(n => !isAutoConfiguredTool(n));
+
+    const autoConfiguredEntries = autoConfiguredToolNames
+      .map(name => {
+        const match = findManifestForTool(name);
+        if (!match) {
+          logger.warn('Auto-configured tool has no manifest', { tool: name, agentId: agent.id });
+          return null;
+        }
+        const toolConfig: Record<string, string> = {
+          api_url: `http://host.docker.internal:${config.server.port}`,
+        };
+        if (config.server.internalSecret) {
+          toolConfig.internal_secret = config.server.internalSecret;
+        }
+        return {
+          name: match.tool.name,
+          schema: JSON.parse(match.tool.schema),
+          script_path: null,
+          script_code: match.tool.code,
+          language: 'javascript',
+          config: toolConfig,
+        };
+      })
+      .filter((e): e is NonNullable<typeof e> => e !== null);
+
+    let agentCustomTools = customTools.filter(t => nonAutoConfiguredToolNames.includes(t.name));
+
+    // Auto-recovery: if the agent references non-auto-configured tools that
+    // aren't in custom_tools, try registering them from integration manifests.
+    // (Auto-configured tools bypass this path entirely.)
+    const missingTools = nonAutoConfiguredToolNames.filter((name: string) => !customTools.find(t => t.name === name));
     if (missingTools.length > 0) {
       try {
-        const { getIntegrations, getIntegration: getInteg } = await import('../tools/integrations');
+        const { getIntegrations } = await import('../tools/integrations');
         for (const integ of getIntegrations()) {
           const integTools = (integ as any).tools || [];
           const needed = integTools.filter((t: any) => missingTools.includes(t.name));
@@ -297,12 +333,12 @@ async function executeAgentRunInner(job: Job<JobData>, data: JobData, workspaceI
         }
         // Re-fetch after registration
         customTools = await listCustomTools(workspaceId);
-        agentCustomTools = customTools.filter(t => agentTools.includes(t.name));
+        agentCustomTools = customTools.filter(t => nonAutoConfiguredToolNames.includes(t.name));
       } catch (autoRegErr: any) {
         logger.warn('Auto-registration of missing tools failed', { error: autoRegErr.message, missingTools });
       }
     }
-    const customToolEntries = [];
+    const customToolEntries: any[] = [...autoConfiguredEntries];
     const missingCredTools: { name: string; message: string }[] = [];
     for (const t of agentCustomTools) {
       const execScript = await getToolExecutionScript(workspaceId, t.name);

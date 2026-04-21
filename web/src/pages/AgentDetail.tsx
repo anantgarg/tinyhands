@@ -830,8 +830,11 @@ function ToolsTab({ agentId, agent }: { agentId: string; agent: AgentData }) {
                             {group.isInteg ? (
                               (() => {
                               const integCheck = integrationsList?.find(i => i.id === group.key);
-                              if (integCheck?.supportedCredentialModes && integCheck.supportedCredentialModes.length === 0) {
-                                return <span className="text-xs text-warm-text-secondary">Auto-configured</span>;
+                              const isAutoConfigured = !!integCheck?.autoConfigured
+                                || (integCheck?.supportedCredentialModes !== undefined
+                                  && integCheck.supportedCredentialModes.length === 0);
+                              if (isAutoConfigured) {
+                                return <span className="text-xs text-warm-text-secondary">Built-in</span>;
                               }
                               return <>
                               <Select

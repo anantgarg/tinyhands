@@ -324,6 +324,7 @@ export const manifest: ToolManifest = {
   description: 'Create and manage documents, spreadsheets, and files. No API keys needed.',
   configKeys: [],
   supportedCredentialModes: [],
+  autoConfigured: true,
   tools: [
     { name: 'docs-read', schema: READ_SCHEMA, code: READ_CODE, accessLevel: 'read-only', displayName: 'Reading documents' },
     { name: 'docs-write', schema: WRITE_SCHEMA, code: WRITE_CODE, accessLevel: 'read-write', displayName: 'Writing documents' },

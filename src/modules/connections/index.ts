@@ -3,6 +3,7 @@ import { query, queryOne, execute } from '../../db';
 import { encrypt, decrypt } from './crypto';
 import type { Connection, AgentToolConnection, ConnectionMode, PlatformRole, AgentAccessLevel } from '../../types';
 import { logger } from '../../utils/logger';
+import { isAutoConfiguredTool } from '../tools/integrations';
 import type { CredentialErrorContext } from './errors';
 
 // ── Connection CRUD ──
@@ -298,6 +299,12 @@ export async function setAgentToolConnection(
   connectionId: string | null,
   configuredBy: string,
 ): Promise<AgentToolConnection> {
+  // Auto-configured tools never need a connection row. Reject at the write
+  // boundary so callers (dashboard PUT, Slack modal, sibling-tool inheritance
+  // in agents.ts) can't silently recreate the stale rows we're cleaning up.
+  if (isAutoConfiguredTool(toolName)) {
+    throw new Error(`Tool "${toolName}" is auto-configured and cannot have a credential mode`);
+  }
   const id = uuid();
   const row = await queryOne<AgentToolConnection>(`
     INSERT INTO agent_tool_connections (id, workspace_id, agent_id, tool_name, connection_mode, connection_id, configured_by)
@@ -354,10 +361,15 @@ export async function getToolAgentUsage(wsId: string): Promise<Array<{ agent_id:
 }
 
 export async function listAgentToolConnections(wsId: string, agentId: string): Promise<AgentToolConnection[]> {
-  return query<AgentToolConnection>(
+  const rows = await query<AgentToolConnection>(
     'SELECT * FROM agent_tool_connections WHERE workspace_id = $1 AND agent_id = $2 ORDER BY tool_name',
     [wsId, agentId]
   );
+  // Auto-configured tools (KB, Docs) don't have credentials — any rows that
+  // exist for them are stale leftovers from a pre-auto-configured UI that
+  // asked users to pick a credential mode. Filter them out so the dashboard
+  // never renders a "Not configured" credentials picker for these tools.
+  return rows.filter(r => !isAutoConfiguredTool(r.tool_name));
 }
 
 // ── Credential Resolution ──
@@ -395,26 +407,11 @@ export async function resolveToolCredentials(
   }
 
   // Auto-configured integrations (KB, Documents) have no user-supplied
-  // credentials — their config lives directly in custom_tools.config_json.
-  // Skip connection resolution and surface that config.
-  try {
-    const { getIntegration } = require('../tools/integrations');
-    const manifest = getIntegration(integrationId);
-    if (manifest && (!manifest.configKeys || manifest.configKeys.length === 0)) {
-      const row = await queryOne<{ config_json: string }>(
-        'SELECT config_json FROM custom_tools WHERE name = $1 AND workspace_id = $2',
-        [toolName, wsId],
-      );
-      if (row?.config_json) {
-        try {
-          return JSON.parse(row.config_json);
-        } catch {
-          return {};
-        }
-      }
-      return {};
-    }
-  } catch { /* fall through to connection-based resolution */ }
+  // credentials — they're provisioned directly from the manifest at runtime
+  // (see src/modules/execution). Callers that still land here get an empty
+  // config object so the "resolve returned null → missing credentials" path
+  // is never triggered for these tools.
+  if (isAutoConfiguredTool(toolName)) return {};
 
   if (atc) {
     switch (atc.connection_mode) {

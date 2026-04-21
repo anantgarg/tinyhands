@@ -36,6 +36,15 @@ export interface ToolManifest {
   setupGuide?: string;
   /** Which credential modes this integration supports. Defaults to all three (team, delegated, runtime) if omitted. */
   supportedCredentialModes?: ('team' | 'delegated' | 'runtime')[];
+  /**
+   * Tool is fully configured by the platform and has no user-supplied
+   * credentials. Auto-configured tools (e.g. Knowledge Base, Documents) skip
+   * the whole connection/credential pipeline: the dashboard hides the
+   * credential picker, the connections API rejects mode selection, and the
+   * runtime provisions them into the container directly from the manifest —
+   * no `agent_tool_connections` row required.
+   */
+  autoConfigured?: boolean;
   /** The tool definitions (read-only and optionally read-write) */
   tools: ToolDefinition[];
   /** Register both tools into the database */
