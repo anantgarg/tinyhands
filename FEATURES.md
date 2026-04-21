@@ -1260,7 +1260,7 @@ All user-facing text in the dashboard and agent creation flow MUST use these lab
 | Dashboard | All | Agent metrics, recent activity, cost tracking |
 | Agents | All | List, filter, search. Split: "Your Agents" + "Other Agents". Create/edit |
 | Agent Detail | All (varies by role) | 6 tabs: Overview, Tools, Runs, Memory, Triggers, Access |
-| Tools & Integrations | Admin only | Connect services, manage integrations, agent-created tools |
+| Tools & Integrations | Admin only (page) | Connect services, manage integrations, agent-created tools. The page route and all mutating API endpoints are admin-gated; the read-only `GET /tools/integrations` metadata endpoint is accessible to any workspace member so the Agent Detail Tools tab can render the correct `autoConfigured` / `Built-in` label for members. |
 | Connections | All | Personal connections tab + Team connections tab (read-only for non-admins) |
 | Knowledge Base | All | Browse sources, entries, search. Admin: add/edit/approve/delete |
 | Documents | All | List, create, edit, delete docs/sheets/files. Filter by type, search, version history |
