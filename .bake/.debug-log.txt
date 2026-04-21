@@ -1722,3 +1722,10 @@
 [13:40:17.084] [AutoSwitch] plan → activating existing session {"itemId":"plan-016","sessionId":"plan-016","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-016","prevSession":"plan-018"}
 [13:40:17.086] [TerminalSwitch] transitioning {"from":"plan-018","to":"plan-016","storeSessionsLen":27}
 [13:40:17.086] [Terminal] getOrCreate → returning cached {"sessionId":"plan-016","cachedCwd":null}
+[13:40:30.878] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-018.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":7584,"isPlanPath":true}
+[13:40:30.878] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-018.md","title":"Stop asking for credentials on built-in tools (Knowledge Base, Documents) and fix runtime tool provisioning"}
+[13:40:30.887] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-018.md","sessionsLen":27,"activeSessionId":"plan-016"}
+[13:40:30.887] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-018.md"}
+[13:40:30.898] [AutoSwitch] plan → activating existing session {"itemId":"plan-018","sessionId":"plan-018","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-018","prevSession":"plan-016"}
+[13:40:30.899] [TerminalSwitch] transitioning {"from":"plan-016","to":"plan-018","storeSessionsLen":27}
+[13:40:30.899] [Terminal] getOrCreate → returning cached {"sessionId":"plan-018","cachedCwd":null}
