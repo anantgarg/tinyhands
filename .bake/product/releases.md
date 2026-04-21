@@ -2,6 +2,15 @@
 
 One entry per deploy to production. Each entry names the version, the date, the merges included since the previous release, and the exact rollback command. Updated automatically by the Deploy button (see `.bake/harness/deploy.md` for the post-deploy step that appends here).
 
+## v1.49.1 — 2026-04-21
+
+Deployed to the production host. Boot-time cleanup.
+
+- `ensureBotInAllAgentChannels()` now groups agent channels by `workspace_id` and runs each batch inside `runInSlackContext` with `getBotClient(workspaceId)`. Previously a single system client tried to join every channel across every workspace, logging `channel_not_found` warnings on every restart. Pure runtime hygiene; no user-visible change.
+- Production log now shows `Ensuring bot is in agent channels` with the correct `workspaceId` per install.
+
+Rollback: SSH to production, `cd $APP_DIR && git checkout v1.49.0 && NODE_ENV=development npm install && NODE_ENV=development npm run build && NODE_ENV=development npm run build:web && pm2 reload ecosystem.config.js --force`.
+
 ## v1.49.0 — 2026-04-17
 
 Deployed to the production host. Two long-standing UI bugs fixed, plus the v1.48.1-v1.48.5 hardening rollup.
