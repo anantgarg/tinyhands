@@ -114,6 +114,9 @@ The production app checkout accumulated untracked files worth cleaning up: a han
 ### OAuth redirect URIs still reference old domain
 After v1.47.0, the app's `OAUTH_REDIRECT_BASE_URL` is `https://app.tinyhands.ai`, but Slack / Google Cloud Console / Notion / GitHub OAuth apps may still have the previous domain's redirect URIs registered. New OAuth flows started from the dashboard use `app.tinyhands.ai` and will fail if the provider doesn't have that redirect URI whitelisted. Update all four third-party dashboards.
 
+### Audit remaining `getDefaultWorkspaceId()` fallback call sites
+v1.50.5 fixed the 13 `/internal/kb/*` and `/internal/docs/*` endpoints that hardcoded `getDefaultWorkspaceId()` (caused ARK KB in Splitsie to see 0 entries while CometChat's 2945-entry KB lived under the default workspace). The pattern `body.team?.id || getDefaultWorkspaceId()` is used in ~60 call sites across `src/slack/{commands,events,actions}.ts` and `src/sync.ts`. Slack events normally carry `team.id`, so the fallback is usually dead code — but any code path where the Slack payload is malformed, missing, or forwarded from a webhook stub could silently route tenant B's request through tenant A's default workspace. Worth a deliberate audit: either replace each fallback with an explicit error, or prove each site is guaranteed a `team.id` from the upstream contract.
+
 ### Test-mock debt — deferred to v1.50
 In v1.48.0 we skipped four test files at the vitest config level: `tests/unit/slack-module.test.ts`, `tests/unit/events.test.ts`, `tests/unit/commands.test.ts`, `tests/unit/api-misc.test.ts`. All of them mock the pre-v1.48 Slack surface (static `getSlackApp().client` plus the slash-command handlers that were deleted). The production code moved to `authorize()` + `AsyncLocalStorage` + dashboard-managed workflows, so the mocks don't compose anymore. Rewrite against the new surface in v1.50 and remove entries from `vitest.config.ts` `exclude`.
 
