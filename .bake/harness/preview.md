@@ -33,7 +33,7 @@ set -a && source .env && set +a && npm run dev
 The app does not auto-load `.env` (it relies on PM2 injecting env vars in production). `set -a; source .env; set +a` exports every key in `.env` before running ts-node.
 
 - **Port**: 3000
-- **Requirements**: PostgreSQL, Redis, Slack app credentials, Anthropic API key (workspace 1 seeded via env bootstrap on first boot of a single-tenant install; otherwise pasted into the dashboard)
+- **Requirements**: PostgreSQL, Redis, Slack app credentials, Anthropic API key (seeded via env bootstrap on first boot of a single-tenant install; otherwise pasted into the dashboard by each workspace admin)
 - **Environment**: see setup above
 
 The dev server starts the Slack Socket Mode listener and Express HTTP server on port 3000.
