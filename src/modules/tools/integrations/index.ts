@@ -63,6 +63,7 @@ export function getToolIntegrations() {
     requiredConfigKeys: m.configKeys,
     configPlaceholders: m.configPlaceholders || {},
     supportedCredentialModes: m.supportedCredentialModes,
+    autoConfigured: m.autoConfigured,
   }));
 }
 
@@ -78,6 +79,36 @@ export function getToolDisplayNames(): Record<string, string> {
     }
   }
   return map;
+}
+
+/**
+ * Look up the integration manifest that owns the tool with the given name.
+ * Returns both the manifest and the tool definition — useful for runtime
+ * provisioning of auto-configured tools, where we need both the integration
+ * metadata (is it auto-configured?) and the tool code/schema.
+ */
+export function findManifestForTool(toolName: string): { manifest: ToolManifest; tool: import('./manifest').ToolDefinition } | undefined {
+  for (const m of ALL_MANIFESTS) {
+    const tool = m.tools.find(t => t.name === toolName);
+    if (tool) return { manifest: m, tool };
+  }
+  return undefined;
+}
+
+/**
+ * Whether a tool belongs to an auto-configured integration — i.e. one
+ * configured by the platform with no user-supplied credentials (KB, Docs).
+ * Auto-configured tools bypass the credential-resolution pipeline entirely
+ * and are provisioned into the agent container directly from the manifest.
+ */
+export function isAutoConfiguredTool(toolName: string): boolean {
+  const match = findManifestForTool(toolName);
+  if (!match) return false;
+  // Primary signal: explicit `autoConfigured: true` flag.
+  // Legacy signal: `supportedCredentialModes: []` (pre-flag manifests).
+  if (match.manifest.autoConfigured) return true;
+  const modes = match.manifest.supportedCredentialModes;
+  return Array.isArray(modes) && modes.length === 0;
 }
 
 export type { ToolManifest, ToolDefinition } from './manifest';

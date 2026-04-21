@@ -264,6 +264,7 @@ router.get('/integrations', requireAdmin, async (req: Request, res: Response) =>
       connectionId: connectionMap[int.id] || null,
       toolsCount: int.tools?.length ?? 0,
       supportedCredentialModes: int.supportedCredentialModes || undefined,
+      autoConfigured: int.autoConfigured || undefined,
       oauthSupported: supportedOAuthIds.has(int.id),
       configKeys: (int.configKeys ?? []).map((k: string) => ({
         key: k,

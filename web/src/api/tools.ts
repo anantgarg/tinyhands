@@ -18,6 +18,7 @@ interface Integration {
   connectionId: string | null;
   toolsCount: number;
   supportedCredentialModes?: string[];
+  autoConfigured?: boolean;
   oauthSupported?: boolean;
   configKeys: { key: string; label: string; placeholder: string; required: boolean; secret: boolean }[];
   setupGuide: string | null;
