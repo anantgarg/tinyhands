@@ -1593,3 +1593,5 @@
 [10:43:42.309] [AutoSwitch] plan → activating existing session {"itemId":"plan-016","sessionId":"plan-016","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-016","prevSession":"main"}
 [10:43:42.310] [TerminalSwitch] transitioning {"from":"main","to":"plan-016","storeSessionsLen":25}
 [10:43:42.311] [Terminal] getOrCreate → returning cached {"sessionId":"plan-016","cachedCwd":null}
+[10:51:04.087] [Poll] External change detected {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-016.md","resolvedPath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-016/.bake/tasks/plans/plan-016.md","newTitle":"Wiki-style Knowledge Base and Documents, parsing-powered, kept separate","currentH1":"Wiki-style Knowledge Base and Documents, parsing-powered, kept separate","refExists":true}
+[10:51:04.117] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-016.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":28060,"isPlanPath":true}
