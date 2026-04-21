@@ -19,7 +19,7 @@
    - `ENCRYPTION_KEY` — 32+ chars from `openssl rand -base64 48`
    - `SESSION_SECRET` — anything random
    - `OAUTH_REDIRECT_BASE_URL=http://localhost:3000`
-   - Do **not** set `GOOGLE_OAUTH_CLIENT_ID/_SECRET` — Google OAuth credentials are configured per-workspace via the dashboard (Settings → Integrations → Google connection app). The env vars only matter as a bootstrap seed for fresh single-tenant installs.
+   - Google OAuth is configured per-workspace via the dashboard (Settings → Integrations → Google connection app). There is no env var for it — the platform never holds a Google OAuth identity of its own.
 5. **Migrations** — `npm run migrate`. Mandatory before `npm run dev` whenever new migrations land; the listener does not auto-migrate.
 
 `.env` is gitignored. The manifest file at `dev/slack-manifest.json` is checked in and reusable.
