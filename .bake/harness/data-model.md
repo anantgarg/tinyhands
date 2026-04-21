@@ -95,6 +95,8 @@ Execution records for every agent invocation.
 | category | TEXT | Categorization |
 | tags | TEXT[] | Search tags |
 | source_type | TEXT | manual / agent / google_drive / zendesk / website / github / hubspot / linear |
+| kb_source_id | UUID | FK → kb_sources when the entry was created by a connector (NULL for manual entries) |
+| source_external_id | TEXT | Stable per-source identifier (e.g. Drive file id). Partial unique index `(workspace_id, kb_source_id, source_external_id)` WHERE both are NOT NULL. Enables upsert-by-external-id and tombstoning missing entries on each sync. |
 | search_vector | TSVECTOR | Full-text search index (GIN) |
 
 #### KB Sources
