@@ -238,8 +238,14 @@ export async function withTransaction<T>(fn: (client: PoolClient) => Promise<T>)
       throw err;
     }
   }
-  // Wrap client.query to sanitize params, preventing null byte errors
+  // Wrap client.query to sanitize params, preventing null byte errors.
+  // IMPORTANT: restore the original method before releasing the client.
+  // Pooled pg clients are reused; if the wrapper is left in place, later
+  // internal callers of pool.query (which uses client.query(config, cb))
+  // would have their callback silently dropped by our (sql, params)-only
+  // wrapper, and the resulting promise would hang forever.
   const originalQuery = client.query.bind(client);
+  const originalClientQuery = (client as any).query;
   (client as any).query = (sql: any, params?: any) => {
     return originalQuery(sql, sanitizeParams(params));
   };
@@ -252,6 +258,7 @@ export async function withTransaction<T>(fn: (client: PoolClient) => Promise<T>)
     await originalQuery('ROLLBACK');
     throw err;
   } finally {
+    (client as any).query = originalClientQuery;
     client.release();
   }
 }

@@ -252,6 +252,8 @@ router.get('/integrations', requireAdmin, async (req: Request, res: Response) =>
       }
     } catch { /* ignore */ }
 
+    const supportedOAuthIds = new Set(await getSupportedOAuthIntegrations(workspaceId));
+
     // Hide legacy Google Workspace (replaced by google-drive, google-sheets, google-docs, gmail)
     res.json(integrations.filter((int: any) => int.id !== 'google').map((int: any) => ({
       id: int.id,
@@ -262,7 +264,7 @@ router.get('/integrations', requireAdmin, async (req: Request, res: Response) =>
       connectionId: connectionMap[int.id] || null,
       toolsCount: int.tools?.length ?? 0,
       supportedCredentialModes: int.supportedCredentialModes || undefined,
-      oauthSupported: getSupportedOAuthIntegrations().includes(int.id),
+      oauthSupported: supportedOAuthIds.has(int.id),
       configKeys: (int.configKeys ?? []).map((k: string) => ({
         key: k,
         label: k.replace(/_/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()),

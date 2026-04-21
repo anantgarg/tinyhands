@@ -42,6 +42,9 @@ import {
 } from '@/api/tools';
 import { useAuthStore } from '@/store/auth';
 import { toast } from '@/components/ui/use-toast';
+import { useOAuthAppStatus } from '@/api/workspace-oauth-apps';
+import { Link } from 'react-router-dom';
+import { AlertTriangle } from 'lucide-react';
 
 function fmtUserId(createdBy: unknown): string {
   if (!createdBy || typeof createdBy !== 'string') return '\u2014';
@@ -91,9 +94,20 @@ export function Tools() {
   return <ToolsContent />;
 }
 
-function ToolsContent() {
+const GOOGLE_TOOL_IDS = new Set(['google', 'google-drive', 'google_drive', 'google-sheets', 'google-docs', 'gmail']);
+
+/**
+ * Team-scoped admin view: connected integrations, available integrations,
+ * custom tools. Exported for use inside the merged Apps page (Team tab).
+ * The outer Tools() wrapper above keeps the standalone /tools route working
+ * as a compatibility alias.
+ */
+export function ToolsContent() {
   const { data: integrations, isLoading: intLoading, isError: intError } = useIntegrations();
   const { data: customTools, isLoading: ctLoading } = useCustomTools();
+  const { data: googleOAuthStatus } = useOAuthAppStatus('google');
+  const hasGoogleTool = (integrations ?? []).some((i: any) => GOOGLE_TOOL_IDS.has(i.id));
+  const showGoogleSetupBanner = hasGoogleTool && googleOAuthStatus && !googleOAuthStatus.configured;
   const registerIntegration = useRegisterIntegration();
   const disconnectIntegration = useDisconnectIntegration();
   const approveCustomTool = useApproveCustomTool();
@@ -356,6 +370,21 @@ ${hasBody ? 'req.write(body);\n' : ''}req.end();`;
         </Button>
       </PageHeader>
 
+      {showGoogleSetupBanner && (
+        <div className="mb-6 flex items-center gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+          <AlertTriangle className="h-5 w-5 shrink-0 text-amber-500" />
+          <div className="flex-1 text-sm text-amber-800">
+            Google tools are available, but this workspace hasn't connected a Google app yet. Set one up so your team can authorize Google Drive, Sheets, Docs, and Gmail.
+          </div>
+          <Link
+            to="/settings/integrations/google"
+            className="text-sm font-medium text-amber-900 underline hover:no-underline"
+          >
+            Set it up
+          </Link>
+        </div>
+      )}
+
       {/* Connected Integrations */}
       <section className="mb-8">
         <h2 className="text-lg font-semibold mb-4">Connected</h2>
@@ -455,42 +484,56 @@ ${hasBody ? 'req.write(body);\n' : ''}req.end();`;
           <p className="text-sm text-warm-text-secondary">All integrations are connected.</p>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {available.map((integration) => (
-              <Card key={integration.id} className="transition-colors hover:bg-warm-bg/30">
-                <CardContent className="p-5">
-                  <h3 className="font-semibold mb-1">{integration.displayName ?? integration.name ?? 'Unknown'}</h3>
-                  <p className="text-xs text-warm-text-secondary mb-3">{integration.description || 'Available for connection'}</p>
-                  {integration.oauthSupported ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => window.open(`/api/v1/connections/oauth/${integration.id}/start`, '_blank')}
-                    >
-                      Connect with Google
-                      <Check className="ml-1 h-3 w-3" />
-                    </Button>
-                  ) : (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setRegisterDialog({
-                          id: integration.id,
-                          name: integration.displayName ?? integration.name ?? 'Integration',
-                          isEdit: false,
-                          configKeys: integration.configKeys ?? [],
-                          setupGuide: integration.setupGuide ?? null,
-                        });
-                        setConfigValues({});
-                      }}
-                    >
-                      Connect
-                      <Check className="ml-1 h-3 w-3" />
-                    </Button>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
+            {available.map((integration) => {
+              const isGoogleTool = GOOGLE_TOOL_IDS.has(integration.id);
+              const googleAppNotReady = isGoogleTool && googleOAuthStatus && !googleOAuthStatus.configured;
+              return (
+                <Card key={integration.id} className={`transition-colors ${googleAppNotReady ? 'opacity-60' : 'hover:bg-warm-bg/30'}`}>
+                  <CardContent className="p-5">
+                    <h3 className="font-semibold mb-1">{integration.displayName ?? integration.name ?? 'Unknown'}</h3>
+                    <p className="text-xs text-warm-text-secondary mb-3">{integration.description || 'Available for connection'}</p>
+                    {googleAppNotReady ? (
+                      <div className="flex items-center gap-2">
+                        <Button size="sm" variant="outline" disabled>
+                          Connect
+                          <Check className="ml-1 h-3 w-3" />
+                        </Button>
+                        <Link to="/settings/integrations/google" className="text-xs text-warm-text-secondary underline hover:text-warm-text">
+                          Needs Google app setup
+                        </Link>
+                      </div>
+                    ) : integration.oauthSupported ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => window.open(`/api/v1/connections/oauth/${integration.id}/start`, '_blank')}
+                      >
+                        Connect with Google
+                        <Check className="ml-1 h-3 w-3" />
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setRegisterDialog({
+                            id: integration.id,
+                            name: integration.displayName ?? integration.name ?? 'Integration',
+                            isEdit: false,
+                            configKeys: integration.configKeys ?? [],
+                            setupGuide: integration.setupGuide ?? null,
+                          });
+                          setConfigValues({});
+                        }}
+                      >
+                        Connect
+                        <Check className="ml-1 h-3 w-3" />
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
       </section>

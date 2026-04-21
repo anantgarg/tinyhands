@@ -186,6 +186,8 @@ Your agents come with core tools (web search, file operations, code analysis) an
 
 Google services (Drive, Sheets, Docs, Gmail) each appear as separate integrations but share a single Google OAuth connection. Connecting your Google account once gives agents access to whichever Google tools are enabled.
 
+**Bring-your-own Google OAuth app.** Google integrations use your workspace's own Google Cloud OAuth client, not a TinyHands-owned app. A workspace admin configures it once via Settings → Integrations → Google connection app (~20–40 minutes). Publishing the app as **Internal** (Workspace-scoped) skips Google's CASA audit entirely — no audit fee, no 100-user cap, full Drive/Gmail scopes, and the consent screen your teammates see is named after your own app. TinyHands is transport only — it never holds a Google OAuth identity and never becomes a data-processor for your Google data.
+
 When you create an agent, TinyHands automatically selects the right tools based on the agent's goal. For each integration tool, you choose between two levels:
 - **Can view data** -- the agent can read information from the service
 - **Can make changes** -- the agent can also create, update, or delete data

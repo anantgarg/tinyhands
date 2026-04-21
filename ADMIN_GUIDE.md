@@ -423,10 +423,6 @@ To enable personal connections via OAuth, configure these environment variables:
 # Generate with: openssl rand -base64 32
 ENCRYPTION_KEY=<at least 32 characters>
 
-# From Google Cloud Console -> APIs & Services -> Credentials -> OAuth 2.0
-GOOGLE_OAUTH_CLIENT_ID=<your-client-id>
-GOOGLE_OAUTH_CLIENT_SECRET=<your-client-secret>
-
 # From notion.so/my-integrations -> Create integration -> OAuth
 NOTION_OAUTH_CLIENT_ID=<your-client-id>
 NOTION_OAUTH_CLIENT_SECRET=<your-client-secret>
@@ -439,16 +435,26 @@ GITHUB_OAUTH_CLIENT_SECRET=<your-client-secret>
 OAUTH_REDIRECT_BASE_URL=https://your-domain.com
 ```
 
-#### Google OAuth Setup
+Google OAuth credentials are **not** configured via env vars. Each workspace brings its own Google Cloud OAuth client via the dashboard — see the next section. `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` only matter as a one-time bootstrap for single-tenant installs (if set on first boot, they're lifted into workspace 1's encrypted credential store and then never read again).
 
-All four Google integrations (Drive, Sheets, Docs, Gmail) share a single OAuth client configuration. You only need to set up one Google OAuth app:
+#### Setting up your Google OAuth app (workspace admin, per workspace)
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com/) and create or select a project
-2. Navigate to **APIs & Services > Credentials**
-3. Click **Create Credentials > OAuth 2.0 Client ID**
-4. Set application type to **Web application**
-5. Add the authorized redirect URI: `https://your-domain.com/auth/callback/google`
-6. Copy the client ID and client secret into your `.env` file
+Every workspace owns its own Google Cloud OAuth client — TinyHands is transport only and never holds a Google identity of its own. This is what lets workspaces publish their OAuth app **Internal** (Workspace-scoped), skip Google's CASA audit entirely, and keep any scope including full Drive / Gmail.
+
+One-time setup per workspace, ~20–40 minutes:
+
+1. **Create a Google Cloud project** at [console.cloud.google.com/projectcreate](https://console.cloud.google.com/projectcreate). Name it anything (e.g. "Acme TinyHands").
+2. **Enable the APIs you need** at [console.cloud.google.com/apis/library](https://console.cloud.google.com/apis/library) — Google Drive API, Google Sheets API, Google Docs API, Gmail API (whichever you plan to use).
+3. **Configure the OAuth consent screen** at [console.cloud.google.com/apis/credentials/consent](https://console.cloud.google.com/apis/credentials/consent).
+   - **User Type: Internal (strongly recommended)** if every TinyHands user is on your Google Workspace. Internal mode skips Google verification, has no user cap, and supports restricted scopes without an audit. This is the whole reason BYO exists.
+   - If you need external users, pick External + Testing (up to 100 test users, no audit) or External + Production (requires CASA audit for restricted scopes).
+   - Add your workspace email as a support contact and developer contact.
+4. **Create an OAuth 2.0 Client ID** at [console.cloud.google.com/apis/credentials](https://console.cloud.google.com/apis/credentials). Application type = Web application. Under "Authorized redirect URIs", add the exact redirect URI shown on your TinyHands dashboard (Settings → Integrations → Google connection app) — it looks like `https://your-tinyhands-domain.com/auth/callback/google`.
+5. **Paste the Client ID and Client Secret** into the TinyHands dashboard on the same page. Click **Test connection** — a green check means Google accepts your credentials and your redirect URI is registered correctly. Click **Save**.
+
+Once configured, any workspace member can go to Connections → Personal and click Connect on Google Drive / Sheets / Docs / Gmail. The consent screen they see will be named after your Google project, not TinyHands.
+
+The redirect URI is workspace-agnostic (the same for all customers) — the per-workspace identification happens via the signed OAuth `state` parameter. You don't need a separate redirect URI per workspace.
 
 Required Google API scopes (requested automatically during OAuth):
 - `https://www.googleapis.com/auth/drive` (Drive access)
@@ -631,8 +637,8 @@ Optional:
 |----------|---------|
 | `WEB_DASHBOARD_URL` | Public URL for the web dashboard (used in Slack messages) |
 | `ENCRYPTION_KEY` | 32+ character key for encrypting credentials (AES-256-GCM) |
-| `GOOGLE_OAUTH_CLIENT_ID` | Google OAuth client ID (shared by Drive, Sheets, Docs, Gmail) |
-| `GOOGLE_OAUTH_CLIENT_SECRET` | Google OAuth client secret |
+| `GOOGLE_OAUTH_CLIENT_ID` | *Bootstrap-only.* Google OAuth client ID. Set on first boot of a single-tenant install to seed workspace 1's credentials; runtime reads the per-workspace record, never this env var. |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | *Bootstrap-only.* Google OAuth client secret (same bootstrap rule as above). |
 | `NOTION_OAUTH_CLIENT_ID` | Notion OAuth client ID |
 | `NOTION_OAUTH_CLIENT_SECRET` | Notion OAuth client secret |
 | `GITHUB_OAUTH_CLIENT_ID` | GitHub OAuth client ID |
@@ -653,7 +659,7 @@ Optional:
 ## Tips
 
 - Set up integrations (Tools & Integrations page) and knowledge sources (KB Sources page) before creating agents -- agents auto-select tools based on their goal.
-- For Google services, set up one OAuth app with the `/auth/callback/google` redirect URI -- it covers Drive, Sheets, Docs, and Gmail.
+- For Google services, each workspace admin sets up their own Google Cloud OAuth app via Settings → Integrations → Google connection app. One OAuth client covers Drive, Sheets, Docs, and Gmail. Publish it **Internal** if everyone is on your Google Workspace — it's the easiest path and skips Google's CASA audit.
 - Use "Can view data" access for integrations unless agents genuinely need to make changes.
 - Enable auto-sync on knowledge sources to keep agent context up to date.
 - Use "Invite Only" access for team-specific agents (e.g., engineering-only, sales-only).

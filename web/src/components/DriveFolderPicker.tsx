@@ -1,7 +1,6 @@
 import { useState } from 'react';
 import { ChevronRight, Folder, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { useDriveFolders } from '@/api/kb';
 
 interface DriveFolderPickerProps {
@@ -30,23 +29,28 @@ export function DriveFolderPicker({ value, valueName, onChange, placeholder, hel
   };
 
   if (!browsing) {
+    const hasValue = !!(value && valueName);
     return (
       <div>
-        <div className="flex items-center gap-2">
-          <Input
-            value={valueName && value ? valueName : value}
-            onChange={(e) => onChange(e.target.value, '')}
-            placeholder={placeholder || 'Folder ID'}
-            className="flex-1"
-            readOnly={!!valueName && !!value}
-          />
-          {value && (
-            <Button type="button" variant="ghost" size="sm" className="text-xs text-warm-text-secondary" onClick={() => onChange('', '')}>
-              Clear
-            </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {hasValue ? (
+            <span className="inline-flex items-center gap-1.5 rounded-full bg-warm-bg px-2.5 py-1 text-sm">
+              <Folder className="h-3.5 w-3.5 text-blue-500 shrink-0" />
+              <span className="truncate max-w-[240px]">{valueName}</span>
+              <button
+                type="button"
+                className="ml-1 text-warm-text-secondary hover:text-warm-text"
+                onClick={() => onChange('', '')}
+                aria-label="Clear folder"
+              >
+                ×
+              </button>
+            </span>
+          ) : (
+            <span className="text-sm text-warm-text-secondary">{placeholder || 'All folders (no restriction)'}</span>
           )}
           <Button type="button" variant="outline" size="sm" onClick={() => setBrowsing(true)}>
-            <Folder className="mr-1.5 h-3.5 w-3.5" /> Browse
+            <Folder className="mr-1.5 h-3.5 w-3.5" /> {hasValue ? 'Change' : 'Browse'}
           </Button>
         </div>
         {helpText && <p className="text-xs text-warm-text-secondary mt-1">{helpText}</p>}

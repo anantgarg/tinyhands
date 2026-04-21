@@ -8,7 +8,7 @@
  *   4. Updates source status / entry_count
  */
 import https from 'https';
-import { createKBEntry } from '../knowledge-base';
+import { createKBEntry, upsertKBEntryByExternalId, deleteStaleKBEntries } from '../knowledge-base';
 import { getApiKey, updateSource, updateSourceStatus } from './index';
 import { getProviderForConnector, normalizeConnectorType } from './connectors';
 import { logger } from '../../utils/logger';
@@ -658,23 +658,25 @@ async function syncWebsite(workspaceId: string, source: KBSource, config: Record
 // Google Drive Sync
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-async function refreshGoogleAccessToken(creds: Record<string, string>): Promise<string> {
-  const res = await httpsRequest('oauth2.googleapis.com', '/token', 'POST', {}, {
-    client_id: creds.client_id,
-    client_secret: creds.client_secret,
-    refresh_token: creds.refresh_token,
-    grant_type: 'refresh_token',
-  });
-  if (res.status >= 400 || !res.data.access_token) {
-    throw new Error(`Google OAuth refresh failed (${res.status}): ${JSON.stringify(res.data).slice(0, 300)}`);
-  }
-  return res.data.access_token;
-}
-
 async function syncGoogleDrive(workspaceId: string, source: KBSource, config: Record<string, string>): Promise<number> {
-  const creds = await getProviderCredentials(workspaceId, 'google_drive');
-  const accessToken = await refreshGoogleAccessToken(creds);
-  const folderId = config.folder_id;
+  // Resolve credentials via the workspace's Google OAuth connection (personal).
+  // The admin who created the KB source is preferred; any active admin's Google
+  // connection is a fallback so the source keeps working if the original admin
+  // disconnects or is removed from the workspace.
+  const { getAnyPersonalConnection, decryptCredentials } = await import('../connections');
+  const { refreshGoogleAccessToken } = await import('../connections/oauth');
+
+  const conn = await getAnyPersonalConnection(workspaceId, 'google-drive', source.created_by);
+  if (!conn) {
+    throw new Error('No Google Drive connection found. An admin must connect their Google account in Tools → Personal first.');
+  }
+  const creds = decryptCredentials(conn);
+  if (!creds.refresh_token) {
+    throw new Error('Google connection is missing a refresh token. Reconnect Google in Tools → Personal.');
+  }
+  const accessToken = await refreshGoogleAccessToken(workspaceId, creds.refresh_token);
+
+  const folderId = config.folder_id || config.folderId;
   const fileTypes = config.file_types ? config.file_types.split(',').map(t => t.trim()) : [];
 
   if (!folderId) throw new Error('Google Drive Folder ID is required');
@@ -700,6 +702,7 @@ async function syncGoogleDrive(workspaceId: string, source: KBSource, config: Re
   const authHeaders = { 'Authorization': `Bearer ${accessToken}` };
   let count = 0;
   let pageToken: string | null = null;
+  const seenFileIds: string[] = [];
 
   do {
     let path = `/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,mimeType,size),nextPageToken&pageSize=100`;
@@ -717,7 +720,11 @@ async function syncGoogleDrive(workspaceId: string, source: KBSource, config: Re
           // Export Google Doc as plain text
           const expRes = await httpsGetRaw('www.googleapis.com',
             `/drive/v3/files/${file.id}/export?mimeType=text/plain`, authHeaders);
-          if (expRes.status < 400) content = expRes.data;
+          if (expRes.status < 400) {
+            content = expRes.data;
+          } else {
+            logger.warn('Google Doc export failed', { name: file.name, status: expRes.status, body: String(expRes.data).slice(0, 200) });
+          }
         } else if (file.mimeType === 'application/vnd.google-apps.spreadsheet') {
           // Export Google Sheet as CSV
           const expRes = await httpsGetRaw('www.googleapis.com',
@@ -743,7 +750,7 @@ async function syncGoogleDrive(workspaceId: string, source: KBSource, config: Re
 
         if (!content.trim()) continue;
 
-        await createKBEntry(workspaceId, {
+        await upsertKBEntryByExternalId(workspaceId, {
           title: file.name,
           summary: content.slice(0, 200),
           content,
@@ -753,7 +760,9 @@ async function syncGoogleDrive(workspaceId: string, source: KBSource, config: Re
           sourceType: 'google_drive',
           approved: true,
           kbSourceId: source.id,
+          sourceExternalId: file.id,
         });
+        seenFileIds.push(file.id);
         count++;
       } catch (err: any) {
         logger.warn('Failed to sync Google Drive file', { name: file.name, error: err.message });
@@ -762,6 +771,11 @@ async function syncGoogleDrive(workspaceId: string, source: KBSource, config: Re
 
     pageToken = res.data.nextPageToken || null;
   } while (pageToken);
+
+  // Tombstone pass: anything in this source not seen this crawl is gone
+  // (deleted, moved out of folder, or folder scope changed). Also cleans up
+  // pre-upsert entries with NULL source_external_id.
+  await deleteStaleKBEntries(workspaceId, source.id, seenFileIds);
 
   return count;
 }

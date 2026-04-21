@@ -131,9 +131,7 @@ export function KnowledgeBase() {
     ? 'Manual Entries'
     : (sources ?? []).find((s) => s.id === activeSource)?.name ?? 'Source';
 
-  // Count manual entries = total - sum of source entries
-  const sourceEntrySum = (sources ?? []).reduce((sum, s) => sum + (s.entriesCount ?? 0), 0);
-  const manualCount = Math.max(0, (stats?.totalEntries ?? 0) - sourceEntrySum);
+  const manualCount = stats?.manualEntries ?? 0;
 
   return (
     <div>
@@ -385,19 +383,21 @@ export function KnowledgeBase() {
                                     Approve
                                   </DropdownMenuItem>
                                 )}
-                                <DropdownMenuItem
-                                  className="text-red-600"
-                                  onClick={() => {
-                                    if (confirm(`Delete "${entry.title}"?`)) {
-                                      deleteEntry.mutate(entry.id, {
-                                        onSuccess: () => toast({ title: 'Entry deleted', variant: 'success' }),
-                                      });
-                                    }
-                                  }}
-                                >
-                                  <Trash2 className="mr-2 h-4 w-4" />
-                                  Delete
-                                </DropdownMenuItem>
+                                {!(entry as any).kbSourceId && (
+                                  <DropdownMenuItem
+                                    className="text-red-600"
+                                    onClick={() => {
+                                      if (confirm(`Delete "${entry.title}"?`)) {
+                                        deleteEntry.mutate(entry.id, {
+                                          onSuccess: () => toast({ title: 'Entry deleted', variant: 'success' }),
+                                        });
+                                      }
+                                    }}
+                                  >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                )}
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </TableCell>
@@ -513,7 +513,9 @@ export function KnowledgeBase() {
             ) : (
               <>
                 {isAdmin && detailEntry?.kbSourceId && (
-                  <p className="text-xs text-warm-text-secondary mr-auto">Auto-synced entries cannot be edited</p>
+                  <p className="text-xs text-warm-text-secondary mr-auto">
+                    Managed by {detailEntry.sourceName ?? 'a connected source'} — edit or remove in the source folder to change.
+                  </p>
                 )}
                 <Button variant="outline" onClick={() => { setDetailEntry(null); setEditMode(false); }}>Close</Button>
                 {isAdmin && !detailEntry?.kbSourceId && (
@@ -524,10 +526,10 @@ export function KnowledgeBase() {
                     setEditMode(true);
                   }}>Edit</Button>
                 )}
-                {isAdmin && (
+                {isAdmin && !detailEntry?.kbSourceId && (
                   <Button variant="danger" size="sm" onClick={() => {
                     if (!detailEntry) return;
-                    if (confirm(`Delete "${detailEntry.title}"?${detailEntry.kbSourceId ? ' This entry will not be re-synced.' : ''}`)) {
+                    if (confirm(`Delete "${detailEntry.title}"?`)) {
                       deleteEntry.mutate(detailEntry.id, {
                         onSuccess: () => {
                           toast({ title: 'Entry deleted', variant: 'success' });

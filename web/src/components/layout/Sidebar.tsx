@@ -5,7 +5,6 @@ import {
   Wrench,
   Sparkles,
   BookOpen,
-  Link,
   Zap,
   Bell,
   FileText,
@@ -52,8 +51,7 @@ const mainNav: NavItem[] = [
 const manageNav: NavItem[] = [
   { label: 'Agents', to: '/agents', icon: Bot },
   { label: 'Skills', to: '/skills', icon: Sparkles, adminOnly: true },
-  { label: 'Tools & Integrations', to: '/tools', icon: Wrench, adminOnly: true },
-  { label: 'Connections', to: '/connections', icon: Link },
+  { label: 'Tools', to: '/tools', icon: Wrench },
   { label: 'Knowledge Base', to: '/kb', icon: BookOpen },
   { label: 'Documents', to: '/documents', icon: FolderOpen },
   { label: 'Triggers', to: '/triggers', icon: Zap },
@@ -87,7 +85,7 @@ function NavSection({ title, items, isAdmin, onNavigate }: { title?: string; ite
           <NavLink
             key={item.to}
             to={item.to}
-            end={item.to === '/'}
+            end={item.to === '/' || item.to === '/settings'}
             onClick={onNavigate}
             className={({ isActive }) =>
               cn(
@@ -127,9 +125,9 @@ export function Sidebar({ onNavigate }: { onNavigate?: () => void } = {}) {
       : item
   );
 
-  // Inject badge count on the Connections nav item for expired connections
+  // Inject badge count on the Tools nav item for expired connections
   const manageNavWithBadge: NavItem[] = manageNav.map((item) =>
-    item.to === '/connections' && expiredCount?.count
+    item.to === '/tools' && expiredCount?.count
       ? { ...item, badge: expiredCount.count }
       : item
   );

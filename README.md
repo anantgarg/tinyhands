@@ -79,7 +79,7 @@ Core tools (file access, web search, code execution) are always available. Conne
 | **Zendesk** | Tickets, groups, users | Create tickets, comments, update priority | API key |
 | **Documents** | Read docs, sheets, files | Create, edit, archive documents | Auto |
 
-All four Google integrations share a single OAuth flow -- one authorization covers Drive, Sheets, Docs, and Gmail.
+All four Google integrations share a single OAuth flow -- one authorization covers Drive, Sheets, Docs, and Gmail. Google OAuth uses **your workspace's own Google Cloud OAuth app** (an admin sets this up once via Settings → Integrations), not a TinyHands-owned app. This keeps you off Google's CASA audit, removes the 100-user cap when using Internal publishing, and keeps your Google data's processor relationship with Google alone — TinyHands is transport only.
 
 ### Documents
 

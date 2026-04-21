@@ -140,7 +140,8 @@ describe('KB Routes', () => {
         .mockResolvedValueOnce([{ count: 10 }])
         .mockResolvedValueOnce([{ count: 2 }])
         .mockResolvedValueOnce([{ count: 3 }])
-        .mockResolvedValueOnce([{ count: 1 }]);
+        .mockResolvedValueOnce([{ count: 1 }])
+        .mockResolvedValueOnce([{ count: 4 }]);
 
       const res = await makeRequest(app, 'GET', '/kb/stats');
 
@@ -150,6 +151,7 @@ describe('KB Routes', () => {
         pendingEntries: 2,
         categories: 3,
         sourcesCount: 1,
+        manualEntries: 4,
       });
     });
 
@@ -357,6 +359,7 @@ describe('KB Routes', () => {
 
   describe('DELETE /kb/entries/:id', () => {
     it('deletes entry (admin)', async () => {
+      mockGetKBEntry.mockResolvedValueOnce({ id: 'e1', kb_source_id: null });
       mockDeleteKBEntry.mockResolvedValueOnce(undefined);
 
       const res = await makeRequest(app, 'DELETE', '/kb/entries/e1');
@@ -365,12 +368,47 @@ describe('KB Routes', () => {
       expect(res.body).toEqual({ ok: true });
     });
 
+    it('returns 404 when entry does not exist', async () => {
+      mockGetKBEntry.mockResolvedValueOnce(null);
+
+      const res = await makeRequest(app, 'DELETE', '/kb/entries/missing');
+
+      expect(res.status).toBe(404);
+    });
+
+    it('returns 409 when entry is managed by a KB source', async () => {
+      mockGetKBEntry.mockResolvedValueOnce({ id: 'e1', kb_source_id: 's1' });
+
+      const res = await makeRequest(app, 'DELETE', '/kb/entries/e1');
+
+      expect(res.status).toBe(409);
+      expect(mockDeleteKBEntry).not.toHaveBeenCalled();
+    });
+
     it('returns 403 for non-admin', async () => {
       const memberApp = createApp('member');
 
       const res = await makeRequest(memberApp, 'DELETE', '/kb/entries/e1');
 
       expect(res.status).toBe(403);
+    });
+  });
+
+  describe('PATCH /kb/entries/:id', () => {
+    it('returns 409 when entry is managed by a KB source', async () => {
+      mockGetKBEntry.mockResolvedValueOnce({ id: 'e1', kb_source_id: 's1' });
+
+      const res = await makeRequest(app, 'PATCH', '/kb/entries/e1', { title: 'x' });
+
+      expect(res.status).toBe(409);
+    });
+
+    it('returns 404 when entry does not exist', async () => {
+      mockGetKBEntry.mockResolvedValueOnce(null);
+
+      const res = await makeRequest(app, 'PATCH', '/kb/entries/missing', { title: 'x' });
+
+      expect(res.status).toBe(404);
     });
   });
 

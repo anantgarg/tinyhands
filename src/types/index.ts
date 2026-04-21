@@ -69,6 +69,28 @@ export interface WorkspaceSetting {
   updated_at: string;
 }
 
+// ── Workspace-owned OAuth app credentials ──
+// Each workspace brings its own Google Cloud project and OAuth client. The
+// platform is transport only — it never holds a Google OAuth identity.
+
+export type OAuthAppProvider = 'google' | 'notion' | 'github';
+export type OAuthAppPublishingStatus =
+  | 'internal'
+  | 'external_testing'
+  | 'external_production';
+
+export interface WorkspaceOAuthApp {
+  workspace_id: string;
+  provider: OAuthAppProvider;
+  client_id: string;
+  client_secret_encrypted: string;
+  client_secret_iv: string;
+  publishing_status: OAuthAppPublishingStatus | null;
+  configured_by_user_id: string | null;
+  configured_at: string;
+  updated_at: string;
+}
+
 export interface Agent {
   id: string;
   name: string;
@@ -224,6 +246,7 @@ export interface KBEntry {
   contributed_by: string | null;
   approved: boolean;
   kb_source_id: string | null;
+  source_external_id?: string | null;
   created_at: string;
   updated_at: string;
 }
