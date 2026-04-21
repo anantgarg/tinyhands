@@ -53,6 +53,7 @@
 | SerpAPI | `src/modules/tools/integrations/serpapi/` | Web search |
 | Knowledge Base tool | `src/modules/tools/integrations/kb/` | KB search (auto-configured) |
 | Documents tool | `src/modules/tools/integrations/docs/` | Doc operations (auto-configured) |
+| Auto-configured tool bypass | `ToolManifest.autoConfigured` | Dashboard renders "Built-in"; `listAgentToolConnections` filters stale rows; `setAgentToolConnection` rejects them; worker provisions them into the container directly from the manifest — no `agent_tool_connections` row required |
 | Custom tools | `src/modules/tools/` | User-defined tools with code |
 
 ## Knowledge Base
