@@ -171,7 +171,7 @@ Minor version bump (`v1.50.0` per current versioning — check `gh release list 
 
 ### Step 11 — Post-deploy cleanup (follow-up PR, after workspace 1 is confirmed migrated)
 
-Once the CometChat workspace (workspace 1) has been successfully migrated on production and the `workspace_oauth_apps` row is verified, open a follow-up PR to delete the bootstrap scaffolding entirely:
+Once the legacy single-tenant workspace has been successfully migrated on production and the `workspace_oauth_apps` row is verified, open a follow-up PR to delete the bootstrap scaffolding entirely:
 
 - Remove the Google bootstrap step added in Step 7 from `src/modules/multitenant-migration/` (and its test).
 - Remove `config.oauth.googleClientId` and `config.oauth.googleClientSecret` from `src/config.ts`.
