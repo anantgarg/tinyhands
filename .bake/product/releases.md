@@ -2,6 +2,16 @@
 
 One entry per deploy to production. Each entry names the version, the date, the merges included since the previous release, and the exact rollback command. Updated automatically by the Deploy button (see `.bake/harness/deploy.md` for the post-deploy step that appends here).
 
+## v1.50.4 — 2026-04-21
+
+Deployed to the production host. Follow-up patch to v1.50.3.
+
+- `GET /tools/integrations` is now readable by any workspace member. Plan-018's "Built-in" vs "Not configured" label on the Agent Detail Tools tab was silently broken for non-admin members because the frontend reads `autoConfigured` / `supportedCredentialModes` from that endpoint, which was admin-gated. Members got 403 → metadata never reached the UI → fallback "Not configured" Select rendered even for built-in tools like Knowledge Base.
+- Mutating routes under `/tools/integrations` (POST register, DELETE disconnect, PUT/PATCH config) remain admin-gated. The Tools & Integrations web page stays admin-only at the route level.
+- FEATURES.md updated to reflect the split (page admin-only; metadata API member-readable).
+
+Rollback: SSH to production, `cd $APP_DIR && git checkout v1.50.3 && NODE_ENV=development npm install && NODE_ENV=development npm run build && NODE_ENV=development npm run build:web && pm2 reload ecosystem.config.js --force`. No migrations.
+
 ## v1.50.3 — 2026-04-21
 
 Deployed to the production host. Patch over v1.50.2. Includes the one functional change merged to main since v1.50.2 (plan-018); the `v1.51.0` tag on branch `bake/plan/plan-016` remains unmerged and is not part of this release.
