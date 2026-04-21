@@ -171,6 +171,54 @@ router.post('/upload', upload.single('file'), async (req: Request, res: Response
   }
 });
 
+// POST /docs/upload-batch — Upload multiple files at once (plan-016 §6).
+// All files become regular documents tied to the same agent. Each upload
+// auto-emits a wiki ingest job via the documents-write trigger.
+router.post('/upload-batch', upload.array('files', 100), async (req: Request, res: Response) => {
+  try {
+    const { workspaceId, userId } = getSessionUser(req);
+    const files = ((req as any).files || []) as Array<{ originalname?: string; mimetype?: string; buffer: Buffer }>;
+    if (!files.length) { res.status(400).json({ error: 'No files uploaded' }); return; }
+    if (files.length > 100) { res.status(400).json({ error: 'Batch limit is 100 files. Split your batch.' }); return; }
+
+    const agentId = req.body.agentId;
+    if (agentId) {
+      const isAdmin = await isPlatformAdmin(workspaceId, userId);
+      if (!isAdmin && !(await canModifyAgent(workspaceId, agentId, userId))) {
+        res.status(403).json({ error: "You don't have permission to access this document" });
+        return;
+      }
+    } else {
+      res.status(400).json({ error: 'agentId is required for uploads (every document is agent-scoped).' });
+      return;
+    }
+
+    const tags = req.body.tags ? JSON.parse(req.body.tags) : [];
+    const results: Array<{ ok: true; documentId: string; filename: string } | { ok: false; filename: string; error: string }> = [];
+    for (const file of files) {
+      try {
+        const doc = await uploadFile(workspaceId, {
+          title: file.originalname || 'Untitled',
+          mimeType: file.mimetype || 'application/octet-stream',
+          data: file.buffer,
+          createdBy: userId,
+          createdByType: 'user',
+          agentId,
+          tags,
+        });
+        results.push({ ok: true, documentId: doc.id, filename: doc.title });
+      } catch (err: any) {
+        results.push({ ok: false, filename: file.originalname || 'unnamed', error: err.message || 'upload failed' });
+      }
+    }
+    const succeeded = results.filter(r => r.ok).length;
+    res.status(succeeded > 0 ? 201 : 400).json({ uploads: results, succeeded, failed: results.length - succeeded });
+  } catch (err: any) {
+    logger.error('Batch upload error', { error: err.message });
+    res.status(400).json({ error: err.message || "Couldn't process the batch." });
+  }
+});
+
 // POST /docs/import-csv — Import CSV as sheet
 router.post('/import-csv', upload.single('file'), async (req: Request, res: Response) => {
   try {

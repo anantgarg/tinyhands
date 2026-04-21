@@ -223,6 +223,25 @@ From the Sources page, each source has action buttons:
 
 The Sources page also manages API keys for external KB access. Click **New API Key** to generate a key. Keys are shown once at creation -- copy them immediately.
 
+### Wiki mode
+
+The Knowledge Base has a `mode` setting that controls how agents read from it:
+
+- **`wiki`** (default for new workspaces) — agents read the LLM-curated wiki pages. No keyword search.
+- **`search`** (default for existing workspaces migrated from pre-wiki releases) — agents use the legacy tsvector keyword search. Wiki pages are still maintained in the background but not exposed to agents.
+- **`both`** — both paths available. Useful while migrating.
+
+Change the mode on the **Wiki** page under the KB tab. Use the **Migrate to wiki** button to kick off a backfill that rebuilds wiki pages from every existing KB entry and Drive source. The backfill is rate-limited (default 60 sources/minute, configurable), shows progress and ETA, and can be paused, resumed, or cancelled. It survives worker restarts.
+
+### Parser API keys (Reducto / LlamaParse)
+
+Optional. Without a key, local parsers handle text, native PDFs, Word, Excel, CSV, email, and archives. For OCR on scanned PDFs, images, and legacy Office formats, set one of these under **Wiki → Parser keys** (admin only). Keys are workspace-wide and used by both KB and Documents wikis.
+
+- **Reducto** is the default recommendation — highest accuracy on scanned PDFs and complex spreadsheets.
+- **LlamaParse** covers OpenDocument, RTF, EPUB, and more image types.
+
+If both are configured, Reducto is preferred; LlamaParse is an inert fallback.
+
 ---
 
 ## Document Management
@@ -256,12 +275,18 @@ All document edits create version snapshots. Documents retain up to 50 versions,
 ### File Upload Limits
 
 - Maximum file size: 25 MB
+- Per batch (multi-file upload): up to 100 files × 25 MB each
 - Blocked file types: .exe, .sh, .bat, .dll, .so, .cmd, .com, .msi, .scr
 - File storage uses PostgreSQL BYTEA (can be swapped to S3 via StorageProvider interface)
 
+### Supported file formats
+
+Every upload is parsed into Markdown and folded into the Documents wiki. Text-native formats (Markdown, HTML, JSON, CSV, YAML, code files) and native PDFs, `.docx`, `.xlsx`, `.pptx`, `.odt`/`.ods`/`.odp`, `.eml`/`.msg`, `.zip`, and `.epub` are handled locally with no API cost. For OCR on scanned PDFs, images (PNG/JPG/TIFF/HEIC/WEBP), and legacy Office (`.doc`, `.ppt`), configure a Reducto or LlamaParse API key on the Wiki page. Apple iWork (`.pages`, `.numbers`, `.key`) is not supported — uploads succeed but surface a "convert to PDF or DOCX" message.
+
 ### Database Tables
 
-Migration `022_docs.sql` creates: `documents`, `document_versions`, `sheet_tabs`, `document_files`, `document_search`.
+- Migration `022_docs.sql` creates the core tables: `documents`, `document_versions`, `sheet_tabs`, `document_files`, `document_search`.
+- Migration `027_content_wiki.sql` adds the wiki tables shared with the KB surface: `kb_wiki_pages`, `kb_wiki_page_versions`, `kb_ingest_jobs`, `kb_source_files`, `kb_wiki_backfills`.
 
 ### Dependencies
 

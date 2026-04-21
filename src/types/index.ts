@@ -254,7 +254,46 @@ export interface KBEntry {
 // ── KB Source Types ──
 
 export type KBSourceStatus = 'active' | 'syncing' | 'error' | 'needs_setup';
-export type KBProviderType = 'google' | 'zendesk' | 'firecrawl' | 'github' | 'hubspot' | 'linear';
+export type KBProviderType = 'google' | 'zendesk' | 'firecrawl' | 'github' | 'hubspot' | 'linear' | 'reducto' | 'llamaparse';
+
+// ── Wiki / Parser (plan-016) ──
+
+export type WikiNamespace = 'kb' | 'docs';
+export type WikiSourceKind = 'kb_entry' | 'document' | 'drive_file';
+export type WikiPageKind = 'index' | 'log' | 'schema' | 'source' | 'entity' | 'concept';
+export type ParserName = 'local' | 'reducto' | 'llamaparse';
+export type IngestStatus = 'queued' | 'parsing' | 'classifying' | 'wiki_updating' | 'done' | 'failed';
+
+export interface WikiSource {
+  namespace: WikiNamespace;
+  source_kind: WikiSourceKind;
+  source_id: string;             // always TEXT for the JSONB unique constraint
+  revision: string;              // monotonic per source (updated_at iso, drive revision, etc.)
+  triggered_by?: string;
+}
+
+export interface WikiPage {
+  id: string;
+  workspace_id: string;
+  namespace: WikiNamespace;
+  path: string;
+  kind: WikiPageKind;
+  title: string;
+  content: string;
+  frontmatter: Record<string, unknown>;
+  source_ref: { source_kind: WikiSourceKind; source_id: string; revision: string } | null;
+  updated_by: string;
+  archived_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ParsedSource {
+  markdown: string;
+  tables: Array<{ name?: string; markdown: string }>;
+  metadata: Record<string, unknown>;
+  parser: ParserName;
+}
 export type KBConnectorType = 'google_drive' | 'zendesk_help_center' | 'website' | 'github' | 'hubspot_kb' | 'linear_docs';
 
 export interface KBSource {

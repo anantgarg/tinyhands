@@ -87,9 +87,17 @@ Native document management — create, edit, and manage three document types dir
 
 - **Docs** — Rich text documents with auto-save, version history, and Markdown export
 - **Sheets** — Spreadsheets with tabs, cell editing, and CSV export
-- **Files** — Upload any file (images, PDFs, text) with preview and download
+- **Files** — Upload any common document format. Single-file or multi-file drag-and-drop. Handles PDFs (native + scanned), Office (`.docx`/`.xlsx`/`.pptx`), legacy Office, OpenDocument, email (`.eml`/`.msg` with attachments), archives (`.zip`), eBooks (`.epub`), images, code, and data formats (CSV/TSV/JSON/XML/YAML) — see the format matrix in `FEATURES.md`.
 
 Agents can create and edit documents via tool calls. Each document has an "Allow agents to edit" toggle. Full-text search across all document types.
+
+### Wiki (KB + Documents)
+
+Each content surface — the Knowledge Base and the Documents module — maintains its own LLM-curated wiki. Every write (KB article, Drive sync, user upload, user or agent edit) triggers a re-ingest that refreshes source, entity, and concept pages with cross-references and an append-only log.
+
+- **No embeddings, no vector search.** Agents read the wiki directly as Markdown pages via new `wiki_index`, `wiki_list`, and `wiki_read` actions on the `kb` and `docs-read` tools.
+- **Optional OCR** via customer-supplied Reducto or LlamaParse API keys — otherwise local parsers handle everything text-native.
+- **Open wiki** button in the dashboard for full-screen read-only preview; admin-only schema editor; rate-limited backfill migration for existing workspaces.
 
 ### Knowledge Base
 

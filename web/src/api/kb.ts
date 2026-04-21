@@ -235,3 +235,147 @@ export function useDriveFolders(parentId: string | null) {
     enabled: parentId !== null,
   });
 }
+
+// ── Wiki (plan-016) ────────────────────────────────────────────────────
+
+export type WikiNamespace = 'kb' | 'docs';
+
+export interface WikiPage {
+  id: string;
+  namespace: WikiNamespace;
+  path: string;
+  kind: string;
+  title: string;
+  content: string;
+  archived_at: string | null;
+  updated_at: string;
+}
+
+export interface IngestJob {
+  id: string;
+  workspace_id: string;
+  namespace: WikiNamespace;
+  source_kind: string;
+  source_id: string;
+  status: string;
+  parser: string | null;
+  pages_touched: string[];
+  error: string | null;
+  retries: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export function useWikiPages(namespace: WikiNamespace, includeArchived: boolean = false) {
+  return useQuery<{ namespace: WikiNamespace; pages: WikiPage[] }>({
+    queryKey: ['kb', 'wiki-pages', namespace, includeArchived],
+    queryFn: () => api.get(`/kb/wiki/pages?namespace=${namespace}${includeArchived ? '&includeArchived=true' : ''}`),
+  });
+}
+
+export function useWikiPage(namespace: WikiNamespace, path: string | null) {
+  return useQuery<WikiPage>({
+    queryKey: ['kb', 'wiki-page', namespace, path],
+    queryFn: () => api.get(`/kb/wiki/page?namespace=${namespace}&path=${encodeURIComponent(path || '')}`),
+    enabled: !!path,
+  });
+}
+
+export function useUpdateWikiSchema() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { namespace: WikiNamespace; content: string }) =>
+      api.put('/kb/wiki/schema', data),
+    onSuccess: (_, vars) => qc.invalidateQueries({ queryKey: ['kb', 'wiki-pages', vars.namespace] }),
+  });
+}
+
+export function useWikiMode() {
+  return useQuery<{ kb: string; docs: string }>({
+    queryKey: ['kb', 'wiki-mode'],
+    queryFn: () => api.get('/kb/wiki/mode'),
+  });
+}
+
+export function useSetWikiMode() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { namespace: WikiNamespace; mode: 'wiki' | 'search' | 'both' }) =>
+      api.put('/kb/wiki/mode', data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['kb', 'wiki-mode'] }),
+  });
+}
+
+export function useIngestJobs(namespace?: WikiNamespace, status?: string, documentId?: string) {
+  const qs = new URLSearchParams();
+  if (namespace) qs.set('namespace', namespace);
+  if (status) qs.set('status', status);
+  if (documentId) qs.set('documentId', documentId);
+  return useQuery<{ jobs: IngestJob[] }>({
+    queryKey: ['kb', 'ingest-jobs', namespace, status, documentId],
+    queryFn: () => api.get(`/kb/ingest-jobs?${qs.toString()}`),
+    refetchInterval: 5_000,
+  });
+}
+
+export function useRetryIngestJob() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.post(`/kb/ingest-jobs/${id}/retry`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['kb', 'ingest-jobs'] }),
+  });
+}
+
+export function useParserKeys() {
+  return useQuery<{ reducto: boolean; llamaparse: boolean }>({
+    queryKey: ['kb', 'parser-keys'],
+    queryFn: () => api.get('/kb/parser-keys'),
+  });
+}
+
+export function useSetParserKeys() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { reductoApiKey?: string; llamaParseApiKey?: string }) =>
+      api.put('/kb/parser-keys', data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['kb', 'parser-keys'] }),
+  });
+}
+
+export interface BackfillJob {
+  id: string;
+  namespace: WikiNamespace;
+  status: string;
+  total: number;
+  enqueued: number;
+  completed: number;
+  failed: number;
+  rate_per_minute: number;
+  estimated_cost_usd: number | null;
+}
+
+export function useBackfills() {
+  return useQuery<{ backfills: BackfillJob[] }>({
+    queryKey: ['kb', 'backfills'],
+    queryFn: () => api.get('/kb/wiki/backfills'),
+    refetchInterval: 5_000,
+  });
+}
+
+export function useStartBackfill() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { namespace: WikiNamespace; ratePerMinute?: number }) =>
+      api.post('/kb/wiki/migrate', data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['kb', 'backfills'] }),
+  });
+}
+
+export function useControlBackfill() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, action }: { id: string; action: 'pause' | 'resume' | 'cancel' }) =>
+      api.post(`/kb/wiki/backfills/${id}/${action}`, {}),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['kb', 'backfills'] }),
+  });
+}

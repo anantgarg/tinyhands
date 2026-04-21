@@ -1011,6 +1011,63 @@ Every document must be associated with an agent (`agent_id` is required). Permis
 - Keys shown once at creation -- copy immediately.
 - Used for external programmatic KB access.
 
+### Wiki (KB + Documents, LLM-curated)
+
+The KB and Documents modules each maintain their own LLM-curated wiki under `/wiki` in the dashboard. Content comes from the existing surfaces — nothing new to manage. Agents read the wiki directly via new `wiki_index`, `wiki_list`, and `wiki_read` actions on the `kb` and `docs-read` tools (no embeddings, no vector search).
+
+- **KB wiki** — built from `kb_entries` and Google Drive sync. Admins curate; users and agents don't write to it directly.
+- **Documents wiki** — built from the `documents` module. Every write (user upload, doc edit, sheet edit, agent write through the `docs` tool) triggers a re-ingest.
+- **Page kinds** — `index.md`, `log.md`, `schema.md`, plus synthesized `sources/<slug>.md`, `entities/<slug>.md`, `concepts/<slug>.md`.
+- **Modes** (per namespace, via workspace settings `kb.mode` / `docs.mode`): `wiki` (new default), `search` (legacy keyword search), or `both`.
+- **Backfill** — one-click "Migrate to wiki" action rate-limits enqueue (default 60/min, configurable), shows ETA, supports pause/resume/cancel, and survives worker restarts.
+
+### Supported upload formats (Documents module)
+
+The Documents module now handles a much wider set of formats. Text-native formats parse locally. Formats requiring OCR or proprietary decoding work when a Reducto or LlamaParse API key is configured.
+
+| Category | Formats | Local | Cloud (Reducto/LlamaParse) |
+|---|---|---|---|
+| Text / Markdown / HTML / RTF / code / transcripts (`.vtt`, `.srt`) | | Yes | Yes |
+| Data (`.csv`, `.tsv`, `.json`, `.xml`, `.yaml`) | | Yes | Yes |
+| PDF (native text layer) | | Yes | Yes |
+| PDF (scanned / image-only) | | Placeholder | OCR |
+| Modern Office (`.docx`, `.xlsx`, `.pptx`) | | Yes | Yes |
+| Legacy Office (`.doc`, `.xls`, `.ppt`) | | `.xls` only | Yes |
+| OpenDocument (`.odt`, `.ods`, `.odp`) | | Basic text | Yes |
+| Images (`.png`, `.jpg`, `.gif`, `.bmp`, `.webp`, `.tiff`, `.heic`) | | Placeholder | OCR |
+| Email (`.eml`, `.msg`) with attachments | | Yes (attachments recursed) | Yes |
+| Archives (`.zip`, `.tar`, `.tar.gz`) | | Yes (entries recursed, depth 3) | n/a |
+| eBooks (`.epub`) | | Basic text | Yes |
+| Google Workspace native (Docs / Sheets / Slides) via Drive | | Exported to `.docx` / `.xlsx` / `.pptx` then parsed | same |
+
+Apple iWork (`.pages`, `.numbers`, `.key`) is not supported — uploads succeed but the source page says "convert to PDF or DOCX".
+
+### Multi-file upload to Documents
+
+- `POST /docs/upload-batch` — multipart, up to 100 files × 25 MB each per batch. Every file becomes a regular `documents` row with a `document_files` blob.
+- `agentId` is required (every document is agent-scoped; the dashboard upload UI asks first).
+- Each uploaded file is parsed and folded into the Documents wiki automatically.
+
+### Parser API keys (shared across KB + Documents)
+
+Optional. Without a key, local parsers handle text, native PDFs, Word, Excel, CSV, email, and archives. For OCR (scanned PDFs, images, legacy Office, eBooks) configure one of:
+
+- **Reducto** — purpose-built for enterprise document parsing with high accuracy on scanned PDFs, complex multi-sheet Excel, tables with merged cells.
+- **LlamaParse** (LlamaIndex) — comparable table fidelity, broader format coverage (OpenDocument, RTF, EPUB, more image types), slightly cheaper.
+
+If both are configured, Reducto is preferred. Keys live in `kb_api_keys` with `provider = 'reducto'` or `'llamaparse'` and are set via the admin-only `PUT /kb/parser-keys` endpoint (dashboard: KB wiki tab → Parser keys panel).
+
+**Access:**
+
+| Action | Superadmin | Admin | Agent Owner | Agent Member | Viewer |
+|--------|-----------|-------|-------------|-------------|--------|
+| View wiki pages | Yes | Yes | Yes | Yes | Yes |
+| Edit wiki schema | Yes | Yes | No | No | No |
+| Change wiki mode | Yes | Yes | No | No | No |
+| Set parser keys | Yes | Yes | No | No | No |
+| Retry failed ingest jobs | Yes | Yes | No | No | No |
+| Trigger migrate-to-wiki | Yes | Yes | No | No | No |
+
 **Access:**
 
 | Action | Superadmin | Admin | Agent Owner | Agent Member | Viewer |

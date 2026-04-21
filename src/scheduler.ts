@@ -1,5 +1,6 @@
 process.env.PROCESS_TYPE = 'scheduler';
-import { initDb, upsertWorkspace, setDefaultWorkspaceId, closeDb, queryOne } from './db';
+import { initDb, upsertWorkspace, setDefaultWorkspaceId, closeDb, queryOne, query } from './db';
+import { getLintQueue, getNamespaceMode } from './modules/kb-wiki';
 import { initSlackClient, getSystemSlackClient } from './slack';
 import { config } from './config';
 import { getScheduledTriggersDue, fireTrigger, updateTriggerLastFired, getTriggerLastFiredAt } from './modules/triggers';
@@ -89,11 +90,34 @@ async function main(): Promise<void> {
     }
   }, SCHEDULER_INTERVAL_MS);
 
+  // Nightly wiki lint at 03:00 UTC. We poll once a minute and dispatch a
+  // single job per (workspace, namespace) when the wall-clock minute matches.
+  const lintInterval = setInterval(async () => {
+    const now = new Date();
+    if (now.getUTCHours() !== 3 || now.getUTCMinutes() !== 0) return;
+    try {
+      const workspaces = await query<{ id: string }>('SELECT id FROM workspaces');
+      const queue = getLintQueue();
+      for (const ws of workspaces) {
+        for (const namespace of ['kb', 'docs'] as const) {
+          const mode = await getNamespaceMode(ws.id, namespace);
+          if (mode === 'search') continue;
+          await queue.add('lint', { workspaceId: ws.id, namespace }, {
+            jobId: `lint-${ws.id}-${namespace}-${now.toISOString().slice(0, 10)}`,
+          });
+        }
+      }
+    } catch (err: any) {
+      logger.error('Nightly wiki lint dispatch failed', { error: err.message });
+    }
+  }, 60 * 1000);
+
   logger.info('Scheduler process ready');
 
   const shutdown = async () => {
     logger.info('Scheduler process shutting down...');
     clearInterval(schedulerInterval);
+    clearInterval(lintInterval);
     await closeDb();
     process.exit(0);
   };

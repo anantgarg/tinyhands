@@ -434,6 +434,49 @@ export function createWebhookServer(): express.Application {
     }
   });
 
+  // Internal wiki ops — used by the kb / docs tools inside agent containers.
+  // Workspace is resolved from the X-Workspace-Id header (set by the runner)
+  // with the bootstrap default as a fallback for self-hosted single-tenant setups.
+  function resolveInternalWorkspace(req: any): string {
+    return (req.headers['x-workspace-id'] as string) || getDefaultWorkspaceId();
+  }
+
+  app.get('/internal/wiki/list', async (req, res) => {
+    const secret = req.headers['x-internal-secret'] as string;
+    if (config.server.internalSecret && secret !== config.server.internalSecret) { res.status(401).json({ error: 'Unauthorized' }); return; }
+    try {
+      const workspaceId = resolveInternalWorkspace(req);
+      const namespace = (req.query.namespace === 'docs' ? 'docs' : 'kb') as 'kb' | 'docs';
+      const { listPages } = await import('./modules/kb-wiki');
+      const pages = await listPages(workspaceId, namespace);
+      res.json({
+        namespace,
+        pages: pages.map(p => ({ path: p.path, title: p.title, kind: p.kind })),
+      });
+    } catch (err: any) {
+      logger.error('Internal wiki list failed', { error: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get('/internal/wiki/page', async (req, res) => {
+    const secret = req.headers['x-internal-secret'] as string;
+    if (config.server.internalSecret && secret !== config.server.internalSecret) { res.status(401).json({ error: 'Unauthorized' }); return; }
+    try {
+      const workspaceId = resolveInternalWorkspace(req);
+      const namespace = (req.query.namespace === 'docs' ? 'docs' : 'kb') as 'kb' | 'docs';
+      const path = String(req.query.path || '');
+      if (!path) { res.status(400).json({ error: 'path required' }); return; }
+      const { getPage } = await import('./modules/kb-wiki');
+      const page = await getPage(workspaceId, namespace, path);
+      if (!page) { res.status(404).json({ error: 'page not found' }); return; }
+      res.json({ path: page.path, title: page.title, kind: page.kind, content: page.content });
+    } catch (err: any) {
+      logger.error('Internal wiki read failed', { error: err.message });
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // ── Internal Docs API (used by in-container docs tool) ──
 
   app.post('/internal/docs/create', async (req, res) => {

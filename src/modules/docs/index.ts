@@ -1,9 +1,10 @@
 import { v4 as uuid } from 'uuid';
 import { query, queryOne, execute, withTransaction } from '../../db';
 import { logger } from '../../utils/logger';
-import type { Document, DocType, DocCreatorType, DocumentVersion, SheetTab, CellData } from '../../types';
+import type { Document, DocType, DocCreatorType, DocumentVersion, SheetTab, CellData, WikiSource } from '../../types';
 import { extractTextForSearch } from './convert';
 import { storeFile, getFile, deleteFile } from './storage';
+import { enqueueWikiIngest, archiveWikiSourcePage } from '../kb-wiki';
 
 // ── Constants ──
 
@@ -81,6 +82,11 @@ export async function createDocument(workspaceId: string, params: CreateDocument
   }
 
   logger.info('Document created', { docId: id, type: params.type, title: params.title });
+
+  // File uploads emit their own ingest after the binary is stored — see uploadFile.
+  if (params.type !== 'file') {
+    void emitDocsWiki(workspaceId, id, params.createdBy);
+  }
   return doc;
 }
 
@@ -202,6 +208,7 @@ export async function updateDocument(
 
   const doc = await getDocument(workspaceId, docId);
   if (!doc) throw new Error('Document not found after update');
+  void emitDocsWiki(workspaceId, docId, params.updatedBy);
   return doc;
 }
 
@@ -210,11 +217,13 @@ export async function archiveDocument(workspaceId: string, docId: string): Promi
     'UPDATE documents SET is_archived = true, updated_at = NOW() WHERE workspace_id = $1 AND id = $2',
     [workspaceId, docId]
   );
+  void archiveWikiSourcePage(workspaceId, 'docs', 'document', docId);
 }
 
 export async function deleteDocument(workspaceId: string, docId: string): Promise<void> {
   await execute('DELETE FROM documents WHERE workspace_id = $1 AND id = $2', [workspaceId, docId]);
   logger.info('Document deleted', { docId });
+  void archiveWikiSourcePage(workspaceId, 'docs', 'document', docId);
 }
 
 export async function searchDocuments(workspaceId: string, searchQuery: string, limit = 20): Promise<Document[]> {
@@ -322,6 +331,7 @@ export async function createSheetTab(workspaceId: string, docId: string, name: s
     [tab.id, docId, tab.name, tab.position, '[]', '{}', '{}', 0, 0, tab.created_at, tab.updated_at]
   );
 
+  void emitDocsWiki(workspaceId, docId, 'system');
   return tab;
 }
 
@@ -381,6 +391,7 @@ export async function updateSheetTab(
   await indexSheetContent(tab.document_id);
 
   const updated = await queryOne<any>('SELECT * FROM sheet_tabs WHERE id = $1', [tabId]);
+  void emitDocsWiki(workspaceId, tab.document_id, 'system');
   return parseSheetTabRow(updated!);
 }
 
@@ -402,6 +413,7 @@ export async function deleteSheetTab(workspaceId: string, tabId: string): Promis
   }
 
   await execute('DELETE FROM sheet_tabs WHERE id = $1', [tabId]);
+  void emitDocsWiki(workspaceId, tab.document_id, 'system');
 }
 
 export async function reorderSheetTabs(workspaceId: string, docId: string, tabIds: string[]): Promise<void> {
@@ -413,6 +425,7 @@ export async function reorderSheetTabs(workspaceId: string, docId: string, tabId
       await client.query('UPDATE sheet_tabs SET position = $1 WHERE id = $2 AND document_id = $3', [i, tabIds[i], docId]);
     }
   });
+  void emitDocsWiki(workspaceId, docId, 'system');
 }
 
 export async function updateCells(
@@ -514,6 +527,10 @@ export async function uploadFile(
     await indexDocumentText(doc.id, text);
   }
 
+  // Now that the binary is on disk, queue the wiki ingest. This emit is the
+  // only one for file uploads — the createDocument call above intentionally
+  // skipped emitting (file_size was still NULL, file bytes weren't stored).
+  void emitDocsWiki(workspaceId, doc.id, params.createdBy);
   return doc;
 }
 
@@ -576,6 +593,7 @@ export async function updateFileContent(
     await indexDocumentText(docId, text);
   }
 
+  void emitDocsWiki(workspaceId, docId, updatedBy);
   return (await getDocument(workspaceId, docId))!;
 }
 
@@ -741,3 +759,22 @@ function columnIndex(letter: string): number {
 
 // Re-export for API layer
 export { MAX_FILE_SIZE, BLOCKED_EXTENSIONS };
+
+// ── Wiki ingest helper ──
+// Every public mutation in this module funnels through this helper so the
+// docs wiki stays current. Failures are logged-only — wiki problems must
+// not break document writes.
+async function emitDocsWiki(workspaceId: string, docId: string, triggeredBy: string): Promise<void> {
+  try {
+    const source: WikiSource = {
+      namespace: 'docs',
+      source_kind: 'document',
+      source_id: docId,
+      revision: new Date().toISOString(),
+      triggered_by: triggeredBy,
+    };
+    await enqueueWikiIngest(workspaceId, source);
+  } catch (err: any) {
+    logger.warn('Wiki ingest enqueue failed (docs)', { docId, error: err.message });
+  }
+}

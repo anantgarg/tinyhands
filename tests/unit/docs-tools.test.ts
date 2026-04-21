@@ -77,6 +77,9 @@ describe('Docs Tools Module', () => {
         'read_doc',
         'read_sheet_tab',
         'read_file',
+        'wiki_index',
+        'wiki_list',
+        'wiki_read',
       ]);
     });
 

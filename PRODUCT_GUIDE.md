@@ -152,6 +152,20 @@ Every edit creates a version snapshot. Click **History** in any document editor 
 - Search by title or content
 - View documents for a specific agent from the agent's **Docs** tab
 
+### Bulk upload
+
+The Documents page has an **Upload files** control that accepts drag-and-drop of up to 100 files per batch, 25 MB per file. Every common format is supported — PDFs (native and scanned), modern and legacy Office, OpenDocument, email with attachments, archives, eBooks, images, and data formats. Scanned PDFs and images need a Reducto or LlamaParse API key (set once for the workspace under **KB → Wiki → Parser keys**).
+
+---
+
+## Wiki
+
+The **Wiki** page (left sidebar → Wiki) shows two LLM-curated knowledge surfaces: the **KB wiki** (from your knowledge base and Drive sync) and the **Documents wiki** (from your docs, sheets, and uploaded files). Each surface keeps its own index, entity pages, concept pages, and an append-only log. The wiki stays current automatically — every time you add a KB article, sync from Drive, upload a file, or edit a doc or sheet, the wiki re-ingests that source and refreshes the affected pages.
+
+**Open wiki** launches a full-screen reader view. Admins can edit the schema (what page kinds exist and how the LLM should organize them), switch between `wiki` / `search` / `both` modes, set parser API keys, and retry failed ingests. For existing workspaces, a one-click **Migrate to wiki** builds a first wiki from everything already stored.
+
+Agents read the wiki directly (no embeddings, no vector search) via new `wiki_index`, `wiki_list`, and `wiki_read` actions on their KB and Documents tools.
+
 ---
 
 ## Triggers

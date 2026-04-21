@@ -2,7 +2,8 @@ import { v4 as uuid } from 'uuid';
 import { query, queryOne, execute, withTransaction } from '../../db';
 import { chunkText } from '../../utils/chunker';
 import { logger } from '../../utils/logger';
-import type { KBEntry, KBSourceType } from '../../types';
+import type { KBEntry, KBSourceType, WikiSource } from '../../types';
+import { enqueueWikiIngest, archiveWikiSourcePage } from '../kb-wiki';
 
 // ── KB Entry Management ──
 
@@ -57,6 +58,13 @@ export async function createKBEntry(workspaceId: string, params: CreateKBEntryPa
   });
 
   logger.info('KB entry created', { entryId: id, title: params.title, approved: entry.approved });
+
+  if (entry.approved) {
+    void emitWikiIngest(workspaceId, {
+      namespace: 'kb', source_kind: 'kb_entry', source_id: id,
+      revision: entry.updated_at, triggered_by: params.contributedBy,
+    });
+  }
   return entry;
 }
 
@@ -68,6 +76,10 @@ export async function approveKBEntry(workspaceId: string, entryId: string): Prom
   await indexKBEntry(workspaceId, entry);
 
   logger.info('KB entry approved', { entryId });
+  void emitWikiIngest(workspaceId, {
+    namespace: 'kb', source_kind: 'kb_entry', source_id: entryId,
+    revision: new Date().toISOString(),
+  });
   return { ...entry, approved: true };
 }
 
@@ -92,9 +104,17 @@ export async function listPendingEntries(workspaceId: string): Promise<KBEntry[]
 }
 
 export async function deleteKBEntry(workspaceId: string, id: string): Promise<void> {
+  // Capture external id before delete so the drive_file source page archives too.
+  const row = await queryOne<{ source_external_id: string | null }>(
+    'SELECT source_external_id FROM kb_entries WHERE id = $1 AND workspace_id = $2', [id, workspaceId],
+  );
   await execute('DELETE FROM kb_chunks WHERE entry_id = $1 AND entry_id IN (SELECT id FROM kb_entries WHERE workspace_id = $2)', [id, workspaceId]);
   await execute('DELETE FROM kb_entries WHERE id = $1 AND workspace_id = $2', [id, workspaceId]);
   logger.info('KB entry deleted', { entryId: id });
+  void archiveWikiSourcePage(workspaceId, 'kb', 'kb_entry', id);
+  if (row?.source_external_id) {
+    void archiveWikiSourcePage(workspaceId, 'kb', 'drive_file', row.source_external_id);
+  }
 }
 
 // ── Upsert (source-driven sync) ──
@@ -123,6 +143,16 @@ export async function upsertKBEntryByExternalId(
       'UPDATE kb_entries SET source_external_id = $1 WHERE id = $2 AND workspace_id = $3',
       [params.sourceExternalId, entry.id, workspaceId],
     );
+    // Drive sync emits a `drive_file` ingest below; the createKBEntry call above
+    // also fires a `kb_entry` ingest, which we archive immediately so a Drive
+    // file maps to exactly one wiki source page (the drive_file one).
+    void archiveWikiSourcePage(workspaceId, 'kb', 'kb_entry', entry.id);
+    void emitWikiIngest(workspaceId, {
+      namespace: 'kb',
+      source_kind: 'drive_file',
+      source_id: params.sourceExternalId,
+      revision: entry.updated_at,
+    });
     return { entry: { ...entry, source_external_id: params.sourceExternalId } as KBEntry, created: true };
   }
 
@@ -171,6 +201,12 @@ export async function upsertKBEntryByExternalId(
     updated_at: new Date().toISOString(),
   };
   logger.info('KB entry upserted from source', { entryId: id, sourceId: params.kbSourceId, externalId: params.sourceExternalId });
+  void emitWikiIngest(workspaceId, {
+    namespace: 'kb',
+    source_kind: 'drive_file',
+    source_id: params.sourceExternalId,
+    revision: entry.updated_at,
+  });
   return { entry, created: false };
 }
 
@@ -198,12 +234,33 @@ export async function deleteStaleKBEntries(
     `DELETE FROM kb_chunks WHERE entry_id = ANY($1::text[])`,
     [staleIds],
   );
+  // Capture external ids of deleted rows so the wiki can archive the Drive source pages.
+  const externalIdRows = await query<{ source_external_id: string | null }>(
+    `SELECT source_external_id FROM kb_entries WHERE id = ANY($1::text[]) AND source_external_id IS NOT NULL`,
+    [staleIds],
+  );
   await execute(
     `DELETE FROM kb_entries WHERE id = ANY($1::text[]) AND workspace_id = $2`,
     [staleIds, workspaceId],
   );
   logger.info('KB entries tombstoned after sync', { sourceId: kbSourceId, deletedCount: staleIds.length });
+  for (const row of externalIdRows) {
+    if (row.source_external_id) {
+      void archiveWikiSourcePage(workspaceId, 'kb', 'drive_file', row.source_external_id);
+    }
+  }
   return staleIds.length;
+}
+
+// ── Wiki ingest helper ──
+
+async function emitWikiIngest(workspaceId: string, source: WikiSource): Promise<void> {
+  try {
+    await enqueueWikiIngest(workspaceId, source);
+  } catch (err: any) {
+    // Wiki failures must not break the underlying KB op.
+    logger.warn('Wiki ingest enqueue failed (KB)', { error: err.message, source });
+  }
 }
 
 // ── KB Search ──

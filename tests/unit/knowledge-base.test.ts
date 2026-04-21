@@ -468,17 +468,11 @@ describe('Knowledge Base Module', () => {
 
       await deleteKBEntry(TEST_WORKSPACE_ID, 'entry-1');
 
-      expect(mockExecute).toHaveBeenCalledTimes(2);
-      // First call: delete chunks
-      expect(mockExecute.mock.calls[0]).toEqual([
-        'DELETE FROM kb_chunks WHERE entry_id = $1 AND entry_id IN (SELECT id FROM kb_entries WHERE workspace_id = $2)',
-        ['entry-1', TEST_WORKSPACE_ID],
-      ]);
-      // Second call: delete entry
-      expect(mockExecute.mock.calls[1]).toEqual([
-        'DELETE FROM kb_entries WHERE id = $1 AND workspace_id = $2',
-        ['entry-1', TEST_WORKSPACE_ID],
-      ]);
+      // The two DELETEs + one wiki archive UPDATE (fire-and-forget) all
+      // hit execute() after plan-016. Assert both DELETEs ran.
+      const sqls = mockExecute.mock.calls.map((c: any[]) => c[0]);
+      expect(sqls).toContain('DELETE FROM kb_chunks WHERE entry_id = $1 AND entry_id IN (SELECT id FROM kb_entries WHERE workspace_id = $2)');
+      expect(sqls).toContain('DELETE FROM kb_entries WHERE id = $1 AND workspace_id = $2');
     });
 
     it('should log info after deletion', async () => {

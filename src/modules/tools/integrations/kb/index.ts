@@ -7,16 +7,17 @@ import type { ToolManifest } from '../manifest';
 
 const READ_SCHEMA = JSON.stringify({
   type: 'object',
-  description: 'Search and browse the internal knowledge base. Find articles, documentation, and reference material by keyword or category.',
+  description: 'Search and browse the internal knowledge base. Find articles, documentation, and reference material. The KB now also maintains an LLM-curated wiki — start with `wiki_index` to see what is in it, then `wiki_read` to follow links.',
   properties: {
     action: {
       type: 'string',
-      enum: ['search', 'list', 'categories'],
-      description: 'The action to perform: search (find by query), list (browse entries), categories (list available categories)',
+      enum: ['search', 'list', 'categories', 'wiki_index', 'wiki_list', 'wiki_read'],
+      description: 'search/list/categories use legacy keyword search. wiki_index returns the rendered index.md; wiki_list returns every page (path + title + kind); wiki_read fetches one page by path.',
     },
     query: { type: 'string', description: 'Search query text (required for search action)' },
     category: { type: 'string', description: 'Filter by category (optional, for list action)' },
     limit: { type: 'number', description: 'Max results to return (default 10, max 20)' },
+    path: { type: 'string', description: 'Wiki page path (required for wiki_read), e.g. "entities/acme-corp.md"' },
   },
   required: ['action'],
 });
@@ -46,6 +47,9 @@ function httpRequest(method, urlPath, body) {
     };
     if (secret) {
       options.headers['X-Internal-Secret'] = secret;
+    }
+    if (process.env.WORKSPACE_ID) {
+      options.headers['X-Workspace-Id'] = process.env.WORKSPACE_ID;
     }
     var req = http.request(options, function(res) {
       var data = '';
@@ -118,8 +122,28 @@ async function main() {
       }
       break;
     }
+    case 'wiki_index': {
+      var wiResp = await httpRequest('GET', '/internal/wiki/page?namespace=kb&path=index.md', null);
+      if (wiResp.status === 200) result = { page: wiResp.data };
+      else result = { error: 'wiki_index failed: HTTP ' + wiResp.status };
+      break;
+    }
+    case 'wiki_list': {
+      var wlResp = await httpRequest('GET', '/internal/wiki/list?namespace=kb', null);
+      if (wlResp.status === 200) result = { pages: wlResp.data.pages || [] };
+      else result = { error: 'wiki_list failed: HTTP ' + wlResp.status };
+      break;
+    }
+    case 'wiki_read': {
+      if (!input.path) { result = { error: 'path is required for wiki_read' }; break; }
+      var wrResp = await httpRequest('GET', '/internal/wiki/page?namespace=kb&path=' + encodeURIComponent(input.path), null);
+      if (wrResp.status === 200) result = { page: wrResp.data };
+      else if (wrResp.status === 404) result = { error: 'wiki page not found: ' + input.path };
+      else result = { error: 'wiki_read failed: HTTP ' + wrResp.status };
+      break;
+    }
     default:
-      result = { error: 'Unknown action: ' + action + '. Valid actions: search, list, categories' };
+      result = { error: 'Unknown action: ' + action + '. Valid actions: search, list, categories, wiki_index, wiki_list, wiki_read' };
   }
 
   console.log(JSON.stringify(result));

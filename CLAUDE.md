@@ -49,7 +49,7 @@ src/
 ├── config.ts                                       # Env var config
 ├── db/
 │   ├── index.ts                                    # PostgreSQL pool, query helpers
-│   └── migrations/                                 # SQL migrations (001-022)
+│   └── migrations/                                 # SQL migrations (001-027)
 ├── queue/index.ts                                  # BullMQ queue, Redis, rate limiting
 ├── slack/
 │   ├── index.ts                                    # Bolt app setup
@@ -65,6 +65,8 @@ src/
 │   ├── knowledge-base/      # KB entries, full-text search (tsvector + GIN)
 │   ├── kb-sources/          # KB source connectors (GitHub, Drive, Zendesk, web)
 │   ├── kb-wizard/           # Guided KB source setup flow
+│   ├── kb-parser/           # Shared multi-format parser (PDF, DOCX, XLSX, email, archives, eBooks, …) with optional Reducto/LlamaParse OCR
+│   ├── kb-wiki/             # LLM-curated wiki pages (KB and Documents namespaces), ingest worker, lint, backfill
 │   ├── sources/             # Agent data sources (GitHub, Google Drive, memory)
 │   ├── triggers/            # Trigger types: slack, linear, zendesk, intercom, webhook, schedule
 │   ├── workflows/           # Multi-step stateful workflows (DAG of steps)
@@ -105,6 +107,11 @@ PostgreSQL with migrations in `src/db/migrations/`. Key tables:
 - **agent_roles** — Per-agent access levels (owner, member, viewer)
 - **workspace_settings** — Per-workspace configuration
 - **workspace_oauth_apps** — Per-workspace OAuth client credentials (provider = `google` | `notion` | `github`). Client secret is AES-GCM encrypted. The platform never holds a Google OAuth identity of its own — each workspace brings its own Google Cloud project.
+- **kb_wiki_pages** — LLM-curated wiki pages for KB and Documents surfaces. `namespace` column (`kb` | `docs`) partitions the two. Partial unique index on `(workspace_id, namespace, source_ref->>'source_kind', source_ref->>'source_id')` guarantees one source page per underlying record.
+- **kb_wiki_page_versions** — Version snapshots on every wiki page write (rationale + changed_by).
+- **kb_ingest_jobs** — Per-source ingest job state (queued/parsing/classifying/wiki_updating/done/failed), tracks parser used (local/reducto/llamaparse), pages_touched, retries.
+- **kb_source_files** — Binary cache for Drive-synced files keyed by `source_external_id`. Lets the wiki parser re-run without round-tripping Google.
+- **kb_wiki_backfills** — Backfill migration progress (enqueued/completed/failed, rate_per_minute, pause/resume/cancel state).
 - **upgrade_requests** — Viewer→member upgrade request tracking
 - **connections** — Encrypted tool credentials (team + personal)
 - **agent_tool_connections** — Per-agent tool connection mode config
@@ -258,6 +265,16 @@ Integration manifests can optionally declare `supportedCredentialModes` (array o
 
 ### Write Policy Approval Gates
 Write policies (`confirm`, `admin_confirm`) are enforced at runtime via Redis-backed approval state. Approval routes in `src/server.ts` handle approve/deny actions from Slack DM buttons. Redis helpers in `src/queue/index.ts` manage approval request creation, polling, and expiration.
+
+### Wiki (KB and Documents)
+
+Two separate LLM-curated wikis — one for the Knowledge Base, one for the Documents module — live side-by-side in the `kb_wiki_pages` table, partitioned by a `namespace` column (`kb` | `docs`). Each namespace has its own `index.md`, `log.md`, `schema.md`, plus synthesized `sources/*.md`, `entities/*.md`, and `concepts/*.md` pages. Agents read them via the existing `kb` and `docs-read` tools (new actions: `wiki_index`, `wiki_list`, `wiki_read`) — no embeddings, no vector search.
+
+Every write to an underlying source emits a `WikiSource` event via `enqueueWikiIngest(workspaceId, source)` from `src/modules/kb-wiki/`. The worker (started alongside the agent-run worker in `src/worker.ts`) picks up the `kb-ingest` BullMQ queue, parses the source via `src/modules/kb-parser/` (local parsers for text-native formats and native Slate/sheet content; optional Reducto or LlamaParse for OCR on scanned PDFs, images, and legacy Office), runs an LLM pass to produce a zod-validated page-edit plan, and applies it transactionally inside per-page Redis locks with an `expected_prior_revision` optimistic check. Rapid repeats of the same source debounce into a single trailing ingest.
+
+Parser API keys (Reducto, LlamaParse) are workspace-wide and shared between KB and Documents. They live in `kb_api_keys` with `provider = 'reducto' | 'llamaparse'`; without a key, local parsers handle everything they can and emit a placeholder for OCR-required formats.
+
+Dashboard surface lives at `/wiki` (`web/src/pages/Wiki.tsx`) with tabs for both namespaces, an "Open wiki" full-screen preview, recent ingest jobs with retry, admin-only schema editor, mode toggle (`wiki` | `search` | `both`), and a rate-limited "Migrate to wiki" backfill (default 60/min, pause/resume/cancel, survives worker restarts via `kb_wiki_backfills`).
 
 ## Slack App Configuration
 

@@ -16,6 +16,7 @@ const AgentCreate = lazy(() => import('@/pages/AgentCreate').then(m => ({ defaul
 const AgentTemplates = lazy(() => import('@/pages/AgentTemplates').then(m => ({ default: m.AgentTemplates })));
 const KnowledgeBase = lazy(() => import('@/pages/KnowledgeBase').then(m => ({ default: m.KnowledgeBase })));
 const KBSources = lazy(() => import('@/pages/KBSources').then(m => ({ default: m.KBSources })));
+const Wiki = lazy(() => import('@/pages/Wiki'));
 const Apps = lazy(() => import('@/pages/Apps').then(m => ({ default: m.Apps })));
 const Triggers = lazy(() => import('@/pages/Triggers').then(m => ({ default: m.Triggers })));
 
@@ -115,6 +116,7 @@ export function App() {
                 <Route path="skills" element={<Suspense fallback={<PageLoader />}><Skills /></Suspense>} />
                 <Route path="kb" element={<Suspense fallback={<PageLoader />}><KnowledgeBase /></Suspense>} />
                 <Route path="kb/sources" element={<Suspense fallback={<PageLoader />}><KBSources /></Suspense>} />
+                <Route path="wiki" element={<Suspense fallback={<PageLoader />}><Wiki /></Suspense>} />
                 <Route path="documents" element={<Suspense fallback={<PageLoader />}><Documents /></Suspense>} />
                 <Route path="documents/:id" element={<Suspense fallback={<PageLoader />}><DocumentDetail /></Suspense>} />
                 <Route path="tools" element={<Suspense fallback={<PageLoader />}><Apps /></Suspense>} />

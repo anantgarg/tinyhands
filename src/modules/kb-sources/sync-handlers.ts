@@ -8,9 +8,11 @@
  *   4. Updates source status / entry_count
  */
 import https from 'https';
+import { v4 as uuid } from 'uuid';
 import { createKBEntry, upsertKBEntryByExternalId, deleteStaleKBEntries } from '../knowledge-base';
 import { getApiKey, updateSource, updateSourceStatus } from './index';
 import { getProviderForConnector, normalizeConnectorType } from './connectors';
+import { execute } from '../../db';
 import { logger } from '../../utils/logger';
 import type { KBSource, KBConnectorType } from '../../types';
 
@@ -736,9 +738,18 @@ async function syncGoogleDrive(workspaceId: string, source: KBSource, config: Re
             `/drive/v3/files/${file.id}/export?mimeType=text/plain`, authHeaders);
           if (expRes.status < 400) content = expRes.data;
         } else if (file.mimeType === 'application/pdf' || file.mimeType?.startsWith('image/')) {
-          // Download binary — skip for now (OCR would need a separate service)
-          logger.debug('Skipping binary file (OCR not yet implemented)', { name: file.name, mime: file.mimeType });
-          continue;
+          // Binary content: store the raw bytes in kb_source_files so the wiki
+          // ingest worker can parse them (Reducto/LlamaParse for OCR, local
+          // pdf-parse for native-text PDFs). Also create a KB entry so the
+          // sync surface and tombstone path keep working.
+          try {
+            const bytes = await fetchDriveBinary(file.id, accessToken);
+            await storeKBSourceFile(workspaceId, source.id, file.id, file.name, file.mimeType, bytes);
+            content = `Binary file (${file.mimeType}). Wiki ingest will parse and summarize.`;
+          } catch (err: any) {
+            logger.warn('Failed to download Drive binary', { name: file.name, error: err.message });
+            continue;
+          }
         } else if (file.mimeType?.startsWith('text/') || file.mimeType === 'application/json') {
           // Download text files directly
           const dlRes = await httpsGetRaw('www.googleapis.com',
@@ -778,6 +789,48 @@ async function syncGoogleDrive(workspaceId: string, source: KBSource, config: Re
   await deleteStaleKBEntries(workspaceId, source.id, seenFileIds);
 
   return count;
+}
+
+// Helper: stream Drive file bytes for binary content (PDFs, images)
+async function fetchDriveBinary(fileId: string, accessToken: string): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      {
+        hostname: 'www.googleapis.com',
+        path: `/drive/v3/files/${fileId}?alt=media`,
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${accessToken}` },
+      },
+      (res) => {
+        if ((res.statusCode || 0) >= 400) {
+          reject(new Error(`Drive download failed (${res.statusCode})`));
+          return;
+        }
+        const chunks: Buffer[] = [];
+        res.on('data', (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
+        res.on('end', () => resolve(Buffer.concat(chunks)));
+        res.on('error', reject);
+      },
+    );
+    req.on('error', reject);
+    req.setTimeout(120_000, () => { req.destroy(); reject(new Error('Drive download timeout')); });
+    req.end();
+  });
+}
+
+// Helper: upsert into kb_source_files keyed by source_external_id
+async function storeKBSourceFile(
+  workspaceId: string, kbSourceId: string,
+  externalId: string, filename: string, mime: string, bytes: Buffer,
+): Promise<void> {
+  const id = uuid();
+  await execute(
+    `INSERT INTO kb_source_files (id, workspace_id, kb_source_id, source_external_id, filename, mime, size, bytes)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       ON CONFLICT (workspace_id, kb_source_id, source_external_id)
+       DO UPDATE SET filename = EXCLUDED.filename, mime = EXCLUDED.mime, size = EXCLUDED.size, bytes = EXCLUDED.bytes, updated_at = NOW()`,
+    [id, workspaceId, kbSourceId, externalId, filename, mime, bytes.length, bytes],
+  );
 }
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

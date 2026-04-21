@@ -1,5 +1,6 @@
 process.env.PROCESS_TYPE = 'worker';
 import { createWorker } from './modules/execution';
+import { createWikiWorkers, shutdownWikiWorkers } from './modules/kb-wiki/worker';
 import { initSlackClient, getSystemSlackClient } from './slack';
 import { initDb, upsertWorkspace, setDefaultWorkspaceId, execute, getDefaultWorkspaceId, closeDb } from './db';
 import { config } from './config';
@@ -91,7 +92,10 @@ async function main(): Promise<void> {
 
   // Create BullMQ worker
   const worker = createWorker();
-  logger.info(`Worker ${workerId} ready, waiting for jobs...`);
+  // Wiki ingest + lint workers share the same process (cheap, mostly I/O bound).
+  const wikiWorkers = createWikiWorkers();
+  logger.info(`Worker ${workerId} ready, waiting for jobs (agent + kb-ingest + kb-lint)...`);
+  void wikiWorkers;
 
   // Periodic tasks
   const timerInterval = setInterval(async () => {
@@ -125,6 +129,7 @@ async function main(): Promise<void> {
     // Default timeout is 30s; we use the job timeout since agent runs can be long
     try {
       await worker.close(true);
+      await shutdownWikiWorkers();
       logger.info(`Worker ${workerId} shutdown complete`);
     } catch (err: any) {
       logger.warn(`Worker ${workerId} forced shutdown`, { error: err.message });

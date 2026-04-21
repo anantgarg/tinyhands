@@ -72,7 +72,7 @@ describe('KB Tools Module', () => {
     it('has correct actions in the schema', () => {
       const schema = JSON.parse(kbManifest.tools[0].schema);
       expect(schema.type).toBe('object');
-      expect(schema.properties.action.enum).toEqual(['search', 'list', 'categories']);
+      expect(schema.properties.action.enum).toEqual(['search', 'list', 'categories', 'wiki_index', 'wiki_list', 'wiki_read']);
       expect(schema.required).toEqual(['action']);
     });
 

@@ -7,11 +7,11 @@ import type { ToolManifest } from '../manifest';
 
 const READ_SCHEMA = JSON.stringify({
   type: 'object',
-  description: 'Read, search, and list documents, spreadsheets, and files. Use this to find and read existing documents.',
+  description: 'Read, search, and list documents, spreadsheets, and files. The Documents module also maintains an LLM-curated wiki — start with `wiki_index` for cross-document context, then `wiki_read` to follow links.',
   properties: {
     action: {
       type: 'string',
-      enum: ['list', 'search', 'read_doc', 'read_sheet_tab', 'read_file'],
+      enum: ['list', 'search', 'read_doc', 'read_sheet_tab', 'read_file', 'wiki_index', 'wiki_list', 'wiki_read'],
       description: 'Action to perform',
     },
     document_id: { type: 'string', description: 'Document ID (required for read_doc, read_sheet_tab, read_file)' },
@@ -19,6 +19,7 @@ const READ_SCHEMA = JSON.stringify({
     query: { type: 'string', description: 'Search query (required for search)' },
     type: { type: 'string', enum: ['doc', 'sheet', 'file'], description: 'Filter by type (optional, for list)' },
     limit: { type: 'number', description: 'Max results (default 10)' },
+    path: { type: 'string', description: 'Wiki page path (required for wiki_read), e.g. "entities/acme-corp.md"' },
   },
   required: ['action'],
 });
@@ -78,6 +79,7 @@ function httpRequest(method, urlPath, body) {
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
     };
     if (secret) options.headers['X-Internal-Secret'] = secret;
+    if (process.env.WORKSPACE_ID) options.headers['X-Workspace-Id'] = process.env.WORKSPACE_ID;
     var req = http.request(options, function(res) {
       var data = '';
       res.on('data', function(chunk) { data += chunk; });
@@ -98,6 +100,24 @@ async function main() {
   var result;
 
   switch (action) {
+    case 'wiki_index': {
+      var wiResp = await httpRequest('GET', '/internal/wiki/page?namespace=docs&path=index.md', null);
+      result = wiResp.status === 200 ? { page: wiResp.data } : { error: 'wiki_index failed: HTTP ' + wiResp.status };
+      break;
+    }
+    case 'wiki_list': {
+      var wlResp = await httpRequest('GET', '/internal/wiki/list?namespace=docs', null);
+      result = wlResp.status === 200 ? { pages: wlResp.data.pages || [] } : { error: 'wiki_list failed: HTTP ' + wlResp.status };
+      break;
+    }
+    case 'wiki_read': {
+      if (!input.path) { result = { error: 'path is required for wiki_read' }; break; }
+      var wrResp = await httpRequest('GET', '/internal/wiki/page?namespace=docs&path=' + encodeURIComponent(input.path), null);
+      if (wrResp.status === 200) result = { page: wrResp.data };
+      else if (wrResp.status === 404) result = { error: 'wiki page not found: ' + input.path };
+      else result = { error: 'wiki_read failed: HTTP ' + wrResp.status };
+      break;
+    }
     case 'list': {
       var qs = '?limit=' + (input.limit || 10);
       if (input.type) qs += '&type=' + encodeURIComponent(input.type);
