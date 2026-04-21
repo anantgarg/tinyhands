@@ -152,17 +152,29 @@ export async function listAgents(workspaceId: string): Promise<Agent[]> {
  */
 export async function ensureBotInAllAgentChannels(): Promise<void> {
   const agents = await query('SELECT * FROM agents WHERE status != $1', ['archived']);
-  const allChannels = new Set<string>();
+  // Group channels by workspace_id so each batch can run with the correct
+  // workspace's bot token. Prior to v1.50 this used a single system client
+  // and logged `channel_not_found` for every cross-workspace channel on boot.
+  const channelsByWorkspace = new Map<string, Set<string>>();
   for (const row of agents) {
     const agent = deserializeAgent(row);
-    for (const ch of (agent.channel_ids || [])) {
-      allChannels.add(ch);
-    }
+    const wsId = (row as any).workspace_id as string | undefined;
+    if (!wsId) continue;
+    const channels = channelsByWorkspace.get(wsId) ?? new Set<string>();
+    for (const ch of (agent.channel_ids || [])) channels.add(ch);
+    if (channels.size > 0) channelsByWorkspace.set(wsId, channels);
   }
-  if (allChannels.size > 0) {
-    logger.info('Ensuring bot is in all agent channels', { count: allChannels.size });
-    const { ensureBotInChannels } = await import('../../slack');
-    await ensureBotInChannels([...allChannels]);
+  if (channelsByWorkspace.size === 0) return;
+
+  const { runInSlackContext, getBotClient, ensureBotInChannels } = await import('../../slack');
+  for (const [workspaceId, channels] of channelsByWorkspace) {
+    try {
+      const client = await getBotClient(workspaceId);
+      logger.info('Ensuring bot is in agent channels', { workspaceId, count: channels.size });
+      await runInSlackContext({ workspaceId, client }, () => ensureBotInChannels([...channels]));
+    } catch (err: any) {
+      logger.warn('Could not ensure bot in channels for workspace', { workspaceId, error: err.message });
+    }
   }
 }
 
