@@ -14,6 +14,14 @@
 - [ ] Verify the platform-admin page in the dashboard UI: accessible to platform_admins only, 403 for everyone else, shows ≥2 workspaces with health counters (from plan-010)
 - [ ] Migration dry-run against a snapshot of the production single-tenant DB: idempotent, zero data loss, ANTHROPIC_API_KEY env var ignored after migration (from plan-010)
 - [ ] Full regression sweep of existing flows in the migrated workspace: slash commands, triggers, KB search, document editing, scheduled triggers, sync, daily digest (from plan-010)
+- [ ] Manual QA post-deploy: admin fills BYO Google OAuth wizard with valid credentials, "Test connection" passes, save → OAuth flow reaches customer's own consent screen (from plan-015)
+- [ ] Manual QA post-deploy: end-to-end authorize as end user → token saved in connections → agent run successfully calls Google Drive API with that token (from plan-015)
+- [ ] Manual QA post-deploy: workspace 1 env-var credentials auto-migrated into workspace_oauth_apps and existing Google connections still work without re-auth (from plan-015)
+- [ ] "Remove credentials" banner copy explicitly prompting admins to reconfigure their Google OAuth app (existing health-check DM covers the reconnect case but doesn't name the OAuth-app-configuration step) (from plan-015)
+- [ ] Step 11 follow-up PR: once workspace 1 is confirmed migrated in production, remove the Google bootstrap scaffolding from src/modules/multitenant-migration, delete config.oauth.googleClientId/Secret, strip GOOGLE_OAUTH_CLIENT_ID/_SECRET from .env.example and docs, unset the env vars on production hosts (from plan-015)
+- [ ] Extend BYO OAuth app pattern to Notion and GitHub once those integrations ship (from plan-015)
+- [ ] Wire GitHub / Zendesk / Web Crawl KB source connectors through the connections table so the wizard can un-grey them (currently "Coming soon") (from plan-015)
+- [ ] Implement a Notion KB source connector (no sync handler exists today) (from plan-015)
 
 ## Completed
 
