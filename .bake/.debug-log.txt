@@ -1585,3 +1585,11 @@
 [09:50:48.149] [Terminal] getOrCreate → returning cached {"sessionId":"main","cachedCwd":null}
 [09:50:48.149] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"__main__","sessionsLen":25,"activeSessionId":"main"}
 [09:50:48.149] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":false,"activeFilePath":"__main__"}
+[10:43:42.258] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-016.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":27660,"isPlanPath":true}
+[10:43:42.259] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-016.md","title":"Wiki-style Knowledge Base and Documents, parsing-powered, kept separate"}
+[10:43:42.292] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-016.md","sessionsLen":25,"activeSessionId":"main"}
+[10:43:42.292] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-016.md"}
+[10:43:42.293] [Editor] useLayoutEffect syncing h1 {"planTitle":"Wiki-style Knowledge Base and Documents, parsing-powered, kept separate","currentTextContent":""}
+[10:43:42.309] [AutoSwitch] plan → activating existing session {"itemId":"plan-016","sessionId":"plan-016","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-016","prevSession":"main"}
+[10:43:42.310] [TerminalSwitch] transitioning {"from":"main","to":"plan-016","storeSessionsLen":25}
+[10:43:42.311] [Terminal] getOrCreate → returning cached {"sessionId":"plan-016","cachedCwd":null}
