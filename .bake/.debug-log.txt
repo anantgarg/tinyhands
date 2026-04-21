@@ -1759,3 +1759,28 @@
 [14:15:51.155] [Terminal] getOrCreate → returning cached {"sessionId":"main","cachedCwd":null}
 [14:15:51.155] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"__main__","sessionsLen":27,"activeSessionId":"main"}
 [14:15:51.155] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":false,"activeFilePath":"__main__"}
+[14:19:01.214] [Restore] setProjectPath {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"__main__","activeSessionId":"main","openTabsLen":5}
+[14:19:01.715] [Restore] setTimeout fired — restoring tabs {"sessionsLen":0}
+[14:19:01.718] [Restore] setActiveSessionId (from persistence) {"activeSessionId":"main","prevActive":""}
+[14:19:01.776] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-018.md","isReadOnly":false,"parsedStatus":null,"editorContentLen":0,"isPlanPath":true}
+[14:19:01.779] [TerminalSwitch] transitioning {"from":null,"to":"main","storeSessionsLen":0}
+[14:19:01.779] [Terminal] getOrCreate → creating new {"sessionId":"main","sessionFound":false,"worktreePath":null,"sessionsLen":0,"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[14:19:01.833] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-018.md","sessionsLen":0,"activeSessionId":"main"}
+[14:19:01.833] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-018.md"}
+[14:19:01.833] [AutoSwitch] deferred — sessions not loaded for plan/vibe {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-018.md"}
+[14:19:01.833] [LoadSessions] start {"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[14:19:01.834] [Layout] App mounted {"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[14:19:02.135] [Terminal] resolved cwd {"sessionId":"main","cwd":"/Users/anantgarg/Local/tinyhands","cwdSource":"project-fallback","worktreePath":null,"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[14:19:02.575] [LoadSessions] reconcile returned {"len":27}
+[14:19:02.576] [ApplySessions] setSessions {"incomingLen":27,"prevActive":"main","currentIsValid":true,"willForceMain":false,"planIds":["plan-001","plan-002","plan-003","plan-004","plan-004","plan-004","plan-005","plan-006","plan-007","plan-008"]}
+[14:19:02.576] [LoadSessions] applied reconcile result
+[14:19:02.578] [TerminalSwitch] no-op same session {"activeSessionId":"main"}
+[14:19:02.578] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-018.md","sessionsLen":27,"activeSessionId":"main"}
+[14:19:02.578] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-018.md"}
+[14:19:02.580] [AutoSwitch] plan → activating existing session {"itemId":"plan-018","sessionId":"plan-018","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-018","prevSession":"main"}
+[14:19:02.582] [TerminalSwitch] transitioning {"from":"main","to":"plan-018","storeSessionsLen":27}
+[14:19:02.582] [Terminal] getOrCreate → creating new {"sessionId":"plan-018","sessionFound":true,"sessionType":"plan","sessionPlanId":"plan-018","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-018","sessionsLen":27,"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[14:19:02.899] [Terminal] resolved cwd {"sessionId":"plan-018","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-018","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-018","projectPath":"/Users/anantgarg/Local/tinyhands"}
+[14:19:04.783] [Poll] External change detected {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-018.md","resolvedPath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-018/.bake/tasks/plans/plan-018.md","newTitle":"Stop asking for credentials on built-in tools (Knowledge Base, Documents) and fix runtime tool provisioning","refExists":false}
+[14:19:04.804] [Editor] useLayoutEffect syncing h1 {"planTitle":"Stop asking for credentials on built-in tools (Knowledge Base, Documents) and fix runtime tool provisioning","currentTextContent":""}
+[14:19:04.804] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-018.md","isReadOnly":true,"parsedStatus":"complete","editorContentLen":9495,"isPlanPath":true}

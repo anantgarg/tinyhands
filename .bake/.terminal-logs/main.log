@@ -35850,4 +35850,40 @@ For more details, please visit https://support.apple.com/kb/HT208050.
 ❯ [7m [27m
 [38;2;136;136;136m──────────────────────────────────────────────────────────────────────────[39m
 [2C[38;2;255;107;128m⏵⏵[1Cdon't[1Cask[1Con[38;2;153;153;153m (shift+tab[1Cto[1Ccycle)[18C●[1Chigh[1C·[1C/effort[39m
-[2C[3A
+[2C[3Aclear && claude
+
+The default interactive shell is now zsh.
+To update your account to use zsh, please run `chsh -s /bin/zsh`.
+For more details, please visit https://support.apple.com/kb/HT208050.
+[?1034hMacBook-Pro-4:tinyhands anantgarg$ 
+The default interactive shell is now zsh.
+To update your account to use zsh, please run `chsh -s /bin/zsh`.
+For more details, please visit https://support.apple.com/kb/HT208050.
+[?1034hMacBook-Pro-4:tinyhands anantgarg$ clear && claude
+[3J[H[2J7[r8[?25h[?25l[?2004h[?1004h[?2031h[>0q[?2026$p[c]0;✳ Claude Code[38;2;215;119;87m ▐[48;2;0;0;0m▛███▜[49m▌[3C[39m[1mClaude[1CCode[1C[22m[38;2;153;153;153mv2.1.116[39m
+[38;2;215;119;87m▝▜[48;2;0;0;0m█████[49m▛▘[2C[38;2;153;153;153mOpus[1C4.7[1C(1M[1Ccontext)[1Cwith[1Chigh[1Ceffort[1C·[1CClaude[1CMax[39m
+[38;2;215;119;87m [1C▘▘[1C▝▝[4C[38;2;153;153;153m~/Local/tinyhands[39m
+
+[38;2;136;136;136m──────────────────────────────────────────────────────────────────────────[39m
+❯ clear[1C&&[1Cclaude
+[2Cclear[1C&&[1Cclaude
+[38;2;136;136;136m──────────────────────────────────────────────────────────────────────────[39m
+[2C[38;2;255;107;128m⏵⏵[1Cdon't[1Cask[1Con[38;2;153;153;153m (shift+tab[1Cto[1Ccycle)[13Cctrl+g[1Cto[1Cedit[1Cin[1CVim[39m
+[2J[H[38;2;215;119;87m ▐[48;2;0;0;0m▛███▜[49m▌[3C[39m[1mClaude[1CCode[1C[22m[38;2;153;153;153mv2.1.116[39m
+[38;2;215;119;87m▝▜[48;2;0;0;0m█████[49m▛▘[2C[38;2;153;153;153mOpus[1C4.7[1C(1M[1Ccontext)[1Cwith[1Chigh[1Ceffort[1C·[1CClaude[1CMax[39m
+[38;2;215;119;87m [1C▘▘[1C▝▝[4C[38;2;153;153;153m~/Local/tinyhands[39m
+
+[38;2;136;136;136m─────────────────────────────────────────────────────────────────────────[39m
+❯ clear[1C&&[1Cclaude
+[2Cclear[1C&&[1Cclaude
+[38;2;136;136;136m─────────────────────────────────────────────────────────────────────────[39m
+[2C[38;2;255;107;128m⏵⏵[1Cdon't[1Cask[1Con[38;2;153;153;153m (shift+tab[1Cto[1Ccycle)[12Cctrl+g[1Cto[1Cedit[1Cin[1CVim[39m
+[2J[H[38;2;215;119;87m ▐[48;2;0;0;0m▛███▜[49m▌[3C[39m[1mClaude[1CCode[1C[22m[38;2;153;153;153mv2.1.116[39m
+[38;2;215;119;87m▝▜[48;2;0;0;0m█████[49m▛▘[2C[38;2;153;153;153mOpus[1C4.7[1C(1M[1Ccontext)[1Cwith[1Chigh[1Ceffort[1C·[1CClaude[1CMax[39m
+[38;2;215;119;87m [1C▘▘[1C▝▝[4C[38;2;153;153;153m~/Local/tinyhands[39m
+
+[38;2;136;136;136m──────────────────────────────────────────────────────────────────────────[39m
+❯ clear[1C&&[1Cclaude
+[2Cclear[1C&&[1Cclaude
+[38;2;136;136;136m──────────────────────────────────────────────────────────────────────────[39m
+[2C[38;2;255;107;128m⏵⏵[1Cdon't[1Cask[1Con[38;2;153;153;153m (shift+tab[1Cto[1Ccycle)[13Cctrl+g[1Cto[1Cedit[1Cin[1CVim[39m
