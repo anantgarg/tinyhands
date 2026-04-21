@@ -2,6 +2,17 @@
 
 One entry per deploy to production. Each entry names the version, the date, the merges included since the previous release, and the exact rollback command. Updated automatically by the Deploy button (see `.bake/harness/deploy.md` for the post-deploy step that appends here).
 
+## v1.50.0 — 2026-04-21
+
+Deployed to the production host. plan-015 rolled up (BYO Google OAuth app + KB source sync hardening), and the env-based Google OAuth migration path removed.
+
+- New `workspace_oauth_apps` table (migration 025): per-workspace Google OAuth client credentials, encrypted at rest. Each workspace admin configures their own Google Cloud OAuth client via Settings → Integrations. The platform never holds a Google OAuth identity of its own.
+- External-id tracking for KB entries (migration 026) so sync detects renamed/moved upstream resources without duplicating them.
+- New dashboard pages: `/settings/integrations/google-oauth-app` and `/apps`.
+- Removed `config.oauth.googleClientId` / `googleClientSecret`, `GOOGLE_OAUTH_CLIENT_ID` / `_SECRET` entries in `.env.example`, and the `migrateGoogleOAuthApp` bootstrap function. CometChat's legacy Google OAuth credentials were migrated by hand during this deploy (one-time `setOAuthAppCredentials` call on the droplet).
+
+Rollback: SSH to production, `cd $APP_DIR && git checkout v1.49.1 && NODE_ENV=development npm install && NODE_ENV=development npm run build && NODE_ENV=development npm run build:web && pm2 reload ecosystem.config.js --force`. Migrations 025/026 are additive.
+
 ## v1.49.1 — 2026-04-21
 
 Deployed to the production host. Boot-time cleanup.
