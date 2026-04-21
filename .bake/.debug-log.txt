@@ -1699,3 +1699,6 @@
 [13:31:56.619] [AutoSwitch] bailed — activeFilePath changed during await {"capturedPath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-016.md","currentActiveFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-018.md"}
 [13:31:56.619] [AutoSwitch] plan → already on correct session, no-op {"itemId":"plan-018","activeSessionId":"plan-018"}
 [13:31:56.900] [Terminal] resolved cwd {"sessionId":"plan-018","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-018","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-018","projectPath":"/Users/anantgarg/Local/tinyhands"}
+[13:33:38.613] [Poll] External change detected {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-018.md","resolvedPath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-018/.bake/tasks/plans/plan-018.md","newTitle":"Stop asking for credentials on built-in tools (Knowledge Base, Documents)","currentH1":"New Plan","refExists":true}
+[13:33:38.613] [Poll] Updated h1 DOM {"newTitle":"Stop asking for credentials on built-in tools (Knowledge Base, Documents)"}
+[13:33:38.621] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-018.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":5293,"isPlanPath":true}
