@@ -167,7 +167,7 @@ Target 100% code coverage on new files per CLAUDE.md rule.
 
 ### Step 10 — Release
 
-Minor version bump (`v1.50.0` per current versioning — check `gh release list --limit 1` to confirm). Changelog entry emphasising the CASA-avoidance benefit and what workspace admins need to do (one-time setup). Migration note at top: existing workspace 1 is auto-migrated from env vars; no manual action needed for that one workspace.
+Minor version bump (`v1.50.0` per current versioning — check `gh release list --limit 1` to confirm). Changelog entry emphasising the CASA-avoidance benefit and what workspace admins need to do (one-time setup). Migration note at top: the legacy single-tenant workspace is auto-migrated from env vars; no manual action needed for that one workspace.
 
 ### Step 11 — Post-deploy cleanup (follow-up PR, after workspace 1 is confirmed migrated)
 
