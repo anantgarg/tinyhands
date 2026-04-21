@@ -13,7 +13,7 @@
    - App token (xapp) generated under **Basic Information → App-Level Tokens** with scope `connections:write`
    - Signing secret / Client ID / Client Secret from **Basic Information → App Credentials**
 4. **`.env`** — copy `.env.example` to `.env` and fill in the Slack values above plus:
-   - `ANTHROPIC_API_KEY` — reuse the prod key (CometChat droplet's `/root/tinyjobs/.env`) or a fresh dev key
+   - `ANTHROPIC_API_KEY` — reuse the production key (fetch from the production host's `.env`) or use a fresh dev key
    - `DATABASE_URL=postgresql://localhost:5432/tinyhands_dev`
    - `REDIS_URL=redis://localhost:6379`
    - `ENCRYPTION_KEY` — 32+ chars from `openssl rand -base64 48`
