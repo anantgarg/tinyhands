@@ -53,8 +53,6 @@ beforeEach(() => {
 
 // Google OAuth env-migration was removed in v1.50.0 — each workspace admin
 // configures their own Google Cloud OAuth client via Settings → Integrations.
-// The one-off copy of env GOOGLE_OAUTH_CLIENT_ID into the legacy
-// single-tenant workspace was done by hand during the v1.50.0 deploy.
 
 describe('multi-tenant bootstrap: Anthropic key migration', () => {
   it('copies env ANTHROPIC_API_KEY into workspace_settings on first boot (single-tenant install)', async () => {

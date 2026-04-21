@@ -44,26 +44,37 @@ router.get('/team', requireAdmin, async (req: Request, res: Response) => {
     const { workspaceId } = getSessionUser(req);
     const connections = await listTeamConnections(workspaceId);
 
-    // Build integration name map
+    // Build integration name map + collect auto-configured integration ids so
+    // we can filter them out. Auto-configured integrations (KB, Docs) declare
+    // `supportedCredentialModes: []` — they never need a credential row. Any
+    // rows for them in the connections table are legacy leftovers from before
+    // they were reclassified and shouldn't appear as manageable team
+    // connections in the UI.
     const integrationMap: Record<string, string> = {};
+    const autoConfiguredIds = new Set<string>();
     try {
       const integrations = getIntegrations();
       for (const int of integrations as any[]) {
         integrationMap[int.id] = int.label || int.name || int.id;
+        if (Array.isArray(int.supportedCredentialModes) && int.supportedCredentialModes.length === 0) {
+          autoConfiguredIds.add(int.id);
+        }
       }
     } catch { /* ignore */ }
 
-    res.json((connections as any[]).map((c: any) => ({
-      id: c.id,
-      integrationId: c.integration_id,
-      integrationName: integrationMap[c.integration_id] || c.integration_id || '',
-      displayName: c.label || integrationMap[c.integration_id] || c.integration_id || '',
-      type: 'team',
-      userId: null,
-      userDisplayName: null,
-      status: c.status || 'active',
-      createdAt: c.created_at,
-    })));
+    res.json((connections as any[])
+      .filter((c: any) => !autoConfiguredIds.has(c.integration_id))
+      .map((c: any) => ({
+        id: c.id,
+        integrationId: c.integration_id,
+        integrationName: integrationMap[c.integration_id] || c.integration_id || '',
+        displayName: c.label || integrationMap[c.integration_id] || c.integration_id || '',
+        type: 'team',
+        userId: null,
+        userDisplayName: null,
+        status: c.status || 'active',
+        createdAt: c.created_at,
+      })));
   } catch (err: any) {
     logger.error('List team connections error', { error: err.message });
     res.status(500).json({ error: 'Failed to list team connections' });
