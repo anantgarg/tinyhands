@@ -46,13 +46,13 @@
 ### Delete KB Entry
 `DELETE /entries/:id`
 - **Auth**: Admin only
-- **Response**: `{ ok: true }`
+- **Response**: `{ ok: true }` on success. Returns `404` if the entry doesn't exist, and `409` if the entry has `kb_source_id` set — source-managed entries must be removed in the source folder and re-synced.
 
 ### Update KB Entry
 `PATCH /entries/:id`
 - **Auth**: Admin only
 - **Body**: `{ title?, content?, category? }`
-- **Response**: Updated entry
+- **Response**: Updated entry. Returns `404` if the entry doesn't exist, and `409` if the entry has `kb_source_id` set — source-managed entries are read-only from the dashboard; edit in the source folder and re-sync.
 
 ## KB Sources
 
