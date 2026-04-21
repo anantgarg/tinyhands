@@ -1729,3 +1729,5 @@
 [13:40:30.898] [AutoSwitch] plan → activating existing session {"itemId":"plan-018","sessionId":"plan-018","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-018","prevSession":"plan-016"}
 [13:40:30.899] [TerminalSwitch] transitioning {"from":"plan-016","to":"plan-018","storeSessionsLen":27}
 [13:40:30.899] [Terminal] getOrCreate → returning cached {"sessionId":"plan-018","cachedCwd":null}
+[13:42:09.149] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-018.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":8837,"isPlanPath":true}
+[13:42:09.156] [Editor] editorContent changed externally — reloading body {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-018.md","title":"Stop asking for credentials on built-in tools (Knowledge Base, Documents) and fix runtime tool provisioning"}
