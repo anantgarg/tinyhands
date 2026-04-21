@@ -61,9 +61,11 @@
 |---------|--------|-------------|
 | KB entries | `src/modules/knowledge-base/` | `/kb` command, `GET /api/kb` |
 | Full-text search | `src/modules/knowledge-base/` | tsvector + GIN indexes |
-| KB sources | `src/modules/kb-sources/` | GitHub, Drive, Zendesk, website connectors |
+| KB sources | `src/modules/kb-sources/` | Google Drive shipped; GitHub/Zendesk/Web Crawl/Notion gated "Coming soon" in the wizard |
 | KB setup wizard | `src/modules/kb-wizard/` | Interactive guided setup |
 | Auto-sync | `src/modules/kb-sources/` | Periodic source refresh |
+| Idempotent source sync | `src/modules/knowledge-base/` (`upsertKBEntryByExternalId`, `deleteStaleKBEntries`) | `source_external_id` partial unique index; tombstones entries missing from the latest crawl |
+| Locked synced entries | `src/api/routes/kb.ts`, `web/src/pages/KnowledgeBase.tsx` | PATCH/DELETE `/kb/entries/:id` return 409 when `kb_source_id` is set |
 
 ## Documents
 
