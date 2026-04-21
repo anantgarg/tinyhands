@@ -100,7 +100,7 @@ If a migration itself is the problem, write a new compensating migration and shi
 ```
 ## {version} — {YYYY-MM-DD}
 
-Deployed to DigitalOcean droplet `tinyjobs-prod` (45.55.157.4). Includes:
+Deployed to the production host. Includes:
 - {one-line summary per merge since the previous release}
 - ...
 
