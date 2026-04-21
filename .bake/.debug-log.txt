@@ -1667,3 +1667,10 @@
 [11:13:21.320] [AutoSwitch] plan → activating existing session {"itemId":"plan-016","sessionId":"plan-016","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-016","prevSession":"plan-017"}
 [11:13:21.322] [TerminalSwitch] transitioning {"from":"plan-017","to":"plan-016","storeSessionsLen":26}
 [11:13:21.322] [Terminal] getOrCreate → returning cached {"sessionId":"plan-016","cachedCwd":null}
+[11:14:14.295] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-017.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":4419,"isPlanPath":true}
+[11:14:14.295] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-017.md","title":"Investigate why two agents responded to the same Slack message"}
+[11:14:14.303] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-017.md","sessionsLen":26,"activeSessionId":"plan-016"}
+[11:14:14.303] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-017.md"}
+[11:14:14.311] [AutoSwitch] plan → activating existing session {"itemId":"plan-017","sessionId":"plan-017","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-017","prevSession":"plan-016"}
+[11:14:14.312] [TerminalSwitch] transitioning {"from":"plan-016","to":"plan-017","storeSessionsLen":26}
+[11:14:14.312] [Terminal] getOrCreate → returning cached {"sessionId":"plan-017","cachedCwd":null}
