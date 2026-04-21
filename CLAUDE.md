@@ -104,6 +104,7 @@ PostgreSQL with migrations in `src/db/migrations/`. Key tables:
 - **platform_roles** — Workspace-level roles (superadmin, admin, member)
 - **agent_roles** — Per-agent access levels (owner, member, viewer)
 - **workspace_settings** — Per-workspace configuration
+- **workspace_oauth_apps** — Per-workspace OAuth client credentials (provider = `google` | `notion` | `github`). Client secret is AES-GCM encrypted. The platform never holds a Google OAuth identity of its own — each workspace brings its own Google Cloud project.
 - **upgrade_requests** — Viewer→member upgrade request tracking
 - **connections** — Encrypted tool credentials (team + personal)
 - **agent_tool_connections** — Per-agent tool connection mode config
@@ -201,13 +202,14 @@ capabilities:
 TinyHands is multi-tenant. A single deployment hosts many Slack workspaces side by side, with hard isolation between them.
 
 - **Platform-owned (TinyHands):** Slack app + app-level token + OAuth client, PostgreSQL, Redis, worker/listener/scheduler/sync processes, Docker runner image, deploy infra.
-- **Workspace-owned (admin):** Anthropic API key, tool connections, agents, KB, documents, triggers, memory, audit log.
+- **Workspace-owned (admin):** Anthropic API key, Google (and future Notion/GitHub) OAuth client credentials, tool connections, agents, KB, documents, triggers, memory, audit log.
 
 ### Core modules
 
 - `src/modules/users/` — `users`, `workspace_memberships`, `platform_admins`. Slack-sign-in produces a `users` row; memberships govern which workspaces a user can access.
 - `src/modules/anthropic/` — `getAnthropicApiKey(workspaceId)`, `setAnthropicApiKey`, `testAnthropicApiKey`, `createAnthropicClient(workspaceId)`. Every Anthropic SDK call at runtime must go through `createAnthropicClient` — `new Anthropic()` with a default env key is forbidden and will bleed credentials across tenants.
-- `src/modules/multitenant-migration/` — idempotent startup bootstrap that migrates `ANTHROPIC_API_KEY` from env into workspace 1's encrypted settings and backfills users/memberships from legacy `platform_roles`.
+- `src/modules/workspace-oauth-apps/` — per-workspace OAuth client credentials for third-party providers (Google today; Notion/GitHub reserved). `getOAuthAppCredentials(workspaceId, provider)` is the only way `src/modules/connections/oauth.ts` resolves a client id/secret — the platform no longer holds a Google OAuth identity. `OAuthAppNotConfiguredError` is the typed error upstream callers surface as a "set up your Google OAuth app" prompt.
+- `src/modules/multitenant-migration/` — idempotent startup bootstrap that migrates `ANTHROPIC_API_KEY` and `GOOGLE_OAUTH_CLIENT_ID`/`_SECRET` from env into workspace 1's encrypted settings (single-tenant installs only — multi-tenant deployments skip) and backfills users/memberships from legacy `platform_roles`.
 - `src/utils/oauth-state.ts` — signed `state` encoding/verification for third-party OAuth flows. Every integration must use this so callbacks can safely prove they belong to the originating workspace.
 - `src/utils/logger.ts` — the winston logger now runs a `redactSecrets()` pass before each log line so API keys, bot tokens, and OAuth secrets can never leak to stdout.
 
@@ -310,7 +312,11 @@ ENCRYPTION_KEY   # 32+ chars, used for workspace-scoped credential encryption
 
 `ANTHROPIC_API_KEY` is bootstrap-only: if present on first boot, the multi-tenant migration copies it into workspace 1's encrypted `workspace_settings` and never reads it again. After that, each workspace admin sets their own key via the dashboard (validated via `/settings/anthropic-key/test`).
 
-Optional: `GITHUB_TOKEN`, `PORT` (default 3000), `LOG_LEVEL`, `DOCKER_BASE_IMAGE`, `DAILY_BUDGET_USD`, `AUTO_UPDATE_ENABLED`, `WORKER_CONCURRENCY` (jobs per worker process; default 1), `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `NOTION_OAUTH_CLIENT_ID`, `NOTION_OAUTH_CLIENT_SECRET`, `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`, `OAUTH_REDIRECT_BASE_URL`.
+`GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` are bootstrap-only on the same terms: if present on first boot of a single-tenant deployment, the multi-tenant migration lifts them into workspace 1's `workspace_oauth_apps` row and never reads them again. After that, each workspace admin brings their own Google Cloud project and OAuth client via Settings → Integrations → Google connection app. Multi-tenant deployments never auto-adopt the env vars — each workspace must configure its own app. There is no platform-owned Google OAuth fallback.
+
+Optional: `GITHUB_TOKEN`, `PORT` (default 3000), `LOG_LEVEL`, `DOCKER_BASE_IMAGE`, `DAILY_BUDGET_USD`, `AUTO_UPDATE_ENABLED`, `WORKER_CONCURRENCY` (jobs per worker process; default 1), `NOTION_OAUTH_CLIENT_ID`, `NOTION_OAUTH_CLIENT_SECRET`, `GITHUB_OAUTH_CLIENT_ID`, `GITHUB_OAUTH_CLIENT_SECRET`, `OAUTH_REDIRECT_BASE_URL`.
+
+Bootstrap-only (single-tenant installs): `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET` — see the "Multi-Tenancy" section; runtime never reads these.
 
 ## Development Workflow
 

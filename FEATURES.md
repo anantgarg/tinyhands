@@ -529,6 +529,21 @@ to agent       (denied)
 - API key entry available for any integration. OAuth supported for Google, Notion, and GitHub.
 - One personal connection per integration per user per workspace (upsert on conflict).
 
+### Bring-Your-Own Google OAuth App (workspace-owned OAuth client)
+
+- **Rule:** Google OAuth uses each workspace's own Google Cloud OAuth client credentials. TinyHands never owns a Google OAuth identity or pays for Google's CASA audit on any customer's behalf.
+- **Storage:** `workspace_oauth_apps` table, keyed by `(workspace_id, provider)`. `provider = 'google'` today; schema is provider-agnostic so `'notion'` and `'github'` can slot in later. Client secret is AES-GCM encrypted with the same `ENCRYPTION_KEY` used for connection credentials.
+- **Resolution:** `src/modules/connections/oauth.ts` resolves credentials per workspace via `getOAuthAppCredentials(workspaceId, provider)` on every `getOAuthUrl` and `handleOAuthCallback` call. If no credentials are saved, a typed `OAuthAppNotConfiguredError` is thrown and upstream entry points surface a setup prompt.
+- **Pre-flight gate:**
+  - Dashboard: `GET /api/v1/connections/oauth/:integration/start` returns 409 with `{ needsSetup: true, setupUrl: '/settings/integrations/google' }` when the workspace hasn't configured a Google OAuth app.
+  - Slack: the "Connect personal OAuth" action DMs the user a setup link instead of an OAuth URL when unconfigured.
+  - Dashboard discovery: the setup banner lives on the admin-facing **Tools & Integrations** page (not the user-facing **Connections** page). Connections is user-level and shouldn't surface workspace-admin concerns.
+- **Admin setup:** Settings → Integrations → Google connection app. Two states — setup wizard (create GCP project → enable APIs → consent screen → OAuth client → paste credentials) or configured (masked client id, Test connection, Replace credentials, Remove).
+- **Workspace isolation:** each workspace's OAuth URL includes its own client id; cross-workspace creds never leak. Enforced at the DB primary key level and verified in `tests/integration/oauth-byo.test.ts`.
+- **Bootstrap:** single-tenant installs that set `GOOGLE_OAUTH_CLIENT_ID` / `_SECRET` in env get their workspace 1 row seeded from those env vars on first boot, once. Multi-tenant deployments never auto-adopt the env vars. After the first successful migration, env vars become dead weight; runtime never reads them.
+- **No platform fallback:** workspaces without a configured Google OAuth app cannot initiate any Google OAuth flow. There is no platform-owned app to fall back to.
+- **Publishing mode:** the dashboard strongly recommends **Internal** (Workspace-scoped) because it skips Google verification entirely, has no user cap, and supports restricted scopes (full Drive, full Gmail) without an audit.
+
 ### Connection Modes: Team, Delegated, Runtime
 
 Stored in `agent_tool_connections` table (unique per `agent_id` + `tool_name`):

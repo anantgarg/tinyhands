@@ -3,14 +3,21 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 // ── Mocks ──
 
 const mockCreateKBEntry = vi.fn().mockResolvedValue({ id: 'kb-entry-1' });
+const mockUpsertKBEntryByExternalId = vi.fn().mockResolvedValue({ entry: { id: 'kb-entry-1' }, created: true });
+const mockDeleteStaleKBEntries = vi.fn().mockResolvedValue(0);
 const mockGetApiKey = vi.fn();
 const mockUpdateSource = vi.fn().mockResolvedValue(undefined);
 const mockUpdateSourceStatus = vi.fn().mockResolvedValue(undefined);
 const mockGetProviderForConnector = vi.fn();
 const mockNormalizeConnectorType = vi.fn((type: string) => type);
+const mockGetAnyPersonalConnection = vi.fn();
+const mockDecryptCredentials = vi.fn();
+const mockRefreshGoogleAccessToken = vi.fn();
 
 vi.mock('../../src/modules/knowledge-base', () => ({
   createKBEntry: (...args: any[]) => mockCreateKBEntry(...args),
+  upsertKBEntryByExternalId: (...args: any[]) => mockUpsertKBEntryByExternalId(...args),
+  deleteStaleKBEntries: (...args: any[]) => mockDeleteStaleKBEntries(...args),
 }));
 
 vi.mock('../../src/modules/kb-sources/index', () => ({
@@ -22,6 +29,16 @@ vi.mock('../../src/modules/kb-sources/index', () => ({
 vi.mock('../../src/modules/kb-sources/connectors', () => ({
   getProviderForConnector: (...args: any[]) => mockGetProviderForConnector(...args),
   normalizeConnectorType: (...args: any[]) => mockNormalizeConnectorType(...args),
+}));
+
+// syncGoogleDrive resolves credentials via dynamic imports; mock those paths.
+vi.mock('../../src/modules/connections', () => ({
+  getAnyPersonalConnection: (...args: any[]) => mockGetAnyPersonalConnection(...args),
+  decryptCredentials: (...args: any[]) => mockDecryptCredentials(...args),
+}));
+
+vi.mock('../../src/modules/connections/oauth', () => ({
+  refreshGoogleAccessToken: (...args: any[]) => mockRefreshGoogleAccessToken(...args),
 }));
 
 vi.mock('../../src/utils/logger', () => ({
@@ -149,6 +166,49 @@ function setupProviderCredentials(provider: string, creds: Record<string, string
     created_at: '2025-01-01T00:00:00Z',
     updated_at: '2025-01-01T00:00:00Z',
   });
+
+  // syncGoogleDrive now resolves credentials via the workspace's Google Drive
+  // connection (personal OAuth), not kb_api_keys. Wire the connection mocks
+  // and make refreshGoogleAccessToken consume the first setupHttpsMock
+  // response — that lets legacy tests keep their token-refresh mock at the
+  // head of the response array without code changes.
+  if (provider === 'google') {
+    mockGetAnyPersonalConnection.mockResolvedValue({
+      id: 'conn-1',
+      workspace_id: 'W_TEST_123',
+      integration_id: 'google-drive',
+      connection_type: 'personal',
+      user_id: 'admin-1',
+      encrypted_credentials: 'x',
+      iv: 'x',
+      status: 'active',
+      created_at: '2025-01-01T00:00:00Z',
+      updated_at: '2025-01-01T00:00:00Z',
+    });
+    mockDecryptCredentials.mockReturnValue({ refresh_token: creds.refresh_token || 'refresh' });
+    mockRefreshGoogleAccessToken.mockImplementation(() => {
+      return new Promise<string>((resolve, reject) => {
+        const req = mockHttpsRequest({}, (res: any) => {
+          let buf = '';
+          res.on('data', (chunk: string) => { buf += chunk; });
+          res.on('end', () => {
+            if (res.statusCode >= 400) {
+              reject(new Error('Google OAuth refresh failed: ' + buf));
+              return;
+            }
+            try {
+              const parsed = JSON.parse(buf);
+              if (parsed.access_token) resolve(parsed.access_token);
+              else reject(new Error('Google OAuth refresh failed: no access_token'));
+            } catch (err: any) {
+              reject(new Error('Google OAuth refresh failed: ' + err.message));
+            }
+          });
+        });
+        req.end();
+      });
+    });
+  }
 }
 
 // ── Tests ──
@@ -994,11 +1054,12 @@ describe('KB Source Sync Handlers', () => {
 
       const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(1);
-      expect(mockCreateKBEntry).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
+      expect(mockUpsertKBEntryByExternalId).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
         title: 'My Document',
         content: 'This is the document content',
         category: 'google-drive',
         sourceType: 'google_drive',
+        sourceExternalId: 'file1',
       }));
     });
 
@@ -1030,7 +1091,7 @@ describe('KB Source Sync Handlers', () => {
 
       const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(0);
-      expect(mockCreateKBEntry).not.toHaveBeenCalled();
+      expect(mockUpsertKBEntryByExternalId).not.toHaveBeenCalled();
     });
 
     it('should skip files with empty content after export', async () => {
@@ -2573,9 +2634,10 @@ describe('KB Source Sync Handlers', () => {
 
       const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(1);
-      expect(mockCreateKBEntry).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
+      expect(mockUpsertKBEntryByExternalId).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
         title: 'My Spreadsheet',
         content: 'Name,Age\nAlice,30\nBob,25',
+        sourceExternalId: 'sheet1',
       }));
     });
 
@@ -2611,9 +2673,10 @@ describe('KB Source Sync Handlers', () => {
 
       const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(1);
-      expect(mockCreateKBEntry).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
+      expect(mockUpsertKBEntryByExternalId).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
         title: 'My Presentation',
         content: 'Slide 1: Introduction\nSlide 2: Details',
+        sourceExternalId: 'slide1',
       }));
     });
 
@@ -2649,9 +2712,10 @@ describe('KB Source Sync Handlers', () => {
 
       const result = await syncSource(TEST_WORKSPACE_ID, source);
       expect(result).toBe(1);
-      expect(mockCreateKBEntry).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
+      expect(mockUpsertKBEntryByExternalId).toHaveBeenCalledWith(TEST_WORKSPACE_ID, expect.objectContaining({
         title: 'notes.txt',
         content: 'Plain text content of the file',
+        sourceExternalId: 'txt1',
       }));
     });
 
@@ -2834,9 +2898,9 @@ describe('KB Source Sync Handlers', () => {
         { status: 200, body: 'Doc 2 content' },
       ]);
 
-      mockCreateKBEntry
+      mockUpsertKBEntryByExternalId
         .mockRejectedValueOnce(new Error('DB insert error'))
-        .mockResolvedValueOnce({ id: 'kb-2' });
+        .mockResolvedValueOnce({ entry: { id: 'kb-2' }, created: true });
 
       const source = makeFakeSource({
         source_type: 'google_drive',

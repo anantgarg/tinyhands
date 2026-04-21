@@ -23,11 +23,13 @@ router.get('/stats', async (req: Request, res: Response) => {
     const [pendingRow] = await query('SELECT count(*)::int as count FROM kb_entries WHERE workspace_id = $1 AND approved = false', [workspaceId]);
     const [catRow] = await query('SELECT count(DISTINCT category)::int as count FROM kb_entries WHERE workspace_id = $1 AND category IS NOT NULL', [workspaceId]);
     const [srcRow] = await query('SELECT count(*)::int as count FROM kb_sources WHERE workspace_id = $1', [workspaceId]);
+    const [manualRow] = await query('SELECT count(*)::int as count FROM kb_entries WHERE workspace_id = $1 AND kb_source_id IS NULL', [workspaceId]);
     res.json({
       totalEntries: totalRow?.count ?? 0,
       pendingEntries: pendingRow?.count ?? 0,
       categories: catRow?.count ?? 0,
       sourcesCount: srcRow?.count ?? 0,
+      manualEntries: manualRow?.count ?? 0,
     });
   } catch (err: any) {
     logger.error('KB stats error', { error: err.message });
@@ -170,6 +172,12 @@ router.delete('/entries/:id', requireAdmin, async (req: Request, res: Response) 
   try {
     const { workspaceId } = getSessionUser(req);
     const id = req.params.id as string;
+    const existing = await getKBEntry(workspaceId, id);
+    if (!existing) { res.status(404).json({ error: 'Entry not found' }); return; }
+    if (existing.kb_source_id) {
+      res.status(409).json({ error: 'This entry is managed by a connected source and can\'t be deleted here. Remove it in the source folder and re-sync.' });
+      return;
+    }
     await deleteKBEntry(workspaceId, id);
     res.json({ ok: true });
   } catch (err: any) {
@@ -183,6 +191,12 @@ router.patch('/entries/:id', requireAdmin, async (req: Request, res: Response) =
   try {
     const { workspaceId } = getSessionUser(req);
     const id = req.params.id as string;
+    const existing = await getKBEntry(workspaceId, id);
+    if (!existing) { res.status(404).json({ error: 'Entry not found' }); return; }
+    if (existing.kb_source_id) {
+      res.status(409).json({ error: 'This entry is managed by a connected source and can\'t be edited here. Edit it in the source folder and re-sync.' });
+      return;
+    }
     const { title, content, category } = req.body;
     const sets: string[] = [];
     const vals: any[] = [];
@@ -254,9 +268,14 @@ router.patch('/sources/:id', requireAdmin, async (req: Request, res: Response) =
   try {
     const { workspaceId } = getSessionUser(req);
     const id = req.params.id as string;
-    const { config, ...rest } = req.body;
+    const { config, autoSync, syncIntervalHours, ...rest } = req.body;
     const updates: any = { ...rest };
     if (config) updates.config_json = JSON.stringify(config);
+    if (autoSync !== undefined) updates.auto_sync = autoSync === true || autoSync === 'true';
+    if (syncIntervalHours !== undefined) {
+      const h = Number(syncIntervalHours);
+      if (Number.isFinite(h) && h > 0) updates.sync_interval_hours = Math.round(h);
+    }
     await updateSource(workspaceId, id, updates);
     res.json({ ok: true });
   } catch (err: any) {
@@ -364,7 +383,7 @@ router.get('/drive-folders', requireAdmin, async (req: Request, res: Response) =
     if (!conn) conn = await getPersonalConnection(workspaceId, 'google_drive', userId);
 
     if (!conn) {
-      res.status(400).json({ error: 'Google account not connected. Connect via Connections page first.' });
+      res.status(400).json({ error: 'Connect your Google account in Tools → Personal first, then try again.' });
       return;
     }
 
@@ -382,6 +401,59 @@ router.get('/drive-folders', requireAdmin, async (req: Request, res: Response) =
   } catch (err: any) {
     logger.error('Drive folders error', { error: err.message });
     res.status(500).json({ error: "Couldn't load Drive folders. Please try again." });
+  }
+});
+
+// GET /kb/drive-folder-name/:id — look up a Google Drive folder's display name
+// via the caller's personal Google connection (used to backfill folderName
+// for sources created before we saved it alongside folderId).
+router.get('/drive-folder-name/:id', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { workspaceId, userId } = getSessionUser(req);
+    const folderId = req.params.id as string;
+
+    const { getPersonalConnection, decryptCredentials } = await import('../../modules/connections');
+    let conn = await getPersonalConnection(workspaceId, 'google-drive', userId);
+    if (!conn) conn = await getPersonalConnection(workspaceId, 'google', userId);
+    if (!conn) {
+      res.status(400).json({ error: 'Connect your Google account in Tools → Personal first.' });
+      return;
+    }
+    const creds = decryptCredentials(conn);
+    const token = creds?.access_token;
+    if (!token) {
+      res.status(400).json({ error: 'Google access token not found' });
+      return;
+    }
+
+    const nodeHttps = require('https');
+    const name: string = await new Promise((resolve, reject) => {
+      const req2 = nodeHttps.request({
+        hostname: 'www.googleapis.com',
+        path: `/drive/v3/files/${encodeURIComponent(folderId)}?fields=name`,
+        method: 'GET',
+        headers: { Authorization: `Bearer ${token}` },
+      }, (r: any) => {
+        let data = '';
+        r.on('data', (c: Buffer) => { data += c.toString(); });
+        r.on('end', () => {
+          try {
+            const parsed = JSON.parse(data);
+            resolve(parsed?.name || '');
+          } catch {
+            resolve('');
+          }
+        });
+      });
+      req2.on('error', reject);
+      req2.setTimeout(10000, () => { req2.destroy(); reject(new Error('timeout')); });
+      req2.end();
+    });
+
+    res.json({ id: folderId, name });
+  } catch (err: any) {
+    logger.error('Drive folder name lookup error', { error: err.message });
+    res.status(500).json({ error: "Couldn't look up the folder." });
   }
 });
 

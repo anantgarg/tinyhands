@@ -136,6 +136,28 @@ export async function getPersonalConnection(wsId: string, integrationId: string,
   return row || null;
 }
 
+/**
+ * Find any active personal connection in the workspace for the given integration.
+ * Used by workspace-level subsystems (e.g. KB sync) that need a Google identity
+ * but aren't acting on behalf of a specific user — the admin who created the
+ * source is a reasonable stand-in, but any active admin's connection works too.
+ */
+export async function getAnyPersonalConnection(
+  wsId: string,
+  integrationId: string,
+  preferredUserId?: string,
+): Promise<Connection | null> {
+  if (preferredUserId) {
+    const preferred = await getPersonalConnection(wsId, integrationId, preferredUserId);
+    if (preferred) return preferred;
+  }
+  const row = await queryOne<Connection>(
+    "SELECT * FROM connections WHERE workspace_id = $1 AND integration_id = $2 AND connection_type = 'personal' AND status = 'active' ORDER BY created_at DESC LIMIT 1",
+    [wsId, integrationId]
+  );
+  return row || null;
+}
+
 export async function getUserConnections(wsId: string, userId: string): Promise<Connection[]> {
   return query<Connection>(
     "SELECT * FROM connections WHERE workspace_id = $1 AND (user_id = $2 OR connection_type = 'team') AND status = 'active' ORDER BY created_at DESC",
@@ -143,11 +165,37 @@ export async function getUserConnections(wsId: string, userId: string): Promise<
   );
 }
 
+const GOOGLE_INTEGRATION_IDS = new Set(['gmail', 'google-drive', 'google-sheets', 'google-docs']);
+
 export async function deleteConnection(wsId: string, id: string): Promise<void> {
-  await execute(
-    "UPDATE connections SET status = 'revoked', updated_at = NOW() WHERE workspace_id = $1 AND id = $2",
+  // Look up the row to check for Google fan-out before revoking.
+  const target = await queryOne<Connection>(
+    'SELECT * FROM connections WHERE workspace_id = $1 AND id = $2',
     [wsId, id]
   );
+
+  // Google connections are created as 4 sibling rows from one OAuth consent
+  // (see src/modules/connections/oauth.ts handleOAuthCallback). Disconnecting
+  // any one of them revokes the whole set — the underlying Google token is
+  // shared, so keeping other rows "active" would be a lie.
+  const shouldCascade = target
+    && target.connection_type === 'personal'
+    && GOOGLE_INTEGRATION_IDS.has(target.integration_id)
+    && target.user_id;
+
+  if (shouldCascade) {
+    await execute(
+      `UPDATE connections SET status = 'revoked', updated_at = NOW()
+       WHERE workspace_id = $1 AND connection_type = 'personal' AND user_id = $2
+         AND integration_id = ANY($3)`,
+      [wsId, target!.user_id, Array.from(GOOGLE_INTEGRATION_IDS)]
+    );
+  } else {
+    await execute(
+      "UPDATE connections SET status = 'revoked', updated_at = NOW() WHERE workspace_id = $1 AND id = $2",
+      [wsId, id]
+    );
+  }
 
   // Fire-and-forget audit
   try {
@@ -158,10 +206,11 @@ export async function deleteConnection(wsId: string, id: string): Promise<void> 
       actorRole: 'system',
       actionType: 'connection_deleted',
       connectionId: id,
+      details: shouldCascade ? { cascadedGoogleSiblings: true } : undefined,
     });
   } catch { /* best-effort */ }
 
-  logger.info('Connection deleted (soft)', { wsId, id });
+  logger.info('Connection deleted (soft)', { wsId, id, cascadedGoogleSiblings: !!shouldCascade });
 }
 
 const MIGRATION_MARKER = 'NEEDS_RE_ENCRYPTION:';
@@ -186,7 +235,7 @@ async function refreshIfGoogleOAuth(
   if (!isGoogleIntegration(conn.integration_id)) return credentials;
 
   try {
-    const freshAccessToken = await refreshGoogleAccessToken(credentials.refresh_token);
+    const freshAccessToken = await refreshGoogleAccessToken(conn.workspace_id, credentials.refresh_token);
     credentials.access_token = freshAccessToken;
 
     // Update stored credentials with fresh token (best-effort, don't block on failure)
@@ -342,6 +391,28 @@ export async function resolveToolCredentials(
     const creds = decryptCredentials(conn);
     return refreshIfGoogleOAuth(creds, conn);
   }
+
+  // Auto-configured integrations (KB, Documents) have no user-supplied
+  // credentials — their config lives directly in custom_tools.config_json.
+  // Skip connection resolution and surface that config.
+  try {
+    const { getIntegration } = require('../tools/integrations');
+    const manifest = getIntegration(integrationId);
+    if (manifest && (!manifest.configKeys || manifest.configKeys.length === 0)) {
+      const row = await queryOne<{ config_json: string }>(
+        'SELECT config_json FROM custom_tools WHERE name = $1 AND workspace_id = $2',
+        [toolName, wsId],
+      );
+      if (row?.config_json) {
+        try {
+          return JSON.parse(row.config_json);
+        } catch {
+          return {};
+        }
+      }
+      return {};
+    }
+  } catch { /* fall through to connection-based resolution */ }
 
   if (atc) {
     switch (atc.connection_mode) {

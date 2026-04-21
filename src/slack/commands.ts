@@ -1233,10 +1233,37 @@ export function registerInlineActions(app: App): void {
     const channelId = (body as any).channel?.id;
 
     try {
-      const { getOAuthUrl } = await import('../modules/connections/oauth');
-      const { url } = await getOAuthUrl(integrationId, workspaceId, userId, channelId);
+      const { getOAuthUrl, getProviderForIntegration, OAuthAppNotConfiguredError } =
+        await import('../modules/connections/oauth');
+      const { hasOAuthAppConfigured } = await import('../modules/workspace-oauth-apps');
+      const provider = getProviderForIntegration(integrationId);
       const manifest = getIntegration(integrationId);
       const label = manifest?.label || integrationId;
+
+      // Pre-flight gate: guide unconfigured workspaces to the setup page
+      // instead of trying to build an OAuth URL we can't sign.
+      if (provider) {
+        const configured = await hasOAuthAppConfigured(workspaceId, provider);
+        if (!configured) {
+          const dashboardBase = config.server.webDashboardUrl || config.oauth.redirectBaseUrl || `http://localhost:${config.server.port}`;
+          const setupUrl = `${dashboardBase}/settings/integrations/${provider}`;
+          await sendDMBlocks(userId, [
+            { type: 'section', text: { type: 'mrkdwn', text: `:gear: *Set up ${label} first*\n\nYour workspace hasn't connected a ${label} OAuth app yet. An admin needs to configure one before anyone can authorize ${label}.` } },
+            {
+              type: 'actions',
+              elements: [{
+                type: 'button',
+                text: { type: 'plain_text', text: 'Open setup page' },
+                url: setupUrl,
+                action_id: 'open_oauth_setup',
+              }],
+            },
+          ], `Set up ${label}`);
+          return;
+        }
+      }
+
+      const { url } = await getOAuthUrl(integrationId, workspaceId, userId, channelId);
 
       await sendDMBlocks(userId, [
         { type: 'section', text: { type: 'mrkdwn', text: `:link: *Connect your ${label} account*\n\nClick the button below to authorize access.` } },
@@ -1251,8 +1278,12 @@ export function registerInlineActions(app: App): void {
         },
       ], `Connect ${integrationId}`);
     } catch (err: any) {
+      const isNotConfigured = err && err.name === 'OAuthAppNotConfiguredError';
+      const message = isNotConfigured
+        ? `:gear: Your workspace hasn't set up this OAuth app yet. An admin needs to configure it in the dashboard.`
+        : ':x: Couldn\'t start the connection process. Please try again.';
       await sendDMBlocks(userId, [
-        { type: 'section', text: { type: 'mrkdwn', text: ':x: Couldn\'t start the connection process. Please try again.' } },
+        { type: 'section', text: { type: 'mrkdwn', text: message } },
       ], 'OAuth error');
     }
   });
@@ -2563,7 +2594,7 @@ async function buildCredentialSelectionBlocks(
   try {
     const { getTeamConnection, getPersonalConnection } = await import('../modules/connections');
     const { getSupportedOAuthIntegrations } = await import('../modules/connections/oauth');
-    const oauthIntegrations = getSupportedOAuthIntegrations();
+    const oauthIntegrations = await getSupportedOAuthIntegrations(workspaceId);
 
     // Group tools by integration
     const integrationTools = new Map<string, string[]>();

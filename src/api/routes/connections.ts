@@ -9,7 +9,16 @@ import {
   getToolAgentUsage,
 } from '../../modules/connections';
 import { getIntegrations } from '../../modules/tools/integrations';
-import { getSupportedOAuthIntegrations } from '../../modules/connections/oauth';
+import { getSupportedOAuthIntegrations, OAuthAppNotConfiguredError, getProviderForIntegration } from '../../modules/connections/oauth';
+import {
+  hasOAuthAppConfigured,
+  getOAuthAppSummary,
+  setOAuthAppCredentials,
+  clearOAuthAppCredentials,
+  testOAuthAppCredentials,
+  SUPPORTED_PROVIDERS,
+} from '../../modules/workspace-oauth-apps';
+import type { OAuthAppProvider, OAuthAppPublishingStatus } from '../../types';
 import { resolveUserNames } from '../helpers/user-resolver';
 import { query, execute } from '../../db';
 import { logger } from '../../utils/logger';
@@ -17,13 +26,17 @@ import { config } from '../../config';
 
 const router = Router();
 
-/** Lazily resolved list of OAuth-capable integration IDs */
-let _oauthIds: string[] | null = null;
-function getOAuthIds(): string[] {
-  if (!_oauthIds) _oauthIds = getSupportedOAuthIntegrations();
-  return _oauthIds;
-}
-const oauthIds = { includes: (id: string) => getOAuthIds().includes(id) };
+/**
+ * The set of OAuth-capable integrations is static metadata (the protocol is
+ * the same for everyone). What _varies per workspace_ is whether credentials
+ * have been configured for each provider — checked via `hasOAuthAppConfigured`
+ * at the entry points, not here.
+ */
+const OAUTH_CAPABLE_IDS = new Set([
+  'google', 'google_drive', 'google-drive', 'google-sheets', 'google-docs', 'gmail',
+  'notion', 'github',
+]);
+const oauthIds = { includes: (id: string) => OAUTH_CAPABLE_IDS.has(id) };
 
 // GET /connections/team — List team connections (admin-only)
 router.get('/team', requireAdmin, async (req: Request, res: Response) => {
@@ -354,23 +367,51 @@ router.put('/agent/:agentId/:toolName', async (req: Request, res: Response) => {
   }
 });
 
-// GET /connections/oauth/:integration/start — Start OAuth flow (redirects to provider)
+// GET /connections/oauth/:integration/start — Start OAuth flow (redirects to provider).
+// Pre-flight gate: if the workspace has no OAuth app configured for this
+// provider, surface the setup prompt instead of a generic failure.
 router.get('/oauth/:integration/start', async (req: Request, res: Response) => {
   try {
     const { workspaceId, userId } = getSessionUser(req);
     const integration = req.params.integration as string;
+    const provider = getProviderForIntegration(integration);
+    if (provider) {
+      const configured = await hasOAuthAppConfigured(workspaceId, provider);
+      if (!configured) {
+        res.status(409).json({
+          needsSetup: true,
+          provider,
+          setupUrl: `/settings/integrations/${provider}`,
+          message: `Your workspace hasn't set up a ${provider} OAuth app yet. An admin needs to configure one in Settings → Integrations.`,
+        });
+        return;
+      }
+    }
     const { getOAuthUrl } = await import('../../modules/connections/oauth');
     const { url } = await getOAuthUrl(integration, workspaceId, userId);
     res.redirect(url);
   } catch (err: any) {
+    if (err instanceof OAuthAppNotConfiguredError) {
+      res.status(409).json({
+        needsSetup: true,
+        provider: err.provider,
+        setupUrl: `/settings/integrations/${err.provider}`,
+        message: err.message,
+      });
+      return;
+    }
     logger.error('OAuth start error', { error: err.message });
     res.status(400).json({ error: "Couldn't start the connection process. Please try again." });
   }
 });
 
-// GET /connections/oauth-integrations — List OAuth-capable integrations
-router.get('/oauth-integrations', async (_req: Request, res: Response) => {
+// GET /connections/oauth-integrations — List OAuth-capable integrations.
+// The `oauthSupported` flag narrows to integrations the workspace has actually
+// configured an OAuth app for (i.e. has creds in `workspace_oauth_apps`).
+router.get('/oauth-integrations', async (req: Request, res: Response) => {
   try {
+    const { workspaceId } = getSessionUser(req);
+    const supported = new Set(await getSupportedOAuthIntegrations(workspaceId));
     let result: any[] = [];
     try {
       const integrations = getIntegrations();
@@ -381,7 +422,7 @@ router.get('/oauth-integrations', async (_req: Request, res: Response) => {
           name: int.id,
           displayName: int.label || int.id,
           description: int.description || '',
-          oauthSupported: oauthIds.includes(int.id),
+          oauthSupported: supported.has(int.id),
         }));
     } catch { /* ignore */ }
     res.json(result);
@@ -506,6 +547,122 @@ router.get('/expired-count', async (req: Request, res: Response) => {
     res.json({ count: parseInt(result?.count || '0', 10) });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ── Workspace-owned OAuth apps (Google, Notion, GitHub) ──
+// Each workspace brings its own OAuth client credentials. The platform is
+// transport only — it never holds a Google OAuth identity of its own.
+
+function parseProvider(raw: string): OAuthAppProvider | null {
+  return (SUPPORTED_PROVIDERS as readonly string[]).includes(raw)
+    ? (raw as OAuthAppProvider)
+    : null;
+}
+
+function parsePublishingStatus(raw: unknown): OAuthAppPublishingStatus | null {
+  if (raw === 'internal' || raw === 'external_testing' || raw === 'external_production') return raw;
+  return null;
+}
+
+// GET /connections/workspace-oauth-apps/:provider — status + masked client id
+router.get('/workspace-oauth-apps/:provider', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { workspaceId } = getSessionUser(req);
+    const provider = parseProvider(req.params.provider as string);
+    if (!provider) {
+      res.status(400).json({ error: 'Unsupported provider' });
+      return;
+    }
+    const summary = await getOAuthAppSummary(workspaceId, provider);
+    if (!summary) {
+      res.json({
+        configured: false,
+        provider,
+        redirectUri: `${config.oauth.redirectBaseUrl}/auth/callback/${provider}`,
+      });
+      return;
+    }
+    res.json({
+      configured: true,
+      provider,
+      clientIdMasked: summary.clientIdMasked,
+      publishingStatus: summary.publishingStatus,
+      configuredAt: summary.configuredAt,
+      updatedAt: summary.updatedAt,
+      redirectUri: `${config.oauth.redirectBaseUrl}/auth/callback/${provider}`,
+    });
+  } catch (err: any) {
+    logger.error('Get workspace OAuth app error', { error: err.message });
+    res.status(500).json({ error: 'Failed to read OAuth app config' });
+  }
+});
+
+// PUT /connections/workspace-oauth-apps/:provider — save or replace credentials
+router.put('/workspace-oauth-apps/:provider', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { workspaceId, userId } = getSessionUser(req);
+    const provider = parseProvider(req.params.provider as string);
+    if (!provider) {
+      res.status(400).json({ error: 'Unsupported provider' });
+      return;
+    }
+    const { clientId, clientSecret, publishingStatus } = req.body || {};
+    if (typeof clientId !== 'string' || typeof clientSecret !== 'string') {
+      res.status(400).json({ error: 'clientId and clientSecret are required' });
+      return;
+    }
+    const summary = await setOAuthAppCredentials(workspaceId, provider, {
+      clientId,
+      clientSecret,
+      publishingStatus: parsePublishingStatus(publishingStatus),
+      userId: userId || null,
+    });
+    res.json({
+      configured: true,
+      provider,
+      clientIdMasked: summary.clientIdMasked,
+      publishingStatus: summary.publishingStatus,
+      configuredAt: summary.configuredAt,
+      updatedAt: summary.updatedAt,
+    });
+  } catch (err: any) {
+    logger.error('Save workspace OAuth app error', { error: err.message });
+    res.status(400).json({ error: err.message || 'Failed to save OAuth app' });
+  }
+});
+
+// DELETE /connections/workspace-oauth-apps/:provider — remove credentials
+router.delete('/workspace-oauth-apps/:provider', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { workspaceId } = getSessionUser(req);
+    const provider = parseProvider(req.params.provider as string);
+    if (!provider) {
+      res.status(400).json({ error: 'Unsupported provider' });
+      return;
+    }
+    await clearOAuthAppCredentials(workspaceId, provider);
+    res.json({ ok: true });
+  } catch (err: any) {
+    logger.error('Delete workspace OAuth app error', { error: err.message });
+    res.status(500).json({ error: 'Failed to remove OAuth app' });
+  }
+});
+
+// POST /connections/workspace-oauth-apps/:provider/test — preflight check
+router.post('/workspace-oauth-apps/:provider/test', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { workspaceId } = getSessionUser(req);
+    const provider = parseProvider(req.params.provider as string);
+    if (!provider) {
+      res.status(400).json({ error: 'Unsupported provider' });
+      return;
+    }
+    const result = await testOAuthAppCredentials(workspaceId, provider);
+    res.json(result);
+  } catch (err: any) {
+    logger.error('Test workspace OAuth app error', { error: err.message });
+    res.status(500).json({ error: 'Failed to test OAuth app' });
   }
 });
 

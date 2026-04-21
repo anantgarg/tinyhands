@@ -28,7 +28,7 @@ export async function checkConnectionHealth(workspaceId: string): Promise<void> 
       if (isGoogleIntegration(conn.integration_id) && credentials.refresh_token) {
         // Google: attempt token refresh
         try {
-          const freshToken = await refreshGoogleAccessToken(credentials.refresh_token);
+          const freshToken = await refreshGoogleAccessToken(conn.workspace_id, credentials.refresh_token);
           credentials.access_token = freshToken;
           const { encrypted, iv } = encrypt(JSON.stringify(credentials));
           await execute(

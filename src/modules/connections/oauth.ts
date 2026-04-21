@@ -3,22 +3,35 @@ import https from 'https';
 import { queryOne, execute } from '../../db';
 import { config } from '../../config';
 import { createPersonalConnection } from './index';
-import type { OAuthState } from '../../types';
+import type { OAuthState, OAuthAppProvider } from '../../types';
 import { logger } from '../../utils/logger';
+import {
+  getOAuthAppCredentials,
+  listConfiguredProviders,
+  OAuthAppNotConfiguredError,
+} from '../workspace-oauth-apps';
+
+// ── Re-export the typed error so callers don't need a second import path ──
+export { OAuthAppNotConfiguredError };
 
 // ── Supported OAuth Integrations ──
+//
+// Per-integration metadata (URLs, scopes, which provider bucket the integration
+// maps to). Client credentials are no longer stored here — they are resolved
+// from `workspace_oauth_apps` at the time of `getOAuthUrl` / `handleOAuthCallback`
+// via `getOAuthAppCredentials(workspaceId, provider)`.
 
 interface OAuthIntegrationConfig {
   id: string;
+  provider: OAuthAppProvider;
   authUrl: string;
   tokenUrl: string;
   scopes: string[];
-  clientId: () => string;
-  clientSecret: () => string;
 }
 
 // Shared Google OAuth config — all Google integrations use the same credentials & scopes
 const GOOGLE_OAUTH: Omit<OAuthIntegrationConfig, 'id'> = {
+  provider: 'google',
   authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
   tokenUrl: 'https://oauth2.googleapis.com/token',
   scopes: [
@@ -27,8 +40,6 @@ const GOOGLE_OAUTH: Omit<OAuthIntegrationConfig, 'id'> = {
     'https://www.googleapis.com/auth/documents',
     'https://mail.google.com/',
   ],
-  clientId: () => config.oauth.googleClientId,
-  clientSecret: () => config.oauth.googleClientSecret,
 };
 
 const OAUTH_INTEGRATIONS: Record<string, OAuthIntegrationConfig> = {
@@ -40,26 +51,44 @@ const OAUTH_INTEGRATIONS: Record<string, OAuthIntegrationConfig> = {
   gmail:           { id: 'gmail', ...GOOGLE_OAUTH },
   notion: {
     id: 'notion',
+    provider: 'notion',
     authUrl: 'https://api.notion.com/v1/oauth/authorize',
     tokenUrl: 'https://api.notion.com/v1/oauth/token',
     scopes: [],
-    clientId: () => config.oauth.notionClientId,
-    clientSecret: () => config.oauth.notionClientSecret,
   },
   github: {
     id: 'github',
+    provider: 'github',
     authUrl: 'https://github.com/login/oauth/authorize',
     tokenUrl: 'https://github.com/login/oauth/access_token',
     scopes: ['repo', 'read:org'],
-    clientId: () => config.oauth.githubClientId,
-    clientSecret: () => config.oauth.githubClientSecret,
   },
 };
 
-export function getSupportedOAuthIntegrations(): string[] {
-  return Object.keys(OAUTH_INTEGRATIONS).filter(id => {
+const GOOGLE_INTEGRATION_IDS = new Set(['google', 'google_drive', 'google-drive', 'google-sheets', 'google-docs', 'gmail']);
+
+export function isGoogleIntegration(integrationId: string): boolean {
+  return GOOGLE_INTEGRATION_IDS.has(integrationId);
+}
+
+/**
+ * Resolve an integration id (e.g. 'google-drive', 'gmail') to its provider
+ * bucket in `workspace_oauth_apps` (e.g. 'google'). Null for unknown ids.
+ */
+export function getProviderForIntegration(integrationId: string): OAuthAppProvider | null {
+  const cfg = OAUTH_INTEGRATIONS[integrationId];
+  return cfg ? cfg.provider : null;
+}
+
+/**
+ * List OAuth-capable integrations the given workspace can currently initiate.
+ * Filters by which providers the workspace has configured in `workspace_oauth_apps`.
+ */
+export async function getSupportedOAuthIntegrations(workspaceId: string): Promise<string[]> {
+  const configured = new Set(await listConfiguredProviders(workspaceId));
+  return Object.keys(OAUTH_INTEGRATIONS).filter((id) => {
     const cfg = OAUTH_INTEGRATIONS[id];
-    return cfg.clientId() && cfg.clientSecret();
+    return configured.has(cfg.provider);
   });
 }
 
@@ -72,13 +101,12 @@ export async function getOAuthUrl(
   const integration = OAUTH_INTEGRATIONS[integrationId];
   if (!integration) throw new Error(`Unsupported OAuth integration: ${integrationId}`);
 
-  const clientId = integration.clientId();
-  if (!clientId) throw new Error(`OAuth not configured for ${integrationId}`);
+  const creds = await getOAuthAppCredentials(wsId, integration.provider);
+  if (!creds) throw new OAuthAppNotConfiguredError(wsId, integration.provider);
 
   const state = uuid();
   // All Google integrations share one registered redirect URI
-  const GOOGLE_IDS = new Set(['google', 'google_drive', 'google-drive', 'google-sheets', 'google-docs', 'gmail']);
-  const callbackId = GOOGLE_IDS.has(integrationId) ? 'google' : integrationId;
+  const callbackId = GOOGLE_INTEGRATION_IDS.has(integrationId) ? 'google' : integrationId;
   const redirectUri = `${config.oauth.redirectBaseUrl}/auth/callback/${callbackId}`;
 
   // Store state in DB
@@ -89,7 +117,7 @@ export async function getOAuthUrl(
   );
 
   const params = new URLSearchParams({
-    client_id: clientId,
+    client_id: creds.clientId,
     redirect_uri: redirectUri,
     state,
     response_type: 'code',
@@ -100,7 +128,7 @@ export async function getOAuthUrl(
   }
 
   // Google requires access_type=offline + prompt=consent to get a refresh token
-  if (GOOGLE_IDS.has(integrationId)) {
+  if (GOOGLE_INTEGRATION_IDS.has(integrationId)) {
     params.set('access_type', 'offline');
     params.set('prompt', 'consent');
   }
@@ -131,37 +159,55 @@ export async function handleOAuthCallback(
   const integration = OAUTH_INTEGRATIONS[actualIntegrationId] || OAUTH_INTEGRATIONS[callbackIntegrationId];
   if (!integration) throw new Error(`Unsupported OAuth integration: ${actualIntegrationId}`);
 
+  const creds = await getOAuthAppCredentials(oauthState.workspace_id, integration.provider);
+  if (!creds) throw new OAuthAppNotConfiguredError(oauthState.workspace_id, integration.provider);
+
   // Exchange code for tokens — use the callback path that Google expects
   const redirectUri = `${config.oauth.redirectBaseUrl}/auth/callback/${callbackIntegrationId}`;
   const tokenData = await exchangeCodeForToken(
     integration.tokenUrl,
     code,
     redirectUri,
-    integration.clientId(),
-    integration.clientSecret(),
+    creds.clientId,
+    creds.clientSecret,
     actualIntegrationId,
   );
 
-  // Store as personal connection with the original integration ID
-  await createPersonalConnection(
-    oauthState.workspace_id,
-    actualIntegrationId,
-    oauthState.user_id,
-    tokenData,
-    `${actualIntegrationId} (OAuth)`,
-  );
+  // For Google, a single consent grants all four scopes (Drive, Sheets, Docs,
+  // Gmail). Fan out into one connection row per sub-service so agent-level
+  // credential resolution (which looks up by specific integration_id like
+  // 'gmail' or 'google-drive') keeps working unchanged.
+  const targetIntegrationIds = GOOGLE_INTEGRATION_IDS.has(actualIntegrationId)
+    ? ['gmail', 'google-drive', 'google-sheets', 'google-docs']
+    : [actualIntegrationId];
+
+  for (const id of targetIntegrationIds) {
+    await createPersonalConnection(
+      oauthState.workspace_id,
+      id,
+      oauthState.user_id,
+      tokenData,
+      `${id} (OAuth)`,
+    );
+  }
 
   // Store token expiry if available
   if (tokenData.expires_in) {
     const expiresAt = new Date(Date.now() + parseInt(tokenData.expires_in) * 1000);
-    await execute(
-      `UPDATE connections SET oauth_token_expires_at = $1
-       WHERE workspace_id = $2 AND integration_id = $3 AND user_id = $4 AND connection_type = 'personal' AND status = 'active'`,
-      [expiresAt.toISOString(), oauthState.workspace_id, actualIntegrationId, oauthState.user_id]
-    );
+    for (const id of targetIntegrationIds) {
+      await execute(
+        `UPDATE connections SET oauth_token_expires_at = $1
+         WHERE workspace_id = $2 AND integration_id = $3 AND user_id = $4 AND connection_type = 'personal' AND status = 'active'`,
+        [expiresAt.toISOString(), oauthState.workspace_id, id, oauthState.user_id]
+      );
+    }
   }
 
-  logger.info('OAuth connection created', { integrationId: actualIntegrationId, userId: oauthState.user_id });
+  logger.info('OAuth connection created', {
+    integrationId: actualIntegrationId,
+    expandedIds: targetIntegrationIds,
+    userId: oauthState.user_id,
+  });
 
   return {
     wsId: oauthState.workspace_id,
@@ -172,26 +218,23 @@ export async function handleOAuthCallback(
 
 // ── Google OAuth Token Refresh ──
 
-const GOOGLE_INTEGRATION_IDS = new Set(['google', 'google_drive', 'google-drive', 'google-sheets', 'google-docs', 'gmail']);
-
-export function isGoogleIntegration(integrationId: string): boolean {
-  return GOOGLE_INTEGRATION_IDS.has(integrationId);
-}
-
 /**
  * Refresh a Google OAuth access token using the stored refresh_token.
- * Returns a fresh access_token. Uses server-side client credentials (never exposed to containers).
+ * Uses the workspace's own OAuth client credentials — the platform no longer
+ * holds a Google OAuth identity.
  */
-export async function refreshGoogleAccessToken(refreshToken: string): Promise<string> {
-  const clientId = config.oauth.googleClientId;
-  const clientSecret = config.oauth.googleClientSecret;
-  if (!clientId || !clientSecret) {
-    throw new Error('Google OAuth not configured (missing GOOGLE_OAUTH_CLIENT_ID or GOOGLE_OAUTH_CLIENT_SECRET)');
+export async function refreshGoogleAccessToken(
+  workspaceId: string,
+  refreshToken: string,
+): Promise<string> {
+  const creds = await getOAuthAppCredentials(workspaceId, 'google');
+  if (!creds) {
+    throw new OAuthAppNotConfiguredError(workspaceId, 'google');
   }
 
   const body = new URLSearchParams({
-    client_id: clientId,
-    client_secret: clientSecret,
+    client_id: creds.clientId,
+    client_secret: creds.clientSecret,
     refresh_token: refreshToken,
     grant_type: 'refresh_token',
   }).toString();

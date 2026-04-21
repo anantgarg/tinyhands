@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  ArrowLeft, RefreshCw, Trash2, Plus, Key, Copy, AlertCircle, Pencil,
+  ArrowLeft, RefreshCw, Trash2, Plus, Key, AlertCircle, Pencil,
   Github, Globe, FileText, Database, BookOpen,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
@@ -28,20 +28,20 @@ import {
   useSyncKBSource,
   useDeleteKBSource,
   useUpdateKBSource,
-  useKBApiKeys,
-  useSetKBApiKey,
-  useDeleteKBApiKey,
   useCreateKBSource,
+  useDriveFolderName,
 } from '@/api/kb';
 import { DriveFolderPicker } from '@/components/DriveFolderPicker';
 import { toast } from '@/components/ui/use-toast';
+import { useAuthStore } from '@/store/auth';
+import { usePersonalConnections } from '@/api/connections';
 
 const SOURCE_TYPES = [
-  { id: 'github', name: 'GitHub Repository', description: 'Sync markdown files from a GitHub repository', icon: Github },
-  { id: 'google_drive', name: 'Google Drive', description: 'Import documents from Google Drive folders', icon: FileText },
-  { id: 'zendesk', name: 'Zendesk Help Center', description: 'Sync articles from Zendesk Help Center', icon: BookOpen },
-  { id: 'web_crawl', name: 'Web Crawl', description: 'Crawl and index web pages', icon: Globe },
-  { id: 'notion', name: 'Notion', description: 'Sync pages from a Notion workspace', icon: Database },
+  { id: 'google_drive', name: 'Google Drive', description: 'Import documents from Google Drive folders', icon: FileText, comingSoon: false },
+  { id: 'github', name: 'GitHub Repository', description: 'Sync markdown files from a GitHub repository', icon: Github, comingSoon: true },
+  { id: 'zendesk', name: 'Zendesk Help Center', description: 'Sync articles from Zendesk Help Center', icon: BookOpen, comingSoon: true },
+  { id: 'web_crawl', name: 'Web Crawl', description: 'Crawl and index web pages', icon: Globe, comingSoon: true },
+  { id: 'notion', name: 'Notion', description: 'Sync pages from a Notion workspace', icon: Database, comingSoon: true },
 ];
 
 const SOURCE_CONFIG_FIELDS: Record<string, { key: string; label: string; placeholder: string; required: boolean; help?: string }[]> = {
@@ -51,7 +51,7 @@ const SOURCE_CONFIG_FIELDS: Record<string, { key: string; label: string; placeho
     { key: 'path', label: 'Path filter', placeholder: 'docs/', required: false, help: 'Only sync files under this path. Leave blank to sync all markdown files.' },
   ],
   google_drive: [
-    { key: 'folderId', label: 'Folder ID', placeholder: 'The Google Drive folder ID', required: true, help: 'Find this in the folder\'s URL: drive.google.com/drive/folders/[THIS_PART]' },
+    { key: 'folderId', label: 'Folder', placeholder: 'Pick a Google Drive folder', required: true, help: 'Browse and pick a folder to sync into the knowledge base.' },
   ],
   zendesk: [
     { key: 'subdomain', label: 'Subdomain', placeholder: 'yourcompany', required: true, help: 'Your Zendesk subdomain, e.g. "acme" from acme.zendesk.com' },
@@ -91,24 +91,38 @@ function getStatusLabel(status: string | null): string {
 }
 
 export function KBSources() {
+  const currentUser = useAuthStore((s) => s.user);
   const { data: sources, isLoading: sourcesLoading, isError: sourcesError } = useKBSources();
-  const { data: apiKeys, isLoading: keysLoading, isError: keysError } = useKBApiKeys();
+  const { data: personalConns } = usePersonalConnections();
+  const hasGoogleDriveConnection = ((personalConns ?? []) as any[]).some(
+    (c) => c.integrationId === 'google-drive' && c.status === 'active',
+  );
   const syncSource = useSyncKBSource();
   const deleteSource = useDeleteKBSource();
-  const createApiKey = useSetKBApiKey();
-  const deleteApiKey = useDeleteKBApiKey();
   const createSource = useCreateKBSource();
 
   const updateSource = useUpdateKBSource();
-
-  const [showNewKey, setShowNewKey] = useState(false);
-  const [keyName, setKeyName] = useState('');
-  const [generatedKey, setGeneratedKey] = useState('');
 
   // Edit source state
   const [editSource, setEditSource] = useState<{ id: string; name: string; type: string; config: Record<string, unknown> } | null>(null);
   const [editName, setEditName] = useState('');
   const [editConfig, setEditConfig] = useState<Record<string, string>>({});
+  const [editFolderName, setEditFolderName] = useState('');
+  const [editAutoSync, setEditAutoSync] = useState(true);
+  const [editInterval, setEditInterval] = useState(24);
+
+  // Lazy-load folder name for existing Google Drive sources that were created
+  // before we started persisting folderName alongside folderId in config.
+  const folderIdNeedingName =
+    editSource?.type === 'google_drive' && editConfig.folderId && !editFolderName
+      ? editConfig.folderId
+      : null;
+  const { data: folderNameLookup } = useDriveFolderName(folderIdNeedingName);
+  useEffect(() => {
+    if (folderNameLookup?.name && !editFolderName) {
+      setEditFolderName(folderNameLookup.name);
+    }
+  }, [folderNameLookup, editFolderName]);
 
   // Wizard state
   const [showWizard, setShowWizard] = useState(false);
@@ -116,6 +130,7 @@ export function KBSources() {
   const [wizardType, setWizardType] = useState('');
   const [wizardName, setWizardName] = useState('');
   const [wizardConfig, setWizardConfig] = useState<Record<string, string>>({});
+  const [wizardFolderName, setWizardFolderName] = useState('');
   const [wizardAutoSync, setWizardAutoSync] = useState(true);
   const [wizardCategory, setWizardCategory] = useState('');
 
@@ -134,26 +149,12 @@ export function KBSources() {
     }
   };
 
-  const handleCreateKey = () => {
-    if (!keyName.trim()) return;
-    createApiKey.mutate(
-      { name: keyName },
-      {
-        onSuccess: (data) => {
-          setGeneratedKey(data?.key ?? '');
-          setKeyName('');
-          toast({ title: 'API key created', variant: 'success' });
-        },
-        onError: (err) => toast({ title: 'Failed to create key', description: err.message, variant: 'error' }),
-      },
-    );
-  };
-
   const openWizard = () => {
     setWizardStep(1);
     setWizardType('');
     setWizardName('');
     setWizardConfig({});
+    setWizardFolderName('');
     setWizardAutoSync(true);
     setWizardCategory('');
     setShowWizard(true);
@@ -167,9 +168,10 @@ export function KBSources() {
     const config: Record<string, unknown> = { ...wizardConfig };
     if (wizardAutoSync) config.autoSync = true;
     if (wizardCategory) config.category = wizardCategory;
+    if (wizardType === 'google_drive' && wizardFolderName) config.folderName = wizardFolderName;
 
     createSource.mutate(
-      { name: wizardName, type: wizardType, config },
+      { name: wizardName, sourceType: wizardType, config },
       {
         onSuccess: () => {
           toast({ title: 'Source created', variant: 'success' });
@@ -190,74 +192,7 @@ export function KBSources() {
         Knowledge Base
       </Link>
 
-      <PageHeader title="KB Sources" description="Manage knowledge base data sources and API keys" />
-
-      {/* API Keys */}
-      <section className="mb-8">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">API Keys</h2>
-          <Button size="sm" onClick={() => setShowNewKey(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            New API Key
-          </Button>
-        </div>
-        {keysLoading ? (
-          <Skeleton className="h-[100px]" />
-        ) : keysError ? (
-          <Card>
-            <CardContent className="py-6 text-center text-red-500">
-              <AlertCircle className="h-5 w-5 mx-auto mb-2" />
-              Failed to load API keys
-            </CardContent>
-          </Card>
-        ) : (apiKeys ?? []).length === 0 ? (
-          <Card>
-            <CardContent className="py-6 text-center text-warm-text-secondary">
-              No API keys created yet. API keys allow external services to access your knowledge base.
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="rounded-card border border-warm-border bg-white">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Key Prefix</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="w-10"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {(apiKeys ?? []).map((key) => (
-                  <TableRow key={key.id}>
-                    <TableCell className="font-medium">{key.name ?? 'Unnamed'}</TableCell>
-                    <TableCell className="font-mono text-xs">{key.prefix ?? '***'}...</TableCell>
-                    <TableCell className="text-warm-text-secondary text-xs">
-                      {key.createdAt
-                        ? formatDistanceToNow(new Date(key.createdAt), { addSuffix: true })
-                        : '\u2014'}
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-red-500"
-                        onClick={() => {
-                          if (confirm(`Delete API key "${key.name ?? 'this key'}"?`)) {
-                            deleteApiKey.mutate(key.id);
-                          }
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </section>
+      <PageHeader title="KB Sources" description="Connect data sources to populate your knowledge base" />
 
       {/* Connected Sources */}
       <section>
@@ -330,6 +265,9 @@ export function KBSources() {
                             setEditSource({ id: source.id, name: source.name, type: source.type, config: cfg });
                             setEditName(source.name ?? '');
                             setEditConfig(stringCfg);
+                            setEditFolderName(typeof (cfg as any).folderName === 'string' ? (cfg as any).folderName : '');
+                            setEditAutoSync((source as any).autoSync ?? (source as any).auto_sync ?? true);
+                            setEditInterval(Number((source as any).syncIntervalHours ?? (source as any).sync_interval_hours ?? 24));
                           }}
                         >
                           <Pencil className="h-3 w-3" />
@@ -356,55 +294,6 @@ export function KBSources() {
         )}
       </section>
 
-      {/* New API Key Dialog */}
-      <Dialog open={showNewKey} onOpenChange={setShowNewKey}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Create API Key</DialogTitle>
-            <DialogDescription>Generate a new API key for external KB access</DialogDescription>
-          </DialogHeader>
-          {generatedKey ? (
-            <div className="space-y-4">
-              <p className="text-sm text-warm-text-secondary">
-                Copy this key now. It will not be shown again.
-              </p>
-              <div className="flex items-center gap-2">
-                <Input value={generatedKey} readOnly className="font-mono text-xs" />
-                <Button
-                  variant="outline"
-                  size="icon"
-                  onClick={() => {
-                    navigator.clipboard.writeText(generatedKey);
-                    toast({ title: 'Copied to clipboard', variant: 'success' });
-                  }}
-                >
-                  <Copy className="h-4 w-4" />
-                </Button>
-              </div>
-              <DialogFooter>
-                <Button onClick={() => { setShowNewKey(false); setGeneratedKey(''); }}>Done</Button>
-              </DialogFooter>
-            </div>
-          ) : (
-            <>
-              <div>
-                <Label>Key Name</Label>
-                <Input
-                  value={keyName}
-                  onChange={(e) => setKeyName(e.target.value)}
-                  placeholder="e.g. Production"
-                  className="mt-1"
-                />
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setShowNewKey(false)}>Cancel</Button>
-                <Button onClick={handleCreateKey} disabled={createApiKey.isPending}>Create</Button>
-              </DialogFooter>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
-
       {/* Edit Source Dialog */}
       <Dialog open={!!editSource} onOpenChange={() => setEditSource(null)}>
         <DialogContent>
@@ -420,23 +309,81 @@ export function KBSources() {
             {(SOURCE_CONFIG_FIELDS[editSource?.type ?? ''] ?? []).map((field) => (
               <div key={field.key}>
                 <Label>{field.label}</Label>
-                <Input
-                  value={editConfig[field.key] ?? ''}
-                  onChange={(e) => setEditConfig((prev) => ({ ...prev, [field.key]: e.target.value }))}
-                  placeholder={field.placeholder}
-                  className="mt-1"
-                />
-                {field.help && <p className="text-xs text-warm-text-secondary mt-1">{field.help}</p>}
+                {editSource?.type === 'google_drive' && field.key === 'folderId' ? (
+                  <div className="mt-1">
+                    <DriveFolderPicker
+                      value={editConfig.folderId ?? ''}
+                      valueName={editFolderName}
+                      onChange={(id, name) => {
+                        setEditConfig((prev) => ({ ...prev, folderId: id }));
+                        setEditFolderName(name);
+                      }}
+                      helpText={field.help}
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <Input
+                      value={editConfig[field.key] ?? ''}
+                      onChange={(e) => setEditConfig((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                      placeholder={field.placeholder}
+                      className="mt-1"
+                    />
+                    {field.help && <p className="text-xs text-warm-text-secondary mt-1">{field.help}</p>}
+                  </>
+                )}
               </div>
             ))}
+
+            <div className="border-t border-warm-border pt-4">
+              <div className="flex items-center gap-3 mb-3">
+                <Switch checked={editAutoSync} onCheckedChange={setEditAutoSync} />
+                <div>
+                  <Label>Auto-sync</Label>
+                  <p className="text-xs text-warm-text-secondary">Pull fresh content on a schedule. Turn off to sync only on demand.</p>
+                </div>
+              </div>
+              {editAutoSync && (
+                <div>
+                  <Label>Sync frequency</Label>
+                  <select
+                    value={editInterval}
+                    onChange={(e) => setEditInterval(Number(e.target.value))}
+                    className="mt-1 w-full rounded-md border border-warm-border bg-white px-3 py-2 text-sm"
+                  >
+                    <option value={1}>Every hour</option>
+                    <option value={6}>Every 6 hours</option>
+                    <option value={12}>Every 12 hours</option>
+                    <option value={24}>Every 24 hours</option>
+                    <option value={168}>Every week</option>
+                  </select>
+                </div>
+              )}
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditSource(null)}>Cancel</Button>
             <Button
               onClick={() => {
                 if (!editSource) return;
+                // Strip schedule keys out of config blob — they live in their own columns.
+                const mergedConfig: Record<string, unknown> = {
+                  ...editSource.config,
+                  ...editConfig,
+                };
+                if (editSource.type === 'google_drive') {
+                  mergedConfig.folderName = editFolderName;
+                }
+                delete (mergedConfig as any).autoSync;
+                delete (mergedConfig as any).syncIntervalHours;
                 updateSource.mutate(
-                  { id: editSource.id, name: editName, config: { ...editSource.config, ...editConfig } },
+                  {
+                    id: editSource.id,
+                    name: editName,
+                    config: mergedConfig,
+                    autoSync: editAutoSync,
+                    syncIntervalHours: editInterval,
+                  },
                   {
                     onSuccess: () => {
                       toast({ title: 'Source updated', variant: 'success' });
@@ -474,19 +421,33 @@ export function KBSources() {
             <div className="grid grid-cols-2 gap-3">
               {SOURCE_TYPES.map((type) => {
                 const Icon = type.icon;
+                const disabled = type.comingSoon;
                 return (
                   <button
                     key={type.id}
+                    disabled={disabled}
                     onClick={() => {
+                      if (disabled) return;
                       setWizardType(type.id);
                       setWizardConfig({});
+                      if (type.id === 'google_drive' && currentUser?.displayName) {
+                        const first = currentUser.displayName.split(' ')[0];
+                        setWizardName(`${first}'s Google Drive`);
+                      }
                       setWizardStep(2);
                     }}
-                    className={`flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors hover:bg-warm-bg ${
-                      wizardType === type.id ? 'border-brand bg-brand-light/20' : 'border-warm-border'
+                    className={`relative flex flex-col items-center gap-2 rounded-lg border p-4 text-center transition-colors ${
+                      disabled
+                        ? 'cursor-not-allowed border-warm-border bg-warm-bg/40 opacity-60'
+                        : `hover:bg-warm-bg ${wizardType === type.id ? 'border-brand bg-brand-light/20' : 'border-warm-border'}`
                     }`}
                   >
-                    <Icon className="h-6 w-6 text-brand" />
+                    {disabled && (
+                      <span className="absolute top-2 right-2 rounded-full bg-warm-border px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-warm-text-secondary">
+                        Coming soon
+                      </span>
+                    )}
+                    <Icon className={`h-6 w-6 ${disabled ? 'text-warm-text-secondary' : 'text-brand'}`} />
                     <span className="text-sm font-medium">{type.name}</span>
                     <span className="text-xs text-warm-text-secondary">{type.description}</span>
                   </button>
@@ -498,6 +459,14 @@ export function KBSources() {
           {/* Step 2: Type-specific config */}
           {wizardStep === 2 && (
             <div className="space-y-4">
+              {wizardType === 'google_drive' && !hasGoogleDriveConnection && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  <p className="font-medium mb-1">Connect Google first</p>
+                  <p className="text-amber-800">
+                    You haven't connected your Google account yet. Head to <Link to="/tools?tab=personal" className="underline font-medium">Tools → Personal</Link> and connect Google, then come back here.
+                  </p>
+                </div>
+              )}
               <div>
                 <Label>Source Name *</Label>
                 <Input
@@ -514,14 +483,20 @@ export function KBSources() {
                     {field.required && <span className="text-red-500 ml-1">*</span>}
                   </Label>
                   {wizardType === 'google_drive' && field.key === 'folderId' ? (
-                    <div className="mt-1">
+                    <div className="mt-1 space-y-2">
                       <DriveFolderPicker
                         value={wizardConfig.folderId ?? ''}
+                        valueName={wizardFolderName}
                         onChange={(id, name) => {
                           setWizardConfig((prev) => ({ ...prev, folderId: id }));
+                          setWizardFolderName(name);
                           if (name && !wizardName) setWizardName(name);
                         }}
+                        helpText={field.help}
                       />
+                      <p className="text-xs text-warm-text-secondary">
+                        Folders are browsed through your personal Google connection. The knowledge base itself is shared across the workspace.
+                      </p>
                     </div>
                   ) : (
                     <>
@@ -548,8 +523,8 @@ export function KBSources() {
                   onCheckedChange={setWizardAutoSync}
                 />
                 <div>
-                  <Label>Auto-sync</Label>
-                  <p className="text-xs text-warm-text-secondary">Automatically sync this source on a schedule</p>
+                  <Label>Auto-sync every 24 hours</Label>
+                  <p className="text-xs text-warm-text-secondary">Pull fresh content once a day. Turn off to sync only on demand.</p>
                 </div>
               </div>
               <div>
@@ -577,12 +552,17 @@ export function KBSources() {
                   <span className="text-sm text-warm-text-secondary">Type</span>
                   <span className="text-sm font-medium">{selectedType?.name || wizardType}</span>
                 </div>
-                {Object.entries(wizardConfig).filter(([, v]) => v).map(([k, v]) => (
-                  <div key={k} className="flex justify-between">
-                    <span className="text-sm text-warm-text-secondary">{k}</span>
-                    <span className="text-sm font-medium truncate max-w-[200px]">{v}</span>
-                  </div>
-                ))}
+                {Object.entries(wizardConfig).filter(([, v]) => v).map(([k, v]) => {
+                  const isDriveFolder = wizardType === 'google_drive' && k === 'folderId';
+                  const label = isDriveFolder ? 'Folder' : k;
+                  const display = isDriveFolder && wizardFolderName ? wizardFolderName : v;
+                  return (
+                    <div key={k} className="flex justify-between">
+                      <span className="text-sm text-warm-text-secondary">{label}</span>
+                      <span className="text-sm font-medium truncate max-w-[200px]">{display}</span>
+                    </div>
+                  );
+                })}
                 <div className="flex justify-between">
                   <span className="text-sm text-warm-text-secondary">Auto-sync</span>
                   <span className="text-sm font-medium">{wizardAutoSync ? 'Yes' : 'No'}</span>

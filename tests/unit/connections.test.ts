@@ -165,7 +165,15 @@ describe('getUserConnections', () => {
 });
 
 describe('deleteConnection', () => {
-  it('should soft-delete a connection by setting status to revoked', async () => {
+  it('should soft-delete a non-Google connection by setting status to revoked', async () => {
+    // queryOne lookup returns a non-Google row — no cascade
+    mockQueryOne.mockResolvedValueOnce({
+      id: 'c1',
+      workspace_id: TEST_WORKSPACE_ID,
+      integration_id: 'chargebee',
+      connection_type: 'team',
+      user_id: null,
+    });
     mockExecute.mockResolvedValueOnce(undefined);
 
     await deleteConnection(TEST_WORKSPACE_ID, 'c1');
@@ -173,6 +181,37 @@ describe('deleteConnection', () => {
     expect(mockExecute).toHaveBeenCalledWith(
       expect.stringContaining("status = 'revoked'"),
       [TEST_WORKSPACE_ID, 'c1']
+    );
+  });
+
+  it('should cascade-delete sibling Google rows when one Google sub-row is deleted', async () => {
+    // A Google personal connection — deleting one should revoke all four.
+    mockQueryOne.mockResolvedValueOnce({
+      id: 'c-gmail',
+      workspace_id: TEST_WORKSPACE_ID,
+      integration_id: 'gmail',
+      connection_type: 'personal',
+      user_id: 'U001',
+    });
+    mockExecute.mockResolvedValueOnce(undefined);
+
+    await deleteConnection(TEST_WORKSPACE_ID, 'c-gmail');
+
+    expect(mockExecute).toHaveBeenCalledWith(
+      expect.stringContaining("integration_id = ANY"),
+      [TEST_WORKSPACE_ID, 'U001', expect.arrayContaining(['gmail', 'google-drive', 'google-sheets', 'google-docs'])]
+    );
+  });
+
+  it('should fall back to single-row revoke when target row is not found', async () => {
+    mockQueryOne.mockResolvedValueOnce(undefined);
+    mockExecute.mockResolvedValueOnce(undefined);
+
+    await deleteConnection(TEST_WORKSPACE_ID, 'missing');
+
+    expect(mockExecute).toHaveBeenCalledWith(
+      expect.stringContaining("WHERE workspace_id = $1 AND id = $2"),
+      [TEST_WORKSPACE_ID, 'missing']
     );
   });
 });

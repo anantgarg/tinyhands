@@ -74,6 +74,15 @@ export async function removeApiKeyField(
 }
 
 export async function isProviderConfigured(workspaceId: string, provider: KBProviderType): Promise<boolean> {
+  // Google Drive KB sync resolves credentials via the new connections path
+  // (admin's personal Google OAuth). If any active Google Drive personal
+  // connection exists in the workspace, the provider is "configured" for KB
+  // purposes — regardless of whether a legacy kb_api_keys row exists.
+  if (provider === 'google') {
+    const { getAnyPersonalConnection } = await import('../connections');
+    const conn = await getAnyPersonalConnection(workspaceId, 'google-drive');
+    if (conn) return true;
+  }
   const key = await getApiKey(workspaceId, provider);
   return key?.setup_complete === true;
 }
@@ -92,21 +101,28 @@ export async function deleteApiKey(workspaceId: string, provider: KBProviderType
 export async function createSource(workspaceId: string, params: {
   name: string;
   sourceType: KBConnectorType;
-  config: Record<string, string>;
+  config: Record<string, any>;
   createdBy: string;
 }): Promise<KBSource> {
   const id = uuid();
   const provider = getProviderForConnector(params.sourceType);
   const providerConfigured = await isProviderConfigured(workspaceId, provider);
 
+  // Pull schedule controls out of the generic config blob so they land in
+  // their own columns and aren't mirrored in config_json.
+  const { autoSync: autoSyncIn, syncIntervalHours: intervalIn, ...restConfig } = params.config ?? {};
+  const auto_sync = autoSyncIn === true || autoSyncIn === 'true';
+  const sync_interval_hours =
+    typeof intervalIn === 'number' && intervalIn > 0 ? Math.round(intervalIn) : 24;
+
   const source: KBSource = {
     id,
     name: params.name,
     source_type: params.sourceType,
-    config_json: JSON.stringify(params.config),
+    config_json: JSON.stringify(restConfig),
     status: providerConfigured ? 'active' : 'needs_setup',
-    auto_sync: false,
-    sync_interval_hours: 24,
+    auto_sync,
+    sync_interval_hours,
     last_sync_at: null,
     entry_count: 0,
     error_message: null,
@@ -121,7 +137,7 @@ export async function createSource(workspaceId: string, params: {
     [source.id, workspaceId, source.name, source.source_type, source.config_json, source.status, source.auto_sync, source.sync_interval_hours, source.created_by],
   );
 
-  logger.info('KB source created', { sourceId: id, name: params.name, type: params.sourceType });
+  logger.info('KB source created', { sourceId: id, name: params.name, type: params.sourceType, autoSync: auto_sync, intervalHours: sync_interval_hours });
   return source;
 }
 
@@ -131,7 +147,7 @@ export async function getSource(workspaceId: string, id: string): Promise<KBSour
 }
 
 export async function listSources(workspaceId: string): Promise<KBSource[]> {
-  return query<KBSource>(
+  const rows = await query<KBSource>(
     `SELECT s.*, COALESCE(e.cnt, 0)::int AS entry_count
      FROM kb_sources s
      LEFT JOIN (SELECT kb_source_id, COUNT(*) AS cnt FROM kb_entries WHERE workspace_id = $1 GROUP BY kb_source_id) e
@@ -140,6 +156,29 @@ export async function listSources(workspaceId: string): Promise<KBSource[]> {
      ORDER BY s.created_at DESC`,
     [workspaceId]
   );
+
+  // Auto-heal: sources marked 'needs_setup' before the provider was connected
+  // should flip to 'pending' (ready, never synced) as soon as the provider
+  // becomes configured — otherwise the UI keeps asking users to set up
+  // something that's already set up.
+  const providerCheckCache = new Map<string, boolean>();
+  for (const row of rows) {
+    if (row.status !== 'needs_setup') continue;
+    const provider = getProviderForConnector(row.source_type);
+    let configured = providerCheckCache.get(provider);
+    if (configured === undefined) {
+      configured = await isProviderConfigured(workspaceId, provider);
+      providerCheckCache.set(provider, configured);
+    }
+    if (configured) {
+      row.status = 'active';
+      await execute(
+        "UPDATE kb_sources SET status = 'active', updated_at = NOW() WHERE id = $1 AND workspace_id = $2 AND status = 'needs_setup'",
+        [row.id, workspaceId]
+      );
+    }
+  }
+  return rows;
 }
 
 export async function updateSource(workspaceId: string, id: string, updates: Partial<Pick<KBSource, 'name' | 'config_json' | 'status' | 'auto_sync' | 'sync_interval_hours' | 'error_message' | 'entry_count' | 'last_sync_at'>>): Promise<void> {

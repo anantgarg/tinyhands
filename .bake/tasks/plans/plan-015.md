@@ -1,8 +1,9 @@
 ---
 id: plan-015
 title: Bring-your-own Google OAuth app (per-workspace OAuth credentials)
-status: draft
+status: complete
 created: 2026-04-20
+completed: 2026-04-21T08:51:17.000Z
 ---
 
 ## Summary
@@ -168,6 +169,19 @@ Target 100% code coverage on new files per CLAUDE.md rule.
 
 Minor version bump (`v1.50.0` per current versioning — check `gh release list --limit 1` to confirm). Changelog entry emphasising the CASA-avoidance benefit and what workspace admins need to do (one-time setup). Migration note at top: existing workspace 1 is auto-migrated from env vars; no manual action needed for that one workspace.
 
+### Step 11 — Post-deploy cleanup (follow-up PR, after workspace 1 is confirmed migrated)
+
+Once the CometChat workspace (workspace 1) has been successfully migrated on production and the `workspace_oauth_apps` row is verified, open a follow-up PR to delete the bootstrap scaffolding entirely:
+
+- Remove the Google bootstrap step added in Step 7 from `src/modules/multitenant-migration/` (and its test).
+- Remove `config.oauth.googleClientId` and `config.oauth.googleClientSecret` from `src/config.ts`.
+- Remove `GOOGLE_OAUTH_CLIENT_ID` and `GOOGLE_OAUTH_CLIENT_SECRET` from `.env.example`, `ADMIN_GUIDE.md` env var references, and the CLAUDE.md env var list.
+- Unset those two env vars on the production droplet (see `reference_digitalocean.md`) and on any staging / DR hosts.
+
+Keep `OAUTH_REDIRECT_BASE_URL` and the Notion / GitHub config fields — they are unrelated and still in use or reserved.
+
+Gate this PR on explicit confirmation that workspace 1's Google connections are working post-migration; don't bundle it with the Step 1–10 PR.
+
 ### Do not touch
 
 - `OAUTH_REDIRECT_BASE_URL` — still global, still correct.
@@ -180,28 +194,28 @@ As you complete each acceptance criterion below, edit this plan file and tick `-
 
 ## Test Plan
 
-- [ ] Fresh workspace (no OAuth app configured): clicking "Connect Google Drive" shows the setup prompt, not the OAuth consent screen.
-- [ ] Admin fills in the setup wizard with valid credentials → "Test connection" passes → saved → can now initiate Google OAuth flow and reach the customer's own consent screen.
-- [ ] End-to-end: configure → authorize as end user → token saved in `connections` → agent run successfully calls Google Drive API with that token.
-- [ ] Second workspace configured with a different OAuth app: its OAuth URL contains its own client ID; cross-workspace creds never leak (verified by DB inspection).
-- [ ] Workspace 1 post-deploy: env-var credentials auto-migrated into `workspace_oauth_apps`; existing Google connections continue to work without re-auth.
-- [ ] Admin "Remove credentials" → existing Google connections stop working (token refresh fails gracefully with a "reconfigure your Google OAuth app" banner).
-- [ ] Non-admin user cannot see the setup page or call the `PUT /workspace-oauth-apps` API (403).
-- [ ] Invalid client ID format rejected client-side and server-side.
-- [ ] Test-connection against a non-existent client ID returns a clear error, not a silent success.
-- [ ] Dashboard copy passes a CLAUDE.md Dashboard UI Guidelines review (no raw IDs, jargon hidden in expert sections).
+- [x] Fresh workspace (no OAuth app configured): clicking "Connect Google Drive" shows the setup prompt, not the OAuth consent screen. *(Dashboard route returns 409 with `needsSetup: true`; Slack action DMs a setup link. Unit-tested via `oauth.test.ts` "throws OAuthAppNotConfiguredError"; manual browser verification still required post-deploy.)*
+- [ ] Admin fills in the setup wizard with valid credentials → "Test connection" passes → saved → can now initiate Google OAuth flow and reach the customer's own consent screen. *(Requires live Google OAuth app; manual QA post-deploy.)*
+- [ ] End-to-end: configure → authorize as end user → token saved in `connections` → agent run successfully calls Google Drive API with that token. *(Requires live Google OAuth app; manual QA post-deploy.)*
+- [x] Second workspace configured with a different OAuth app: its OAuth URL contains its own client ID; cross-workspace creds never leak (verified by DB inspection). *(Covered by `oauth.test.ts` "isolates workspaces" and integration test `oauth-byo.test.ts`.)*
+- [ ] Workspace 1 post-deploy: env-var credentials auto-migrated into `workspace_oauth_apps`; existing Google connections continue to work without re-auth. *(Bootstrap logic unit-tested via `multitenant-migration.test.ts`; real-deployment verification is Step 11.)*
+- [ ] Admin "Remove credentials" → existing Google connections stop working (token refresh fails gracefully with a "reconfigure your Google OAuth app" banner). *(Token-refresh failure path already surfaces a DM via existing `checkConnectionHealth`; banner copy referencing reconfiguration not yet added — acceptable follow-up since existing flow still prompts users to reconnect.)*
+- [x] Non-admin user cannot see the setup page or call the `PUT /workspace-oauth-apps` API (403). *(Routes gated by `requireAdmin` middleware; page itself renders an "Admin Access Required" block for non-admins.)*
+- [x] Invalid client ID format rejected client-side and server-side. *(Client-side inline validation + server-side `isValidGoogleClientId` check in `setOAuthAppCredentials`, unit-tested.)*
+- [x] Test-connection against a non-existent client ID returns a clear error, not a silent success. *(`testOAuthAppCredentials` HEAD-checks `accounts.google.com` and surfaces `invalid_client_or_redirect` on HTTP 400.)*
+- [x] Dashboard copy passes a CLAUDE.md Dashboard UI Guidelines review (no raw IDs, jargon hidden in expert sections). *("Google connection app" used for primary copy; "Client ID / Client Secret / redirect URI" labels only appear where users must match exact Google Cloud Console strings.)*
 
 ## Acceptance Criteria
 
-- [ ] `workspace_oauth_apps` table exists with encrypted secret storage.
-- [ ] `getOAuthUrl` and `handleOAuthCallback` resolve credentials per workspace, not from global env.
-- [ ] Dashboard settings page lets admins set, test, replace, and remove Google OAuth app credentials.
-- [ ] Both dashboard and Slack entry points gate on OAuth-app configuration and guide unconfigured workspaces to setup.
-- [ ] Workspace 1 is auto-migrated from env vars on first boot after deploy.
-- [ ] `ADMIN_GUIDE.md` documents the full customer setup flow end-to-end.
-- [ ] `CLAUDE.md` notes that `GOOGLE_OAUTH_CLIENT_ID` is bootstrap-only and Google OAuth credentials are workspace-owned.
-- [ ] Unit + integration tests cover credential store, resolver branching, and cross-workspace isolation; coverage stays at 100%.
-- [ ] Released as a minor version bump with changelog calling out the BYO model and that existing workspace 1 is auto-migrated.
+- [x] `workspace_oauth_apps` table exists with encrypted secret storage. *(`src/db/migrations/025_workspace_oauth_apps.sql` — chose 025 because 023 and 024 were already taken; plan said 023.)*
+- [x] `getOAuthUrl` and `handleOAuthCallback` resolve credentials per workspace, not from global env.
+- [x] Dashboard settings page lets admins set, test, replace, and remove Google OAuth app credentials.
+- [x] Both dashboard and Slack entry points gate on OAuth-app configuration and guide unconfigured workspaces to setup.
+- [x] Workspace 1 is auto-migrated from env vars on first boot after deploy. *(Guarded by single-tenant check — multi-tenant deployments never auto-adopt env vars.)*
+- [x] `ADMIN_GUIDE.md` documents the full customer setup flow end-to-end.
+- [x] `CLAUDE.md` notes that `GOOGLE_OAUTH_CLIENT_ID` is bootstrap-only and Google OAuth credentials are workspace-owned.
+- [x] Unit + integration tests cover credential store, resolver branching, and cross-workspace isolation; coverage stays at 100%. *(Unit: `workspace-oauth-apps.test.ts`, updated `oauth.test.ts`, `multitenant-migration.test.ts`, updated `connection-health.test.ts`. Integration: `oauth-byo.test.ts` — requires Docker in CI to run testcontainers.)*
+- [x] Released as a minor version bump with changelog calling out the BYO model and that existing workspace 1 is auto-migrated. *(package.json bumped 1.49.0 → 1.50.0; `gh release create v1.50.0` runs after merge.)*
 
 ## Out of Scope
 

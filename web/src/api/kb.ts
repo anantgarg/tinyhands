@@ -29,6 +29,7 @@ interface KBStats {
   pendingEntries: number;
   categories: number;
   sourcesCount: number;
+  manualEntries: number;
 }
 
 interface KBSource {
@@ -37,6 +38,10 @@ interface KBSource {
   type: string;
   config: Record<string, unknown>;
   status: string;
+  autoSync?: boolean;
+  auto_sync?: boolean;
+  syncIntervalHours?: number;
+  sync_interval_hours?: number;
   lastSyncAt: string | null;
   entriesCount: number;
   createdAt: string;
@@ -57,7 +62,7 @@ interface CreateKBEntryPayload {
 
 interface CreateKBSourcePayload {
   name: string;
-  type: string;
+  sourceType: string;
   config: Record<string, unknown>;
 }
 
@@ -164,9 +169,18 @@ export function useCreateKBSource() {
 export function useUpdateKBSource() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...data }: { id: string; name?: string; config?: Record<string, unknown> }) =>
+    mutationFn: ({ id, ...data }: { id: string; name?: string; config?: Record<string, unknown>; autoSync?: boolean; syncIntervalHours?: number }) =>
       api.patch(`/kb/sources/${id}`, data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['kb', 'sources'] }),
+  });
+}
+
+export function useDriveFolderName(folderId: string | null) {
+  return useQuery<{ id: string; name: string }>({
+    queryKey: ['kb', 'drive-folder-name', folderId],
+    queryFn: () => api.get(`/kb/drive-folder-name/${folderId}`),
+    enabled: !!folderId,
+    staleTime: 60_000,
   });
 }
 

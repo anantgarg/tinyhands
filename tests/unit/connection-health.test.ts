@@ -84,7 +84,7 @@ describe('checkConnectionHealth', () => {
 
     await checkConnectionHealth(TEST_WORKSPACE_ID);
 
-    expect(mockRefreshGoogleAccessToken).toHaveBeenCalledWith('refresh_tok');
+    expect(mockRefreshGoogleAccessToken).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 'refresh_tok');
     expect(mockEncrypt).toHaveBeenCalledWith(
       expect.stringContaining('"access_token":"fresh_token"')
     );

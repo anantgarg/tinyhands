@@ -250,16 +250,10 @@ export function createWebhookServer(): express.Application {
         logger.error('Tool registration failed during OAuth callback', { integration, error: regErr.message });
       }
 
-      // DM the user about successful connection + notify in channel
-      try {
-        const { sendDMBlocks, postMessage } = await import('./slack');
-        await sendDMBlocks(userId, [
-          { type: 'section', text: { type: 'mrkdwn', text: `:white_check_mark: Your *${integration}* account is now connected. You can use it with your agents.` } },
-        ], `${integration} connected`);
-        if (channelId) {
-          await postMessage(channelId, `:white_check_mark: Successfully connected *${integration}*!`);
-        }
-      } catch { /* Slack notification is best-effort */ }
+      // Deliberately no Slack notification here — the browser success page
+      // already confirms the connection, and an unsolicited DM after a
+      // dashboard action feels off. (Slack-initiated connect flows can show
+      // their own in-channel confirmation if/when that's wired back in.)
 
       res.status(200).send(`
         <html><body style="font-family: sans-serif; text-align: center; padding: 40px;">

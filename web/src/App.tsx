@@ -14,15 +14,15 @@ const Agents = lazy(() => import('@/pages/Agents').then(m => ({ default: m.Agent
 const AgentDetail = lazy(() => import('@/pages/AgentDetail').then(m => ({ default: m.AgentDetail })));
 const AgentCreate = lazy(() => import('@/pages/AgentCreate').then(m => ({ default: m.AgentCreate })));
 const AgentTemplates = lazy(() => import('@/pages/AgentTemplates').then(m => ({ default: m.AgentTemplates })));
-const Tools = lazy(() => import('@/pages/Tools').then(m => ({ default: m.Tools })));
 const KnowledgeBase = lazy(() => import('@/pages/KnowledgeBase').then(m => ({ default: m.KnowledgeBase })));
 const KBSources = lazy(() => import('@/pages/KBSources').then(m => ({ default: m.KBSources })));
-const Connections = lazy(() => import('@/pages/Connections').then(m => ({ default: m.Connections })));
+const Apps = lazy(() => import('@/pages/Apps').then(m => ({ default: m.Apps })));
 const Triggers = lazy(() => import('@/pages/Triggers').then(m => ({ default: m.Triggers })));
 
 const AuditLog = lazy(() => import('@/pages/AuditLog').then(m => ({ default: m.AuditLog })));
 const AccessRoles = lazy(() => import('@/pages/AccessRoles').then(m => ({ default: m.AccessRoles })));
 const Settings = lazy(() => import('@/pages/Settings').then(m => ({ default: m.Settings })));
+const GoogleOAuthAppSettings = lazy(() => import('@/pages/settings/integrations/google-oauth-app').then(m => ({ default: m.GoogleOAuthAppSettings })));
 const Requests = lazy(() => import('@/pages/Requests').then(m => ({ default: m.Requests })));
 const ErrorLogs = lazy(() => import('@/pages/ErrorLogs').then(m => ({ default: m.ErrorLogs })));
 const Skills = lazy(() => import('@/pages/Skills').then(m => ({ default: m.Skills })));
@@ -112,13 +112,14 @@ export function App() {
                 <Route path="agents/new" element={<Suspense fallback={<PageLoader />}><AgentCreate /></Suspense>} />
                 <Route path="agents/templates" element={<Suspense fallback={<PageLoader />}><AgentTemplates /></Suspense>} />
                 <Route path="agents/:id" element={<Suspense fallback={<PageLoader />}><AgentDetail /></Suspense>} />
-                <Route path="tools" element={<Suspense fallback={<PageLoader />}><Tools /></Suspense>} />
                 <Route path="skills" element={<Suspense fallback={<PageLoader />}><Skills /></Suspense>} />
                 <Route path="kb" element={<Suspense fallback={<PageLoader />}><KnowledgeBase /></Suspense>} />
                 <Route path="kb/sources" element={<Suspense fallback={<PageLoader />}><KBSources /></Suspense>} />
                 <Route path="documents" element={<Suspense fallback={<PageLoader />}><Documents /></Suspense>} />
                 <Route path="documents/:id" element={<Suspense fallback={<PageLoader />}><DocumentDetail /></Suspense>} />
-                <Route path="connections" element={<Suspense fallback={<PageLoader />}><Connections /></Suspense>} />
+                <Route path="tools" element={<Suspense fallback={<PageLoader />}><Apps /></Suspense>} />
+                <Route path="apps" element={<Navigate to="/tools" replace />} />
+                <Route path="connections" element={<Navigate to="/tools?tab=personal" replace />} />
                 <Route path="triggers" element={<Suspense fallback={<PageLoader />}><Triggers /></Suspense>} />
                 <Route path="requests" element={<Suspense fallback={<PageLoader />}><Requests /></Suspense>} />
                 <Route path="errors" element={<Suspense fallback={<PageLoader />}><ErrorLogs /></Suspense>} />
@@ -127,6 +128,7 @@ export function App() {
                 <Route path="audit" element={<Suspense fallback={<PageLoader />}><AuditLog /></Suspense>} />
                 <Route path="access" element={<Suspense fallback={<PageLoader />}><AccessRoles /></Suspense>} />
                 <Route path="settings" element={<Suspense fallback={<PageLoader />}><Settings /></Suspense>} />
+                <Route path="settings/integrations/google" element={<Suspense fallback={<PageLoader />}><GoogleOAuthAppSettings /></Suspense>} />
                 <Route path="platform" element={<Suspense fallback={<PageLoader />}><Platform /></Suspense>} />
               </Route>
             </Routes>

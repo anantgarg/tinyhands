@@ -25,6 +25,8 @@ import { DriveFolderPicker } from '@/components/DriveFolderPicker';
 import { useIntegrations } from '@/api/tools';
 import { useAuthStore } from '@/store/auth';
 import { toast } from '@/components/ui/use-toast';
+import { useOAuthAppStatus } from '@/api/workspace-oauth-apps';
+import { Link } from 'react-router-dom';
 
 function titleCaseStatus(status: string | null): string {
   const labels: Record<string, string> = {
@@ -40,7 +42,13 @@ export function Connections() {
   return <ConnectionsContent />;
 }
 
-function ConnectionsContent() {
+/**
+ * Personal + Team connections view. Exported as a re-usable pane so the
+ * merged Apps page can host just the Personal slice on its Personal tab.
+ * The standalone /connections route still renders the full split view below
+ * as a compatibility alias.
+ */
+export function ConnectionsContent() {
   const isAdmin = useAuthStore((s) => s.isAdmin());
   const { data: teamConns, isLoading: teamLoading, isError: teamError } = useTeamConnections();
   const { data: personalConns, isLoading: personalLoading, isError: personalError } = usePersonalConnections();
@@ -70,6 +78,43 @@ function ConnectionsContent() {
   };
 
 
+  // Group the 4 Google sibling rows (gmail / google-drive / google-docs /
+  // google-sheets) per user into a single "Google" display row. The DB still
+  // stores them separately so tool-credential resolution keeps working per
+  // sub-service. The Drive sub-row is the one that carries folder-restriction
+  // state, so we surface that on the grouped row.
+  const groupGoogleConnections = <T extends { id: string; integrationId: string; userId: string | null; status: string | null; createdAt: string | null }>(list: T[] | undefined): T[] => {
+    if (!list?.length) return [];
+    const seen = new Set<string>();
+    const result: T[] = [];
+    for (const conn of list) {
+      if (GOOGLE_SUB_IDS.has(conn.integrationId)) {
+        const groupKey = `google::${conn.userId ?? ''}`;
+        if (seen.has(groupKey)) continue;
+        seen.add(groupKey);
+        const siblings = list.filter(
+          (c) => GOOGLE_SUB_IDS.has(c.integrationId) && c.userId === conn.userId,
+        );
+        const driveRow = siblings.find((s) => s.integrationId === 'google-drive') ?? conn;
+        const earliest = siblings
+          .map((s) => s.createdAt ? new Date(s.createdAt).getTime() : Infinity)
+          .reduce((a, b) => Math.min(a, b), Infinity);
+        const anyExpired = siblings.some((s) => s.status === 'expired');
+        const allActive = siblings.every((s) => s.status === 'active');
+        result.push({
+          ...driveRow,
+          integrationName: 'Google',
+          integrationId: 'google',
+          status: anyExpired ? 'expired' : allActive ? 'active' : driveRow.status,
+          createdAt: earliest === Infinity ? driveRow.createdAt : new Date(earliest).toISOString(),
+        } as T);
+      } else {
+        result.push(conn);
+      }
+    }
+    return result;
+  };
+
   const renderPersonalConnectionsTable = (connections: typeof personalConns, loading: boolean, hasError: boolean) => {
     if (loading) return <Skeleton className="h-[200px]" />;
     if (hasError) {
@@ -82,7 +127,8 @@ function ConnectionsContent() {
         </Card>
       );
     }
-    if (!connections?.length) {
+    const grouped = groupGoogleConnections(connections);
+    if (!grouped.length) {
       return (
         <EmptyState
           icon={LinkIcon}
@@ -103,8 +149,9 @@ function ConnectionsContent() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {connections.map((conn) => {
-              const isGoogleDrive = conn.integrationId === 'google-drive';
+            {grouped.map((conn) => {
+              const isGoogleGroup = conn.integrationId === 'google';
+              const isGoogleDrive = conn.integrationId === 'google-drive' || isGoogleGroup;
               return (
                 <TableRow key={conn.id}>
                   <TableCell>
@@ -240,7 +287,28 @@ function ConnectionsContent() {
     );
   };
 
-  const oauthList = (oauthIntegrations ?? []).filter((i) => i.oauthSupported);
+  const GOOGLE_SUB_IDS = new Set(['google-drive', 'google_drive', 'google-sheets', 'google-docs', 'gmail']);
+  const GOOGLE_IDS = new Set(['google', ...GOOGLE_SUB_IDS]);
+  const { data: googleOAuthStatus } = useOAuthAppStatus('google');
+
+  // One Google consent grants Drive + Sheets + Docs + Gmail at once — so we
+  // collapse the picker to a single "Google" row. Clicking it starts OAuth
+  // with integration_id='google'; the server fans out into one connection
+  // row per sub-service. The individual google-drive / gmail / etc. entries
+  // still exist at the tool-registration layer so agents opt into specific
+  // sub-services, but the user-facing picker shouldn't expose the split.
+  const oauthList = [
+    {
+      id: 'google',
+      name: 'google',
+      displayName: 'Google',
+      description: 'One sign-in covers Gmail, Drive, Sheets, and Docs.',
+      oauthSupported: googleOAuthStatus?.configured === true,
+    },
+    ...(oauthIntegrations ?? []).filter(
+      (i) => !GOOGLE_SUB_IDS.has(i.id) && i.id !== 'google' && i.oauthSupported,
+    ),
+  ];
 
   return (
     <div>
@@ -252,7 +320,7 @@ function ConnectionsContent() {
           <div className="flex items-start gap-3">
             <Info className="h-5 w-5 text-blue-600 mt-0.5 shrink-0" />
             <p className="text-sm text-blue-900">
-              Connections let your agents access external services like Gmail, Google Sheets, and more. There are two types: *Team connections* are shared across all agents, while *Personal connections* use your own account. Each agent can be configured to use team credentials, the creator's credentials, or your personal credentials from the agent's Tools tab.
+              Connections let your agents access external services like Gmail, Google Sheets, and more. There are two types: <strong>Team connections</strong> are shared across all agents, while <strong>Personal connections</strong> use your own account. Each agent can be configured to use team credentials, the creator's credentials, or your personal credentials from the agent's Tools tab.
             </p>
           </div>
         </CardContent>
@@ -308,22 +376,39 @@ function ConnectionsContent() {
               <p className="text-sm text-warm-text-secondary text-center py-4">No integrations available.</p>
             ) : (
               <>
-                {oauthList.map((integration) => (
-                  <div key={integration.id} className="flex items-center justify-between rounded-lg border border-warm-border p-3">
-                    <div className="flex items-center gap-3">
-                      <ExternalLink className="h-5 w-5 text-brand shrink-0" />
-                      <div>
-                        <p className="text-sm font-medium">{integration.displayName ?? integration.name}</p>
-                        {integration.description && (
-                          <p className="text-xs text-warm-text-secondary line-clamp-1">{integration.description}</p>
-                        )}
+                {oauthList.map((integration) => {
+                  const isGoogleTool = GOOGLE_IDS.has(integration.id);
+                  const googleAppNotReady = isGoogleTool && googleOAuthStatus && !googleOAuthStatus.configured;
+                  return (
+                    <div key={integration.id} className={`flex items-center justify-between rounded-lg border border-warm-border p-3 ${googleAppNotReady ? 'opacity-60' : ''}`}>
+                      <div className="flex items-center gap-3">
+                        <ExternalLink className="h-5 w-5 text-brand shrink-0" />
+                        <div>
+                          <p className="text-sm font-medium">{integration.displayName ?? integration.name}</p>
+                          {googleAppNotReady ? (
+                            <p className="text-xs text-warm-text-secondary">
+                              {isAdmin ? (
+                                <>An admin needs to <Link to="/settings/integrations/google" onClick={() => setShowAddConnection(false)} className="underline hover:text-warm-text">set up the Google connection app</Link> first.</>
+                              ) : (
+                                <>Ask an admin to set up the Google connection app first.</>
+                              )}
+                            </p>
+                          ) : integration.description ? (
+                            <p className="text-xs text-warm-text-secondary line-clamp-1">{integration.description}</p>
+                          ) : null}
+                        </div>
                       </div>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={!!googleAppNotReady}
+                        onClick={() => { handleOAuth(integration.name); setShowAddConnection(false); }}
+                      >
+                        Connect
+                      </Button>
                     </div>
-                    <Button size="sm" variant="outline" onClick={() => { handleOAuth(integration.name); setShowAddConnection(false); }}>
-                      Connect
-                    </Button>
-                  </div>
-                ))}
+                  );
+                })}
                 {(allIntegrations ?? [])
                   .filter(i => (i.configKeys ?? []).length > 0 && !oauthList.some(o => o.id === i.id))
                   .map((integration) => (
