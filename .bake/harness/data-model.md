@@ -33,6 +33,21 @@ Cross-workspace user identity. A user who signs into two Slack workspaces has tw
 
 Per-workspace key/value. After plan-010, stores the workspace's encrypted Anthropic API key under keys `anthropic_api_key` (ciphertext) and `anthropic_api_key_iv` (IV). Encrypted via AES-256-GCM with the platform-owned `ENCRYPTION_KEY`.
 
+### Workspace OAuth Apps (plan-015)
+
+Per-workspace third-party OAuth client credentials. Today only `provider = 'google'` is wired up; the column is provider-agnostic so Notion and GitHub can be added without a schema change.
+
+| Column | Type | Purpose |
+|--------|------|---------|
+| workspace_id | TEXT | FK → workspaces, composite PK |
+| provider | TEXT | `'google'` \| reserved: `'notion'`, `'github'`. Composite PK |
+| client_id | TEXT | OAuth client id, plaintext (not secret on its own) |
+| client_secret_encrypted | TEXT | Client secret encrypted with the same `ENCRYPTION_KEY` helper used by connections |
+| publishing_status | TEXT | `'internal'` / `'external_testing'` / `'external_production'` / NULL |
+| configured_by_user_id | TEXT | Which admin set it up (nullable for bootstrap-migrated rows) |
+| configured_at | TIMESTAMPTZ | Initial configuration time |
+| updated_at | TIMESTAMPTZ | Last change |
+
 ### Agents
 
 The central entity — an AI agent that lives in Slack.
