@@ -7,7 +7,8 @@
 ### Get KB Statistics
 `GET /stats`
 - **Auth**: Required
-- **Response**: `{ totalEntries, pendingEntries, categories, sourcesCount }`
+- **Response**: `{ totalEntries, pendingEntries, categories, sourcesCount, manualEntries }`
+- `manualEntries` counts rows with `kb_source_id IS NULL` directly, so it stays consistent even while source-backed entry counts are in flight.
 
 ### List KB Entries
 `GET /entries`
