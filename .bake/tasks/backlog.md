@@ -16,7 +16,7 @@
 - [ ] Full regression sweep of existing flows in the migrated workspace: slash commands, triggers, KB search, document editing, scheduled triggers, sync, daily digest (from plan-010)
 - [ ] Manual QA post-deploy: admin fills BYO Google OAuth wizard with valid credentials, "Test connection" passes, save → OAuth flow reaches customer's own consent screen (from plan-015)
 - [ ] Manual QA post-deploy: end-to-end authorize as end user → token saved in connections → agent run successfully calls Google Drive API with that token (from plan-015)
-- [ ] Manual QA post-deploy: workspace 1 env-var credentials auto-migrated into workspace_oauth_apps and existing Google connections still work without re-auth (from plan-015)
+- [x] Manual QA post-deploy: legacy workspace's env-var credentials successfully copied into workspace_oauth_apps (v1.50.0 — verified by hand); existing Google connections still work without re-auth (from plan-015)
 - [ ] "Remove credentials" banner copy explicitly prompting admins to reconfigure their Google OAuth app (existing health-check DM covers the reconnect case but doesn't name the OAuth-app-configuration step) (from plan-015)
 - [x] Step 11 follow-up: Google bootstrap scaffolding removed in v1.50.0 (migrateGoogleOAuthApp deleted, config.oauth.googleClientId/Secret removed, .env.example entries stripped, legacy single-tenant workspace's credentials migrated by hand)
 - [ ] Extend BYO OAuth app pattern to Notion and GitHub once those integrations ship (from plan-015)
