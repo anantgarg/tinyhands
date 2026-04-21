@@ -1674,3 +1674,5 @@
 [11:14:14.311] [AutoSwitch] plan → activating existing session {"itemId":"plan-017","sessionId":"plan-017","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-017","prevSession":"plan-016"}
 [11:14:14.312] [TerminalSwitch] transitioning {"from":"plan-016","to":"plan-017","storeSessionsLen":26}
 [11:14:14.312] [Terminal] getOrCreate → returning cached {"sessionId":"plan-017","cachedCwd":null}
+[11:14:28.306] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-017.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":9076,"isPlanPath":true}
+[11:14:28.308] [Editor] editorContent changed externally — reloading body {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-017.md","title":"Investigate why two agents responded to the same Slack message"}
