@@ -2,6 +2,18 @@
 
 One entry per deploy to production. Each entry names the version, the date, the merges included since the previous release, and the exact rollback command. Updated automatically by the Deploy button (see `.bake/harness/deploy.md` for the post-deploy step that appends here).
 
+## v1.50.5 — 2026-04-21
+
+Deployed to the production host. Multi-tenant isolation fix for the `/internal/kb/*` and `/internal/docs/*` endpoints used by in-container agent tools.
+
+- All 13 internal KB + Docs endpoints hardcoded `getDefaultWorkspaceId()`. In multi-tenant deployments this routed any agent running in a non-default workspace to the default tenant's KB/Docs. Seen in production when ARK KB in Splitsie (workspace `T01PFPBDGT0`, 6 KB entries) reported "the knowledge base is currently empty" because `searchKB` actually ran against CometChat's 2945-entry KB under the default workspace id, and the `agent_id` scope filter happened to hide the cross-tenant rows instead of leaking them.
+- Worker now exports `WORKSPACE_ID` into the agent container alongside `AGENT_ID`.
+- `kb-search`, `docs-read`, `docs-write` tool bodies send `X-Workspace-Id` on every internal call.
+- New `resolveInternalWorkspaceId()` helper reads the header and falls back to `getDefaultWorkspaceId()` only when absent, so legacy single-tenant installs keep working.
+- FEATURES.md — added a new Isolation invariant line documenting the `X-Workspace-Id` contract.
+
+Rollback: SSH to production, `cd $APP_DIR && git checkout v1.50.4 && NODE_ENV=development npm install && NODE_ENV=development npm run build && NODE_ENV=development npm run build:web && pm2 reload ecosystem.config.js --force`. No migrations.
+
 ## v1.50.4 — 2026-04-21
 
 Deployed to the production host. Follow-up patch to v1.50.3.
