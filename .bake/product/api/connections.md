@@ -32,10 +32,21 @@
 `PUT /agent/:agentId/:toolName` — Required (can modify). Body: `{ mode, connectionId? }`
 
 ### Start OAuth Flow
-`GET /oauth/:integration/start` — Required auth. Redirects to provider.
+`GET /oauth/:integration/start` — Required auth. Redirects to the provider using the workspace's per-workspace OAuth app credentials. Returns `409 { needsSetup: true, setupUrl }` when the workspace has no OAuth app configured for that provider (Google today).
 
 ### List OAuth Integrations
 `GET /oauth-integrations` — Optional auth.
+
+### Workspace OAuth App Credentials (plan-015)
+Per-workspace OAuth client credentials for third-party providers. Today only `google` is wired; `notion` and `github` are reserved but still use platform-wide env vars.
+
+`GET /workspace-oauth-apps/:provider` — Admin only. Returns `{ configured, clientIdMasked, publishingStatus, configuredAt }`. Never returns the secret.
+
+`PUT /workspace-oauth-apps/:provider` — Admin only. Body: `{ clientId, clientSecret, publishingStatus? }`.
+
+`DELETE /workspace-oauth-apps/:provider` — Admin only.
+
+`POST /workspace-oauth-apps/:provider/test` — Admin only. Builds an auth URL and HEAD-requests `accounts.google.com` to surface `invalid_client_or_redirect` without requiring a full user consent round-trip.
 
 ### Agent Tool Modes (Admin)
 `GET /agent-tool-modes` — List all agent tool modes
