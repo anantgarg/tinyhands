@@ -46,8 +46,9 @@ export const config = {
     key: process.env.ENCRYPTION_KEY || '',
   },
   oauth: {
-    googleClientId: process.env.GOOGLE_OAUTH_CLIENT_ID || '',
-    googleClientSecret: process.env.GOOGLE_OAUTH_CLIENT_SECRET || '',
+    // Google OAuth app creds are per-workspace (workspace_oauth_apps table).
+    // Each workspace admin brings their own Google Cloud project — the
+    // platform never holds a Google OAuth identity of its own.
     notionClientId: process.env.NOTION_OAUTH_CLIENT_ID || '',
     notionClientSecret: process.env.NOTION_OAUTH_CLIENT_SECRET || '',
     githubClientId: process.env.GITHUB_OAUTH_CLIENT_ID || '',

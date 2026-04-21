@@ -29,13 +29,6 @@ vi.mock('../../src/modules/users', () => ({
   addPlatformAdmin: (...args: any[]) => mockAddPlatformAdmin(...args),
 }));
 
-const mockHasOAuthAppConfigured = vi.fn();
-const mockSetOAuthAppCredentials = vi.fn().mockResolvedValue({});
-vi.mock('../../src/modules/workspace-oauth-apps', () => ({
-  hasOAuthAppConfigured: (...args: any[]) => mockHasOAuthAppConfigured(...args),
-  setOAuthAppCredentials: (...args: any[]) => mockSetOAuthAppCredentials(...args),
-}));
-
 vi.mock('../../src/utils/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
@@ -58,46 +51,24 @@ beforeEach(() => {
   mockExecute.mockResolvedValue(undefined);
 });
 
-describe('multi-tenant bootstrap: Google OAuth app migration', () => {
-  it('copies env credentials into workspace_oauth_apps on first boot (single-tenant install)', async () => {
-    process.env.GOOGLE_OAUTH_CLIENT_ID = 'env-client-id';
-    process.env.GOOGLE_OAUTH_CLIENT_SECRET = 'env-client-secret';
-    mockHasOAuthAppConfigured.mockResolvedValueOnce(false);
+// Google OAuth env-migration was removed in v1.50.0 — each workspace admin
+// configures their own Google Cloud OAuth client via Settings → Integrations.
+// The one-off copy of env GOOGLE_OAUTH_CLIENT_ID into the legacy
+// single-tenant workspace was done by hand during the v1.50.0 deploy.
+
+describe('multi-tenant bootstrap: Anthropic key migration', () => {
+  it('copies env ANTHROPIC_API_KEY into workspace_settings on first boot (single-tenant install)', async () => {
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-test';
+    mockGetSetting.mockResolvedValueOnce(null); // key not yet set
 
     await runMultiTenantBootstrap('W1');
 
-    expect(mockSetOAuthAppCredentials).toHaveBeenCalledWith('W1', 'google', {
-      clientId: 'env-client-id',
-      clientSecret: 'env-client-secret',
-      publishingStatus: null,
-      userId: null,
-    });
-  });
-
-  it('is a no-op when the workspace already has a Google OAuth app configured', async () => {
-    process.env.GOOGLE_OAUTH_CLIENT_ID = 'env-client-id';
-    process.env.GOOGLE_OAUTH_CLIENT_SECRET = 'env-client-secret';
-    mockHasOAuthAppConfigured.mockResolvedValueOnce(true);
-
-    await runMultiTenantBootstrap('W1');
-
-    expect(mockSetOAuthAppCredentials).not.toHaveBeenCalled();
-  });
-
-  it('is a no-op when env vars are unset', async () => {
-    delete process.env.GOOGLE_OAUTH_CLIENT_ID;
-    delete process.env.GOOGLE_OAUTH_CLIENT_SECRET;
-    mockHasOAuthAppConfigured.mockResolvedValueOnce(false);
-
-    await runMultiTenantBootstrap('W1');
-
-    expect(mockSetOAuthAppCredentials).not.toHaveBeenCalled();
+    expect(mockSetAnthropicApiKey).toHaveBeenCalledWith('W1', 'sk-ant-test', 'system-migration');
   });
 
   it('does not migrate when multiple workspaces exist (multi-tenant guard)', async () => {
-    process.env.GOOGLE_OAUTH_CLIENT_ID = 'env-client-id';
-    process.env.GOOGLE_OAUTH_CLIENT_SECRET = 'env-client-secret';
-    mockHasOAuthAppConfigured.mockResolvedValueOnce(false);
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-test';
+    mockGetSetting.mockResolvedValueOnce(null);
     mockQueryOne.mockImplementation(async (sql: string) => {
       if (sql.includes('information_schema.tables')) return { exists: false };
       if (sql.includes('count(*)')) return { count: 3 };
@@ -106,20 +77,15 @@ describe('multi-tenant bootstrap: Google OAuth app migration', () => {
 
     await runMultiTenantBootstrap('W1');
 
-    expect(mockSetOAuthAppCredentials).not.toHaveBeenCalled();
+    expect(mockSetAnthropicApiKey).not.toHaveBeenCalled();
   });
 
-  it('is idempotent — calling twice only migrates once', async () => {
-    process.env.GOOGLE_OAUTH_CLIENT_ID = 'env-client-id';
-    process.env.GOOGLE_OAUTH_CLIENT_SECRET = 'env-client-secret';
-    // First call: not configured → migrate. Second call: configured → no-op.
-    mockHasOAuthAppConfigured
-      .mockResolvedValueOnce(false)
-      .mockResolvedValueOnce(true);
+  it('is a no-op when workspace already has a key', async () => {
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-test';
+    mockGetSetting.mockResolvedValueOnce('already-set');
 
     await runMultiTenantBootstrap('W1');
-    await runMultiTenantBootstrap('W1');
 
-    expect(mockSetOAuthAppCredentials).toHaveBeenCalledTimes(1);
+    expect(mockSetAnthropicApiKey).not.toHaveBeenCalled();
   });
 });

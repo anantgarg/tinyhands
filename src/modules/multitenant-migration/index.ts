@@ -2,10 +2,6 @@ import { queryOne, execute } from '../../db';
 import { getSetting } from '../workspace-settings';
 import { setAnthropicApiKey } from '../anthropic';
 import { upsertUser, setMembership, addPlatformAdmin } from '../users';
-import {
-  hasOAuthAppConfigured,
-  setOAuthAppCredentials,
-} from '../workspace-oauth-apps';
 import { logger } from '../../utils/logger';
 
 // ── One-shot multi-tenant bootstrap migration ──
@@ -20,44 +16,8 @@ import { logger } from '../../utils/logger';
 
 export async function runMultiTenantBootstrap(defaultWorkspaceId: string): Promise<void> {
   await migrateAnthropicKey(defaultWorkspaceId);
-  await migrateGoogleOAuthApp(defaultWorkspaceId);
   await backfillMembershipsFromPlatformRoles();
   await ensureWorkspaceSlugs();
-}
-
-async function migrateGoogleOAuthApp(workspaceId: string): Promise<void> {
-  // Idempotent bootstrap for the single legacy single-tenant install (CometChat).
-  // When the legacy env vars are present AND workspace 1 has no google row in
-  // workspace_oauth_apps yet, lift those creds into the workspace's encrypted
-  // storage exactly once. Every subsequent boot is a no-op.
-  const already = await hasOAuthAppConfigured(workspaceId, 'google');
-  if (already) return;
-  const envClientId = process.env.GOOGLE_OAUTH_CLIENT_ID || '';
-  const envClientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET || '';
-  if (!envClientId || !envClientSecret) return;
-
-  // Same guard as the Anthropic key migration: only lift env creds into a
-  // workspace when there's exactly one workspace in the whole deployment.
-  // In a multi-tenant deployment the operator's env creds aren't automatically
-  // anyone's property.
-  const countRow = await queryOne<{ count: number }>('SELECT count(*)::int as count FROM workspaces');
-  const wsCount = countRow?.count ?? 0;
-  if (wsCount > 1) {
-    logger.info('Skipping GOOGLE_OAUTH_CLIENT_ID migration — multi-tenant deployment (each workspace admin must configure their own OAuth app)', { workspaceId, workspaceCount: wsCount });
-    return;
-  }
-
-  try {
-    await setOAuthAppCredentials(workspaceId, 'google', {
-      clientId: envClientId,
-      clientSecret: envClientSecret,
-      publishingStatus: null,
-      userId: null,
-    });
-    logger.info('Migrated GOOGLE_OAUTH_CLIENT_ID/_SECRET from env to workspace_oauth_apps', { workspaceId });
-  } catch (err: any) {
-    logger.error('Google OAuth app migration failed', { workspaceId, error: err.message });
-  }
 }
 
 async function migrateAnthropicKey(workspaceId: string): Promise<void> {

@@ -50,8 +50,7 @@ describe('config', () => {
     expect(config.docker.maxConcurrentWorkers).toBe(3);
     // Encryption and OAuth defaults
     expect(config.encryption.key).toBe('');
-    expect(config.oauth.googleClientId).toBe('');
-    expect(config.oauth.googleClientSecret).toBe('');
+    // Google OAuth is per-workspace (workspace_oauth_apps); no env vars for it.
     expect(config.oauth.notionClientId).toBe('');
     expect(config.oauth.notionClientSecret).toBe('');
     expect(config.oauth.githubClientId).toBe('');
