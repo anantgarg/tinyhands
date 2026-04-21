@@ -2,6 +2,14 @@
 
 One entry per deploy to production. Each entry names the version, the date, the merges included since the previous release, and the exact rollback command. Updated automatically by the Deploy button (see `.bake/harness/deploy.md` for the post-deploy step that appends here).
 
+## v1.50.3 — 2026-04-21
+
+Deployed to the production host. Patch over v1.50.2. Includes the one functional change merged to main since v1.50.2 (plan-018); the `v1.51.0` tag on branch `bake/plan/plan-016` remains unmerged and is not part of this release.
+
+- **plan-018** — Built-in Knowledge Base and Documents tools (`autoConfigured=true` on their manifests) now bypass the credential pipeline end-to-end: dashboard shows "Built-in" instead of "Not configured", `listAgentToolConnections` filters stale rows, `setAgentToolConnection` rejects them at the write boundary, and the worker provisions these tools into the container directly from the manifest so agents like ARK KB can actually call `kb-search`. Migration 027 deletes the 7 stale `agent_tool_connections` rows (connection_id=NULL) for `kb-search`/`docs-read`/`docs-write`.
+
+Rollback: SSH to production, `cd $APP_DIR && git checkout v1.50.2 && NODE_ENV=development npm install && NODE_ENV=development npm run build && NODE_ENV=development npm run build:web && pm2 reload ecosystem.config.js --force`. Migration 027 is additive (DELETE of stale rows) — safe to leave applied on rollback.
+
 ## v1.50.2 — 2026-04-21
 
 Deployed to the production host. Bug fix for stale "Connected since" display after reconnect.
