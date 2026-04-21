@@ -66,6 +66,7 @@ var cfg = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, 'ut
 
 var apiUrl = cfg.api_url || 'http://host.docker.internal:3000';
 var secret = cfg.internal_secret || '';
+var workspaceId = process.env.WORKSPACE_ID || '';
 
 function httpRequest(method, urlPath, body) {
   return new Promise(function(resolve, reject) {
@@ -78,6 +79,7 @@ function httpRequest(method, urlPath, body) {
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
     };
     if (secret) options.headers['X-Internal-Secret'] = secret;
+    if (workspaceId) options.headers['X-Workspace-Id'] = workspaceId;
     var req = http.request(options, function(res) {
       var data = '';
       res.on('data', function(chunk) { data += chunk; });
@@ -148,6 +150,7 @@ var apiUrl = cfg.api_url || 'http://host.docker.internal:3000';
 var secret = cfg.internal_secret || '';
 var agentId = process.env.AGENT_ID || cfg.agent_id || '';
 var runId = process.env.RUN_ID || cfg.run_id || '';
+var workspaceId = process.env.WORKSPACE_ID || '';
 
 function httpRequest(method, urlPath, body) {
   return new Promise(function(resolve, reject) {
@@ -160,6 +163,7 @@ function httpRequest(method, urlPath, body) {
       headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
     };
     if (secret) options.headers['X-Internal-Secret'] = secret;
+    if (workspaceId) options.headers['X-Workspace-Id'] = workspaceId;
     var req = http.request(options, function(res) {
       var data = '';
       res.on('data', function(chunk) { data += chunk; });

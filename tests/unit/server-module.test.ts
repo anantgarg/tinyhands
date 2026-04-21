@@ -862,6 +862,55 @@ describe('Webhook Server', () => {
   });
 
   // ────────────────────────────────────────────────
+  // Multi-tenant workspace resolution for internal endpoints.
+  // The X-Workspace-Id header lets the in-container kb/docs tools
+  // target the agent's actual workspace instead of leaking into
+  // whichever workspace happens to be `getDefaultWorkspaceId()`.
+  // ────────────────────────────────────────────────
+  describe('Internal endpoint workspace resolution', () => {
+    it('POST /internal/kb/search uses X-Workspace-Id instead of the default workspace', async () => {
+      mockSearchKB.mockResolvedValueOnce([]);
+
+      await makeTestRequest(app, 'POST', '/internal/kb/search', { query: 'x' }, {
+        'x-workspace-id': 'T-TENANT-B',
+      });
+
+      expect(mockSearchKB).toHaveBeenCalledWith('T-TENANT-B', 'x', undefined, expect.any(Number));
+    });
+
+    it('GET /internal/kb/list uses X-Workspace-Id instead of the default workspace', async () => {
+      mockListKBEntries.mockResolvedValueOnce([]);
+
+      await makeTestRequest(app, 'GET', '/internal/kb/list', undefined, {
+        'x-workspace-id': 'T-TENANT-B',
+      });
+
+      expect(mockListKBEntries).toHaveBeenCalledWith('T-TENANT-B', expect.any(Number));
+    });
+
+    it('GET /internal/kb/categories uses X-Workspace-Id instead of the default workspace', async () => {
+      mockGetCategories.mockResolvedValueOnce([]);
+
+      await makeTestRequest(app, 'GET', '/internal/kb/categories', undefined, {
+        'x-workspace-id': 'T-TENANT-B',
+      });
+
+      expect(mockGetCategories).toHaveBeenCalledWith('T-TENANT-B');
+    });
+
+    it('falls back to the default workspace when X-Workspace-Id is omitted (legacy single-tenant)', async () => {
+      mockListKBEntries.mockResolvedValueOnce([]);
+
+      await makeTestRequest(app, 'GET', '/internal/kb/list');
+
+      expect(mockListKBEntries).toHaveBeenCalled();
+      const calledWith = mockListKBEntries.mock.calls[0][0];
+      expect(typeof calledWith).toBe('string');
+      expect(calledWith.length).toBeGreaterThan(0);
+    });
+  });
+
+  // ────────────────────────────────────────────────
   // Internal KB API error handling
   // ────────────────────────────────────────────────
   describe('Internal KB API error handling', () => {

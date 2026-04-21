@@ -498,6 +498,7 @@ async function executeAgentRunInner(job: Job<JobData>, data: JobData, workspaceI
         STREAMING_DETAIL: agent.streaming_detail ? '1' : '0',
         TRACE_ID: data.traceId,
         AGENT_ID: agent.id,
+        WORKSPACE_ID: workspaceId,
         PERMISSION_MODE: 'bypassPermissions',
         SKILLS_CONFIG: skillsConfig,
         CUSTOM_TOOLS_CONFIG: customToolsConfig,

@@ -30,6 +30,7 @@ var cfg = fs.existsSync(configPath) ? JSON.parse(fs.readFileSync(configPath, 'ut
 
 var apiUrl = cfg.api_url || 'http://host.docker.internal:3000';
 var secret = cfg.internal_secret || '';
+var workspaceId = process.env.WORKSPACE_ID || '';
 
 function httpRequest(method, urlPath, body) {
   return new Promise(function(resolve, reject) {
@@ -46,6 +47,9 @@ function httpRequest(method, urlPath, body) {
     };
     if (secret) {
       options.headers['X-Internal-Secret'] = secret;
+    }
+    if (workspaceId) {
+      options.headers['X-Workspace-Id'] = workspaceId;
     }
     var req = http.request(options, function(res) {
       var data = '';

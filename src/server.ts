@@ -354,6 +354,17 @@ export function createWebhookServer(): express.Application {
 
   // ── Internal KB API (used by in-container kb-search tool) ──
 
+  // Resolve the workspace for an internal request. Agent containers send
+  // X-Workspace-Id; we fall back to the default workspace only for legacy
+  // single-tenant installs that never set it. In multi-tenant mode, using
+  // the default workspace for a different tenant's agent would cross-leak
+  // KB/Docs data, so trust the header when present.
+  function resolveInternalWorkspaceId(req: import('express').Request): string {
+    const hdr = req.headers['x-workspace-id'];
+    if (typeof hdr === 'string' && hdr.length > 0) return hdr;
+    return getDefaultWorkspaceId();
+  }
+
   app.post('/internal/kb/search', async (req, res) => {
     const secret = req.headers['x-internal-secret'] as string;
     if (config.server.internalSecret && secret !== config.server.internalSecret) {
@@ -368,7 +379,7 @@ export function createWebhookServer(): express.Application {
     }
 
     try {
-      const workspaceId = getDefaultWorkspaceId();
+      const workspaceId = resolveInternalWorkspaceId(req);
       const results = await searchKB(workspaceId, q, agent_id, limit || 4000);
       res.json({
         results: results.map(e => ({
@@ -397,7 +408,7 @@ export function createWebhookServer(): express.Application {
     const category = req.query.category as string;
 
     try {
-      const workspaceId = getDefaultWorkspaceId();
+      const workspaceId = resolveInternalWorkspaceId(req);
       let entries = await listKBEntries(workspaceId, limit);
       if (category) {
         entries = entries.filter(e => e.category === category);
@@ -425,7 +436,7 @@ export function createWebhookServer(): express.Application {
     }
 
     try {
-      const workspaceId = getDefaultWorkspaceId();
+      const workspaceId = resolveInternalWorkspaceId(req);
       const categories = await getCategories(workspaceId);
       res.json({ categories });
     } catch (err: any) {
@@ -442,7 +453,7 @@ export function createWebhookServer(): express.Application {
       res.status(401).json({ error: 'Unauthorized' }); return;
     }
     try {
-      const workspaceId = getDefaultWorkspaceId();
+      const workspaceId = resolveInternalWorkspaceId(req);
       const { createDocument } = await import('./modules/docs');
       const { markdownToSlateJson } = await import('./modules/docs/convert');
       const { type, title, description, content, agent_id, run_id, tags } = req.body;
@@ -476,7 +487,7 @@ export function createWebhookServer(): express.Application {
       res.status(401).json({ error: 'Unauthorized' }); return;
     }
     try {
-      const workspaceId = getDefaultWorkspaceId();
+      const workspaceId = resolveInternalWorkspaceId(req);
       const { getDocument, getSheetTabs } = await import('./modules/docs');
       const { slateJsonToMarkdown, cellDataToCsv } = await import('./modules/docs/convert');
       const doc = await getDocument(workspaceId, req.params.id);
@@ -512,7 +523,7 @@ export function createWebhookServer(): express.Application {
       res.status(401).json({ error: 'Unauthorized' }); return;
     }
     try {
-      const workspaceId = getDefaultWorkspaceId();
+      const workspaceId = resolveInternalWorkspaceId(req);
       const { getDocument, updateDocument } = await import('./modules/docs');
       const { markdownToSlateJson } = await import('./modules/docs/convert');
       const doc = await getDocument(workspaceId, req.params.id);
@@ -549,7 +560,7 @@ export function createWebhookServer(): express.Application {
       res.status(401).json({ error: 'Unauthorized' }); return;
     }
     try {
-      const workspaceId = getDefaultWorkspaceId();
+      const workspaceId = resolveInternalWorkspaceId(req);
       const { archiveDocument } = await import('./modules/docs');
       await archiveDocument(workspaceId, req.params.id);
       res.json({ ok: true });
@@ -565,7 +576,7 @@ export function createWebhookServer(): express.Application {
       res.status(401).json({ error: 'Unauthorized' }); return;
     }
     try {
-      const workspaceId = getDefaultWorkspaceId();
+      const workspaceId = resolveInternalWorkspaceId(req);
       const { listDocuments } = await import('./modules/docs');
       const type = req.query.type as any;
       const agentId = req.query.agent_id as string;
@@ -590,7 +601,7 @@ export function createWebhookServer(): express.Application {
       res.status(401).json({ error: 'Unauthorized' }); return;
     }
     try {
-      const workspaceId = getDefaultWorkspaceId();
+      const workspaceId = resolveInternalWorkspaceId(req);
       const { searchDocuments } = await import('./modules/docs');
       const results = await searchDocuments(workspaceId, req.body.query, req.body.limit || 10);
       res.json({
@@ -611,7 +622,7 @@ export function createWebhookServer(): express.Application {
       res.status(401).json({ error: 'Unauthorized' }); return;
     }
     try {
-      const workspaceId = getDefaultWorkspaceId();
+      const workspaceId = resolveInternalWorkspaceId(req);
       const { getDocument, createSheetTab } = await import('./modules/docs');
       const doc = await getDocument(workspaceId, req.params.id);
       if (!doc) { res.status(404).json({ error: 'Document not found' }); return; }
@@ -630,7 +641,7 @@ export function createWebhookServer(): express.Application {
       res.status(401).json({ error: 'Unauthorized' }); return;
     }
     try {
-      const workspaceId = getDefaultWorkspaceId();
+      const workspaceId = resolveInternalWorkspaceId(req);
       const { getSheetTabs } = await import('./modules/docs');
       const { cellDataToCsv } = await import('./modules/docs/convert');
       const tabs = await getSheetTabs(workspaceId, req.params.id);
@@ -649,7 +660,7 @@ export function createWebhookServer(): express.Application {
       res.status(401).json({ error: 'Unauthorized' }); return;
     }
     try {
-      const workspaceId = getDefaultWorkspaceId();
+      const workspaceId = resolveInternalWorkspaceId(req);
       const { getDocument, deleteSheetTab } = await import('./modules/docs');
       const doc = await getDocument(workspaceId, req.params.id);
       if (!doc) { res.status(404).json({ error: 'Document not found' }); return; }
@@ -668,7 +679,7 @@ export function createWebhookServer(): express.Application {
       res.status(401).json({ error: 'Unauthorized' }); return;
     }
     try {
-      const workspaceId = getDefaultWorkspaceId();
+      const workspaceId = resolveInternalWorkspaceId(req);
       const { getDocument, updateCells } = await import('./modules/docs');
       const doc = await getDocument(workspaceId, req.params.id);
       if (!doc) { res.status(404).json({ error: 'Not found' }); return; }
@@ -697,7 +708,7 @@ export function createWebhookServer(): express.Application {
       res.status(401).json({ error: 'Unauthorized' }); return;
     }
     try {
-      const workspaceId = getDefaultWorkspaceId();
+      const workspaceId = resolveInternalWorkspaceId(req);
       const { getDocument, appendRows } = await import('./modules/docs');
       const doc = await getDocument(workspaceId, req.params.id);
       if (!doc) { res.status(404).json({ error: 'Not found' }); return; }
