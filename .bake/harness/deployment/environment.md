@@ -33,15 +33,17 @@
 
 ## OAuth Providers (Optional)
 
+After plan-015, `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` are **bootstrap-only** on single-tenant installs. On first boot the multi-tenant migration lifts them into workspace 1's `workspace_oauth_apps` row and runtime never reads them again. Multi-tenant deployments ignore them — each workspace admin configures their own Google OAuth client via the dashboard (Settings → Integrations → Google connection app). There is no platform-owned Google OAuth fallback.
+
 | Variable | Purpose |
 |----------|---------|
-| `GOOGLE_OAUTH_CLIENT_ID` | Google OAuth for Drive/Docs connections |
-| `GOOGLE_OAUTH_CLIENT_SECRET` | Google OAuth secret |
-| `NOTION_OAUTH_CLIENT_ID` | Notion OAuth for page connections |
+| `GOOGLE_OAUTH_CLIENT_ID` | **Bootstrap-only (single-tenant).** Google OAuth client id for workspace 1 migration. |
+| `GOOGLE_OAUTH_CLIENT_SECRET` | **Bootstrap-only (single-tenant).** Google OAuth client secret for workspace 1 migration. |
+| `NOTION_OAUTH_CLIENT_ID` | Notion OAuth for page connections (still platform-wide; BYO pattern not yet applied) |
 | `NOTION_OAUTH_CLIENT_SECRET` | Notion OAuth secret |
-| `GITHUB_OAUTH_CLIENT_ID` | GitHub OAuth for repo connections |
+| `GITHUB_OAUTH_CLIENT_ID` | GitHub OAuth for repo connections (still platform-wide; BYO pattern not yet applied) |
 | `GITHUB_OAUTH_CLIENT_SECRET` | GitHub OAuth secret |
-| `OAUTH_REDIRECT_BASE_URL` | Base URL for OAuth callback redirects |
+| `OAUTH_REDIRECT_BASE_URL` | Base URL for OAuth callback redirects (stays global across providers) |
 
 ## Setup
 
