@@ -33,6 +33,7 @@ Operators of the TinyHands deployment (rows in `platform_admins`) can view per-w
 - Webhook URLs for agent triggers include the workspace slug: `/webhooks/w/{workspaceSlug}/agent/{agentSlug}`. The legacy `/webhooks/agent-{name}` form returns a 301 when it can resolve unambiguously.
 - OAuth flows for third-party tools use a signed `state` parameter that carries the workspace id; the signature is verified on callback.
 - The logger runs `redactSecrets()` on every log line so API keys, bot tokens, and OAuth secrets cannot leak to stdout.
+- The in-container `kb-search`, `docs-read`, and `docs-write` tools send `X-Workspace-Id` on every call to `/internal/kb/*` and `/internal/docs/*`. The server resolves the workspace from that header (falling back to the default workspace only when it is absent, for legacy single-tenant installs) so an agent run in tenant A can never read or write tenant B's KB entries or documents.
 
 ---
 
