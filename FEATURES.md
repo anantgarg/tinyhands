@@ -528,6 +528,7 @@ to agent       (denied)
 - OAuth supported for: Google, Notion, GitHub.
 - API key entry available for any integration. OAuth supported for Google, Notion, and GitHub.
 - One personal connection per integration per user per workspace (upsert on conflict).
+- Reconnecting (saving credentials again for an existing connection) resets both `created_at` and `updated_at` to `NOW()` so the "Connected since" column on the Connections page reflects the current active credentials, not the original connect date. Same behavior on team connection reconnects.
 
 ### Bring-Your-Own Google OAuth App (workspace-owned OAuth client)
 
