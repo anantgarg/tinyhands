@@ -2,6 +2,15 @@
 
 One entry per deploy to production. Each entry names the version, the date, the merges included since the previous release, and the exact rollback command. Updated automatically by the Deploy button (see `.bake/harness/deploy.md` for the post-deploy step that appends here).
 
+## v1.50.2 — 2026-04-21
+
+Deployed to the production host. Bug fix for stale "Connected since" display after reconnect.
+
+- `createTeamConnection` and `createPersonalConnection` now set `created_at = NOW()` in the `ON CONFLICT DO UPDATE` clause so the Connections page's "Connected since" column reflects the active credentials instead of the original-connect date when a user reconnects a tool.
+- One-time prod SQL backfill: 17 Google personal rows in the legacy single-tenant workspace had their `created_at` synced to `updated_at` so today's reconnects show the correct date without users having to disconnect and reconnect again.
+
+Rollback: SSH to production, `cd $APP_DIR && git checkout v1.50.1 && NODE_ENV=development npm install && NODE_ENV=development npm run build && NODE_ENV=development npm run build:web && pm2 reload ecosystem.config.js --force`. No migrations.
+
 ## v1.50.0 — 2026-04-21
 
 Deployed to the production host. plan-015 rolled up (BYO Google OAuth app + KB source sync hardening), and the env-based Google OAuth migration path removed.
