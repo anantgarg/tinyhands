@@ -34,6 +34,7 @@
 | @types/express-session | ^1.18.2 | TypeScript types for express-session |
 | @types/multer | ^1.4.12 | TypeScript types for Multer |
 | @types/node | ^22.10.0 | TypeScript types for Node.js |
+| @types/pdf-parse | ^1.1.5 | TypeScript types for pdf-parse |
 | @types/pg | ^8.18.0 | TypeScript types for pg |
 | @types/uuid | ^10.0.0 | TypeScript types for uuid |
 | @typescript-eslint/eslint-plugin | ^8.0.0 | ESLint rules for TypeScript |
