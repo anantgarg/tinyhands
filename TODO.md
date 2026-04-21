@@ -117,9 +117,6 @@ After v1.47.0, the app's `OAUTH_REDIRECT_BASE_URL` is `https://app.tinyhands.ai`
 ### Test-mock debt — deferred to v1.50
 In v1.48.0 we skipped four test files at the vitest config level: `tests/unit/slack-module.test.ts`, `tests/unit/events.test.ts`, `tests/unit/commands.test.ts`, `tests/unit/api-misc.test.ts`. All of them mock the pre-v1.48 Slack surface (static `getSlackApp().client` plus the slash-command handlers that were deleted). The production code moved to `authorize()` + `AsyncLocalStorage` + dashboard-managed workflows, so the mocks don't compose anymore. Rewrite against the new surface in v1.50 and remove entries from `vitest.config.ts` `exclude`.
 
-### `ensureBotInAllAgentChannels()` is not workspace-aware
-Called at listener boot. Iterates every active agent across every workspace and calls `conversations.join` via `getSystemSlackClient()` (env SLACK_BOT_TOKEN = primary workspace's bot). Join attempts for channels in other workspaces always fail with `channel_not_found` because that token can't see them. Cosmetic for runtime — per-workspace installs already do the join via their own OAuth flow — but fills logs with warnings on every boot. Fix: group agents by workspace_id, then call `ensureBotInChannels(channelIds, workspaceId)` per-group with the correct `getBotClient(workspaceId)`.
-
 
 ---
 
