@@ -434,12 +434,18 @@ describe('Tool Routes', () => {
       expect(res.body[0].toolsCount).toBe(1);
     });
 
-    it('returns 403 for non-admin', async () => {
+    it('is readable by non-admin members so Agent Detail Tools tab renders autoConfigured/supportedCredentialModes', async () => {
+      mockGetIntegrations.mockReturnValueOnce([
+        { id: 'kb', label: 'Knowledge Base', description: '', tools: [{ name: 'kb-search' }], configKeys: [], autoConfigured: true, supportedCredentialModes: [] },
+      ]);
+      mockListTeamConnectionsForTools.mockResolvedValueOnce([]);
       const memberApp = createApp('member');
 
       const res = await makeRequest(memberApp, 'GET', '/tools/integrations');
 
-      expect(res.status).toBe(403);
+      expect(res.status).toBe(200);
+      expect(res.body[0].id).toBe('kb');
+      expect(res.body[0].autoConfigured).toBe(true);
     });
 
     it('returns 500 on error', async () => {

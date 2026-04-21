@@ -236,8 +236,11 @@ router.get('/available', async (req: Request, res: Response) => {
 
 // ── Integrations ──
 
-// GET /tools/integrations — List all integrations with status
-router.get('/integrations', requireAdmin, async (req: Request, res: Response) => {
+// GET /tools/integrations — List all integrations with status.
+// Readable by any workspace member so the Agent Detail Tools tab can render
+// autoConfigured/supportedCredentialModes correctly without admin privilege.
+// Mutating routes below remain admin-only.
+router.get('/integrations', async (req: Request, res: Response) => {
   try {
     const { workspaceId } = getSessionUser(req);
     const integrations = getIntegrations();
