@@ -35,3 +35,4 @@ deploy:
   method: docker-compose
   production_command: docker compose up -d
 detected_as: populated
+skip_permissions_dangerously: true
