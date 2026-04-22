@@ -48,6 +48,23 @@ vi.mock('../../src/modules/kb-sources', () => ({
   deleteApiKey: (...args: any[]) => mockDeleteApiKey(...args),
 }));
 
+// Skip-log module is dynamically imported by the sources route to annotate
+// each row with a `skippedCount`. Mock it so list-sources tests don't need
+// a real DB.
+vi.mock('../../src/modules/kb-sources/skip-log', () => ({
+  countSkippedFiles: vi.fn().mockResolvedValue(0),
+  listSkippedFiles: vi.fn().mockResolvedValue([]),
+  SKIP_REASON_LABELS: {
+    too_large: 'File too large to index',
+    unsupported_format: 'File format not supported',
+    parser_failed: 'Could not read the file contents',
+    reducto_failed: 'Advanced parsing failed',
+    corrupted: 'File appears to be corrupted',
+    download_failed: 'Could not download from source',
+    empty_extraction: 'No readable text was found in the file',
+  },
+}));
+
 vi.mock('../../src/utils/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
@@ -433,6 +450,60 @@ describe('KB Routes', () => {
 
       expect(res.status).toBe(500);
       expect(res.body).toEqual({ error: 'Failed to list sources' });
+    });
+
+    it('includes a skippedCount per source so the dashboard can render the failures icon', async () => {
+      const skipLog = await import('../../src/modules/kb-sources/skip-log');
+      const spy = vi.mocked(skipLog.countSkippedFiles);
+      spy.mockResolvedValueOnce(3).mockResolvedValueOnce(0);
+      mockListSources.mockResolvedValueOnce([{ id: 's1', name: 'Drive' }, { id: 's2', name: 'GH' }]);
+
+      const res = await makeRequest(app, 'GET', '/kb/sources');
+
+      expect(res.status).toBe(200);
+      expect(res.body[0].skippedCount).toBe(3);
+      expect(res.body[1].skippedCount).toBe(0);
+    });
+  });
+
+  describe('GET /kb/sources/:id/skip-log', () => {
+    it('returns the list of files that failed to index, with plain-English reason labels', async () => {
+      const skipLog = await import('../../src/modules/kb-sources/skip-log');
+      vi.mocked(skipLog.listSkippedFiles).mockResolvedValueOnce([
+        {
+          id: 'sl1', workspace_id: 'W', kb_source_id: 's1',
+          file_path: 'drive://abc', filename: 'big.pdf',
+          mime_type: 'application/pdf', size_bytes: 300000000,
+          reason: 'too_large', message: 'file is 300 MB, larger than the 250 MB per-file cap',
+          first_seen_at: '2026-04-01T00:00:00Z', last_seen_at: '2026-04-22T00:00:00Z',
+        } as any,
+      ]);
+
+      const res = await makeRequest(app, 'GET', '/kb/sources/s1/skip-log');
+
+      expect(res.status).toBe(200);
+      expect(res.body[0].filename).toBe('big.pdf');
+      expect(res.body[0].reason).toBe('too_large');
+      expect(res.body[0].reasonLabel).toBe('File too large to index');
+      expect(res.body[0].sizeBytes).toBe(300000000);
+    });
+  });
+
+  describe('POST /kb/sources/:id/reparse', () => {
+    it('triggers a flush-and-resync (admin-only)', async () => {
+      mockFlushAndResync.mockResolvedValueOnce(undefined);
+
+      const res = await makeRequest(app, 'POST', '/kb/sources/s1/reparse');
+
+      expect(res.status).toBe(200);
+      expect(res.body.ok).toBe(true);
+      expect(mockFlushAndResync).toHaveBeenCalledWith('W123', 's1', expect.any(String));
+    });
+
+    it('returns 403 for non-admin — re-parse can cost Reducto credits', async () => {
+      const memberApp = createApp('member');
+      const res = await makeRequest(memberApp, 'POST', '/kb/sources/s1/reparse');
+      expect(res.status).toBe(403);
     });
   });
 

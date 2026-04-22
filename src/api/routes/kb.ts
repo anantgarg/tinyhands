@@ -220,24 +220,158 @@ router.patch('/entries/:id', requireAdmin, async (req: Request, res: Response) =
 
 // ── KB Sources ──
 
-// GET /kb/sources — List sources
+// GET /kb/sources — List sources, including a per-source `skippedCount`
+// that the dashboard uses to decide whether to show the "failures" icon on
+// each row. The icon opens a modal that loads the full list via
+// /kb/sources/:id/skip-log.
 router.get('/sources', async (req: Request, res: Response) => {
   try {
-    const { workspaceId } = getSessionUser(req);
+    const { workspaceId, userId } = getSessionUser(req);
+    const { countSkippedFiles } = await import('../../modules/kb-sources/skip-log');
+    const { getAnyPersonalConnection } = await import('../../modules/connections');
+    const { resolveUserNames } = await import('../helpers/user-resolver');
     const sources = await listSources(workspaceId);
-    res.json((sources as any[]).map((s: any) => ({
-      id: s.id,
-      name: s.name,
-      type: s.source_type || s.type,
-      config: s.config_json ? (typeof s.config_json === 'string' ? JSON.parse(s.config_json) : s.config_json) : {},
-      status: s.status,
-      lastSyncAt: s.last_sync_at,
-      entriesCount: s.entry_count ?? 0,
-      createdAt: s.created_at,
-    })));
+
+    // For any Google-Drive source in error state, figure out who owns the
+    // (broken) connection so we can tell the viewer either "Reconnect" (if
+    // they own it) or "Ask <Name>" (if someone else does). The KB sync uses
+    // the source's created_by as the preferred connection owner.
+    const ownerIds = Array.from(new Set(
+      (sources as any[])
+        .filter((s: any) => s.status === 'error' && s.source_type === 'google_drive')
+        .map((s: any) => s.created_by)
+        .filter(Boolean)
+    ));
+    const ownerNames = ownerIds.length ? await resolveUserNames(ownerIds) : {};
+
+    const rows = await Promise.all((sources as any[]).map(async (s: any) => {
+      let translated: { message: string | null; fix: SyncErrorFix | null } =
+        { message: s.error_message ?? null, fix: null };
+      if (s.status === 'error' && s.error_message) {
+        const ownerId = s.created_by as string | null;
+        const ownerIsMe = ownerId && ownerId === userId;
+        const ownerName = ownerId ? (ownerNames[ownerId] || null) : null;
+        // Probe whether the owner's Google connection still exists + is usable.
+        // The UI can then short-circuit to "Reconnect" if the problem is
+        // literally just the owner needing to re-auth.
+        let ownerHasActiveConnection = false;
+        if (ownerId && s.source_type === 'google_drive') {
+          try {
+            const conn = await getAnyPersonalConnection(workspaceId, 'google-drive', ownerId);
+            ownerHasActiveConnection = !!conn && conn.status === 'active';
+          } catch { /* best-effort */ }
+        }
+        translated = translateSyncError(s.error_message, s.source_type, {
+          ownerIsMe: !!ownerIsMe,
+          ownerName,
+          ownerHasActiveConnection,
+        });
+      }
+      return {
+        id: s.id,
+        name: s.name,
+        type: s.source_type || s.type,
+        config: s.config_json ? (typeof s.config_json === 'string' ? JSON.parse(s.config_json) : s.config_json) : {},
+        status: s.status,
+        lastSyncAt: s.last_sync_at,
+        entriesCount: s.entry_count ?? 0,
+        errorMessage: translated.message,
+        errorFix: translated.fix,
+        skippedCount: await countSkippedFiles(workspaceId, s.id),
+        createdAt: s.created_at,
+      };
+    }));
+    res.json(rows);
   } catch (err: any) {
     logger.error('List KB sources error', { error: err.message });
     res.status(500).json({ error: 'Failed to list sources' });
+  }
+});
+
+// Two shapes the UI renders differently: the viewer can self-fix
+// ("Reconnect" button), or the fix is gated behind another admin's OAuth
+// session and we surface their name instead.
+type SyncErrorFix =
+  | { kind: 'reconnect'; integration: string }
+  | { kind: 'ask_owner'; integration: string; ownerName: string | null };
+
+// Map raw or friendly error strings to plain-English messages + an optional
+// one-click "fix" the dashboard can render. Historical rows may carry raw
+// exception text (e.g. "Unsupported state or unable to authenticate data");
+// future syncs store the already-friendly string from sync-handlers.
+function translateSyncError(
+  raw: string | null,
+  sourceType: string | null,
+  ctx: { ownerIsMe: boolean; ownerName: string | null; ownerHasActiveConnection: boolean },
+): { message: string | null; fix: SyncErrorFix | null } {
+  if (!raw) return { message: null, fix: null };
+  const lower = raw.toLowerCase();
+
+  // Google Drive: crypto failures, missing connection, stale refresh token.
+  if (sourceType === 'google_drive') {
+    if (lower.includes('unsupported state') || lower.includes('unable to authenticate data') ||
+        lower.includes('cannot be decrypted') || lower.includes('missing a refresh token') ||
+        lower.includes('not connected') || lower.includes('no google drive connection') ||
+        lower.includes('reconnect google')) {
+      if (ctx.ownerIsMe) {
+        return {
+          message: 'Google Drive connection is broken. Reconnect Google Drive to restore access.',
+          fix: { kind: 'reconnect', integration: 'google' },
+        };
+      }
+      const who = ctx.ownerName || 'the admin who created this source';
+      return {
+        message: `Google Drive connection is broken. Ask ${who} to reconnect Google Drive in Tools → Personal Connections.`,
+        fix: { kind: 'ask_owner', integration: 'google', ownerName: ctx.ownerName },
+      };
+    }
+  }
+
+  // Pass through anything we don't recognise — it was either already friendly
+  // (from the post-plan-020 sync-handlers) or specific enough to show as-is.
+  return { message: raw, fix: null };
+}
+
+// GET /kb/sources/:id/skip-log — Per-file failures from the most recent
+// syncs (upserted; deleted when a file later ingests successfully). The
+// dashboard surfaces this behind an icon on each source row.
+router.get('/sources/:id/skip-log', async (req: Request, res: Response) => {
+  try {
+    const { workspaceId } = getSessionUser(req);
+    const id = req.params.id as string;
+    const { listSkippedFiles, SKIP_REASON_LABELS } = await import('../../modules/kb-sources/skip-log');
+    const rows = await listSkippedFiles(workspaceId, id);
+    res.json(rows.map(r => ({
+      id: r.id,
+      filename: r.filename,
+      filePath: r.file_path,
+      mimeType: r.mime_type,
+      sizeBytes: r.size_bytes === null ? null : Number(r.size_bytes),
+      reason: r.reason,
+      reasonLabel: SKIP_REASON_LABELS[r.reason as keyof typeof SKIP_REASON_LABELS] || r.reason,
+      message: r.message,
+      firstSeenAt: r.first_seen_at,
+      lastSeenAt: r.last_seen_at,
+    })));
+  } catch (err: any) {
+    logger.error('List skip log error', { error: err.message });
+    res.status(500).json({ error: 'Failed to load skipped files' });
+  }
+});
+
+// POST /kb/sources/:id/reparse — Re-run parsing on every already-synced
+// file in a source using current workspace parser settings (e.g. after
+// enabling Reducto). Implemented as flush+resync: cheapest path that
+// honors the updated settings without a dedicated re-parse queue.
+router.post('/sources/:id/reparse', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { workspaceId, userId } = getSessionUser(req);
+    const id = req.params.id as string;
+    await flushAndResync(workspaceId, id, userId);
+    res.json({ ok: true, message: 'Re-parse started — existing entries are being refreshed.' });
+  } catch (err: any) {
+    logger.error('Re-parse KB source error', { error: err.message });
+    res.status(400).json({ error: "Couldn't start the re-parse. Please try again." });
   }
 });
 

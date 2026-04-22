@@ -126,6 +126,7 @@ export async function createSource(workspaceId: string, params: {
     last_sync_at: null,
     entry_count: 0,
     error_message: null,
+    last_sync_warnings: null,
     created_by: params.createdBy,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -181,7 +182,7 @@ export async function listSources(workspaceId: string): Promise<KBSource[]> {
   return rows;
 }
 
-export async function updateSource(workspaceId: string, id: string, updates: Partial<Pick<KBSource, 'name' | 'config_json' | 'status' | 'auto_sync' | 'sync_interval_hours' | 'error_message' | 'entry_count' | 'last_sync_at'>>): Promise<void> {
+export async function updateSource(workspaceId: string, id: string, updates: Partial<Pick<KBSource, 'name' | 'config_json' | 'status' | 'auto_sync' | 'sync_interval_hours' | 'error_message' | 'entry_count' | 'last_sync_at' | 'last_sync_warnings'>>): Promise<void> {
   const sets: string[] = [];
   const vals: any[] = [];
   let idx = 1;
@@ -202,9 +203,13 @@ export async function updateSource(workspaceId: string, id: string, updates: Par
 }
 
 export async function deleteSource(workspaceId: string, id: string, userId: string): Promise<void> {
-  // Remove linked KB entries
+  // Remove linked KB entries + skip log. The FK on kb_source_skip_log also
+  // cascades, but being explicit keeps behavior consistent across DB setups
+  // where the FK may not have been created (older self-hosted installs that
+  // skipped migration 029).
   await execute('DELETE FROM kb_chunks WHERE entry_id IN (SELECT id FROM kb_entries WHERE kb_source_id = $1 AND workspace_id = $2)', [id, workspaceId]);
   await execute('DELETE FROM kb_entries WHERE kb_source_id = $1 AND workspace_id = $2', [id, workspaceId]);
+  await execute('DELETE FROM kb_source_skip_log WHERE kb_source_id = $1 AND workspace_id = $2', [id, workspaceId]);
   await execute('DELETE FROM kb_sources WHERE id = $1 AND workspace_id = $2', [id, workspaceId]);
   logger.info('KB source deleted', { sourceId: id, userId });
 }

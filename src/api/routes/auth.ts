@@ -279,7 +279,7 @@ router.get('/slack/callback', async (req: Request, res: Response) => {
         res.status(500).json({ error: 'Failed to create session' });
         return;
       }
-      res.redirect('/');
+      res.redirect(config.oauth.webUrl);
     });
   } catch (err: any) {
     logger.error('Slack OAuth callback error', { error: err.message });

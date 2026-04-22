@@ -32,7 +32,7 @@ vi.mock('../../src/modules/users', () => ({
 vi.mock('../../src/config', () => ({
   config: {
     slack: { clientId: 'test-client-id', clientSecret: 'test-client-secret' },
-    oauth: { redirectBaseUrl: 'https://example.com' },
+    oauth: { redirectBaseUrl: 'https://example.com', webUrl: '/' },
   },
 }));
 

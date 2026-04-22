@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Loader2, AlertCircle, Shield, HelpCircle, Key, CheckCircle2 } from 'lucide-react';
+import { Loader2, AlertCircle, Shield, HelpCircle, Key, CheckCircle2, FileText } from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -9,7 +9,16 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useSettings, useUpdateSettings, useAnthropicKeyStatus, useTestAnthropicKey, useSaveAnthropicKey } from '@/api/settings';
+import {
+  useSettings,
+  useUpdateSettings,
+  useAnthropicKeyStatus,
+  useTestAnthropicKey,
+  useSaveAnthropicKey,
+  useReductoStatus,
+  useTestReductoKey,
+  useSaveReductoKey,
+} from '@/api/settings';
 import { useAuthStore } from '@/store/auth';
 import { toast } from '@/components/ui/use-toast';
 
@@ -130,6 +139,7 @@ function SettingsContent() {
       <PageHeader title="Workspace Settings" description="Configure platform defaults and limits" />
 
       <AnthropicKeyCard />
+      <ReductoKeyCard />
 
       {/* General */}
       <Card className="mb-6">
@@ -452,6 +462,142 @@ function AnthropicKeyCard() {
           <Input
             type="password"
             placeholder={configured ? '•••••••••••••••• (key is set — paste a new one to replace)' : 'sk-ant-...'}
+            value={apiKey}
+            onChange={(e) => {
+              setApiKey(e.target.value);
+              setTestResult(null);
+            }}
+            className="mt-1 font-mono text-sm"
+            autoComplete="off"
+          />
+          {testResult && (
+            <p
+              className={`text-xs mt-2 flex items-center gap-1.5 ${
+                testResult.ok ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
+              }`}
+            >
+              {testResult.ok ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
+              {testResult.ok ? 'Valid key' : testResult.reason || 'Invalid key'}
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={handleTest}
+            disabled={!apiKey || testKey.isPending}
+          >
+            {testKey.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
+            Test
+          </Button>
+          <Button
+            size="sm"
+            onClick={handleSave}
+            disabled={!apiKey || saveKey.isPending || (testResult !== null && !testResult.ok)}
+          >
+            {saveKey.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" /> : null}
+            Save
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function ReductoKeyCard() {
+  const { data: status, isLoading } = useReductoStatus();
+  const testKey = useTestReductoKey();
+  const saveKey = useSaveReductoKey();
+
+  const [apiKey, setApiKey] = useState('');
+  const [testResult, setTestResult] = useState<{ ok: boolean; reason?: string } | null>(null);
+
+  const configured = status?.configured === true;
+  const enabled = status?.enabled === true;
+
+  const handleTest = async () => {
+    if (!apiKey) return;
+    setTestResult(null);
+    try {
+      const result = await testKey.mutateAsync(apiKey);
+      setTestResult(result);
+    } catch (err: any) {
+      setTestResult({ ok: false, reason: err.message });
+    }
+  };
+
+  const handleSave = async () => {
+    if (!apiKey) return;
+    try {
+      await saveKey.mutateAsync({ apiKey });
+      setApiKey('');
+      setTestResult(null);
+      toast({ title: 'Reducto key saved', variant: 'success' });
+    } catch (err: any) {
+      toast({ title: 'Failed to save key', description: err.message, variant: 'error' });
+    }
+  };
+
+  const handleToggle = async (next: boolean) => {
+    try {
+      await saveKey.mutateAsync({ enabled: next });
+      toast({ title: next ? 'Reducto turned on' : 'Reducto turned off', variant: 'success' });
+    } catch (err: any) {
+      toast({ title: 'Failed to update', description: err.message, variant: 'error' });
+    }
+  };
+
+  return (
+    <Card className="mb-6">
+      <CardHeader>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-base flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Document Parsing
+            </CardTitle>
+            <CardDescription>
+              Optional upgrade. Use Reducto for better PDF and scanned-document extraction in Knowledge Base syncs.
+            </CardDescription>
+          </div>
+          {!isLoading && (
+            <div
+              className={`flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full ${
+                enabled
+                  ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+                  : 'bg-warm-bg-subtle text-warm-text-secondary'
+              }`}
+            >
+              {enabled ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
+              {enabled ? 'On' : configured ? 'Off' : 'Not configured'}
+            </div>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <p className="text-sm text-warm-text-secondary">
+          By default, Knowledge Base syncs parse Word, Excel, PowerPoint, PDF, and OpenDocument files locally. Turn on Reducto to get
+          materially better extraction on messy PDFs and scanned documents. No bytes are sent to Reducto unless this is on.
+        </p>
+        <div className="flex items-center justify-between border border-warm-border rounded-md p-3">
+          <div>
+            <Label className="text-sm font-medium">Use Reducto for better PDF extraction</Label>
+            <p className="text-xs text-warm-text-secondary mt-0.5">
+              {configured ? 'Key saved. Toggle on to route PDFs through Reducto.' : 'Save a key below before turning this on.'}
+            </p>
+          </div>
+          <Switch
+            checked={enabled}
+            disabled={!configured || saveKey.isPending}
+            onCheckedChange={handleToggle}
+          />
+        </div>
+        <div>
+          <Label>API Key</Label>
+          <Input
+            type="password"
+            placeholder={configured ? '•••••••••••••••• (key is set — paste a new one to replace)' : 'Your Reducto API key'}
             value={apiKey}
             onChange={(e) => {
               setApiKey(e.target.value);

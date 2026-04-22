@@ -3,6 +3,12 @@ import { getSessionUser } from '../middleware/auth';
 import { requireAdmin } from '../middleware/admin';
 import { getAllSettings, setSetting } from '../../modules/workspace-settings';
 import { setAnthropicApiKey, hasAnthropicApiKey, testAnthropicApiKey } from '../../modules/anthropic';
+import {
+  getReductoStatus,
+  setReductoApiKey,
+  setReductoEnabled,
+  testReductoApiKey,
+} from '../../modules/reducto';
 import { logger } from '../../utils/logger';
 
 const router = Router();
@@ -101,6 +107,56 @@ router.put('/anthropic-key', requireAdmin, async (req: Request, res: Response) =
   } catch (err: any) {
     logger.error('Anthropic key save error', { error: err.message });
     res.status(500).json({ error: 'Failed to save Anthropic key' });
+  }
+});
+
+// ── Reducto (optional document parsing) ──
+// Reducto is an optional high-fidelity document parser for KB source sync.
+// Admins opt in per workspace by pasting an API key and flipping the enable
+// toggle. The workspace never sends bytes to Reducto unless `enabled === true`
+// AND a decryptable key is present.
+
+router.get('/reducto-key/status', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { workspaceId } = getSessionUser(req);
+    const status = await getReductoStatus(workspaceId);
+    res.json(status);
+  } catch (err: any) {
+    logger.error('Reducto key status error', { error: err.message });
+    res.status(500).json({ error: 'Failed to check Reducto key status' });
+  }
+});
+
+router.post('/reducto-key/test', requireAdmin, async (req: Request, res: Response) => {
+  const { apiKey } = req.body || {};
+  if (!apiKey) {
+    res.status(400).json({ error: 'apiKey is required' });
+    return;
+  }
+  const result = await testReductoApiKey(apiKey);
+  res.json(result);
+});
+
+router.put('/reducto-key', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { workspaceId, userId } = getSessionUser(req);
+    const { apiKey, enabled } = req.body || {};
+    if (apiKey) {
+      const check = await testReductoApiKey(apiKey);
+      if (!check.ok) {
+        res.status(400).json({ error: check.reason || 'Key validation failed' });
+        return;
+      }
+      await setReductoApiKey(workspaceId, apiKey, userId);
+    }
+    if (typeof enabled === 'boolean') {
+      await setReductoEnabled(workspaceId, enabled, userId);
+    }
+    const status = await getReductoStatus(workspaceId);
+    res.json({ ok: true, ...status });
+  } catch (err: any) {
+    logger.error('Reducto key save error', { error: err.message });
+    res.status(500).json({ error: 'Failed to save Reducto key' });
   }
 });
 

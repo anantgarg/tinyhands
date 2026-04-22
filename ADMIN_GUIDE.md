@@ -11,6 +11,7 @@ A single TinyHands deployment hosts many Slack workspaces. TinyHands (the operat
 - **Sign in with Slack** — Users sign in with Slack OAuth. Users who belong to multiple Slack workspaces see a workspace switcher in the dashboard header.
 - **Installing in a new Slack workspace** — Admins click "Add to Slack" (`/api/v1/auth/slack/install`) to OAuth-install the bot into their Slack workspace. This creates a new TinyHands workspace automatically; no manual database edits are required.
 - **Workspace settings** — Each workspace admin sets their own Anthropic API key under **Workspace Settings → Claude API key** (with a **Test key** button that validates against Anthropic before saving).
+- **Document parsing (optional)** — Workspace admins can optionally configure **Reducto** under **Workspace Settings → Document Parsing** for higher-fidelity PDF and scanned-document extraction during Knowledge Base syncs. See the [Reducto Setup](#reducto-setup-optional) section.
 
 ## Upgrading to Multi-Tenant
 
@@ -222,6 +223,29 @@ From the Sources page, each source has action buttons:
 #### API Keys
 
 The Sources page also manages API keys for external KB access. Click **New API Key** to generate a key. Keys are shown once at creation -- copy them immediately.
+
+#### Google Drive File Type Coverage
+
+Connecting a Drive folder indexes both Google-native formats (Docs, Sheets, Slides) and uploaded files: Word (`.docx`/`.doc`), Excel (`.xlsx`/`.xls`), PowerPoint (`.pptx`/`.ppt`), PDF, OpenDocument (`.odt`/`.ods`/`.odp`), RTF, HTML, and plain text (txt, md, csv, tsv, json). Unsupported or unparseable files are recorded in a per-source **skip log**; on the KB Sources page each row shows an orange ⚠ icon with a count when there are failures, and clicking it opens a modal listing every skipped file with a plain-English reason, file size, and the last-attempted time. One bad file never fails the whole crawl.
+
+**Per-file size cap**: Downloads are capped at **250 MB** by default (set `KB_MAX_FILE_BYTES` in the deployment environment to override). Files above the cap are torn down before full download and recorded in the skip log with reason `too_large`.
+
+**Re-parse control**: After turning Reducto on or off, click the ✨ icon on a source's row to re-parse every already-synced file with current settings. This does not happen implicitly because it can use Reducto credits.
+
+#### Reducto Setup (Optional)
+
+Reducto is an optional per-workspace upgrade for higher-fidelity PDF and scanned-document extraction. It is opt-in — no bytes are sent to the vendor unless you have both pasted a key and flipped the toggle on.
+
+1. **Get a Reducto API key** at [reducto.ai](https://reducto.ai) (create an account, generate a key in your Reducto dashboard).
+2. In TinyHands, open **Workspace Settings**. You'll see a **Document Parsing** card below the Claude API key card.
+3. Paste your Reducto key, click **Test** to verify it with Reducto (a tiny probe file is uploaded — no `/parse` credits are spent on the test), then click **Save**.
+4. Flip the **Use Reducto for better PDF extraction** toggle **On**. The next KB sync will route PDFs and Office documents through Reducto.
+
+**Cost implications**: Reducto bills per page parsed. It is invoked for PDFs and Office files (Word / Excel / PowerPoint) when enabled, and as a fallback for any file whose local parser fails or returns empty text. Each Drive sync's Reducto call count and reported `usage` credits are logged with the sync run — monitor your usage on the Reducto dashboard.
+
+**Fallback safety**: If Reducto returns an error, times out, or you revoke the key, the sync silently falls back to the local parser and records a per-file warning. Your KB never breaks because Reducto is unreachable.
+
+**Disabling**: Flip the toggle off. The key stays stored (so you can re-enable without re-pasting), but no further bytes are sent to Reducto until you turn it back on.
 
 ---
 

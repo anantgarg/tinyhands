@@ -22,6 +22,7 @@ import {
   useOAuthIntegrations,
   useUpdateConnectionSettings,
   useExpiredConnectionCount,
+  startOAuthReconnect,
 } from '@/api/connections';
 import { useIntegrations } from '@/api/tools';
 import { useOAuthAppStatus } from '@/api/workspace-oauth-apps';
@@ -473,7 +474,7 @@ function PersonalTab() {
   const [folderDialog, setFolderDialog] = useState<{ connId: string; name: string; folderId: string; folderName: string } | null>(null);
 
   const handleOAuth = (integration: string) => {
-    window.open(`/api/v1/connections/oauth/${integration}/start`, '_blank');
+    startOAuthReconnect(integration);
   };
 
   const handleDelete = (id: string) => {
@@ -505,12 +506,14 @@ function PersonalTab() {
           .map((s: any) => s.createdAt ? new Date(s.createdAt).getTime() : Infinity)
           .reduce((a: number, b: number) => Math.min(a, b), Infinity);
         const anyExpired = siblings.some((s: any) => s.status === 'expired');
+        const anyBroken = siblings.some((s: any) => s.isBroken);
         const allActive = siblings.every((s: any) => s.status === 'active');
         result.push({
           ...driveRow,
           integrationName: 'Google',
           integrationId: 'google',
           status: anyExpired ? 'expired' : allActive ? 'active' : driveRow.status,
+          isBroken: anyBroken,
           createdAt: earliest === Infinity ? driveRow.createdAt : new Date(earliest).toISOString(),
         });
       } else {
@@ -671,28 +674,32 @@ function PersonalTab() {
                       )}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={conn.status === 'active' ? 'success' : conn.status === 'expired' ? 'warning' : 'danger'}>
-                        {titleCaseStatus(conn.status)}
-                      </Badge>
+                      {conn.isBroken ? (
+                        <Badge variant="danger" title="Stored credentials cannot be used — reconnect to fix">Broken</Badge>
+                      ) : (
+                        <Badge variant={conn.status === 'active' ? 'success' : conn.status === 'expired' ? 'warning' : 'danger'}>
+                          {titleCaseStatus(conn.status)}
+                        </Badge>
+                      )}
                     </TableCell>
                     <TableCell className="text-warm-text-secondary text-xs">
                       {conn.createdAt ? formatDistanceToNow(new Date(conn.createdAt), { addSuffix: true }) : '—'}
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center justify-end gap-1">
-                        {conn.status === 'expired' && (
+                        {(conn.status === 'expired' || conn.isBroken) && (
                           <Button
                             size="sm"
                             variant="outline"
                             onClick={() => {
                               const target = isGoogleGroup ? 'google' : conn.integrationId;
-                              window.open(`/api/v1/connections/oauth/${target}/start`, '_blank');
+                              startOAuthReconnect(target);
                             }}
                           >
                             Reconnect
                           </Button>
                         )}
-                        {isGoogleDrive && conn.status !== 'expired' && (
+                        {isGoogleDrive && conn.status !== 'expired' && !conn.isBroken && (
                           <Button
                             variant="ghost"
                             size="sm"

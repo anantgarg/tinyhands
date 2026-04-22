@@ -63,8 +63,9 @@ src/
 │   ├── execution/           # Docker container lifecycle, Claude SDK, token tracking
 │   ├── tools/               # Tool registry + integrations (see below)
 │   ├── knowledge-base/      # KB entries, full-text search (tsvector + GIN)
-│   ├── kb-sources/          # KB source connectors (GitHub, Drive, Zendesk, web)
+│   ├── kb-sources/          # KB source connectors (GitHub, Drive, Zendesk, web) + parsers/ (docx, xlsx, pptx, pdf, rtf, html, plain)
 │   ├── kb-wizard/           # Guided KB source setup flow
+│   ├── reducto/             # Optional per-workspace Reducto integration for PDF / scanned-document parsing
 │   ├── sources/             # Agent data sources (GitHub, Google Drive, memory)
 │   ├── triggers/            # Trigger types: slack, linear, zendesk, intercom, webhook, schedule
 │   ├── workflows/           # Multi-step stateful workflows (DAG of steps)
@@ -96,6 +97,7 @@ PostgreSQL with migrations in `src/db/migrations/`. Key tables:
 - **custom_tools** — Tool definitions (schema, code, config, access_level)
 - **kb_entries** — Knowledge base articles (full-text search via tsvector)
 - **kb_sources** — KB source configs (auto-sync, connectors)
+- **kb_source_skip_log** — Per-file failures from KB syncs (too-large, parser-failed, unsupported, reducto-failed, corrupted). Upsert by `(kb_source_id, file_path)` — rows are deleted when the file later ingests successfully so the log reflects current state.
 - **triggers** — Agent activation rules (cron, webhook, event-based)
 - **sources** / **source_chunks** — Agent data sources and indexed content
 - **agent_memories** — Persistent cross-run memory (facts, categories, relevance)
