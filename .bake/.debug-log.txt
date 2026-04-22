@@ -1884,3 +1884,14 @@
 [11:38:16.438] [AutoSwitch] bailed — activeFilePath changed during await {"capturedPath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-017.md","currentActiveFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-021.md"}
 [11:38:16.438] [AutoSwitch] plan → already on correct session, no-op {"itemId":"plan-021","activeSessionId":"plan-021"}
 [11:38:16.724] [Terminal] resolved cwd {"sessionId":"plan-021","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-021","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-021","projectPath":"/Users/anantgarg/Local/tinyhands"}
+[11:39:52.642] [TerminalSwitch] transitioning {"from":"plan-021","to":"plan-022","storeSessionsLen":31}
+[11:39:52.642] [Terminal] getOrCreate → creating new {"sessionId":"plan-022","sessionFound":true,"sessionType":"plan","sessionPlanId":"plan-022","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-022","sessionsLen":31,"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[11:39:52.659] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-021.md","sessionsLen":31,"activeSessionId":"plan-022"}
+[11:39:52.659] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-021.md"}
+[11:39:52.663] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":1964,"isPlanPath":true}
+[11:39:52.663] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md","title":"New Plan"}
+[11:39:52.666] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md","sessionsLen":31,"activeSessionId":"plan-022"}
+[11:39:52.666] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md"}
+[11:39:52.671] [AutoSwitch] bailed — activeFilePath changed during await {"capturedPath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-021.md","currentActiveFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md"}
+[11:39:52.671] [AutoSwitch] plan → already on correct session, no-op {"itemId":"plan-022","activeSessionId":"plan-022"}
+[11:39:52.961] [Terminal] resolved cwd {"sessionId":"plan-022","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-022","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-022","projectPath":"/Users/anantgarg/Local/tinyhands"}
