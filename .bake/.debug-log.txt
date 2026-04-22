@@ -2299,3 +2299,30 @@
 [14:40:16.672] [Poll] External change detected {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md","resolvedPath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-022/.bake/tasks/plans/plan-022.md","newTitle":"Include Slack attachments and Block Kit content in the text passed to agents","currentH1":"Include Slack attachments/blocks in the text passed to agents","refExists":true}
 [14:40:16.673] [Poll] Updated h1 DOM {"newTitle":"Include Slack attachments and Block Kit content in the text passed to agents"}
 [14:40:16.694] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":13140,"isPlanPath":true}
+[14:42:55.562] [Restore] setProjectPath {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md","activeSessionId":"plan-022","openTabsLen":10}
+[14:42:55.873] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":null,"sessionsLen":0,"activeSessionId":""}
+[14:42:55.873] [AutoSwitch] early-bail (no project/path) {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":null}
+[14:42:55.873] [LoadSessions] start {"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[14:42:55.873] [Layout] App mounted {"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[14:42:56.064] [Restore] setTimeout fired — restoring tabs {"sessionsLen":0}
+[14:42:56.097] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md","isReadOnly":false,"parsedStatus":null,"editorContentLen":0,"isPlanPath":true}
+[14:42:56.101] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md","sessionsLen":0,"activeSessionId":""}
+[14:42:56.101] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md"}
+[14:42:56.101] [AutoSwitch] deferred — sessions not loaded for plan/vibe {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md"}
+[14:42:56.103] [Restore] switchTab {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md","contentLen":1964}
+[14:42:56.103] [Restore] setActiveSessionId (from persistence) {"activeSessionId":"plan-022","prevActive":""}
+[14:42:56.109] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":1964,"isPlanPath":true}
+[14:42:56.110] [Editor] editorContent changed externally — reloading body {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md","title":"New Plan"}
+[14:42:56.138] [TerminalSwitch] deferred — sessions not loaded {"activeSessionId":"plan-022"}
+[14:42:56.508] [LoadSessions] reconcile returned {"len":33}
+[14:42:56.508] [ApplySessions] setSessions {"incomingLen":33,"prevActive":"plan-022","currentIsValid":true,"willForceMain":false,"planIds":["plan-001","plan-002","plan-003","plan-004","plan-004","plan-004","plan-005","plan-006","plan-007","plan-008"]}
+[14:42:56.508] [LoadSessions] applied reconcile result
+[14:42:56.512] [TerminalSwitch] transitioning {"from":null,"to":"plan-022","storeSessionsLen":33}
+[14:42:56.512] [Terminal] getOrCreate → creating new {"sessionId":"plan-022","sessionFound":true,"sessionType":"plan","sessionPlanId":"plan-022","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-022","sessionsLen":33,"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[14:42:56.548] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md","sessionsLen":33,"activeSessionId":"plan-022"}
+[14:42:56.548] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md"}
+[14:42:56.560] [AutoSwitch] plan → already on correct session, no-op {"itemId":"plan-022","activeSessionId":"plan-022"}
+[14:42:56.850] [Terminal] resolved cwd {"sessionId":"plan-022","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-022","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-022","projectPath":"/Users/anantgarg/Local/tinyhands"}
+[14:42:59.104] [Poll] External change detected {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md","resolvedPath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-022/.bake/tasks/plans/plan-022.md","newTitle":"Include Slack attachments and Block Kit content in the text passed to agents","refExists":false}
+[14:42:59.175] [Editor] useLayoutEffect syncing h1 {"planTitle":"Include Slack attachments and Block Kit content in the text passed to agents","currentTextContent":""}
+[14:42:59.175] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":13140,"isPlanPath":true}

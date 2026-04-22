@@ -223,7 +223,7 @@
       "name": "Bring-your-own Google OAuth app (per-workspace OAuth credentials)",
       "planId": "plan-015",
       "planPath": "/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-015.md",
-      "worktreePath": null,
+      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-015",
       "branch": "bake/plan/plan-015",
       "createdAt": "2026-04-20T09:17:17.332Z"
     },
@@ -285,7 +285,8 @@
       "planPath": "/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md",
       "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-022",
       "branch": "bake/plan/plan-022",
-      "createdAt": "2026-04-22T11:39:52.639Z"
+      "createdAt": "2026-04-22T11:39:52.639Z",
+      "claudeSessionId": "1d898aac-56bf-409f-8fb2-191feef317a6"
     },
     {
       "id": "plan-023",
