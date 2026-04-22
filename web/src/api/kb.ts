@@ -45,6 +45,13 @@ interface KBSource {
   lastSyncAt: string | null;
   entriesCount: number;
   errorMessage?: string | null;
+  // Structured hint for the dashboard. `reconnect` → the viewer owns the
+  // broken connection, render a Reconnect button. `ask_owner` → another
+  // admin owns it; render a non-interactive "Ask <Name>" chip instead.
+  errorFix?:
+    | { kind: 'reconnect'; integration: string }
+    | { kind: 'ask_owner'; integration: string; ownerName: string | null }
+    | null;
   skippedCount?: number;
   createdAt: string;
 }

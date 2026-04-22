@@ -276,6 +276,26 @@ export function KBSources() {
                           </button>
                         )}
                       </div>
+                      {source.status === 'error' && source.errorMessage && (
+                        <div className="mt-1.5 max-w-xl space-y-1.5">
+                          <div className="text-xs text-warm-text-secondary leading-snug">
+                            {source.errorMessage}
+                          </div>
+                          {source.errorFix?.kind === 'reconnect' && (
+                            <Button
+                              asChild
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-2.5 text-xs"
+                            >
+                              <Link to="/tools?tab=personal" onClick={(e) => e.stopPropagation()}>
+                                <RefreshCw className="h-3 w-3 mr-1.5" />
+                                Reconnect Google Drive
+                              </Link>
+                            </Button>
+                          )}
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell>
                       <Badge variant="secondary">{getSourceTypeName(source.type)}</Badge>

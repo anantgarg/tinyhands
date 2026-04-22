@@ -816,11 +816,20 @@ async function syncGoogleDrive(workspaceId: string, source: KBSource, config: Re
 
   const conn = await getAnyPersonalConnection(workspaceId, 'google-drive', source.created_by);
   if (!conn) {
-    throw new Error('No Google Drive connection found. An admin must connect their Google account in Tools → Personal first.');
+    throw new Error('Google Drive is not connected. Open Tools → Personal Connections and connect Google Drive, then sync again.');
   }
-  const creds = decryptCredentials(conn);
+  let creds: Record<string, string>;
+  try {
+    creds = decryptCredentials(conn);
+  } catch {
+    // AES-GCM "Unsupported state or unable to authenticate data" — the
+    // stored ciphertext can't be decrypted with the current ENCRYPTION_KEY.
+    // Typically means the key was rotated or the DB came from a different
+    // install. The admin needs to reconnect Google Drive to re-encrypt.
+    throw new Error('Google Drive connection is broken (stored credentials cannot be decrypted). Open Tools → Personal Connections and reconnect Google Drive.');
+  }
   if (!creds.refresh_token) {
-    throw new Error('Google connection is missing a refresh token. Reconnect Google in Tools → Personal.');
+    throw new Error('Google Drive connection is missing a refresh token. Open Tools → Personal Connections and reconnect Google Drive.');
   }
   const accessToken = await refreshGoogleAccessToken(workspaceId, creds.refresh_token);
 

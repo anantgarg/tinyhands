@@ -101,14 +101,34 @@ router.get('/personal', async (req: Request, res: Response) => {
     res.json((connections as any[]).map((c: any) => {
       let rootFolderId = null;
       let rootFolderName = null;
+      // A connection is "broken" when its stored credential ciphertext can't
+      // be decrypted with the current ENCRYPTION_KEY, or the decrypted blob
+      // is missing a usable token. Reasons: the admin rotated the key, the
+      // OAuth provider revoked the token, the DB was populated by a sibling
+      // install with a different key. The UI uses this to show a Reconnect
+      // button instead of the regular row.
+      let isBroken = false;
+      let brokenReason: string | null = null;
       try {
         if (c.credentials_encrypted && c.credentials_iv) {
           const { decryptCredentials } = require('../../modules/connections');
           const creds = decryptCredentials(c);
           rootFolderId = creds.root_folder_id || null;
           rootFolderName = creds.root_folder_name || null;
+          // OAuth integrations that should have a refresh_token — if it's
+          // missing, the connection is effectively broken (can't refresh access).
+          if (c.integration_id === 'google-drive' && !creds.refresh_token) {
+            isBroken = true;
+            brokenReason = 'missing_refresh_token';
+          }
+        } else {
+          isBroken = true;
+          brokenReason = 'missing_ciphertext';
         }
-      } catch { /* ignore decrypt errors */ }
+      } catch {
+        isBroken = true;
+        brokenReason = 'decrypt_failed';
+      }
       return {
         id: c.id,
         integrationId: c.integration_id,
@@ -118,6 +138,8 @@ router.get('/personal', async (req: Request, res: Response) => {
         userId: c.user_id,
         userDisplayName: names[c.user_id] || c.user_id,
         status: c.status || 'active',
+        isBroken,
+        brokenReason,
         createdAt: c.created_at,
         rootFolderId,
         rootFolderName,

@@ -1,8 +1,9 @@
 ---
 id: plan-020
 title: Expand Google Drive sync to cover popular document file types
-status: review
+status: complete
 created: 2026-04-22
+completed: 2026-04-22T14:13:30.000Z
 ---
 
 ## Summary
