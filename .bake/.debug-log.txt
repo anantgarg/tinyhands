@@ -2124,3 +2124,18 @@
 [13:13:50.994] [Terminal] getOrCreate → returning cached {"sessionId":"plan-022","cachedCwd":null}
 [13:14:20.968] [Poll] External change detected {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md","resolvedPath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-022/.bake/tasks/plans/plan-022.md","newTitle":"HubSpot notifications stopped posting to #interactive-demo-signups","currentH1":"HubSpot notifications stopped posting to #interactive-demo-signups","refExists":true}
 [13:14:20.980] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":6572,"isPlanPath":true}
+[13:14:25.449] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-023.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":13914,"isPlanPath":true}
+[13:14:25.449] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-023.md","title":"Investigate Splitsie KB source showing 0 entries in production"}
+[13:14:25.468] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-023.md","sessionsLen":33,"activeSessionId":"plan-022"}
+[13:14:25.468] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-023.md"}
+[13:14:25.499] [AutoSwitch] plan → activating existing session {"itemId":"plan-023","sessionId":"plan-023","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-023","prevSession":"plan-022"}
+[13:14:25.502] [TerminalSwitch] transitioning {"from":"plan-022","to":"plan-023","storeSessionsLen":33}
+[13:14:25.503] [Terminal] getOrCreate → returning cached {"sessionId":"plan-023","cachedCwd":null}
+[13:14:28.459] [Tab] Clicked tab {"tabPath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-019.md","resolvedPath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-019/.bake/tasks/plans/plan-019.md","title":"Audit and harden remaining getDefaultWorkspaceId() fallback call sites","contentLen":12502}
+[13:14:28.464] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-019.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":12502,"isPlanPath":true}
+[13:14:28.464] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-019.md","title":"Audit and harden remaining getDefaultWorkspaceId() fallback call sites"}
+[13:14:28.488] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-019.md","sessionsLen":33,"activeSessionId":"plan-023"}
+[13:14:28.488] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-019.md"}
+[13:14:28.509] [AutoSwitch] plan → activating existing session {"itemId":"plan-019","sessionId":"plan-019","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-019","prevSession":"plan-023"}
+[13:14:28.514] [TerminalSwitch] transitioning {"from":"plan-023","to":"plan-019","storeSessionsLen":33}
+[13:14:28.514] [Terminal] getOrCreate → returning cached {"sessionId":"plan-019","cachedCwd":null}
