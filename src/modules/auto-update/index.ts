@@ -50,6 +50,31 @@ export async function handleDeploy(payload: any): Promise<DeployResult> {
   const packageJsonChanged = changedFiles.includes('package.json') || changedFiles.includes('package-lock.json');
   const dockerfileChanged = changedFiles.some((f: string) => f.startsWith('docker/'));
 
+  // Skip the full build+reload when every changed file is under .bake/ — those are
+  // bake tool artifacts (session logs, task state) that don't affect runtime.
+  // Without this, each bake push triggers a pm2 reload and a brief 502 at the edge.
+  // We still fast-forward the git working tree so subsequent deploys have a clean base.
+  const dedupedFiles = [...new Set(changedFiles)];
+  if (dedupedFiles.length > 0 && dedupedFiles.every((f: string) => f.startsWith('.bake/'))) {
+    logger.info('Deploy: skipping build/reload — only .bake/ files changed', {
+      commitHash,
+      fileCount: dedupedFiles.length,
+    });
+    try {
+      execSync('git pull origin main', { cwd: process.cwd(), timeout: 30000 });
+    } catch (err: any) {
+      logger.warn('Deploy: git pull failed during .bake-only skip', { error: err.message });
+    }
+    return {
+      success: true,
+      commitHash,
+      changedFiles: dedupedFiles,
+      packageJsonChanged: false,
+      dockerfileChanged: false,
+      restartTime: Date.now() - startTime,
+    };
+  }
+
   try {
     // 1. Git pull
     logger.info('Deploy: pulling latest code', { commitHash });

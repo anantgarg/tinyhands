@@ -1405,6 +1405,7 @@ The non-streaming endpoint also accepts the legacy `{ "message": "..." }` format
 - Process: pull code -> `npm install` -> `npm run build` -> run migrations -> reload PM2.
 - Resilient reload: if bulk `pm2 reload` fails, falls back to reloading each process individually to prevent partial deploys.
 - Deploy webhook endpoint: `POST /webhooks/github-deploy`.
+- `.bake/`-only pushes are fast-forwarded with `git pull` but skip the build and PM2 reload — bake session/debug artifacts do not affect the running service, and reloading on every bake push was causing brief 502s at the edge.
 - Handled by `src/modules/auto-update/`.
 
 ---
