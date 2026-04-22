@@ -2192,3 +2192,5 @@
 [13:28:09.767] [AutoSwitch] plan → activating existing session {"itemId":"plan-020","sessionId":"plan-020","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-020","prevSession":"swift-jaguar"}
 [13:28:09.769] [TerminalSwitch] transitioning {"from":"swift-jaguar","to":"plan-020","storeSessionsLen":33}
 [13:28:09.769] [Terminal] getOrCreate → returning cached {"sessionId":"plan-020","cachedCwd":null}
+[14:13:51.765] [Poll] External change detected {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-020.md","resolvedPath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-020/.bake/tasks/plans/plan-020.md","newTitle":"Expand Google Drive sync to cover popular document file types","currentH1":"Expand Google Drive sync to cover popular document file types","refExists":true}
+[14:13:51.794] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-020.md","isReadOnly":true,"parsedStatus":"complete","editorContentLen":23195,"isPlanPath":true}
