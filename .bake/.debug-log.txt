@@ -2049,3 +2049,18 @@
 [13:10:46.507] [AutoSwitch] non-plan/vibe → forcing main {"prevSession":"plan-020"}
 [13:10:46.510] [TerminalSwitch] transitioning {"from":"plan-020","to":"main","storeSessionsLen":32}
 [13:10:46.510] [Terminal] getOrCreate → returning cached {"sessionId":"main","cachedCwd":null}
+[13:11:45.699] [TerminalSwitch] transitioning {"from":"main","to":"swift-jaguar","storeSessionsLen":33}
+[13:11:45.699] [Terminal] getOrCreate → creating new {"sessionId":"swift-jaguar","sessionFound":true,"sessionType":"vibe","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/swift-jaguar","sessionsLen":33,"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[13:11:45.734] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"__main__","sessionsLen":33,"activeSessionId":"swift-jaguar"}
+[13:11:45.734] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":false,"activeFilePath":"__main__"}
+[13:11:45.734] [AutoSwitch] non-plan/vibe → forcing main {"prevSession":"swift-jaguar"}
+[13:11:45.739] [TerminalSwitch] transitioning {"from":"swift-jaguar","to":"main","storeSessionsLen":33}
+[13:11:45.739] [Terminal] getOrCreate → returning cached {"sessionId":"main","cachedCwd":null}
+[13:11:45.780] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-005.md","isReadOnly":false,"parsedStatus":"active","editorContentLen":87,"isPlanPath":false}
+[13:11:45.781] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-005.md","title":"Swift Jaguar"}
+[13:11:45.786] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-005.md","sessionsLen":33,"activeSessionId":"main"}
+[13:11:45.786] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":true,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-005.md"}
+[13:11:45.788] [Editor] useLayoutEffect syncing h1 {"planTitle":"Swift Jaguar","currentTextContent":""}
+[13:11:45.799] [TerminalSwitch] transitioning {"from":"main","to":"swift-jaguar","storeSessionsLen":33}
+[13:11:45.799] [Terminal] getOrCreate → returning cached {"sessionId":"swift-jaguar","cachedCwd":null}
+[13:11:46.035] [Terminal] resolved cwd {"sessionId":"swift-jaguar","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/swift-jaguar","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/swift-jaguar","projectPath":"/Users/anantgarg/Local/tinyhands"}

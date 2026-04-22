@@ -296,6 +296,15 @@
       "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-023",
       "branch": "bake/plan/plan-023",
       "createdAt": "2026-04-22T12:57:46.203Z"
+    },
+    {
+      "id": "swift-jaguar",
+      "type": "vibe",
+      "name": "Swift Jaguar",
+      "vibeId": "vibe-005",
+      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/swift-jaguar",
+      "branch": "bake/vibe/swift-jaguar",
+      "createdAt": "2026-04-22T13:11:45.693Z"
     }
   ]
 }
