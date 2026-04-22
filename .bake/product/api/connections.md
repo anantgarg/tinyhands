@@ -8,7 +8,7 @@
 `GET /team` — Admin only. Workspace-wide credential connections.
 
 ### List Personal Connections
-`GET /personal` — Required auth. Current user's personal connections.
+`GET /personal` — Required auth. Current user's personal connections. Each row includes `isBroken` (true when the stored credentials can't be decrypted with the current `ENCRYPTION_KEY`, or when a Google OAuth row is missing its refresh token) and `brokenReason` (`decrypt_failed` | `missing_refresh_token` | `missing_ciphertext`). The dashboard uses these to badge the row red and render a Reconnect button. (plan-020)
 
 ### Create Team Connection
 `POST /team` — Admin only. Body: `{ integrationId, credentials, label? }`
