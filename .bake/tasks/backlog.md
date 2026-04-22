@@ -22,6 +22,7 @@
 - [ ] Extend BYO OAuth app pattern to Notion and GitHub once those integrations ship (from plan-015)
 - [ ] Wire GitHub / Zendesk / Web Crawl KB source connectors through the connections table so the wizard can un-grey them (currently "Coming soon") (from plan-015)
 - [ ] Implement a Notion KB source connector (no sync handler exists today) (from plan-015)
+- [ ] Cut a GitHub release (`gh release create v1.51.0`) with changelog entry for plan-020 (from plan-020)
 
 ## Completed
 
