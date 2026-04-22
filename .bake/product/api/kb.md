@@ -59,7 +59,18 @@
 ### List Sources
 `GET /sources`
 - **Auth**: Required
-- **Response**: Sources array
+- **Response**: Sources array. Each row includes `skippedCount` (count of files in the skip log — drives the failures icon on the KB Sources row), `errorMessage` (plain-English translation of the last sync's failure), and `errorFix` (structured hint: `{ kind: 'reconnect', integration }` when the viewer can self-fix, `{ kind: 'ask_owner', integration, ownerName }` when someone else's personal connection is broken).
+
+### Skip Log for a Source (plan-020)
+`GET /sources/:id/skip-log`
+- **Auth**: Required
+- **Response**: Array of skipped files with `filename`, `filePath`, `mimeType`, `sizeBytes`, `reason`, `reasonLabel` (plain English — e.g. "File too large to index"), `message`, `firstSeenAt`, `lastSeenAt`. The dashboard opens a modal over this list when an admin clicks the failures icon on a source row. Rows disappear as soon as the file ingests successfully on a later sync.
+
+### Re-parse Source (plan-020)
+`POST /sources/:id/reparse`
+- **Auth**: Admin only
+- **Response**: `{ ok: true, message }`
+- Flushes the source's existing entries and runs a fresh sync with current workspace parser settings. Use after turning Reducto on/off so existing files pick up the new settings; not triggered implicitly because it can use Reducto credits.
 
 ### Create Source
 `POST /sources`
