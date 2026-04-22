@@ -67,6 +67,11 @@
 | Auto-sync | `src/modules/kb-sources/` | Periodic source refresh |
 | Idempotent source sync | `src/modules/knowledge-base/` (`upsertKBEntryByExternalId`, `deleteStaleKBEntries`) | `source_external_id` partial unique index; tombstones entries missing from the latest crawl |
 | Locked synced entries | `src/api/routes/kb.ts`, `web/src/pages/KnowledgeBase.tsx` | PATCH/DELETE `/kb/entries/:id` return 409 when `kb_source_id` is set |
+| Drive file-type coverage (plan-020) | `src/modules/kb-sources/parsers/` | docx / xlsx / pptx / pdf / odt / ods / odp / rtf / html / plain + Google-native exports |
+| Reducto document parsing (plan-020) | `src/modules/reducto/` | Optional per-workspace; two-step upload → parse with sync → async fallback |
+| KB source skip log (plan-020) | `src/modules/kb-sources/skip-log.ts`, `kb_source_skip_log` table | Per-file failures surfaced as icon + modal on KBSources row |
+| KB per-file size cap (plan-020) | `src/modules/kb-sources/sync-handlers.ts` | `KB_MAX_FILE_BYTES` default 250 MB, enforced at download stream |
+| KB re-parse control (plan-020) | `POST /api/kb/sources/:id/reparse` | Sparkle icon on each source to reprocess after settings change |
 
 ## Documents
 
