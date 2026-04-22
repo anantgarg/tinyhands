@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowLeft, RefreshCw, Trash2, Plus, Key, AlertCircle, Pencil,
-  Github, Globe, FileText, Database, BookOpen,
+  Github, Globe, FileText, Database, BookOpen, AlertTriangle, Sparkles,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -30,6 +30,8 @@ import {
   useUpdateKBSource,
   useCreateKBSource,
   useDriveFolderName,
+  useKBSourceSkipLog,
+  useReparseKBSource,
 } from '@/api/kb';
 import { DriveFolderPicker } from '@/components/DriveFolderPicker';
 import { toast } from '@/components/ui/use-toast';
@@ -78,6 +80,14 @@ function getSourceTypeName(type: string | null): string {
   return type ? names[type] ?? type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Unknown';
 }
 
+function formatBytes(bytes: number | null): string {
+  if (bytes === null || bytes === undefined) return '—';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
 function getStatusLabel(status: string | null): string {
   const labels: Record<string, string> = {
     active: 'Active',
@@ -100,8 +110,15 @@ export function KBSources() {
   const syncSource = useSyncKBSource();
   const deleteSource = useDeleteKBSource();
   const createSource = useCreateKBSource();
+  const reparseSource = useReparseKBSource();
 
   const updateSource = useUpdateKBSource();
+
+  // Skip-log modal state — the icon only appears on a row when the source
+  // has one or more file-level failures from recent syncs. Clicking opens
+  // this modal and loads the detailed list lazily.
+  const [skipLogFor, setSkipLogFor] = useState<{ id: string; name: string } | null>(null);
+  const { data: skipLog, isLoading: skipLogLoading } = useKBSourceSkipLog(skipLogFor?.id ?? null);
 
   // Edit source state
   const [editSource, setEditSource] = useState<{ id: string; name: string; type: string; config: Record<string, unknown> } | null>(null);
@@ -147,6 +164,15 @@ export function KBSources() {
         onSuccess: () => toast({ title: 'Source deleted', variant: 'success' }),
       });
     }
+  };
+
+  const handleReparse = (id: string, name: string) => {
+    const msg = `Re-parse every file in "${name}" with current settings? This may take a while and, if Reducto is turned on, will use Reducto credits.`;
+    if (!confirm(msg)) return;
+    reparseSource.mutate(id, {
+      onSuccess: () => toast({ title: 'Re-parse started', variant: 'success' }),
+      onError: (err) => toast({ title: 'Re-parse failed', description: err.message, variant: 'error' }),
+    });
   };
 
   const openWizard = () => {
@@ -235,7 +261,22 @@ export function KBSources() {
               <TableBody>
                 {(sources ?? []).map((source) => (
                   <TableRow key={source.id}>
-                    <TableCell className="font-medium">{source.name ?? 'Unnamed Source'}</TableCell>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        <span>{source.name ?? 'Unnamed Source'}</span>
+                        {(source.skippedCount ?? 0) > 0 && (
+                          <button
+                            type="button"
+                            title={`${source.skippedCount} file${source.skippedCount === 1 ? '' : 's'} could not be indexed — click to see the list`}
+                            onClick={() => setSkipLogFor({ id: source.id, name: source.name ?? 'source' })}
+                            className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 hover:bg-amber-100 dark:bg-amber-950 dark:text-amber-300 dark:hover:bg-amber-900"
+                          >
+                            <AlertTriangle className="h-3 w-3" />
+                            {source.skippedCount}
+                          </button>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <Badge variant="secondary">{getSourceTypeName(source.type)}</Badge>
                     </TableCell>
@@ -278,6 +319,15 @@ export function KBSources() {
                         <Button
                           size="sm"
                           variant="ghost"
+                          title="Re-parse all files with current settings (useful after turning Reducto on or off)"
+                          onClick={() => handleReparse(source.id, source.name ?? 'source')}
+                          disabled={reparseSource.isPending}
+                        >
+                          <Sparkles className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
                           title="Delete"
                           className="text-red-500"
                           onClick={() => handleDeleteSource(source.id, source.name ?? 'source')}
@@ -293,6 +343,55 @@ export function KBSources() {
           </div>
         )}
       </section>
+
+      {/* Skipped Files Dialog — shown only when the icon on a row is clicked */}
+      <Dialog open={!!skipLogFor} onOpenChange={(open) => { if (!open) setSkipLogFor(null); }}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Files not indexed — {skipLogFor?.name}</DialogTitle>
+            <DialogDescription>
+              These files couldn't be added to the knowledge base on the most recent syncs.
+              Files disappear from this list as soon as they sync successfully.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto">
+            {skipLogLoading ? (
+              <div className="py-8 text-center text-sm text-warm-text-secondary">Loading…</div>
+            ) : (skipLog ?? []).length === 0 ? (
+              <div className="py-8 text-center text-sm text-warm-text-secondary">No skipped files.</div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>File</TableHead>
+                    <TableHead>Reason</TableHead>
+                    <TableHead className="w-32">Size</TableHead>
+                    <TableHead className="w-40">Last attempted</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(skipLog ?? []).map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell className="font-medium break-all">{row.filename}</TableCell>
+                      <TableCell>
+                        <div className="text-sm">{row.reasonLabel}</div>
+                        <div className="text-xs text-warm-text-secondary mt-0.5">{row.message}</div>
+                      </TableCell>
+                      <TableCell className="text-sm text-warm-text-secondary">{formatBytes(row.sizeBytes)}</TableCell>
+                      <TableCell className="text-sm text-warm-text-secondary">
+                        {formatDistanceToNow(new Date(row.lastSeenAt), { addSuffix: true })}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setSkipLogFor(null)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Source Dialog */}
       <Dialog open={!!editSource} onOpenChange={() => setEditSource(null)}>

@@ -268,6 +268,7 @@ export interface KBSource {
   last_sync_at: string | null;
   entry_count: number;
   error_message: string | null;
+  last_sync_warnings: string | null;
   created_by: string;
   created_at: string;
   updated_at: string;

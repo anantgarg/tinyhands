@@ -220,12 +220,16 @@ router.patch('/entries/:id', requireAdmin, async (req: Request, res: Response) =
 
 // ── KB Sources ──
 
-// GET /kb/sources — List sources
+// GET /kb/sources — List sources, including a per-source `skippedCount`
+// that the dashboard uses to decide whether to show the "failures" icon on
+// each row. The icon opens a modal that loads the full list via
+// /kb/sources/:id/skip-log.
 router.get('/sources', async (req: Request, res: Response) => {
   try {
     const { workspaceId } = getSessionUser(req);
+    const { countSkippedFiles } = await import('../../modules/kb-sources/skip-log');
     const sources = await listSources(workspaceId);
-    res.json((sources as any[]).map((s: any) => ({
+    const rows = await Promise.all((sources as any[]).map(async (s: any) => ({
       id: s.id,
       name: s.name,
       type: s.source_type || s.type,
@@ -233,11 +237,57 @@ router.get('/sources', async (req: Request, res: Response) => {
       status: s.status,
       lastSyncAt: s.last_sync_at,
       entriesCount: s.entry_count ?? 0,
+      errorMessage: s.error_message ?? null,
+      skippedCount: await countSkippedFiles(workspaceId, s.id),
       createdAt: s.created_at,
     })));
+    res.json(rows);
   } catch (err: any) {
     logger.error('List KB sources error', { error: err.message });
     res.status(500).json({ error: 'Failed to list sources' });
+  }
+});
+
+// GET /kb/sources/:id/skip-log — Per-file failures from the most recent
+// syncs (upserted; deleted when a file later ingests successfully). The
+// dashboard surfaces this behind an icon on each source row.
+router.get('/sources/:id/skip-log', async (req: Request, res: Response) => {
+  try {
+    const { workspaceId } = getSessionUser(req);
+    const id = req.params.id as string;
+    const { listSkippedFiles, SKIP_REASON_LABELS } = await import('../../modules/kb-sources/skip-log');
+    const rows = await listSkippedFiles(workspaceId, id);
+    res.json(rows.map(r => ({
+      id: r.id,
+      filename: r.filename,
+      filePath: r.file_path,
+      mimeType: r.mime_type,
+      sizeBytes: r.size_bytes === null ? null : Number(r.size_bytes),
+      reason: r.reason,
+      reasonLabel: SKIP_REASON_LABELS[r.reason as keyof typeof SKIP_REASON_LABELS] || r.reason,
+      message: r.message,
+      firstSeenAt: r.first_seen_at,
+      lastSeenAt: r.last_seen_at,
+    })));
+  } catch (err: any) {
+    logger.error('List skip log error', { error: err.message });
+    res.status(500).json({ error: 'Failed to load skipped files' });
+  }
+});
+
+// POST /kb/sources/:id/reparse — Re-run parsing on every already-synced
+// file in a source using current workspace parser settings (e.g. after
+// enabling Reducto). Implemented as flush+resync: cheapest path that
+// honors the updated settings without a dedicated re-parse queue.
+router.post('/sources/:id/reparse', requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const { workspaceId, userId } = getSessionUser(req);
+    const id = req.params.id as string;
+    await flushAndResync(workspaceId, id, userId);
+    res.json({ ok: true, message: 'Re-parse started — existing entries are being refreshed.' });
+  } catch (err: any) {
+    logger.error('Re-parse KB source error', { error: err.message });
+    res.status(400).json({ error: "Couldn't start the re-parse. Please try again." });
   }
 });
 

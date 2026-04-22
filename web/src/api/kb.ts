@@ -44,7 +44,22 @@ interface KBSource {
   sync_interval_hours?: number;
   lastSyncAt: string | null;
   entriesCount: number;
+  errorMessage?: string | null;
+  skippedCount?: number;
   createdAt: string;
+}
+
+export interface KBSourceSkipLogEntry {
+  id: string;
+  filename: string;
+  filePath: string;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  reason: string;
+  reasonLabel: string;
+  message: string;
+  firstSeenAt: string;
+  lastSeenAt: string;
 }
 
 interface KBApiKey {
@@ -196,6 +211,22 @@ export function useDeleteKBSource() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.del(`/kb/sources/${id}`),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['kb', 'sources'] }),
+  });
+}
+
+export function useKBSourceSkipLog(id: string | null) {
+  return useQuery<KBSourceSkipLogEntry[]>({
+    queryKey: ['kb', 'sources', id, 'skip-log'],
+    queryFn: () => api.get(`/kb/sources/${id}/skip-log`),
+    enabled: !!id,
+  });
+}
+
+export function useReparseKBSource() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.post(`/kb/sources/${id}/reparse`),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['kb', 'sources'] }),
   });
 }
