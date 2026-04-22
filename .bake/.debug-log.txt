@@ -1897,3 +1897,10 @@
 [11:39:52.961] [Terminal] resolved cwd {"sessionId":"plan-022","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-022","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-022","projectPath":"/Users/anantgarg/Local/tinyhands"}
 [11:40:59.613] [Poll] External change detected {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md","resolvedPath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-022/.bake/tasks/plans/plan-022.md","newTitle":"New Plan","currentH1":"New Plan","refExists":true}
 [11:40:59.623] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":4208,"isPlanPath":true}
+[11:47:23.990] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-021.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":11438,"isPlanPath":true}
+[11:47:23.991] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-021.md","title":"Fix HubSpot tool honesty — writes that silently fail and custom properties that aren't read"}
+[11:47:24.011] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-021.md","sessionsLen":31,"activeSessionId":"plan-022"}
+[11:47:24.011] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-021.md"}
+[11:47:24.172] [AutoSwitch] plan → activating existing session {"itemId":"plan-021","sessionId":"plan-021","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-021","prevSession":"plan-022"}
+[11:47:24.174] [TerminalSwitch] transitioning {"from":"plan-022","to":"plan-021","storeSessionsLen":31}
+[11:47:24.175] [Terminal] getOrCreate → returning cached {"sessionId":"plan-021","cachedCwd":null}
