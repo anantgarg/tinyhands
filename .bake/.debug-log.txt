@@ -2208,3 +2208,10 @@
 [14:22:20.725] [AutoSwitch] plan → activating existing session {"itemId":"plan-020","sessionId":"plan-020","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-020","prevSession":"plan-022"}
 [14:22:20.728] [TerminalSwitch] transitioning {"from":"plan-022","to":"plan-020","storeSessionsLen":33}
 [14:22:20.728] [Terminal] getOrCreate → returning cached {"sessionId":"plan-020","cachedCwd":null}
+[14:22:40.194] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":6572,"isPlanPath":true}
+[14:22:40.200] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md","title":"HubSpot notifications stopped posting to #interactive-demo-signups"}
+[14:22:40.209] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md","sessionsLen":33,"activeSessionId":"plan-020"}
+[14:22:40.210] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md"}
+[14:22:40.240] [AutoSwitch] plan → activating existing session {"itemId":"plan-022","sessionId":"plan-022","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-022","prevSession":"plan-020"}
+[14:22:40.243] [TerminalSwitch] transitioning {"from":"plan-020","to":"plan-022","storeSessionsLen":33}
+[14:22:40.244] [Terminal] getOrCreate → returning cached {"sessionId":"plan-022","cachedCwd":null}
