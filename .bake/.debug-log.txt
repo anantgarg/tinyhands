@@ -2326,3 +2326,8 @@
 [14:42:59.104] [Poll] External change detected {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md","resolvedPath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-022/.bake/tasks/plans/plan-022.md","newTitle":"Include Slack attachments and Block Kit content in the text passed to agents","refExists":false}
 [14:42:59.175] [Editor] useLayoutEffect syncing h1 {"planTitle":"Include Slack attachments and Block Kit content in the text passed to agents","currentTextContent":""}
 [14:42:59.175] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":13140,"isPlanPath":true}
+[14:44:56.553] [TerminalSwitch] transitioning {"from":"plan-022","to":"main","storeSessionsLen":33}
+[14:44:56.553] [Terminal] getOrCreate → creating new {"sessionId":"main","sessionFound":true,"sessionType":"vibe","worktreePath":null,"sessionsLen":33,"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[14:44:56.573] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"__main__","sessionsLen":33,"activeSessionId":"main"}
+[14:44:56.573] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":false,"activeFilePath":"__main__"}
+[14:44:56.875] [Terminal] resolved cwd {"sessionId":"main","cwd":"/Users/anantgarg/Local/tinyhands","cwdSource":"project-fallback","worktreePath":null,"projectPath":"/Users/anantgarg/Local/tinyhands"}
