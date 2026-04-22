@@ -2080,3 +2080,27 @@
 [13:13:29.957] [AutoSwitch] plan → activating existing session {"itemId":"plan-022","sessionId":"plan-022","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-022","prevSession":"plan-023"}
 [13:13:29.960] [TerminalSwitch] transitioning {"from":"plan-023","to":"plan-022","storeSessionsLen":33}
 [13:13:29.960] [Terminal] getOrCreate → returning cached {"sessionId":"plan-022","cachedCwd":null}
+[13:13:36.742] [Tab] Clicked tab {"tabPath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-021.md","resolvedPath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-021/.bake/tasks/plans/plan-021.md","title":"Stop agents from faking ✅ when Bash-wrapped tools time out, and let them read custom HubSpot properties","contentLen":17456}
+[13:13:36.747] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-021.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":17456,"isPlanPath":true}
+[13:13:36.748] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-021.md","title":"Stop agents from faking ✅ when Bash-wrapped tools time out, and let them read custom HubSpot properties"}
+[13:13:36.787] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-021.md","sessionsLen":33,"activeSessionId":"plan-022"}
+[13:13:36.787] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-021.md"}
+[13:13:36.810] [AutoSwitch] plan → activating existing session {"itemId":"plan-021","sessionId":"plan-021","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-021","prevSession":"plan-022"}
+[13:13:36.814] [TerminalSwitch] transitioning {"from":"plan-022","to":"plan-021","storeSessionsLen":33}
+[13:13:36.814] [Terminal] getOrCreate → returning cached {"sessionId":"plan-021","cachedCwd":null}
+[13:13:37.844] [Tab] Clicked tab {"tabPath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-019.md","resolvedPath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-019/.bake/tasks/plans/plan-019.md","title":"Audit and harden remaining getDefaultWorkspaceId() fallback call sites","contentLen":12502}
+[13:13:37.847] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-019.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":12502,"isPlanPath":true}
+[13:13:37.848] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-019.md","title":"Audit and harden remaining getDefaultWorkspaceId() fallback call sites"}
+[13:13:37.898] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-019.md","sessionsLen":33,"activeSessionId":"plan-021"}
+[13:13:37.898] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-019.md"}
+[13:13:37.921] [AutoSwitch] plan → activating existing session {"itemId":"plan-019","sessionId":"plan-019","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-019","prevSession":"plan-021"}
+[13:13:37.924] [TerminalSwitch] transitioning {"from":"plan-021","to":"plan-019","storeSessionsLen":33}
+[13:13:37.924] [Terminal] getOrCreate → returning cached {"sessionId":"plan-019","cachedCwd":null}
+[13:13:39.180] [Tab] Clicked tab {"tabPath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-020.md","resolvedPath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-020/.bake/tasks/plans/plan-020.md","title":"Expand Google Drive sync to cover popular document file types","contentLen":23157}
+[13:13:39.184] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-020.md","isReadOnly":false,"parsedStatus":"review","editorContentLen":23157,"isPlanPath":true}
+[13:13:39.185] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-020.md","title":"Expand Google Drive sync to cover popular document file types"}
+[13:13:39.211] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-020.md","sessionsLen":33,"activeSessionId":"plan-019"}
+[13:13:39.211] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-020.md"}
+[13:13:39.238] [AutoSwitch] plan → activating existing session {"itemId":"plan-020","sessionId":"plan-020","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-020","prevSession":"plan-019"}
+[13:13:39.242] [TerminalSwitch] transitioning {"from":"plan-019","to":"plan-020","storeSessionsLen":33}
+[13:13:39.242] [Terminal] getOrCreate → returning cached {"sessionId":"plan-020","cachedCwd":null}
