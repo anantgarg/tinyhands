@@ -2064,3 +2064,11 @@
 [13:11:45.799] [TerminalSwitch] transitioning {"from":"main","to":"swift-jaguar","storeSessionsLen":33}
 [13:11:45.799] [Terminal] getOrCreate → returning cached {"sessionId":"swift-jaguar","cachedCwd":null}
 [13:11:46.035] [Terminal] resolved cwd {"sessionId":"swift-jaguar","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/swift-jaguar","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/swift-jaguar","projectPath":"/Users/anantgarg/Local/tinyhands"}
+[13:12:06.919] [Tab] Clicked tab {"tabPath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-023.md","resolvedPath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-023/.bake/tasks/plans/plan-023.md","title":"Investigate Splitsie KB source showing 0 entries in production","contentLen":13914}
+[13:12:06.922] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-023.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":13914,"isPlanPath":true}
+[13:12:06.922] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-023.md","title":"Investigate Splitsie KB source showing 0 entries in production"}
+[13:12:06.936] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-023.md","sessionsLen":33,"activeSessionId":"swift-jaguar"}
+[13:12:06.936] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-023.md"}
+[13:12:06.947] [AutoSwitch] plan → activating existing session {"itemId":"plan-023","sessionId":"plan-023","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-023","prevSession":"swift-jaguar"}
+[13:12:06.949] [TerminalSwitch] transitioning {"from":"swift-jaguar","to":"plan-023","storeSessionsLen":33}
+[13:12:06.949] [Terminal] getOrCreate → returning cached {"sessionId":"plan-023","cachedCwd":null}
