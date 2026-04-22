@@ -1941,3 +1941,10 @@
 [12:08:41.608] [AutoSwitch] plan → activating existing session {"itemId":"plan-020","sessionId":"plan-020","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-020","prevSession":"plan-021"}
 [12:08:41.609] [TerminalSwitch] transitioning {"from":"plan-021","to":"plan-020","storeSessionsLen":31}
 [12:08:41.610] [Terminal] getOrCreate → returning cached {"sessionId":"plan-020","cachedCwd":null}
+[12:53:27.168] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-021.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":17456,"isPlanPath":true}
+[12:53:27.170] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-021.md","title":"Stop agents from faking ✅ when Bash-wrapped tools time out, and let them read custom HubSpot properties"}
+[12:53:27.215] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-021.md","sessionsLen":31,"activeSessionId":"plan-020"}
+[12:53:27.215] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-021.md"}
+[12:53:27.242] [AutoSwitch] plan → activating existing session {"itemId":"plan-021","sessionId":"plan-021","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-021","prevSession":"plan-020"}
+[12:53:27.248] [TerminalSwitch] transitioning {"from":"plan-020","to":"plan-021","storeSessionsLen":31}
+[12:53:27.248] [Terminal] getOrCreate → returning cached {"sessionId":"plan-021","cachedCwd":null}
