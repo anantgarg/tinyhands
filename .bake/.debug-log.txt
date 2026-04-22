@@ -1831,3 +1831,6 @@
 [11:06:49.772] [AutoSwitch] bailed — activeFilePath changed during await {"capturedPath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-016.md","currentActiveFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-020.md"}
 [11:06:49.773] [AutoSwitch] plan → already on correct session, no-op {"itemId":"plan-020","activeSessionId":"plan-020"}
 [11:06:50.054] [Terminal] resolved cwd {"sessionId":"plan-020","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-020","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-020","projectPath":"/Users/anantgarg/Local/tinyhands"}
+[11:09:16.604] [Poll] External change detected {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-020.md","resolvedPath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-020/.bake/tasks/plans/plan-020.md","newTitle":"Expand Google Drive sync to cover popular document file types","currentH1":"New Plan","refExists":true}
+[11:09:16.609] [Poll] Updated h1 DOM {"newTitle":"Expand Google Drive sync to cover popular document file types"}
+[11:09:16.628] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-020.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":11200,"isPlanPath":true}
