@@ -44,6 +44,9 @@ After plan-015, `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET` are **bo
 | `GITHUB_OAUTH_CLIENT_ID` | GitHub OAuth for repo connections (still platform-wide; BYO pattern not yet applied) |
 | `GITHUB_OAUTH_CLIENT_SECRET` | GitHub OAuth secret |
 | `OAUTH_REDIRECT_BASE_URL` | Base URL for OAuth callback redirects (stays global across providers) |
+| `WEB_URL` | Optional (plan-020). Where the Slack sign-in callback sends the browser after a successful login. Defaults to `/` (production nginx serves dashboard + API on one origin). In local dev, set to the Vite port (e.g. `http://localhost:5178`). |
+| `KB_MAX_FILE_BYTES` | Optional (plan-020). Per-file download cap for KB sources, in bytes. Default 250 MB. Enforced at stream time — oversized files are never fully buffered. |
+| `REDUCTO_API_URL` | Optional (plan-020). Override Reducto's API base URL for testing. Defaults to `https://platform.reducto.ai`. |
 
 ## Setup
 
