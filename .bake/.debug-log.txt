@@ -2165,3 +2165,10 @@
 [13:16:28.825] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":true,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-005.md"}
 [13:16:28.835] [TerminalSwitch] transitioning {"from":"plan-020","to":"swift-jaguar","storeSessionsLen":33}
 [13:16:28.836] [Terminal] getOrCreate → returning cached {"sessionId":"swift-jaguar","cachedCwd":null}
+[13:22:39.635] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-018.md","isReadOnly":true,"parsedStatus":"complete","editorContentLen":9495,"isPlanPath":true}
+[13:22:39.636] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-018.md","title":"Stop asking for credentials on built-in tools (Knowledge Base, Documents) and fix runtime tool provisioning"}
+[13:22:39.644] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-018.md","sessionsLen":33,"activeSessionId":"swift-jaguar"}
+[13:22:39.644] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-018.md"}
+[13:22:39.658] [AutoSwitch] plan → activating existing session {"itemId":"plan-018","sessionId":"plan-018","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-018","prevSession":"swift-jaguar"}
+[13:22:39.660] [TerminalSwitch] transitioning {"from":"swift-jaguar","to":"plan-018","storeSessionsLen":33}
+[13:22:39.660] [Terminal] getOrCreate → returning cached {"sessionId":"plan-018","cachedCwd":null}
