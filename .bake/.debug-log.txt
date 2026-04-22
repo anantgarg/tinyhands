@@ -1914,3 +1914,10 @@
 [11:48:07.008] [Poll] External change detected {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-020.md","resolvedPath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-020/.bake/tasks/plans/plan-020.md","newTitle":"Expand Google Drive sync to cover popular document file types","currentH1":"New Plan","refExists":true}
 [11:48:07.008] [Poll] Updated h1 DOM {"newTitle":"Expand Google Drive sync to cover popular document file types"}
 [11:48:07.021] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-020.md","isReadOnly":false,"parsedStatus":"building","editorContentLen":23180,"isPlanPath":true}
+[11:48:16.567] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":4208,"isPlanPath":true}
+[11:48:16.567] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md","title":"New Plan"}
+[11:48:16.574] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md","sessionsLen":31,"activeSessionId":"plan-020"}
+[11:48:16.574] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md"}
+[11:48:16.582] [AutoSwitch] plan → activating existing session {"itemId":"plan-022","sessionId":"plan-022","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-022","prevSession":"plan-020"}
+[11:48:16.583] [TerminalSwitch] transitioning {"from":"plan-020","to":"plan-022","storeSessionsLen":31}
+[11:48:16.583] [Terminal] getOrCreate → returning cached {"sessionId":"plan-022","cachedCwd":null}
