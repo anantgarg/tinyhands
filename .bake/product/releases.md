@@ -2,6 +2,23 @@
 
 One entry per deploy to production. Each entry names the version, the date, the merges included since the previous release, and the exact rollback command. Updated automatically by the Deploy button (see `.bake/harness/deploy.md` for the post-deploy step that appends here).
 
+## v1.52.0 — 2026-04-22
+
+Deployed to the production host. Includes:
+
+- plan-020 merged: Google Drive KB sync expanded to docx/xlsx/pptx/pdf/odt/ods/odp/rtf/html/plain text + Google-native exports (previously Docs-only).
+- New `kb_source_skip_log` table (migration 029) with upsert-by-path surfaces per-file sync failures (too-large, parser-failed, unsupported, reducto-failed, corrupted) behind an icon + modal on each KB source row.
+- Optional Reducto integration per workspace (migration 028) for higher-fidelity PDF/Office extraction: two-step upload→parse, sync→async fallback on 60s timeout, per-workspace concurrency guard, `/upload`-based key-test.
+- Per-file size cap (`KB_MAX_FILE_BYTES`, default 250 MB) enforced at stream time.
+- "Re-parse" sparkle icon to reprocess after parser settings change.
+- Friendlier KB sync error UX — raw crypto failures translated to plain English; owner-aware `errorFix` hint renders a Reconnect button for the owner and an "Ask <Name>" message for everyone else.
+- `isBroken`/`brokenReason` on `/connections/personal` badges undecryptable rows red with a Reconnect action across Tools + Connections.
+- New `startOAuthReconnect()` helper pre-flights the OAuth endpoint so workspaces without a configured OAuth app land on the setup page instead of raw JSON.
+- New `WEB_URL` env for local dev so Slack-login redirects back to the Vite port.
+- Version bump resolves an earlier VERSION/package.json drift (VERSION was 1.50.6 while package.json was 1.51.0; v1.51.0 tag was already taken on an unmerged branch).
+
+Rollback: `doctl compute ssh tinyjobs-prod --ssh-key-path ~/.ssh/tinyjobs_deploy --ssh-command "cd /root/tinyjobs && git checkout v1.50.6 && NODE_ENV=development npm install && NODE_ENV=development npm run build && NODE_ENV=development npm run build:web && pm2 reload ecosystem.config.js --force"`. Migrations 028 and 029 are additive — safe to leave in place.
+
 ## v1.50.5 — 2026-04-21
 
 Deployed to the production host. Multi-tenant isolation fix for the `/internal/kb/*` and `/internal/docs/*` endpoints used by in-container agent tools.
