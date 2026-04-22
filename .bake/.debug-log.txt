@@ -2339,3 +2339,5 @@
 [14:52:15.337] [AutoSwitch] plan → activating existing session {"itemId":"plan-022","sessionId":"plan-022","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-022","prevSession":"main"}
 [14:52:15.339] [TerminalSwitch] transitioning {"from":"main","to":"plan-022","storeSessionsLen":33}
 [14:52:15.339] [Terminal] getOrCreate → returning cached {"sessionId":"plan-022","cachedCwd":null}
+[14:52:19.387] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md","isReadOnly":false,"parsedStatus":"building","editorContentLen":13143,"isPlanPath":true}
+[14:52:19.390] [Editor] editorContent changed externally — reloading body {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md","title":"Include Slack attachments and Block Kit content in the text passed to agents"}
