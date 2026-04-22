@@ -1987,3 +1987,10 @@
 [12:58:57.965] [AutoSwitch] plan → activating existing session {"itemId":"plan-020","sessionId":"plan-020","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-020","prevSession":"plan-023"}
 [12:58:57.969] [TerminalSwitch] transitioning {"from":"plan-023","to":"plan-020","storeSessionsLen":32}
 [12:58:57.969] [Terminal] getOrCreate → returning cached {"sessionId":"plan-020","cachedCwd":null}
+[13:01:25.509] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-023.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":8108,"isPlanPath":true}
+[13:01:25.511] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-023.md","title":"Investigate Splitsie KB source showing 0 entries in production"}
+[13:01:25.531] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-023.md","sessionsLen":32,"activeSessionId":"plan-020"}
+[13:01:25.531] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-023.md"}
+[13:01:25.549] [AutoSwitch] plan → activating existing session {"itemId":"plan-023","sessionId":"plan-023","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-023","prevSession":"plan-020"}
+[13:01:25.552] [TerminalSwitch] transitioning {"from":"plan-020","to":"plan-023","storeSessionsLen":32}
+[13:01:25.553] [Terminal] getOrCreate → returning cached {"sessionId":"plan-023","cachedCwd":null}
