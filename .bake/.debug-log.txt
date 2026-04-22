@@ -1921,3 +1921,10 @@
 [11:48:16.582] [AutoSwitch] plan → activating existing session {"itemId":"plan-022","sessionId":"plan-022","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-022","prevSession":"plan-020"}
 [11:48:16.583] [TerminalSwitch] transitioning {"from":"plan-020","to":"plan-022","storeSessionsLen":31}
 [11:48:16.583] [Terminal] getOrCreate → returning cached {"sessionId":"plan-022","cachedCwd":null}
+[11:48:27.437] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-021.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":11438,"isPlanPath":true}
+[11:48:27.437] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-021.md","title":"Fix HubSpot tool honesty — writes that silently fail and custom properties that aren't read"}
+[11:48:27.444] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-021.md","sessionsLen":31,"activeSessionId":"plan-022"}
+[11:48:27.444] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-021.md"}
+[11:48:27.455] [AutoSwitch] plan → activating existing session {"itemId":"plan-021","sessionId":"plan-021","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-021","prevSession":"plan-022"}
+[11:48:27.457] [TerminalSwitch] transitioning {"from":"plan-022","to":"plan-021","storeSessionsLen":31}
+[11:48:27.457] [Terminal] getOrCreate → returning cached {"sessionId":"plan-021","cachedCwd":null}
