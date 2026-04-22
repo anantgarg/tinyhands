@@ -1895,3 +1895,5 @@
 [11:39:52.671] [AutoSwitch] bailed — activeFilePath changed during await {"capturedPath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-021.md","currentActiveFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md"}
 [11:39:52.671] [AutoSwitch] plan → already on correct session, no-op {"itemId":"plan-022","activeSessionId":"plan-022"}
 [11:39:52.961] [Terminal] resolved cwd {"sessionId":"plan-022","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-022","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-022","projectPath":"/Users/anantgarg/Local/tinyhands"}
+[11:40:59.613] [Poll] External change detected {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md","resolvedPath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-022/.bake/tasks/plans/plan-022.md","newTitle":"New Plan","currentH1":"New Plan","refExists":true}
+[11:40:59.623] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":4208,"isPlanPath":true}
