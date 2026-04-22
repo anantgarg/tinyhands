@@ -256,6 +256,16 @@
       "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-020",
       "branch": "bake/plan/plan-020",
       "createdAt": "2026-04-22T11:06:49.734Z"
+    },
+    {
+      "id": "plan-019",
+      "type": "plan",
+      "name": "Audit and harden remaining getDefaultWorkspaceId() fallback call sites",
+      "planId": "plan-019",
+      "planPath": "/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-019.md",
+      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-019",
+      "branch": "bake/plan/plan-019",
+      "createdAt": "2026-04-22T11:37:38.907Z"
     }
   ]
 }
