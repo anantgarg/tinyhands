@@ -1811,3 +1811,12 @@
 [14:20:33.502] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"__main__","sessionsLen":27,"activeSessionId":"main"}
 [14:20:33.502] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":false,"activeFilePath":"__main__"}
 [14:20:33.803] [Terminal] resolved cwd {"sessionId":"main","cwd":"/Users/anantgarg/Local/tinyhands","cwdSource":"project-fallback","worktreePath":null,"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[08:15:49.835] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-016.md","isReadOnly":false,"parsedStatus":"review","editorContentLen":46927,"isPlanPath":true}
+[08:15:49.835] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-016.md","title":"Wiki-style Knowledge Base and Documents, parsing-powered, kept separate"}
+[08:15:49.982] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-016.md","sessionsLen":27,"activeSessionId":"main"}
+[08:15:49.982] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-016.md"}
+[08:15:49.983] [Editor] useLayoutEffect syncing h1 {"planTitle":"Wiki-style Knowledge Base and Documents, parsing-powered, kept separate","currentTextContent":""}
+[08:15:50.028] [AutoSwitch] plan → activating existing session {"itemId":"plan-016","sessionId":"plan-016","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-016","prevSession":"main"}
+[08:15:50.031] [TerminalSwitch] transitioning {"from":"main","to":"plan-016","storeSessionsLen":27}
+[08:15:50.031] [Terminal] getOrCreate → creating new {"sessionId":"plan-016","sessionFound":true,"sessionType":"plan","sessionPlanId":"plan-016","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-016","sessionsLen":27,"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[08:15:50.348] [Terminal] resolved cwd {"sessionId":"plan-016","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-016","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-016","projectPath":"/Users/anantgarg/Local/tinyhands"}
