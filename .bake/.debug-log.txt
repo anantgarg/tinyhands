@@ -1865,3 +1865,11 @@
 [11:37:38.924] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-019.md"}
 [11:37:38.932] [AutoSwitch] plan → already on correct session, no-op {"itemId":"plan-019","activeSessionId":"plan-019"}
 [11:37:39.226] [Terminal] resolved cwd {"sessionId":"plan-019","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-019","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-019","projectPath":"/Users/anantgarg/Local/tinyhands"}
+[11:38:06.455] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-017.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":10868,"isPlanPath":true}
+[11:38:06.456] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-017.md","title":"Extend agent picker to passive channel messages"}
+[11:38:06.476] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-017.md","sessionsLen":29,"activeSessionId":"plan-019"}
+[11:38:06.476] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-017.md"}
+[11:38:06.491] [AutoSwitch] plan → activating existing session {"itemId":"plan-017","sessionId":"plan-017","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-017","prevSession":"plan-019"}
+[11:38:06.492] [TerminalSwitch] transitioning {"from":"plan-019","to":"plan-017","storeSessionsLen":29}
+[11:38:06.492] [Terminal] getOrCreate → creating new {"sessionId":"plan-017","sessionFound":true,"sessionType":"plan","sessionPlanId":"plan-017","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-017","sessionsLen":29,"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[11:38:06.811] [Terminal] resolved cwd {"sessionId":"plan-017","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-017","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-017","projectPath":"/Users/anantgarg/Local/tinyhands"}
