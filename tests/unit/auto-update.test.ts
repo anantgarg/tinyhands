@@ -768,4 +768,71 @@ describe('Auto-Update Module', () => {
       expect(calls).toContainEqual('npm install');
     });
   });
+
+  // ── handleDeploy - .bake-only skip ──
+
+  describe('handleDeploy - .bake-only changes', () => {
+    it('should skip build and pm2 reload when every changed file is under .bake/', async () => {
+      const payload = makePushPayload({
+        commits: [
+          { added: ['.bake/sessions.json'], modified: ['.bake/.debug-log.txt'], removed: [] },
+          { added: [], modified: ['.bake/tasks/vibes/vibe-005.md'], removed: [] },
+        ],
+      });
+
+      const result = await handleDeploy(payload);
+
+      expect(result.success).toBe(true);
+
+      const calls = mockExecSync.mock.calls.map((c: any[]) => c[0]);
+      // git pull still runs so the working tree stays in sync
+      expect(calls).toContainEqual('git pull origin main');
+      // …but nothing else — no build, no migrate, no pm2 reload
+      expect(calls).not.toContainEqual('npm run build');
+      expect(calls).not.toContainEqual('npm run migrate');
+      expect(calls).not.toContainEqual('pm2 reload ecosystem.config.js --force');
+      expect(calls.some((c: string) => typeof c === 'string' && c.startsWith('pm2 reload'))).toBe(false);
+    });
+
+    it('should still run the full deploy when .bake/ changes alongside real code', async () => {
+      const payload = makePushPayload({
+        commits: [
+          { added: ['.bake/sessions.json'], modified: ['src/index.ts'], removed: [] },
+        ],
+      });
+
+      const result = await handleDeploy(payload);
+      expect(result.success).toBe(true);
+
+      const calls = mockExecSync.mock.calls.map((c: any[]) => c[0]);
+      expect(calls).toContainEqual('npm run build');
+      expect(calls).toContainEqual('pm2 reload ecosystem.config.js --force');
+    });
+
+    it('should not treat empty changedFiles (pull-based) as .bake-only', async () => {
+      const payload = { after: 'auto-update', commits: [] };
+      const result = await handleDeploy(payload);
+
+      expect(result.success).toBe(true);
+      const calls = mockExecSync.mock.calls.map((c: any[]) => c[0]);
+      // Pull-based path should still reload, not bail out silently
+      expect(calls).toContainEqual('pm2 reload ecosystem.config.js --force');
+    });
+
+    it('should still succeed when git pull fails during .bake-only skip', async () => {
+      mockExecSync.mockImplementation((cmd: string) => {
+        if (cmd.includes('git pull')) throw new Error('transient network');
+        return Buffer.from('');
+      });
+
+      const payload = makePushPayload({
+        commits: [
+          { added: [], modified: ['.bake/.debug-log.txt'], removed: [] },
+        ],
+      });
+
+      const result = await handleDeploy(payload);
+      expect(result.success).toBe(true);
+    });
+  });
 });
