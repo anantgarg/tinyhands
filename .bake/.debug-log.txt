@@ -2296,3 +2296,6 @@
 [14:37:46.696] [AutoSwitch] plan → activating existing session {"itemId":"plan-022","sessionId":"plan-022","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-022","prevSession":"main"}
 [14:37:46.699] [TerminalSwitch] transitioning {"from":"main","to":"plan-022","storeSessionsLen":33}
 [14:37:46.699] [Terminal] getOrCreate → returning cached {"sessionId":"plan-022","cachedCwd":null}
+[14:40:16.672] [Poll] External change detected {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md","resolvedPath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-022/.bake/tasks/plans/plan-022.md","newTitle":"Include Slack attachments and Block Kit content in the text passed to agents","currentH1":"Include Slack attachments/blocks in the text passed to agents","refExists":true}
+[14:40:16.673] [Poll] Updated h1 DOM {"newTitle":"Include Slack attachments and Block Kit content in the text passed to agents"}
+[14:40:16.694] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":13140,"isPlanPath":true}
