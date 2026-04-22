@@ -1948,3 +1948,10 @@
 [12:53:27.242] [AutoSwitch] plan → activating existing session {"itemId":"plan-021","sessionId":"plan-021","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-021","prevSession":"plan-020"}
 [12:53:27.248] [TerminalSwitch] transitioning {"from":"plan-020","to":"plan-021","storeSessionsLen":31}
 [12:53:27.248] [Terminal] getOrCreate → returning cached {"sessionId":"plan-021","cachedCwd":null}
+[12:54:43.090] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-020.md","isReadOnly":false,"parsedStatus":"review","editorContentLen":23157,"isPlanPath":true}
+[12:54:43.091] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-020.md","title":"Expand Google Drive sync to cover popular document file types"}
+[12:54:43.112] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-020.md","sessionsLen":31,"activeSessionId":"plan-021"}
+[12:54:43.112] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-020.md"}
+[12:54:43.132] [AutoSwitch] plan → activating existing session {"itemId":"plan-020","sessionId":"plan-020","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-020","prevSession":"plan-021"}
+[12:54:43.134] [TerminalSwitch] transitioning {"from":"plan-021","to":"plan-020","storeSessionsLen":31}
+[12:54:43.134] [Terminal] getOrCreate → returning cached {"sessionId":"plan-020","cachedCwd":null}
