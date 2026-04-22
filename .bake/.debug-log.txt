@@ -2006,3 +2006,11 @@
 [13:02:39.811] [AutoSwitch] non-plan/vibe → forcing main {"prevSession":"plan-020"}
 [13:02:39.814] [TerminalSwitch] transitioning {"from":"plan-020","to":"main","storeSessionsLen":32}
 [13:02:39.814] [Terminal] getOrCreate → returning cached {"sessionId":"main","cachedCwd":null}
+[13:03:07.181] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-020.md","isReadOnly":false,"parsedStatus":"review","editorContentLen":23157,"isPlanPath":true}
+[13:03:07.182] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-020.md","title":"Expand Google Drive sync to cover popular document file types"}
+[13:03:07.246] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-020.md","sessionsLen":32,"activeSessionId":"main"}
+[13:03:07.246] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-020.md"}
+[13:03:07.248] [Editor] useLayoutEffect syncing h1 {"planTitle":"Expand Google Drive sync to cover popular document file types","currentTextContent":""}
+[13:03:07.284] [AutoSwitch] plan → activating existing session {"itemId":"plan-020","sessionId":"plan-020","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-020","prevSession":"main"}
+[13:03:07.288] [TerminalSwitch] transitioning {"from":"main","to":"plan-020","storeSessionsLen":32}
+[13:03:07.288] [Terminal] getOrCreate → returning cached {"sessionId":"plan-020","cachedCwd":null}
