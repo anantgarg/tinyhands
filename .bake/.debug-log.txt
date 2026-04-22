@@ -1928,3 +1928,6 @@
 [11:48:27.455] [AutoSwitch] plan → activating existing session {"itemId":"plan-021","sessionId":"plan-021","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-021","prevSession":"plan-022"}
 [11:48:27.457] [TerminalSwitch] transitioning {"from":"plan-022","to":"plan-021","storeSessionsLen":31}
 [11:48:27.457] [Terminal] getOrCreate → returning cached {"sessionId":"plan-021","cachedCwd":null}
+[11:51:16.652] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-021.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":11864,"isPlanPath":true}
+[11:51:16.675] [Editor] editorContent changed externally — reloading body {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-021.md","title":"Fix HubSpot tool honesty — writes that silently fail and custom properties that aren't read"}
+[11:51:16.706] [Poll] External change detected {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-021.md","resolvedPath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-021/.bake/tasks/plans/plan-021.md","newTitle":"Fix HubSpot tool honesty — writes that silently fail and custom properties that aren't read","currentH1":"Fix HubSpot tool honesty — writes that silently fail and custom properties that aren't read","refExists":true}
