@@ -2122,3 +2122,5 @@
 [13:13:50.991] [AutoSwitch] plan → activating existing session {"itemId":"plan-022","sessionId":"plan-022","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-022","prevSession":"plan-021"}
 [13:13:50.994] [TerminalSwitch] transitioning {"from":"plan-021","to":"plan-022","storeSessionsLen":33}
 [13:13:50.994] [Terminal] getOrCreate → returning cached {"sessionId":"plan-022","cachedCwd":null}
+[13:14:20.968] [Poll] External change detected {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md","resolvedPath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-022/.bake/tasks/plans/plan-022.md","newTitle":"HubSpot notifications stopped posting to #interactive-demo-signups","currentH1":"HubSpot notifications stopped posting to #interactive-demo-signups","refExists":true}
+[13:14:20.980] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":6572,"isPlanPath":true}
