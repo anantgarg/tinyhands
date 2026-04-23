@@ -2,6 +2,18 @@
 
 One entry per deploy to production. Each entry names the version, the date, the merges included since the previous release, and the exact rollback command. Updated automatically by the Deploy button (see `.bake/harness/deploy.md` for the post-deploy step that appends here).
 
+## v1.55.0 — 2026-04-23
+
+Deployed to the production host. Includes:
+
+- plan-024 merged: Google Drive KB sources now sync recursively through sub-folders. Picking a root folder pulls nested files from every descendant folder instead of stopping at the top level. Applies to both initial sync and subsequent re-syncs; tombstones continue to work across the expanded tree so moves/deletes inside nested folders propagate.
+- Updates to `src/modules/kb-sources/connectors.ts` and `sync-handlers.ts` for recursive traversal; KBSources UI (`web/src/pages/KBSources.tsx`) reflects the new behavior.
+- 237 new lines of tests in `tests/unit/sync-handlers.test.ts` covering recursive-traversal edge cases; `tests/unit/connectors.test.ts` updated.
+
+No database migrations in this release.
+
+Rollback: `doctl compute ssh tinyjobs-prod --ssh-key-path ~/.ssh/tinyjobs_deploy --ssh-command "cd /root/tinyjobs && git checkout v1.54.0 && NODE_ENV=development npm install && NODE_ENV=development npm run build && NODE_ENV=development npm run build:web && pm2 reload ecosystem.config.js --force"`.
+
 ## v1.54.0 — 2026-04-23
 
 Deployed to the production host. Includes:
