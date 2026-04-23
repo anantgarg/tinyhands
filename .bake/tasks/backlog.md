@@ -34,6 +34,10 @@
 - [ ] Post-deploy regression: `@mention` in a plain-text channel message still routes, DMs still work, existing working channels (`C02VCPSB4TC`, `C0746R57W86`) produce equivalent output — no degradation from the added attachment text (from plan-022)
 - [ ] Post-deploy spot-check: one non-HubSpot agent per active workspace, watch next few runs for any behavior change (from plan-022)
 - [ ] Generic (non-workspace-specific) follow-up reply to Vijit once the release is live (from plan-022)
+- [ ] Manually verify Reducto-disabled path: in a workspace with Reducto turned off, drop a JPG/PNG into a synced Drive folder, run sync, confirm the file is listed in the source's skip-log modal with reason "Image OCR requires Reducto" and an actionable message (from plan-025)
+- [ ] Edge case: a 25 MB+ camera-original JPG should be skipped with reason `too_large`, never attempted via Reducto (from plan-025)
+- [ ] Edge case: a corrupt or zero-byte PNG should produce a `reducto_failed` (or `parser_failed`) skip without crashing the sync run (from plan-025)
+- [ ] Edge case: confirm `.gif`, `.webp`, `.svg`, `.tiff`, and `.heic` files each still land in the skip log with reason `unsupported_format` (not OCR'd) (from plan-025)
 
 ## Completed
 
