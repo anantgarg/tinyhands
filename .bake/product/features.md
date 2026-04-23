@@ -34,6 +34,7 @@
 | Feature | Module | Entry Points |
 |---------|--------|-------------|
 | Message processing | `src/slack/events.ts` | Slack message events |
+| Slack text ingestion | `src/slack/message-text.ts` | Combines `msg.text` + attachments + Block Kit so agents see full payload |
 | Job queue | `src/queue/` | BullMQ priority queue |
 | Docker isolation | `src/modules/execution/` | One container per agent run |
 | Rate limiting | `src/queue/` | Token bucket (TPM/RPM) via Redis |
