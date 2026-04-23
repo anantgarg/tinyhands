@@ -2750,3 +2750,11 @@
 [11:07:55.105] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":true,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-005.md"}
 [11:07:55.113] [TerminalSwitch] transitioning {"from":"plan-025","to":"swift-jaguar","storeSessionsLen":35}
 [11:07:55.113] [Terminal] getOrCreate → returning cached {"sessionId":"swift-jaguar","cachedCwd":null}
+[11:43:13.136] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-021.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":17456,"isPlanPath":true}
+[11:43:13.136] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-021.md","title":"Stop agents from faking ✅ when Bash-wrapped tools time out, and let them read custom HubSpot properties"}
+[11:43:13.180] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-021.md","sessionsLen":35,"activeSessionId":"swift-jaguar"}
+[11:43:13.180] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-021.md"}
+[11:43:13.197] [AutoSwitch] plan → activating existing session {"itemId":"plan-021","sessionId":"plan-021","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-021","prevSession":"swift-jaguar"}
+[11:43:13.199] [TerminalSwitch] transitioning {"from":"swift-jaguar","to":"plan-021","storeSessionsLen":35}
+[11:43:13.199] [Terminal] getOrCreate → creating new {"sessionId":"plan-021","sessionFound":true,"sessionType":"plan","sessionPlanId":"plan-021","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-021","sessionsLen":35,"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[11:43:13.518] [Terminal] resolved cwd {"sessionId":"plan-021","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-021","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-021","projectPath":"/Users/anantgarg/Local/tinyhands"}
