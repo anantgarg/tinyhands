@@ -2540,3 +2540,7 @@
 [10:05:25.256] [AutoSwitch] plan → activating existing session {"itemId":"plan-024","sessionId":"plan-024","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-024","prevSession":"plan-025"}
 [10:05:25.260] [TerminalSwitch] transitioning {"from":"plan-025","to":"plan-024","storeSessionsLen":35}
 [10:05:25.261] [Terminal] getOrCreate → returning cached {"sessionId":"plan-024","cachedCwd":null}
+[10:09:17.739] [TerminalSwitch] transitioning {"from":"plan-024","to":"main","storeSessionsLen":35}
+[10:09:17.739] [Terminal] getOrCreate → returning cached {"sessionId":"main","cachedCwd":null}
+[10:09:17.739] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"__main__","sessionsLen":35,"activeSessionId":"main"}
+[10:09:17.739] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":false,"activeFilePath":"__main__"}
