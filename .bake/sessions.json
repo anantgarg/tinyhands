@@ -236,7 +236,8 @@
       "planPath": "/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-017.md",
       "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-017",
       "branch": "bake/plan/plan-017",
-      "createdAt": "2026-04-21T11:09:55.078Z"
+      "createdAt": "2026-04-21T11:09:55.078Z",
+      "claudeSessionId": "c0fbc238-32d9-4bae-a8d6-3ab21ac37eee"
     },
     {
       "id": "plan-018",

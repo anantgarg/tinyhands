@@ -2758,3 +2758,11 @@
 [11:43:13.199] [TerminalSwitch] transitioning {"from":"swift-jaguar","to":"plan-021","storeSessionsLen":35}
 [11:43:13.199] [Terminal] getOrCreate → creating new {"sessionId":"plan-021","sessionFound":true,"sessionType":"plan","sessionPlanId":"plan-021","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-021","sessionsLen":35,"projectPath":"/Users/anantgarg/Local/tinyhands"}
 [11:43:13.518] [Terminal] resolved cwd {"sessionId":"plan-021","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-021","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-021","projectPath":"/Users/anantgarg/Local/tinyhands"}
+[11:43:42.925] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-017.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":10868,"isPlanPath":true}
+[11:43:42.925] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-017.md","title":"Extend agent picker to passive channel messages"}
+[11:43:42.940] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-017.md","sessionsLen":35,"activeSessionId":"plan-021"}
+[11:43:42.940] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-017.md"}
+[11:43:42.953] [AutoSwitch] plan → activating existing session {"itemId":"plan-017","sessionId":"plan-017","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-017","prevSession":"plan-021"}
+[11:43:42.955] [TerminalSwitch] transitioning {"from":"plan-021","to":"plan-017","storeSessionsLen":35}
+[11:43:42.955] [Terminal] getOrCreate → creating new {"sessionId":"plan-017","sessionFound":true,"sessionType":"plan","sessionPlanId":"plan-017","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-017","sessionsLen":35,"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[11:43:43.271] [Terminal] resolved cwd {"sessionId":"plan-017","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-017","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-017","projectPath":"/Users/anantgarg/Local/tinyhands"}
