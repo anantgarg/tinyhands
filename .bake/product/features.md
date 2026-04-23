@@ -73,6 +73,7 @@
 | KB source skip log (plan-020) | `src/modules/kb-sources/skip-log.ts`, `kb_source_skip_log` table | Per-file failures surfaced as icon + modal on KBSources row |
 | KB per-file size cap (plan-020) | `src/modules/kb-sources/sync-handlers.ts` | `KB_MAX_FILE_BYTES` default 250 MB, enforced at download stream |
 | KB re-parse control (plan-020) | `POST /api/kb/sources/:id/reparse` | Sparkle icon on each source to reprocess after settings change |
+| Drive recursive sub-folder sync (plan-024) | `src/modules/kb-sources/sync-handlers.ts` (`syncGoogleDrive` BFS walk), `web/src/pages/KBSources.tsx` (Include sub-folders switch) | Optional, off by default; unlimited depth with cycle protection |
 
 ## Documents
 
