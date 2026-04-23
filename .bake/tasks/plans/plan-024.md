@@ -1,8 +1,9 @@
 ---
 id: plan-024
 title: Recursive sub-folder support for Google Drive knowledge base sync
-status: review
+status: complete
 created: 2026-04-23
+completed: 2026-04-23T09:59:51.000Z
 ---
 
 ## Summary
