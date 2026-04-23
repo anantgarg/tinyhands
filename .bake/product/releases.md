@@ -2,6 +2,25 @@
 
 One entry per deploy to production. Each entry names the version, the date, the merges included since the previous release, and the exact rollback command. Updated automatically by the Deploy button (see `.bake/harness/deploy.md` for the post-deploy step that appends here).
 
+## v1.54.0 — 2026-04-23
+
+Deployed to the production host. Includes:
+
+- plan-022 merged: Agents now receive content from Slack message attachments and Block Kit blocks in addition to the plain `text` field — fixes silent no-ops on notifications from apps like HubSpot, Datadog, Jira, and PagerDuty that deliver their payload in `attachments[].text` or Block Kit rather than `msg.text`.
+- New `extractSlackMessageText` helper (`src/slack/message-text.ts`) returns `{ combined, raw }`: combines `msg.text` with attachment pretext/title/text/fallback-if-different/action URLs and (when text is empty) Block Kit `rich_text`/`section`/`header`/`context` blocks; capped at 50 KB with a logged truncation marker.
+- Listener uses `combined` for agent input and `raw` for `<@BOT>` mention detection so attachment content can't spuriously trigger mentions. `parentText` in the thread-reply branch and `getThreadHistory` route through the same helper.
+- 12 unit tests in `tests/unit/message-text.test.ts`; HubSpot-shaped happy-path test in `tests/unit/events.test.ts`.
+
+Rollback: `doctl compute ssh tinyjobs-prod --ssh-key-path ~/.ssh/tinyjobs_deploy --ssh-command "cd /root/tinyjobs && git checkout v1.53.0 && NODE_ENV=development npm install && NODE_ENV=development npm run build && NODE_ENV=development npm run build:web && pm2 reload ecosystem.config.js --force"`. No migrations in this release.
+
+## v1.53.0 — 2026-04-23
+
+Deployed to the production host. Includes:
+
+- plan-024 merged: Recursive sub-folder sync for Google Drive KB sources — syncing a root folder now pulls nested files from all descendant folders instead of stopping at the top level.
+
+Rollback: `doctl compute ssh tinyjobs-prod --ssh-key-path ~/.ssh/tinyjobs_deploy --ssh-command "cd /root/tinyjobs && git checkout v1.52.0 && NODE_ENV=development npm install && NODE_ENV=development npm run build && NODE_ENV=development npm run build:web && pm2 reload ecosystem.config.js --force"`. No migrations.
+
 ## v1.52.0 — 2026-04-22
 
 Deployed to the production host. Includes:
