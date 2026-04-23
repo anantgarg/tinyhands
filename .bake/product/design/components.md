@@ -74,7 +74,7 @@ Metrics display: label, value, optional trend (+/- %), colored icon.
 
 ### RichTextEditor
 
-TipTap-based markdown editor with bold, headings, lists, mentions.
+TipTap-based markdown editor with bold, headings, lists, and inline `@`-mention autocomplete (when `enableUserMentions` is set). Typing `@` opens a caret-anchored Slack-user picker (avatar + name, keyboard nav, scroll-into-view); selecting a person inserts a `SlackMention` node that renders as a `@RealName` chip in the editor and serializes to `<@USERID>` in the stored prompt, so Slack runtime mentions keep working.
 
 ### EmptyState / ErrorBoundary
 
