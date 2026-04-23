@@ -333,6 +333,17 @@
       "branch": "bake/plan/plan-025",
       "createdAt": "2026-04-23T10:05:01.495Z",
       "claudeSessionId": "5f9c8484-4398-4da3-b98d-cc4f5b0979fd"
+    },
+    {
+      "id": "plan-026",
+      "type": "plan",
+      "name": "New Plan",
+      "planId": "plan-026",
+      "planPath": "/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-026.md",
+      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-026",
+      "branch": "bake/plan/plan-026",
+      "createdAt": "2026-04-23T11:47:37.085Z",
+      "claudeSessionId": "cffde5fd-846d-4b5e-addd-326a23c1f7b8"
     }
   ]
 }
