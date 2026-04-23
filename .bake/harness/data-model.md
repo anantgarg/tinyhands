@@ -139,7 +139,7 @@ Structured per-file failure log. Upsert by `(kb_source_id, file_path)` — repea
 | filename | TEXT | Human-readable name for UI |
 | mime_type | TEXT | NULL when the source didn't declare one |
 | size_bytes | BIGINT | NULL when the source didn't report a size |
-| reason | TEXT | enum-in-code: `too_large`, `unsupported_format`, `parser_failed`, `reducto_failed`, `corrupted`, `download_failed`, `empty_extraction` |
+| reason | TEXT | enum-in-code: `too_large`, `unsupported_format`, `parser_failed`, `reducto_failed`, `reducto_required`, `corrupted`, `download_failed`, `empty_extraction` |
 | message | TEXT | Plain-English admin-facing message (truncated at 500 chars) |
 | first_seen_at | TIMESTAMPTZ | When this file first failed |
 | last_seen_at | TIMESTAMPTZ | Most recent failure attempt |
