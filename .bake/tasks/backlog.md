@@ -23,6 +23,13 @@
 - [ ] Wire GitHub / Zendesk / Web Crawl KB source connectors through the connections table so the wizard can un-grey them (currently "Coming soon") (from plan-015)
 - [ ] Implement a Notion KB source connector (no sync handler exists today) (from plan-015)
 - [ ] Cut a GitHub release (`gh release create v1.51.0`) with changelog entry for plan-020 (from plan-020)
+- [ ] Trigger an agent in Slack and confirm the chosen user is tagged correctly (clickable mention, notification fires) (from plan-012)
+- [ ] Edge: load an agent whose stored Slack ID is deactivated/unknown — verify "@Unknown user" chip renders and the chip can be replaced (from plan-012)
+- [ ] Edge: workspace with >500 members — verify the `@`-mention picker stays responsive (from plan-012)
+- [ ] Run `/agents` in Slack — verify status shows "Running/Paused/Archived" and model shows "Sonnet/Opus/Haiku" (from plan-012)
+- [ ] Open the Slack home tab — verify recent runs show friendly agent name + model + status, no UUIDs (from plan-012)
+- [ ] Open template details in Slack — verify friendly model label (from plan-012)
+- [ ] Sync a KB source — verify friendly status label (from plan-012)
 
 ## Completed
 
