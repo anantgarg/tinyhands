@@ -74691,4 +74691,94 @@ For more details, please visit https://support.apple.com/kb/HT208050.
 
 
 
-[2K[G[1A                                                                          
+[2K[G[1A                                                                          [4A[38;2;153;153;153m※[39m [38;2;153;153;153m[1mrecap: [22m[3mDeployed v1.52.0 to production (app.tinyhands.ai), including the [1B[23m[39m  [38;2;153;153;153m[3mDrive multi-format KB sync, Reducto integration, and friendlier sync [1B[23m[39m  [38;2;153;153;153m[3merrors. All processes healthy at 1.52.0; GitHub release and releases.md [2C[1Bentry are published. Nothing pending. (disable recaps in /config)[23m[39m
+
+[38;2;136;136;136m──────────────────────────────────────────────────────────────────────────[39m
+❯ 
+[38;2;136;136;136m──────────────────────────────────────────────────────────────────────────[39m
+[2C[38;2;255;107;128m⏵⏵[1Cbypass[1Cpermissions[1Con[38;2;153;153;153m (shift+tab[1Cto[1Ccycle)[39m
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[17C[38;2;153;153;153mChecking[1Cfor[1Cupdates[1C[38;2;255;107;128m✗[1CAuto-update[1Cfailed[1C·[1CTry[1C[1m/status[22m[39m
+[2K[G[1A                                                                          [17C[38;2;153;153;153mChecking[1Cfor[1Cupdates[1C[38;2;255;107;128m✗[1CAuto-update[1Cfailed[1C·[1CTry[1C[1m/status[22m[39m
+[2K[G[1A                                                                          [6C[34A[38;2;80;200;80m[48;2;2;40;0m19[5C[1B 20 +[38;2;248;248;242mRollback: `doctl compute ssh tinyjobs-prod --ssh-key-path[5C[1B[38;2;80;200;80m    +[38;2;248;248;242m ~/.ssh/tinyjobs_deploy --ssh-command "cd /root/tinyjobs [5C[1B[38;2;80;200;80m    +[38;2;248;248;242m&& git checkout v1.50.6 && NODE_ENV=development npm insta[5C[1B[38;2;80;200;80m    +[38;2;248;248;242mll && NODE_ENV=development npm run build && NODE_ENV=deve[5C[1B[38;2;80;200;80m    +[38;2;248;248;242mlopment npm run build:web && pm2 reload ecosystem.config.[5C[1B[38;2;80;200;80m    +[38;2;248;248;242mjs --force"`. Migrations 028 and 029 are additive — safe [1B[49m[39m [1C   [38;2;80;200;80m[48;2;2;40;0m    +[38;2;248;248;242mto leave in place.                                       [49m[39m     [5C[1B[38;2;80;200;80m[48;2;2;40;0m 21 +[38;2;248;248;242m                                                         [49m[39m  [1C   [1B     [38;2;248;248;242m[2m 22 [22m ## v1.50.5 — 2026-04-21[5C[1B[2m 23 [22m [39m      [1C  [1C     [1C  [1C             [1C  [1C [1C       [5C[1B[38;2;248;248;242m[2m 24 [22m Deployed to the production host. Multi-tenant isolation f[5C[1B[2m    [22m ix for the `/internal/kb/*` and `/internal/docs/*` endpoi[1B[39m     [38;2;248;248;242m[2m    [22m nts used by in-container agent tools.[2B[38;2;78;186;101m⏺[1C[39m[1mBash[22m(git[1Cadd .b[1Ck[1C/product/releases.md && git commit -m "Re[2Case not[1Cs[2C[1B   [1Cf[1Cr v1.52.0" 2>&1 | tail -5[1C&&[1Cgit[1Cpush[1Corigin[1Cmain[1C2>&1[1C|[1Ctail[1C-3)[1B[38;2;153;153;153m  ⎿  [39mOn[1Cbranch[1Cmain[2C[1B   Your branch is ahead of 'origin/main' by 1 commit.    [1C    [1C    [1C   [2C[1B [1C   (use "git push" to publish your local commits)[2C[1B   [2m… +4 lines (ctrl+o to expand)[22m                            [1C          [1B[38;2;153;153;153m  ⎿  (timeout 5m)[39m  [1C   [1C     [1C    [1C        [1C        [1C       [1C        [2B[38;2;255;255;255m⏺[1C[39mSkipping — release[1Cnotes[1Cdoc[1Conly,[1Cno[1Cfeatures/workflows/rules[1Cchanged[2C[1Band[1Cno[1Cnew[1Cissues[1Cdiscovered.[1B [1C                                                                        [2C[1B[1mDeploy complete.[22m v1.52.0 live on app.tinyhands.ai (origin HTTP 200, all[2C[1B6 PM2 processes online at 1.52.0). GitHub release:                      [2C[1Bhttps://github.com/anantgarg/tinyhands/releases/tag/v1.52.0. Migrations[2C[1B028[1C(Reducto)[1Cand[1C029[1C(skip[1Clog)[1Capplied.[1CRollback[1Ctarget:[1Cv1.50.6.[1B                                                                          [1B[38;2;153;153;153m✻[39m [38;2;153;153;153mWorked for 6m 22s[1B[39m                                                                          [1B[38;2;153;153;153m※[1C[1mrecap: [22m[3mDeployed v1.52.0 to production (app.tinyhands.ai), including the [23m[39m
+[2C[38;2;153;153;153m[3mDrive[1Cmulti-format[1CKB[1Csync,[1CReducto[1Cintegration,[1Cand[1Cfriendlier[1Csync[23m[39m
+[2C[38;2;153;153;153m[3merrors.[1CAll[1Cprocesses[1Chealthy[1Cat[1C1.52.0;[1CGitHub[1Crelease[1Cand[1Creleases.md[23m[39m
+[2C[38;2;153;153;153m[3mentry[1Care[1Cpublished.[1CNothing[1Cpending.[1C(disable[1Crecaps[1Cin[1C/config)[23m[39m
+
+[38;2;136;136;136m──────────────────────────────────────────────────────────────────────────[39m
+❯ 
+[38;2;136;136;136m──────────────────────────────────────────────────────────────────────────[39m
+[2C[38;2;255;107;128m⏵⏵[1Cbypass[1Cpermissions[1Con[38;2;153;153;153m (shift+tab[1Cto[1Ccycle)[39m
+[17C[38;2;153;153;153mChecking[1Cfor[1Cupdates[1C[38;2;255;107;128m✗[1CAuto-update[1Cfailed[1C·[1CTry[1C[1m/status[22m[39m
+[2K[G[1A                                                                          [17C[38;2;153;153;153mChecking[1Cfor[1Cupdates[1C[38;2;255;107;128m✗[1CAuto-update[1Cfailed[1C·[1CTry[1C[1m/status[22m[39m
+[2K[G[1A                                                                          [17C[38;2;153;153;153mChecking[1Cfor[1Cupdates[1C[38;2;255;107;128m✗[1CAuto-update[1Cfailed[1C·[1CTry[1C[1m/status[22m[39m
+[2K[G[1A                                                                          [17C[38;2;153;153;153mChecking[1Cfor[1Cupdates[1C[38;2;255;107;128m✗[1CAuto-update[1Cfailed[1C·[1CTry[1C[1m/status[22m[39m
+[2K[G[1A                                                                          [17C[38;2;153;153;153mChecking[1Cfor[1Cupdates[1C[38;2;255;107;128m✗[1CAuto-update[1Cfailed[1C·[1CTry[1C[1m/status[22m[39m
+[2K[G[1A                                                                          [17C[38;2;153;153;153mChecking[1Cfor[1Cupdates[1C[38;2;255;107;128m✗[1CAuto-update[1Cfailed[1C·[1CTry[1C[1m/status[22m[39m
+[2K[G[1A                                                                          [17C[38;2;153;153;153mChecking[1Cfor[1Cupdates[1C[38;2;255;107;128m✗[1CAuto-update[1Cfailed[1C·[1CTry[1C[1m/status[22m[39m
+[2K[G[1A                                                                          [17C[38;2;153;153;153mChecking[1Cfor[1Cupdates[1C[38;2;255;107;128m✗[1CAuto-update[1Cfailed[1C·[1CTry[1C[1m/status[22m[39m
+[2K[G[1A                                                                          [52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[17C[38;2;153;153;153mChecking[1Cfor[1Cupdates[1C[38;2;255;107;128m✗[1CAuto-update[1Cfailed[1C·[1CTry[1C[1m/status[22m[39m
+[2K[G[1A                                                                          [52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[52C[1A[38;2;153;153;153mChecking for updates[39m
+[52C[1A                    
+[2J[H[5C[38;2;80;200;80m[48;2;2;40;0m    +[38;2;248;248;242mto leave in place.                                       [49m[39m
+[5C[38;2;80;200;80m[48;2;2;40;0m 21 +[38;2;248;248;242m                                                         [49m[39m
+[5C[38;2;248;248;242m[2m 22[1C[22m ##[1Cv1.50.5[1C—[1C2026-04-21[39m
+[5C[38;2;248;248;242m[2m 23[1C[22m [39m
+[5C[38;2;248;248;242m[2m 24[1C[22m Deployed[1Cto[1Cthe[1Cproduction[1Chost.[1CMulti-tenant[1Cisolation[1Cf[39m
+[5C[38;2;248;248;242m[2m [3C[22m ix[1Cfor[1Cthe[1C`/internal/kb/*`[1Cand[1C`/internal/docs/*`[1Cendpoi[39m
+[5C[38;2;248;248;242m[2m [3C[22m nts[1Cused[1Cby[1Cin-container[1Cagent[1Ctools.[39m
+
+[38;2;78;186;101m⏺[1C[39m[1mBash[22m(git[1Cadd[1C.bake/product/releases.md[1C&&[1Cgit[1Ccommit[1C-m[1C"Release[1Cnotes
+[6Cfor[1Cv1.52.0"[1C2>&1[1C|[1Ctail[1C-5[1C&&[1Cgit[1Cpush[1Corigin[1Cmain[1C2>&1[1C|[1Ctail[1C-3)
+[38;2;153;153;153m [1C⎿[1C [39mOn[1Cbranch[1Cmain
+[5CYour[1Cbranch[1Cis[1Cahead[1Cof[1C'origin/main'[1Cby[1C1[1Ccommit.
+[7C(use[1C"git[1Cpush"[1Cto[1Cpublish[1Cyour[1Clocal[1Ccommits)
+[5C[2m…[1C+4[1Clines[1C(ctrl+o[1Cto[1Cexpand)[22m
+[38;2;153;153;153m [1C⎿[1C (timeout[1C5m)[39m
+
+[38;2;255;255;255m⏺[1C[39mSkipping[1C—[1Crelease[1Cnotes[1Cdoc[1Conly,[1Cno[1Cfeatures/workflows/rules[1Cchanged
+[2Cand[1Cno[1Cnew[1Cissues[1Cdiscovered.
+
+[2C[1mDeploy[1Ccomplete.[1C[22mv1.52.0[1Clive[1Con[1Capp.tinyhands.ai[1C(origin[1CHTTP[1C200,[1Call
+[2C6[1CPM2[1Cprocesses[1Conline[1Cat[1C1.52.0).[1CGitHub[1Crelease:
+[2Chttps://github.com/anantgarg/tinyhands/releases/tag/v1.52.0.[1CMigrations
+[2C028[1C(Reducto)[1Cand[1C029[1C(skip[1Clog)[1Capplied.[1CRollback[1Ctarget:[1Cv1.50.6.
+
+[38;2;153;153;153m✻[1CWorked[1Cfor[1C6m[1C22s[39m
+
+[38;2;153;153;153m※[1C[1mrecap:[1C[22m[3mDeployed[1Cv1.52.0[1Cto[1Cproduction[1C(app.tinyhands.ai),[1Cincluding[1Cthe[23m[39m
+[2C[38;2;153;153;153m[3mDrive[1Cmulti-format[1CKB[1Csync,[1CReducto[1Cintegration,[1Cand[1Cfriendlier[1Csync[23m[39m
+[2C[38;2;153;153;153m[3merrors.[1CAll[1Cprocesses[1Chealthy[1Cat[1C1.52.0;[1CGitHub[1Crelease[1Cand[1Creleases.md[23m[39m
+[2C[38;2;153;153;153m[3mentry[1Care[1Cpublished.[1CNothing[1Cpending.[1C(disable[1Crecaps[1Cin[1C/config)[23m[39m
+
+[38;2;136;136;136m──────────────────────────────────────────────────────────────────────────[39m
+❯ 
+[38;2;136;136;136m──────────────────────────────────────────────────────────────────────────[39m
+[2C[38;2;255;107;128m⏵⏵[1Cbypass[1Cpermissions[1Con[38;2;153;153;153m (shift+tab[1Cto[1Ccycle)[39m

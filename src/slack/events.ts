@@ -376,7 +376,8 @@ export function registerEvents(app: App): void {
               ts: msg.thread_ts,
               limit: 1,
             });
-            const parentText = parentMessages.messages?.[0]?.text || '';
+            const parentMsg = parentMessages.messages?.[0];
+            const parentText = parentMsg ? (extractSlackMessageText(parentMsg).combined || parentMsg.text || '') : '';
             const agentIdMatch = parentText.match(/\[([^\]]+)\]/);
 
             if (agentIdMatch) {

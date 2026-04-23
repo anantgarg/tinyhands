@@ -1,8 +1,9 @@
 ---
 id: plan-022
 title: Include Slack attachments and Block Kit content in the text passed to agents
-status: building
+status: complete
 created: 2026-04-22
+completed: 2026-04-23T09:49:22.000Z
 ---
 
 ## Summary
@@ -109,8 +110,8 @@ Not doing:
 
 ## Test Plan
 
-- [ ] Unit tests cover: attachment-only content, inline text (no double-count), Block Kit-only fallback, link extraction, mention in text, oversized input truncation, unknown block types.
-- [ ] `npm test`, `npm run typecheck`, `npm run lint` all green.
+- [x] Unit tests cover: attachment-only content, inline text (no double-count), Block Kit-only fallback, link extraction, mention in text, oversized input truncation, unknown block types.
+- [x] `npm test`, `npm run typecheck`, `npm run lint` all green.
 - [ ] After deploy, a synthetic HubSpot-shaped post in a test channel produces a `run_history` row whose `input` includes the attachment email. The agent replies in-thread.
 - [ ] Regression check: `@mention` in a plain-text message still routes to the mention path; DMs still work; existing working channels (`C02VCPSB4TC`, `C0746R57W86`) continue to produce equivalent output (not degraded by added duplication).
 - [ ] Spot-check one non-HubSpot agent in each active workspace for any behavior change in its next few runs.
@@ -118,9 +119,9 @@ Not doing:
 ## Acceptance Criteria
 
 - [x] Root cause identified: `src/slack/events.ts` passes only `msg.text` to the agent pipeline, dropping `attachments` and `blocks` content.
-- [ ] `extractSlackMessageText` helper exists, handles attachments (including action URLs) and Block Kit as fallback, has intra-attachment dup skipping, has a 50 KB cap with logged truncation, and is covered by unit tests built on real captured payloads.
-- [ ] Listener uses the helper at every point it reads `msg.text` as "what was said"; `raw` is used for mention detection and log previews.
-- [ ] `parentText` fetched in the thread-reply branch goes through the same helper.
+- [x] `extractSlackMessageText` helper exists, handles attachments (including action URLs) and Block Kit as fallback, has intra-attachment dup skipping, has a 50 KB cap with logged truncation, and is covered by unit tests built on real captured payloads.
+- [x] Listener uses the helper at every point it reads `msg.text` as "what was said"; `raw` is used for mention detection and log previews.
+- [x] `parentText` fetched in the thread-reply branch goes through the same helper.
 - [ ] Patch release tagged, deployed, and smoke-tested with a realistic attachment-based payload.
 - [ ] Generic (non-workspace-specific) follow-up sent to Vijit.
 
