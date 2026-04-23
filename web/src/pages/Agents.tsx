@@ -21,6 +21,7 @@ import { useAgents, useDeleteAgent, useUpdateAgent } from '@/api/agents';
 import type { Agent } from '@/api/agents';
 import { useAuthStore } from '@/store/auth';
 import { renderEmoji } from '@/lib/emoji';
+import { friendlyAgentStatus, friendlyModel } from '@/lib/labels';
 import { toast } from '@/components/ui/use-toast';
 
 export function Agents() {
@@ -76,12 +77,7 @@ export function Agents() {
     return '\u2014';
   }
 
-  function formatModelShort(model: string): string {
-    if (model.includes('sonnet')) return 'Sonnet';
-    if (model.includes('opus')) return 'Opus';
-    if (model.includes('haiku')) return 'Haiku';
-    return model;
-  }
+  const formatModelShort = friendlyModel;
 
   function renderAgentTable(agentList: Agent[]) {
     return (
@@ -114,7 +110,7 @@ export function Agents() {
                 </TableCell>
                 <TableCell>
                   <Badge variant={agent.status === 'active' ? 'success' : 'secondary'}>
-                    {agent.status}
+                    {friendlyAgentStatus(agent.status)}
                   </Badge>
                 </TableCell>
                 <TableCell className="text-warm-text-secondary text-sm">

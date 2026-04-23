@@ -153,11 +153,9 @@ router.get('/recent-runs', async (req: Request, res: Response) => {
 
     res.json((runs as any[]).map((r: any) => ({
       id: r.id,
-      traceId: r.trace_id,
       agentName: r.agent_name || 'Unknown',
       agentAvatar: r.agent_avatar || '',
-      userId: r.slack_user_id,
-      displayName: names[r.slack_user_id] || r.slack_user_id || '',
+      displayName: names[r.slack_user_id] || '',
       status: r.status,
       model: r.model,
       cost: parseFloat(r.estimated_cost_usd) || 0,

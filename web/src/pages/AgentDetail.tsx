@@ -66,6 +66,7 @@ import { useDocuments, useCreateDocument, type Document as DocType } from '@/api
 import { useSlackChannels, useSlackUsers } from '@/api/slack';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { renderEmoji } from '@/lib/emoji';
+import { friendlyAgentStatus, friendlyModel, friendlyRunStatus } from '@/lib/labels';
 import RichTextEditor from '@/components/RichTextEditor';
 import { useAuthStore } from '@/store/auth';
 import { toast } from '@/components/ui/use-toast';
@@ -262,9 +263,9 @@ export function AgentDetail() {
                 <h1 className="text-2xl font-extrabold">{agent.name}</h1>
               )}
               <Badge variant={agent.status === 'active' ? 'success' : 'secondary'}>
-                {agent.status}
+                {friendlyAgentStatus(agent.status)}
               </Badge>
-              <Badge variant="secondary">{agent.model}</Badge>
+              <Badge variant="secondary">{friendlyModel(agent.model)}</Badge>
             </div>
           </div>
         </div>
@@ -448,6 +449,7 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
                 value={promptDraft}
                 onChange={setPromptDraft}
                 placeholder="Write your agent instructions here..."
+                enableUserMentions
               />
               <div className="flex justify-end gap-2">
                 <Button variant="outline" size="sm" onClick={() => setEditingPrompt(false)}>Cancel</Button>
@@ -588,7 +590,7 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
             {(previewVersion?.model || previewVersion?.maxTurns || previewVersion?.tools) && (
               <div className="grid grid-cols-2 gap-2 text-sm rounded-lg border border-warm-border p-3">
                 {previewVersion?.model && (
-                  <div><span className="text-warm-text-secondary">Model:</span> <span className="font-medium">{previewVersion.model.includes('sonnet') ? 'Sonnet' : previewVersion.model.includes('opus') ? 'Opus' : previewVersion.model.includes('haiku') ? 'Haiku' : previewVersion.model}</span></div>
+                  <div><span className="text-warm-text-secondary">Model:</span> <span className="font-medium">{friendlyModel(previewVersion.model)}</span></div>
                 )}
                 {previewVersion?.maxTurns && (
                   <div><span className="text-warm-text-secondary">Effort:</span> <span className="font-medium">{previewVersion.maxTurns <= 10 ? 'Quick' : previewVersion.maxTurns <= 25 ? 'Standard' : previewVersion.maxTurns <= 50 ? 'Thorough' : 'Maximum'}</span></div>
@@ -1147,7 +1149,7 @@ function RunsTab({ agentId }: { agentId: string }) {
                 >
                   <TableCell>
                     <Badge variant={run.status === 'success' ? 'success' : run.status === 'error' ? 'danger' : 'secondary'}>
-                      {run.status}
+                      {friendlyRunStatus(run.status)}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-warm-text-secondary text-sm">{run.displayName || '\u2014'}</TableCell>

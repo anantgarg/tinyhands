@@ -5,6 +5,7 @@ import { config } from '../../config';
 import type { DashboardMetrics, ModelAlias } from '../../types';
 import { logger } from '../../utils/logger';
 import { version } from '../../../package.json';
+import { friendlyModel, friendlyAgentStatus, friendlyRunStatus, friendlyAuditAction, friendlyAuditStatus } from '../../utils/labels';
 
 // ── Slack Home Tab Dashboard ──
 
@@ -215,7 +216,7 @@ async function buildAgentFleetSection(workspaceId: string): Promise<Record<strin
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `${agent.avatar_emoji} *${agent.name}* — <#${agent.channel_id}> — ${agent.status} — ${agent.model}`,
+        text: `${agent.avatar_emoji} *${agent.name}* — <#${agent.channel_id}> — ${friendlyAgentStatus(agent.status)} — ${friendlyModel(agent.model)}`,
       },
     });
   }
@@ -242,6 +243,9 @@ async function buildRecentRunsSection(workspaceId: string): Promise<Record<strin
     text: { type: 'mrkdwn', text: '*Recent Runs*' },
   });
 
+  const agents = await listAgents(workspaceId);
+  const agentNameById = new Map(agents.map((a) => [a.id, a.name]));
+
   for (const run of runs) {
     const statusEmoji = run.status === 'completed' ? ':white_check_mark:'
       : run.status === 'failed' ? ':x:'
@@ -250,12 +254,13 @@ async function buildRecentRunsSection(workspaceId: string): Promise<Record<strin
 
     const duration = run.duration_ms ? `${(run.duration_ms / 1000).toFixed(1)}s` : '-';
     const cost = run.estimated_cost_usd ? `$${run.estimated_cost_usd.toFixed(4)}` : '-';
+    const agentName = agentNameById.get(run.agent_id) || 'Unknown agent';
 
     blocks.push({
       type: 'context',
       elements: [{
         type: 'mrkdwn',
-        text: `${statusEmoji} \`${run.trace_id.slice(0, 8)}\` — ${run.agent_id.slice(0, 8)} — ${duration} — ${cost} — ${run.model}`,
+        text: `${statusEmoji} ${agentName} — ${friendlyRunStatus(run.status)} — ${duration} — ${cost} — ${friendlyModel(run.model)}`,
       }],
     });
   }
@@ -287,7 +292,7 @@ async function buildRecentActivitySection(workspaceId: string): Promise<Record<s
       const agent = entry.agent_name ? ` on *${entry.agent_name}*` : '';
       blocks.push({
         type: 'context',
-        elements: [{ type: 'mrkdwn', text: `\`${entry.action_type}\` by <@${entry.actor_user_id}>${agent} — ${entry.status}` }],
+        elements: [{ type: 'mrkdwn', text: `${friendlyAuditAction(entry.action_type)} by <@${entry.actor_user_id}>${agent} — ${friendlyAuditStatus(entry.status)}` }],
       });
     }
   } catch {

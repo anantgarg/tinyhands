@@ -9,6 +9,7 @@ import { getCustomTool } from '../tools';
 import { getToolAnalytics } from '../self-authoring';
 import { getIntegration, getIntegrations } from '../tools/integrations';
 import type { Agent, RunRecord, ToolCallRecord } from '../../types';
+import { friendlyModel, friendlyRunStatus } from '../../utils/labels';
 
 // ── Friendly label helpers ──
 
@@ -30,22 +31,7 @@ function friendlyToolName(name: string): string {
   return TOOL_FRIENDLY_NAMES[name] || name.replace(/-read$/, '').replace(/-write$/, '').replace(/-search$/, '').replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
-function friendlyModel(model: string): string {
-  if (model.includes('opus')) return 'Opus';
-  if (model.includes('haiku')) return 'Haiku';
-  return 'Sonnet';
-}
-
-function friendlyStatus(status: string): string {
-  switch (status) {
-    case 'completed': return 'Completed';
-    case 'failed': return 'Failed';
-    case 'running': return 'Running';
-    case 'queued': return 'Queued';
-    case 'timeout': return 'Timed out';
-    default: return status;
-  }
-}
+const friendlyStatus = friendlyRunStatus;
 
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`;

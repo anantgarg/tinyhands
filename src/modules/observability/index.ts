@@ -4,6 +4,7 @@ import { listAgents } from '../agents';
 import { config } from '../../config';
 import type { AlertCondition, AlertRule, StructuredLog } from '../../types';
 import { logger } from '../../utils/logger';
+import { friendlyModel } from '../../utils/labels';
 
 // ── Alert Rules ──
 
@@ -88,7 +89,7 @@ export async function checkAlerts(workspaceId: string): Promise<AlertResult[]> {
       condition: 'single_run_cost',
       value: cost,
       threshold: 5.0,
-      message: `*${expensiveRun.agent_name}* had an expensive run: *$${cost.toFixed(2)}* (${expensiveRun.model}, ${expensiveRun.input_tokens.toLocaleString()} in / ${expensiveRun.output_tokens.toLocaleString()} out tokens)`,
+      message: `*${expensiveRun.agent_name}* had an expensive run: *$${cost.toFixed(2)}* (${friendlyModel(expensiveRun.model)}, ${expensiveRun.input_tokens.toLocaleString()} in / ${expensiveRun.output_tokens.toLocaleString()} out tokens)`,
     });
   }
 
