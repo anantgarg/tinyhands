@@ -981,14 +981,16 @@ Every document must be associated with an agent (`agent_id` is required). Permis
 | Source | Config | Connection Type |
 |--------|--------|-----------------|
 | GitHub | Repository (owner/name), branch, path filter | GitHub API token (KB API key) |
-| Google Drive | Folder ID (via folder picker) | Google OAuth connection |
+| Google Drive | Folder ID (via folder picker), optional "Include sub-folders" toggle | Google OAuth connection |
 | Zendesk Help Center | Subdomain, category ID (optional) | Zendesk API token (KB API key) |
 | Website / Docs (Web Crawl) | Start URL, max pages, URL pattern filter | Firecrawl API key (KB API key) |
 | Notion | Root page ID | Notion OAuth connection |
 
 ### Google Drive File Type Coverage
 
-The Google Drive connector indexes both Google-native and uploaded file types from a connected folder:
+The Google Drive connector indexes both Google-native and uploaded file types from a connected folder. By default only files directly inside the configured folder are indexed; ticking **Include sub-folders** on the source walks the entire folder tree at any depth.
+
+
 
 | Type | Format | How it's extracted |
 |------|--------|---------------------|

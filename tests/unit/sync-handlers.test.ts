@@ -1131,6 +1131,243 @@ describe('KB Source Sync Handlers', () => {
   });
 
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  // Google Drive recursion
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  describe('syncGoogleDrive recursion', () => {
+    // Each response is an array; indexing via callIndex. After setupHttpsMock
+    // runs out of responses it replays the last one — so we pad the tail with
+    // empty export responses where needed.
+
+    const txtFile = (id: string, name = `file-${id}`) => ({
+      id, name,
+      mimeType: 'application/vnd.google-apps.document',
+      size: 100,
+    });
+    const folderEntry = (id: string) => ({
+      id, name: `folder-${id}`,
+      mimeType: 'application/vnd.google-apps.folder',
+    });
+
+    it('does not descend into sub-folders when include_subfolders is false', async () => {
+      setupProviderCredentials('google', {
+        client_id: 'id', client_secret: 'secret', refresh_token: 'refresh',
+      });
+
+      setupHttpsMock([
+        // 1. OAuth refresh
+        { status: 200, body: JSON.stringify({ access_token: 'access_tok' }) },
+        // 2. List root: two files + one sub-folder
+        {
+          status: 200,
+          body: JSON.stringify({
+            files: [txtFile('a'), txtFile('b'), folderEntry('sub1')],
+            nextPageToken: null,
+          }),
+        },
+        // 3. + 4. Two document exports (one per file)
+        { status: 200, body: 'content A' },
+        { status: 200, body: 'content B' },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'google_drive',
+        config_json: JSON.stringify({ folder_id: 'root', include_subfolders: 'false' }),
+      });
+
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
+      expect(result).toBe(2);
+      // Folder-list call + 2 export calls + 1 token refresh = 4 total.
+      // But crucially: files.list should have been called exactly once — the
+      // sub-folder was never visited. Count list calls specifically via the q=
+      // parameter in the https.request options.
+      const listCalls = mockHttpsRequest.mock.calls.filter((call: any[]) => {
+        const opts = call[0];
+        return typeof opts?.path === 'string' && opts.path.startsWith('/drive/v3/files?q=');
+      });
+      expect(listCalls).toHaveLength(1);
+
+      // Tombstone sees only the two top-level files.
+      expect(mockDeleteStaleKBEntries).toHaveBeenCalledWith(TEST_WORKSPACE_ID, 'src-1', ['a', 'b']);
+    });
+
+    it('traverses one level of sub-folders when include_subfolders is true', async () => {
+      setupProviderCredentials('google', {
+        client_id: 'id', client_secret: 'secret', refresh_token: 'refresh',
+      });
+
+      setupHttpsMock([
+        // OAuth refresh
+        { status: 200, body: JSON.stringify({ access_token: 'access_tok' }) },
+        // Root: 1 file + 1 sub-folder
+        {
+          status: 200,
+          body: JSON.stringify({
+            files: [txtFile('root1'), folderEntry('sub1')],
+            nextPageToken: null,
+          }),
+        },
+        // Export for root1
+        { status: 200, body: 'root1 content' },
+        // sub1 listing: 2 files, no folders
+        {
+          status: 200,
+          body: JSON.stringify({
+            files: [txtFile('s1a'), txtFile('s1b')],
+            nextPageToken: null,
+          }),
+        },
+        // Exports for s1a and s1b
+        { status: 200, body: 's1a content' },
+        { status: 200, body: 's1b content' },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'google_drive',
+        config_json: JSON.stringify({ folder_id: 'root', include_subfolders: 'true' }),
+      });
+
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
+      expect(result).toBe(3);
+
+      const listCalls = mockHttpsRequest.mock.calls.filter((call: any[]) => {
+        const opts = call[0];
+        return typeof opts?.path === 'string' && opts.path.startsWith('/drive/v3/files?q=');
+      });
+      expect(listCalls).toHaveLength(2);
+
+      expect(mockDeleteStaleKBEntries).toHaveBeenCalledWith(
+        TEST_WORKSPACE_ID,
+        'src-1',
+        expect.arrayContaining(['root1', 's1a', 's1b']),
+      );
+    });
+
+    it('walks multiple levels deep', async () => {
+      setupProviderCredentials('google', {
+        client_id: 'id', client_secret: 'secret', refresh_token: 'refresh',
+      });
+
+      setupHttpsMock([
+        { status: 200, body: JSON.stringify({ access_token: 'access_tok' }) },
+        // root → one file + sub1
+        { status: 200, body: JSON.stringify({ files: [txtFile('r1'), folderEntry('sub1')], nextPageToken: null }) },
+        { status: 200, body: 'r1 content' },
+        // sub1 → one file + sub2
+        { status: 200, body: JSON.stringify({ files: [txtFile('s1'), folderEntry('sub2')], nextPageToken: null }) },
+        { status: 200, body: 's1 content' },
+        // sub2 → one file
+        { status: 200, body: JSON.stringify({ files: [txtFile('s2')], nextPageToken: null }) },
+        { status: 200, body: 's2 content' },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'google_drive',
+        config_json: JSON.stringify({ folder_id: 'root', include_subfolders: 'true' }),
+      });
+
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
+      expect(result).toBe(3);
+
+      const listCalls = mockHttpsRequest.mock.calls.filter((call: any[]) => {
+        const opts = call[0];
+        return typeof opts?.path === 'string' && opts.path.startsWith('/drive/v3/files?q=');
+      });
+      expect(listCalls).toHaveLength(3);
+    });
+
+    it('does not loop forever when a folder cycles back to itself', async () => {
+      setupProviderCredentials('google', {
+        client_id: 'id', client_secret: 'secret', refresh_token: 'refresh',
+      });
+
+      // Root returns itself as a child (simulating a shortcut back to root).
+      setupHttpsMock([
+        { status: 200, body: JSON.stringify({ access_token: 'access_tok' }) },
+        {
+          status: 200,
+          body: JSON.stringify({
+            files: [txtFile('only'), { id: 'root', name: 'self', mimeType: 'application/vnd.google-apps.folder' }],
+            nextPageToken: null,
+          }),
+        },
+        { status: 200, body: 'only content' },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'google_drive',
+        config_json: JSON.stringify({ folder_id: 'root', include_subfolders: 'true' }),
+      });
+
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
+      expect(result).toBe(1);
+
+      const listCalls = mockHttpsRequest.mock.calls.filter((call: any[]) => {
+        const opts = call[0];
+        return typeof opts?.path === 'string' && opts.path.startsWith('/drive/v3/files?q=');
+      });
+      // Root visited exactly once despite being referenced as its own child.
+      expect(listCalls).toHaveLength(1);
+    });
+
+    it('keeps the folder MIME in the query when a file_types filter is set and recursion is on', async () => {
+      setupProviderCredentials('google', {
+        client_id: 'id', client_secret: 'secret', refresh_token: 'refresh',
+      });
+
+      setupHttpsMock([
+        { status: 200, body: JSON.stringify({ access_token: 'access_tok' }) },
+        // Root: one PDF + one sub-folder (folder only shows up because the
+        // query allows its MIME alongside pdf).
+        {
+          status: 200,
+          body: JSON.stringify({
+            files: [
+              { id: 'p1', name: 'doc.pdf', mimeType: 'application/pdf', size: 100 },
+              folderEntry('sub1'),
+            ],
+            nextPageToken: null,
+          }),
+        },
+        // sub1: one more PDF
+        {
+          status: 200,
+          body: JSON.stringify({
+            files: [{ id: 'p2', name: 'deep.pdf', mimeType: 'application/pdf', size: 100 }],
+            nextPageToken: null,
+          }),
+        },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'google_drive',
+        config_json: JSON.stringify({
+          folder_id: 'root',
+          file_types: 'pdf',
+          include_subfolders: 'true',
+        }),
+      });
+
+      // PDFs are skipped as binary by extractDriveFileText (no parser plumbed
+      // in tests) so the upsert count is 0 — but we care about the walk.
+      await syncSource(TEST_WORKSPACE_ID, source);
+
+      const listCalls = mockHttpsRequest.mock.calls.filter((call: any[]) => {
+        const opts = call[0];
+        return typeof opts?.path === 'string' && opts.path.startsWith('/drive/v3/files?q=');
+      });
+      expect(listCalls).toHaveLength(2);
+
+      // Every list query must include the folder MIME clause; otherwise the
+      // sub-folder would have been filtered out upstream.
+      for (const call of listCalls) {
+        const path = call[0].path as string;
+        expect(decodeURIComponent(path)).toContain("mimeType = 'application/vnd.google-apps.folder'");
+      }
+    });
+  });
+
+  // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   // HubSpot KB sync handler
   // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 

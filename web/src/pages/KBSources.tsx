@@ -46,7 +46,7 @@ const SOURCE_TYPES = [
   { id: 'notion', name: 'Notion', description: 'Sync pages from a Notion workspace', icon: Database, comingSoon: true },
 ];
 
-const SOURCE_CONFIG_FIELDS: Record<string, { key: string; label: string; placeholder: string; required: boolean; help?: string }[]> = {
+const SOURCE_CONFIG_FIELDS: Record<string, { key: string; label: string; placeholder?: string; required: boolean; help?: string; type?: 'text' | 'checkbox' }[]> = {
   github: [
     { key: 'repo', label: 'Repository (owner/name)', placeholder: 'myorg/docs', required: true, help: 'The GitHub repository to sync, e.g. "acme/knowledge-base"' },
     { key: 'branch', label: 'Branch', placeholder: 'main', required: false, help: 'Branch to sync from. Defaults to the repo\'s default branch.' },
@@ -54,6 +54,7 @@ const SOURCE_CONFIG_FIELDS: Record<string, { key: string; label: string; placeho
   ],
   google_drive: [
     { key: 'folderId', label: 'Folder', placeholder: 'Pick a Google Drive folder', required: true, help: 'Browse and pick a folder to sync into the knowledge base.' },
+    { key: 'include_subfolders', label: 'Include sub-folders', required: false, type: 'checkbox', help: 'Also sync files inside nested folders at any depth.' },
   ],
   zendesk: [
     { key: 'subdomain', label: 'Subdomain', placeholder: 'yourcompany', required: true, help: 'Your Zendesk subdomain, e.g. "acme" from acme.zendesk.com' },
@@ -425,34 +426,53 @@ export function KBSources() {
               <Label>Source Name</Label>
               <Input value={editName} onChange={(e) => setEditName(e.target.value)} className="mt-1" />
             </div>
-            {(SOURCE_CONFIG_FIELDS[editSource?.type ?? ''] ?? []).map((field) => (
-              <div key={field.key}>
-                <Label>{field.label}</Label>
-                {editSource?.type === 'google_drive' && field.key === 'folderId' ? (
-                  <div className="mt-1">
-                    <DriveFolderPicker
-                      value={editConfig.folderId ?? ''}
-                      valueName={editFolderName}
-                      onChange={(id, name) => {
-                        setEditConfig((prev) => ({ ...prev, folderId: id }));
-                        setEditFolderName(name);
-                      }}
-                      helpText={field.help}
+            {(SOURCE_CONFIG_FIELDS[editSource?.type ?? ''] ?? []).map((field) => {
+              if (field.type === 'checkbox') {
+                const checked = editConfig[field.key] === 'true';
+                return (
+                  <div key={field.key} className="flex items-center gap-3">
+                    <Switch
+                      checked={checked}
+                      onCheckedChange={(next) =>
+                        setEditConfig((prev) => ({ ...prev, [field.key]: next ? 'true' : 'false' }))
+                      }
                     />
+                    <div>
+                      <Label>{field.label}</Label>
+                      {field.help && <p className="text-xs text-warm-text-secondary">{field.help}</p>}
+                    </div>
                   </div>
-                ) : (
-                  <>
-                    <Input
-                      value={editConfig[field.key] ?? ''}
-                      onChange={(e) => setEditConfig((prev) => ({ ...prev, [field.key]: e.target.value }))}
-                      placeholder={field.placeholder}
-                      className="mt-1"
-                    />
-                    {field.help && <p className="text-xs text-warm-text-secondary mt-1">{field.help}</p>}
-                  </>
-                )}
-              </div>
-            ))}
+                );
+              }
+              return (
+                <div key={field.key}>
+                  <Label>{field.label}</Label>
+                  {editSource?.type === 'google_drive' && field.key === 'folderId' ? (
+                    <div className="mt-1">
+                      <DriveFolderPicker
+                        value={editConfig.folderId ?? ''}
+                        valueName={editFolderName}
+                        onChange={(id, name) => {
+                          setEditConfig((prev) => ({ ...prev, folderId: id }));
+                          setEditFolderName(name);
+                        }}
+                        helpText={field.help}
+                      />
+                    </div>
+                  ) : (
+                    <>
+                      <Input
+                        value={editConfig[field.key] ?? ''}
+                        onChange={(e) => setEditConfig((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                        placeholder={field.placeholder}
+                        className="mt-1"
+                      />
+                      {field.help && <p className="text-xs text-warm-text-secondary mt-1">{field.help}</p>}
+                    </>
+                  )}
+                </div>
+              );
+            })}
 
             <div className="border-t border-warm-border pt-4">
               <div className="flex items-center gap-3 mb-3">
@@ -595,41 +615,65 @@ export function KBSources() {
                   className="mt-1"
                 />
               </div>
-              {configFields.map((field) => (
-                <div key={field.key}>
-                  <Label>
-                    {field.label}
-                    {field.required && <span className="text-red-500 ml-1">*</span>}
-                  </Label>
-                  {wizardType === 'google_drive' && field.key === 'folderId' ? (
-                    <div className="mt-1 space-y-2">
-                      <DriveFolderPicker
-                        value={wizardConfig.folderId ?? ''}
-                        valueName={wizardFolderName}
-                        onChange={(id, name) => {
-                          setWizardConfig((prev) => ({ ...prev, folderId: id }));
-                          setWizardFolderName(name);
-                          if (name && !wizardName) setWizardName(name);
-                        }}
-                        helpText={field.help}
+              {configFields.map((field) => {
+                if (field.type === 'checkbox') {
+                  const checked = wizardConfig[field.key] === 'true';
+                  return (
+                    <div key={field.key} className="flex items-center gap-3">
+                      <Switch
+                        checked={checked}
+                        onCheckedChange={(next) =>
+                          setWizardConfig((prev) => {
+                            if (next) return { ...prev, [field.key]: 'true' };
+                            const rest = { ...prev };
+                            delete rest[field.key];
+                            return rest;
+                          })
+                        }
                       />
-                      <p className="text-xs text-warm-text-secondary">
-                        Folders are browsed through your personal Google connection. The knowledge base itself is shared across the workspace.
-                      </p>
+                      <div>
+                        <Label>{field.label}</Label>
+                        {field.help && <p className="text-xs text-warm-text-secondary">{field.help}</p>}
+                      </div>
                     </div>
-                  ) : (
-                    <>
-                      <Input
-                        value={wizardConfig[field.key] ?? ''}
-                        onChange={(e) => setWizardConfig((prev) => ({ ...prev, [field.key]: e.target.value }))}
-                        placeholder={field.placeholder}
-                        className="mt-1"
-                      />
-                      {field.help && <p className="text-xs text-warm-text-secondary mt-1">{field.help}</p>}
-                    </>
-                  )}
-                </div>
-              ))}
+                  );
+                }
+                return (
+                  <div key={field.key}>
+                    <Label>
+                      {field.label}
+                      {field.required && <span className="text-red-500 ml-1">*</span>}
+                    </Label>
+                    {wizardType === 'google_drive' && field.key === 'folderId' ? (
+                      <div className="mt-1 space-y-2">
+                        <DriveFolderPicker
+                          value={wizardConfig.folderId ?? ''}
+                          valueName={wizardFolderName}
+                          onChange={(id, name) => {
+                            setWizardConfig((prev) => ({ ...prev, folderId: id }));
+                            setWizardFolderName(name);
+                            if (name && !wizardName) setWizardName(name);
+                          }}
+                          helpText={field.help}
+                        />
+                        <p className="text-xs text-warm-text-secondary">
+                          Folders are browsed through your personal Google connection. The knowledge base itself is shared across the workspace.
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <Input
+                          value={wizardConfig[field.key] ?? ''}
+                          onChange={(e) => setWizardConfig((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                          placeholder={field.placeholder}
+                          className="mt-1"
+                        />
+                        {field.help && <p className="text-xs text-warm-text-secondary mt-1">{field.help}</p>}
+                      </>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -673,8 +717,13 @@ export function KBSources() {
                 </div>
                 {Object.entries(wizardConfig).filter(([, v]) => v).map(([k, v]) => {
                   const isDriveFolder = wizardType === 'google_drive' && k === 'folderId';
-                  const label = isDriveFolder ? 'Folder' : k;
-                  const display = isDriveFolder && wizardFolderName ? wizardFolderName : v;
+                  const isSubfolders = wizardType === 'google_drive' && k === 'include_subfolders';
+                  const label = isDriveFolder ? 'Folder' : isSubfolders ? 'Include sub-folders' : k;
+                  const display = isDriveFolder && wizardFolderName
+                    ? wizardFolderName
+                    : isSubfolders
+                      ? (v === 'true' ? 'Yes' : 'No')
+                      : v;
                   return (
                     <div key={k} className="flex justify-between">
                       <span className="text-sm text-warm-text-secondary">{label}</span>

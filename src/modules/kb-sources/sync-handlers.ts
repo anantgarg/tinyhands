@@ -836,6 +836,8 @@ async function syncGoogleDrive(workspaceId: string, source: KBSource, config: Re
   const folderId = config.folder_id || config.folderId;
   if (!folderId) throw new Error('Google Drive Folder ID is required');
 
+  const includeSubfolders = config.include_subfolders === 'true';
+
   // file_types is a legacy UI filter that used short names (doc|sheet|pdf|slide).
   // When present we narrow the Drive query; when absent we crawl everything.
   const fileTypes = config.file_types ? config.file_types.split(',').map(t => t.trim()) : [];
@@ -846,72 +848,100 @@ async function syncGoogleDrive(workspaceId: string, source: KBSource, config: Re
     slide: ['application/vnd.google-apps.presentation', 'application/vnd.openxmlformats-officedocument.presentationml.presentation', 'application/vnd.ms-powerpoint'],
   };
 
-  let driveQuery = `'${folderId}' in parents and trashed = false`;
-  if (fileTypes.length > 0) {
-    const mimes: string[] = [];
-    for (const t of fileTypes) {
-      const entry = legacyMimeMap[t];
-      if (entry) mimes.push(...entry);
-    }
-    if (mimes.length > 0) {
-      driveQuery += ` and (${mimes.map(m => `mimeType = '${m}'`).join(' or ')})`;
-    }
+  // Build the MIME clause once. When recursion is on and a file-type filter is
+  // set, we must also allow the folder MIME through so sub-folders still show
+  // up in the listing; otherwise the walk terminates at the root.
+  const mimes: string[] = [];
+  for (const t of fileTypes) {
+    const entry = legacyMimeMap[t];
+    if (entry) mimes.push(...entry);
+  }
+  const folderMime = 'application/vnd.google-apps.folder';
+  let mimeClause = '';
+  if (mimes.length > 0) {
+    const allowed = includeSubfolders ? [folderMime, ...mimes] : mimes;
+    mimeClause = ` and (${allowed.map(m => `mimeType = '${m}'`).join(' or ')})`;
   }
 
   const authHeaders = { 'Authorization': `Bearer ${accessToken}` };
   let count = 0;
-  let pageToken: string | null = null;
   const seenFileIds: string[] = [];
 
-  do {
-    let path = `/drive/v3/files?q=${encodeURIComponent(driveQuery)}&fields=files(id,name,mimeType,size,modifiedTime),nextPageToken&pageSize=100`;
-    if (pageToken) path += `&pageToken=${encodeURIComponent(pageToken)}`;
+  async function crawlFolder(currentFolderId: string): Promise<string[]> {
+    const driveQuery = `'${currentFolderId}' in parents and trashed = false${mimeClause}`;
+    const childFolderIds: string[] = [];
+    let pageToken: string | null = null;
 
-    const res = await httpsGet('www.googleapis.com', path, authHeaders);
-    if (res.status >= 400) throw new Error(`Google Drive API error (${res.status}): ${JSON.stringify(res.data).slice(0, 300)}`);
+    do {
+      let path = `/drive/v3/files?q=${encodeURIComponent(driveQuery)}&fields=files(id,name,mimeType,size,modifiedTime),nextPageToken&pageSize=100`;
+      if (pageToken) path += `&pageToken=${encodeURIComponent(pageToken)}`;
 
-    const files = res.data.files || [];
-    for (const file of files) {
-      try {
-        const extracted = await extractDriveFileText({ file, authHeaders, workspaceId, source, ctx });
-        if (!extracted) continue;
-        const { text, mimeForEntry } = extracted;
+      const res = await httpsGet('www.googleapis.com', path, authHeaders);
+      if (res.status >= 400) throw new Error(`Google Drive API error (${res.status}): ${JSON.stringify(res.data).slice(0, 300)}`);
 
-        await upsertKBEntryByExternalId(workspaceId, {
-          title: file.name,
-          summary: text.slice(0, 200),
-          content: text,
-          category: 'google-drive',
-          tags: ['google-drive', file.name, mimeForEntry].filter(Boolean) as string[],
-          accessScope: 'all',
-          sourceType: 'google_drive',
-          approved: true,
-          kbSourceId: source.id,
-          sourceExternalId: file.id,
-        });
-        // If this file was previously in the skip log, clear it now that it
-        // has ingested cleanly — the log should reflect current state.
-        await clearSkippedFile(workspaceId, source.id, file.id);
-        seenFileIds.push(file.id);
-        count++;
-      } catch (err: any) {
-        logger.warn('Failed to sync Google Drive file', { name: file.name, error: err.message });
-        ctx.warnings.push(`${file.name}: ${err.message}`);
-        await recordSkippedFile({
-          workspaceId,
-          kbSourceId: source.id,
-          filePath: file.id,
-          filename: file.name,
-          mimeType: file.mimeType || null,
-          sizeBytes: file.size ? Number(file.size) : null,
-          reason: 'parser_failed',
-          message: err.message?.slice(0, 400) || 'Unknown sync error',
-        });
+      const files = res.data.files || [];
+      for (const file of files) {
+        if (file.mimeType === folderMime) {
+          childFolderIds.push(file.id);
+          continue;
+        }
+        try {
+          const extracted = await extractDriveFileText({ file, authHeaders, workspaceId, source, ctx });
+          if (!extracted) continue;
+          const { text, mimeForEntry } = extracted;
+
+          await upsertKBEntryByExternalId(workspaceId, {
+            title: file.name,
+            summary: text.slice(0, 200),
+            content: text,
+            category: 'google-drive',
+            tags: ['google-drive', file.name, mimeForEntry].filter(Boolean) as string[],
+            accessScope: 'all',
+            sourceType: 'google_drive',
+            approved: true,
+            kbSourceId: source.id,
+            sourceExternalId: file.id,
+          });
+          // If this file was previously in the skip log, clear it now that it
+          // has ingested cleanly — the log should reflect current state.
+          await clearSkippedFile(workspaceId, source.id, file.id);
+          seenFileIds.push(file.id);
+          count++;
+        } catch (err: any) {
+          logger.warn('Failed to sync Google Drive file', { name: file.name, error: err.message });
+          ctx.warnings.push(`${file.name}: ${err.message}`);
+          await recordSkippedFile({
+            workspaceId,
+            kbSourceId: source.id,
+            filePath: file.id,
+            filename: file.name,
+            mimeType: file.mimeType || null,
+            sizeBytes: file.size ? Number(file.size) : null,
+            reason: 'parser_failed',
+            message: err.message?.slice(0, 400) || 'Unknown sync error',
+          });
+        }
+      }
+
+      pageToken = res.data.nextPageToken || null;
+    } while (pageToken);
+
+    return childFolderIds;
+  }
+
+  const visitedFolderIds = new Set<string>();
+  const queue: string[] = [folderId];
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    if (visitedFolderIds.has(current)) continue;
+    visitedFolderIds.add(current);
+    const children = await crawlFolder(current);
+    if (includeSubfolders) {
+      for (const child of children) {
+        if (!visitedFolderIds.has(child)) queue.push(child);
       }
     }
-
-    pageToken = res.data.nextPageToken || null;
-  } while (pageToken);
+  }
 
   // Tombstone pass: anything in this source not seen this crawl is gone
   // (deleted, moved out of folder, or folder scope changed). Also cleans up
