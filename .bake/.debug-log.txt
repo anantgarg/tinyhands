@@ -2586,3 +2586,10 @@
 [10:10:15.425] [AutoSwitch] plan → activating existing session {"itemId":"plan-024","sessionId":"plan-024","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-024","prevSession":"plan-025"}
 [10:10:15.428] [TerminalSwitch] transitioning {"from":"plan-025","to":"plan-024","storeSessionsLen":35}
 [10:10:15.428] [Terminal] getOrCreate → returning cached {"sessionId":"plan-024","cachedCwd":null}
+[10:11:11.434] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-019.md","isReadOnly":false,"parsedStatus":"review","editorContentLen":12503,"isPlanPath":true}
+[10:11:11.439] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-019.md","title":"Audit and harden remaining getDefaultWorkspaceId() fallback call sites"}
+[10:11:11.471] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-019.md","sessionsLen":35,"activeSessionId":"plan-024"}
+[10:11:11.471] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-019.md"}
+[10:11:11.496] [AutoSwitch] plan → activating existing session {"itemId":"plan-019","sessionId":"plan-019","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-019","prevSession":"plan-024"}
+[10:11:11.499] [TerminalSwitch] transitioning {"from":"plan-024","to":"plan-019","storeSessionsLen":35}
+[10:11:11.499] [Terminal] getOrCreate → returning cached {"sessionId":"plan-019","cachedCwd":null}
