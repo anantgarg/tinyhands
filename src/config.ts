@@ -54,6 +54,11 @@ export const config = {
     githubClientId: process.env.GITHUB_OAUTH_CLIENT_ID || '',
     githubClientSecret: process.env.GITHUB_OAUTH_CLIENT_SECRET || '',
     redirectBaseUrl: process.env.OAUTH_REDIRECT_BASE_URL || 'http://localhost:3000',
+    // Where to send the browser after a successful sign-in. In production
+    // this is `/` (the dashboard is served from the same origin as the API
+    // behind nginx). In local dev the Vite dev server runs on a separate
+    // port, so set `WEB_URL` in `.env` to that URL (e.g. `http://localhost:5173`).
+    webUrl: process.env.WEB_URL || '/',
   },
   docker: {
     baseImage: process.env.DOCKER_BASE_IMAGE || 'tinyhands-runner:latest',

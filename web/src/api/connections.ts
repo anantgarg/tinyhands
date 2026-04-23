@@ -1,6 +1,41 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from './client';
 
+/**
+ * Start an OAuth reconnect flow for an integration. Pre-flight checks
+ * whether the workspace has an OAuth app configured:
+ *   - configured → redirect THIS tab to the provider (Slack/Google/etc.)
+ *   - not configured → redirect to the workspace's OAuth-app setup page
+ * Never opens a raw JSON response. Shared by the Connections/Tools pages
+ * and the inline "Reconnect" button on broken KB sources.
+ */
+export async function startOAuthReconnect(integrationId: string): Promise<void> {
+  const url = `/api/v1/connections/oauth/${integrationId}/start`;
+  const res = await fetch(url, { redirect: 'manual', credentials: 'include' });
+  // Manual redirect: a success (3xx) shows up as `opaqueredirect` and we
+  // can just navigate the tab to the same URL to let the browser follow it.
+  if (res.type === 'opaqueredirect' || (res.status >= 300 && res.status < 400)) {
+    window.location.href = url;
+    return;
+  }
+  if (res.status === 409) {
+    const body = await res.json().catch(() => null) as { setupUrl?: string } | null;
+    if (body?.setupUrl) {
+      window.location.href = body.setupUrl;
+      return;
+    }
+  }
+  if (res.ok) {
+    // Some providers return JSON with a URL field instead of a redirect.
+    const body = await res.json().catch(() => null) as { url?: string } | null;
+    if (body?.url) {
+      window.location.href = body.url;
+      return;
+    }
+  }
+  window.location.href = url;
+}
+
 interface Connection {
   id: string;
   integrationId: string;
@@ -10,6 +45,11 @@ interface Connection {
   userId: string | null;
   userDisplayName: string | null;
   status: 'active' | 'expired' | 'revoked';
+  // True when the stored credentials cannot be decrypted with the current
+  // ENCRYPTION_KEY, or (for OAuth) lack a usable refresh_token. The UI
+  // treats this like `expired` — shows a Reconnect button.
+  isBroken?: boolean;
+  brokenReason?: 'decrypt_failed' | 'missing_refresh_token' | 'missing_ciphertext' | null;
   createdAt: string;
   rootFolderId?: string | null;
   rootFolderName?: string | null;

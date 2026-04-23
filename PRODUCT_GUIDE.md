@@ -113,6 +113,39 @@ You can search across all entries from any level using the search bar. Admins ca
 
 The **Sources** sub-page (accessible via the "Sources" button) lets admins manage connected data sources and API keys for external KB access.
 
+### Google Drive File Type Coverage
+
+When you connect a Google Drive folder, the sync indexes both Google-native formats (Docs, Sheets, Slides) and uploaded files of the types people actually keep in Drive. By default only the files sitting directly inside the folder are indexed; flip on **Include sub-folders** to walk the entire folder tree at any depth:
+
+- **Word** (`.docx`, `.doc`)
+- **Excel** (`.xlsx`, `.xls`)
+- **PowerPoint** (`.pptx`, `.ppt`)
+- **PDF** (`.pdf`)
+- **OpenDocument** (`.odt`, `.ods`, `.odp`)
+- **Rich Text** (`.rtf`)
+- **HTML** (`.html`, `.htm`)
+- **Plain text** (`.txt`, `.md`, `.csv`, `.tsv`, `.json`, `.log`)
+- **Images** (`.jpg`, `.jpeg`, `.png`) — OCR'd via Reducto. Other image formats (GIF, WebP, SVG, TIFF, HEIC), video, and audio are not supported and are recorded in the skip log.
+
+If Reducto is not enabled for the workspace, JPG/PNG files appear in the skip log with reason "Image OCR requires Reducto" so admins know the files were seen but couldn't be processed.
+
+Unsupported or unparseable files (other image types, video, audio, corrupted uploads, files over 250 MB) are skipped — not silently, but recorded in a per-source skip log. On the KB Sources page each affected row shows a small orange **failures icon** with the count; clicking it opens a modal listing every skipped file with a plain-English reason ("File too large to index", "Could not read the file contents", etc.), size, and when it was last attempted. Files disappear from the list as soon as they ingest successfully on a later sync. One bad file never fails the whole crawl — other files index normally.
+
+### Re-Parsing After Settings Changes
+
+After turning Reducto on or off, click the sparkle icon (✨) on a source's row to re-parse every file in that source with the current settings. This is the only way to re-apply parser changes to existing KB entries; re-parsing doesn't happen automatically because it can take a while and, with Reducto on, use credits.
+
+### Document Parsing (Optional Reducto Upgrade)
+
+By default, every supported file type is parsed locally in the sync process. If you are connecting folders with a lot of scanned PDFs or complex Office documents, you can optionally turn on **Reducto** — a third-party high-fidelity document parser — in **Settings → Document Parsing**. Paste your Reducto API key, test it, save, and flip the toggle on.
+
+Once enabled:
+- Office files (Word, Excel, PowerPoint) and PDFs are routed through Reducto first; if Reducto fails or times out, the sync automatically falls back to the local parser and records a warning in the source's skip log.
+- Any file whose local parser fails or returns empty text is retried through Reducto.
+- JPG and PNG images are OCR'd through Reducto (no local fallback — without Reducto, images cannot be indexed).
+- Reducto is opt-in per workspace — no bytes are sent to the vendor unless both the key is saved and the toggle is on.
+- Files over 100 MB always use the local parser (Reducto's direct-upload cap). Images over 100 MB are skipped.
+
 ### Searching the Knowledge Base
 
 Everyone can search the knowledge base by DMing the bot and typing `/kb search <query>`.

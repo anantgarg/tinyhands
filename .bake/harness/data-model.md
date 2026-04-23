@@ -126,6 +126,36 @@ Execution records for every agent invocation.
 | auto_sync | BOOLEAN | Auto-sync enabled |
 | last_synced_at | TIMESTAMP | Last successful sync |
 
+#### KB Source Skip Log (plan-020)
+
+Structured per-file failure log. Upsert by `(kb_source_id, file_path)` — repeated skips of the same file update `last_seen_at` + `reason` + `message` rather than piling up duplicates. Rows are deleted when the file later ingests successfully, so the log reflects current state not history. ON DELETE CASCADE with `kb_sources`.
+
+| Column | Type | Purpose |
+|--------|------|---------|
+| id | TEXT | Primary key (UUID) |
+| workspace_id | TEXT | FK → workspaces, ON DELETE CASCADE |
+| kb_source_id | TEXT | FK → kb_sources, ON DELETE CASCADE |
+| file_path | TEXT | Per-source file identifier (e.g. Drive file id). UNIQUE with kb_source_id. |
+| filename | TEXT | Human-readable name for UI |
+| mime_type | TEXT | NULL when the source didn't declare one |
+| size_bytes | BIGINT | NULL when the source didn't report a size |
+| reason | TEXT | enum-in-code: `too_large`, `unsupported_format`, `parser_failed`, `reducto_failed`, `reducto_required`, `corrupted`, `download_failed`, `empty_extraction` |
+| message | TEXT | Plain-English admin-facing message (truncated at 500 chars) |
+| first_seen_at | TIMESTAMPTZ | When this file first failed |
+| last_seen_at | TIMESTAMPTZ | Most recent failure attempt |
+
+Plain-English reason labels live in `SKIP_REASON_LABELS` in `src/modules/kb-sources/skip-log.ts` — the single source of truth for dashboard wording.
+
+#### Workspace Settings: Reducto (plan-020)
+
+Reducto document parsing is optional and per-workspace. Keys stored in the existing `workspace_settings` key/value table (AES-256-GCM under the workspace `ENCRYPTION_KEY`):
+
+| Key | Purpose |
+|-----|---------|
+| `reducto_api_key` | AES-GCM ciphertext of the Reducto API key |
+| `reducto_api_key_iv` | 12-byte hex IV for the above |
+| `reducto_enabled` | `'true'` or `'false'` — only `'true'` actually sends bytes to Reducto, even if a key is present |
+
 ### Tools & Connections
 
 #### Custom Tools

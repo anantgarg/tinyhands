@@ -60,3 +60,28 @@ export function useSaveAnthropicKey() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ['settings', 'anthropic-key', 'status'] }),
   });
 }
+
+// ── Reducto (optional document parsing) ──
+
+interface ReductoStatus { configured: boolean; enabled: boolean }
+
+export function useReductoStatus() {
+  return useQuery<ReductoStatus>({
+    queryKey: ['settings', 'reducto-key', 'status'],
+    queryFn: () => api.get('/settings/reducto-key/status'),
+  });
+}
+
+export function useTestReductoKey() {
+  return useMutation<{ ok: boolean; reason?: string }, Error, string>({
+    mutationFn: (apiKey: string) => api.post('/settings/reducto-key/test', { apiKey }),
+  });
+}
+
+export function useSaveReductoKey() {
+  const qc = useQueryClient();
+  return useMutation<ReductoStatus & { ok: true }, Error, { apiKey?: string; enabled?: boolean }>({
+    mutationFn: (payload) => api.put('/settings/reducto-key', payload),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['settings', 'reducto-key', 'status'] }),
+  });
+}

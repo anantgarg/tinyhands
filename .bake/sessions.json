@@ -185,7 +185,8 @@
       "planPath": "/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-012.md",
       "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-012",
       "branch": "bake/plan/plan-012",
-      "createdAt": "2026-04-17T09:27:51.506Z"
+      "createdAt": "2026-04-17T09:27:51.506Z",
+      "claudeSessionId": "cad11525-2347-4a16-b131-f8cedae77785"
     },
     {
       "id": "plan-013",
@@ -265,7 +266,8 @@
       "planPath": "/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-019.md",
       "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-019",
       "branch": "bake/plan/plan-019",
-      "createdAt": "2026-04-22T11:37:38.907Z"
+      "createdAt": "2026-04-22T11:37:38.907Z",
+      "claudeSessionId": "abb92695-a6e7-4e89-ad04-a57f630205a0"
     },
     {
       "id": "plan-021",
@@ -285,7 +287,8 @@
       "planPath": "/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md",
       "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-022",
       "branch": "bake/plan/plan-022",
-      "createdAt": "2026-04-22T11:39:52.639Z"
+      "createdAt": "2026-04-22T11:39:52.639Z",
+      "claudeSessionId": "1d898aac-56bf-409f-8fb2-191feef317a6"
     },
     {
       "id": "plan-023",
@@ -296,6 +299,38 @@
       "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-023",
       "branch": "bake/plan/plan-023",
       "createdAt": "2026-04-22T12:57:46.203Z"
+    },
+    {
+      "id": "swift-jaguar",
+      "type": "vibe",
+      "name": "Swift Jaguar",
+      "vibeId": "vibe-005",
+      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/swift-jaguar",
+      "branch": "bake/vibe/swift-jaguar",
+      "createdAt": "2026-04-22T13:11:45.693Z",
+      "claudeSessionId": "a6865498-3897-49bb-9329-ced4420cde0f"
+    },
+    {
+      "id": "plan-024",
+      "type": "plan",
+      "name": "New Plan",
+      "planId": "plan-024",
+      "planPath": "/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-024.md",
+      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-024",
+      "branch": "bake/plan/plan-024",
+      "createdAt": "2026-04-23T08:52:56.601Z",
+      "claudeSessionId": "87701fc2-069e-4e31-a142-303c7dee7fc1"
+    },
+    {
+      "id": "plan-025",
+      "type": "plan",
+      "name": "New Plan",
+      "planId": "plan-025",
+      "planPath": "/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-025.md",
+      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-025",
+      "branch": "bake/plan/plan-025",
+      "createdAt": "2026-04-23T10:05:01.495Z",
+      "claudeSessionId": "5f9c8484-4398-4da3-b98d-cc4f5b0979fd"
     }
   ]
 }

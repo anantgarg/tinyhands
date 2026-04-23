@@ -34,6 +34,7 @@
 | Feature | Module | Entry Points |
 |---------|--------|-------------|
 | Message processing | `src/slack/events.ts` | Slack message events |
+| Slack text ingestion | `src/slack/message-text.ts` | Combines `msg.text` + attachments + Block Kit so agents see full payload |
 | Job queue | `src/queue/` | BullMQ priority queue |
 | Docker isolation | `src/modules/execution/` | One container per agent run |
 | Rate limiting | `src/queue/` | Token bucket (TPM/RPM) via Redis |
@@ -67,6 +68,13 @@
 | Auto-sync | `src/modules/kb-sources/` | Periodic source refresh |
 | Idempotent source sync | `src/modules/knowledge-base/` (`upsertKBEntryByExternalId`, `deleteStaleKBEntries`) | `source_external_id` partial unique index; tombstones entries missing from the latest crawl |
 | Locked synced entries | `src/api/routes/kb.ts`, `web/src/pages/KnowledgeBase.tsx` | PATCH/DELETE `/kb/entries/:id` return 409 when `kb_source_id` is set |
+| Drive file-type coverage (plan-020) | `src/modules/kb-sources/parsers/` | docx / xlsx / pptx / pdf / odt / ods / odp / rtf / html / plain + Google-native exports |
+| Drive image OCR (plan-025) | `src/modules/kb-sources/parsers/index.ts` (`image` family), `src/modules/kb-sources/sync-handlers.ts` | JPG/PNG OCR'd via Reducto; `reducto_required` skip reason when Reducto disabled; other image formats stay `unsupported_format` |
+| Reducto document parsing (plan-020) | `src/modules/reducto/` | Optional per-workspace; two-step upload → parse with sync → async fallback; also handles JPG/PNG OCR (plan-025) |
+| KB source skip log (plan-020) | `src/modules/kb-sources/skip-log.ts`, `kb_source_skip_log` table | Per-file failures surfaced as icon + modal on KBSources row |
+| KB per-file size cap (plan-020) | `src/modules/kb-sources/sync-handlers.ts` | `KB_MAX_FILE_BYTES` default 250 MB, enforced at download stream |
+| KB re-parse control (plan-020) | `POST /api/kb/sources/:id/reparse` | Sparkle icon on each source to reprocess after settings change |
+| Drive recursive sub-folder sync (plan-024) | `src/modules/kb-sources/sync-handlers.ts` (`syncGoogleDrive` BFS walk), `web/src/pages/KBSources.tsx` (Include sub-folders switch) | Optional, off by default; unlimited depth with cycle protection |
 
 ## Documents
 

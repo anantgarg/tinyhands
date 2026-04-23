@@ -1,14 +1,19 @@
-import { useEditor, EditorContent } from '@tiptap/react';
+import { useEditor, EditorContent, NodeViewWrapper, ReactNodeViewRenderer, type Editor } from '@tiptap/react';
+import { Node as TiptapNode, mergeAttributes } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
+import { useSlackUsers } from '@/api/slack';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 interface RichTextEditorProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
   className?: string;
+  enableUserMentions?: boolean;
 }
 
 /**
@@ -83,12 +88,18 @@ function plainTextToHtml(text: string): string {
   return htmlParts.join('');
 }
 
-/** Apply inline bold/italic formatting. */
+/** Apply inline bold/italic formatting and preserve Slack mention tokens. */
 function inlineFormat(text: string): string {
+  // Escape HTML special chars first.
+  let result = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   // **bold** (double asterisk, processed first)
-  let result = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+  result = result.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
   // *italic* (single asterisk, after bold is already handled)
   result = result.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, '<em>$1</em>');
+  // Convert the now-escaped Slack mention tokens into a Tiptap-parseable span
+  // so they render as mention chips in the editor while keeping `<@ID>` as the
+  // storage format.
+  result = result.replace(/&lt;@([A-Z][A-Z0-9]+)&gt;/g, '<span data-mention-id="$1"></span>');
   return result;
 }
 
@@ -155,7 +166,10 @@ function htmlToPlainText(html: string): string {
       } else if (child.nodeType === Node.ELEMENT_NODE) {
         const childEl = child as HTMLElement;
         const childTag = childEl.tagName.toLowerCase();
-        if (childTag === 'strong' || childTag === 'b') {
+        const mentionId = childEl.getAttribute('data-mention-id');
+        if (mentionId) {
+          result += `<@${mentionId}>`;
+        } else if (childTag === 'strong' || childTag === 'b') {
           result += `**${getInlineText(childEl)}**`;
         } else if (childTag === 'em' || childTag === 'i') {
           result += `*${getInlineText(childEl)}*`;
@@ -210,10 +224,64 @@ function ToolbarButton({ onClick, isActive, title, children }: ToolbarButtonProp
 }
 
 // ---------------------------------------------------------------------------
+// Slack mention node (renders as @Name chip, serializes to <@ID>)
+// ---------------------------------------------------------------------------
+
+const SlackMention = TiptapNode.create({
+  name: 'slackMention',
+  group: 'inline',
+  inline: true,
+  atom: true,
+  selectable: true,
+
+  addAttributes() {
+    return {
+      id: {
+        default: null,
+        parseHTML: (el: HTMLElement) => el.getAttribute('data-mention-id'),
+        renderHTML: (attrs: { id?: string | null }) =>
+          attrs.id ? { 'data-mention-id': attrs.id } : {},
+      },
+    };
+  },
+
+  parseHTML() {
+    return [{ tag: 'span[data-mention-id]' }];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return ['span', mergeAttributes(HTMLAttributes, { class: 'slack-mention' })];
+  },
+
+  addNodeView() {
+    return ReactNodeViewRenderer(MentionChip);
+  },
+});
+
+function MentionChip({ node }: { node: { attrs: Record<string, unknown> } }) {
+  const id = (node.attrs.id as string | undefined) ?? '';
+  const { data } = useSlackUsers();
+  const user = (data?.users ?? []).find((u) => u.id === id);
+  const name = user ? user.realName || user.displayName || user.name : null;
+  return (
+    <NodeViewWrapper
+      as="span"
+      data-mention-id={id}
+      className="mx-px inline-flex h-5 items-center gap-1 rounded bg-blue-100 px-1.5 align-middle text-sm font-medium leading-none text-blue-700"
+    >
+      {user?.avatarUrl ? (
+        <img src={user.avatarUrl} alt="" className="inline-block h-4 w-4 rounded-full" />
+      ) : null}
+      <span>@{name || 'Unknown user'}</span>
+    </NodeViewWrapper>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
-function RichTextEditor({ value, onChange, placeholder, className }: RichTextEditorProps) {
+function RichTextEditor({ value, onChange, placeholder, className, enableUserMentions }: RichTextEditorProps) {
   // Track whether the latest change came from the editor itself so we don't
   // feed the value back in an infinite loop.
   const isInternalChange = useRef(false);
@@ -237,6 +305,7 @@ function RichTextEditor({ value, onChange, placeholder, className }: RichTextEdi
       Placeholder.configure({
         placeholder: placeholder ?? 'Start writing...',
       }),
+      SlackMention,
     ],
     content: plainTextToHtml(value),
     onUpdate: handleUpdate,
@@ -345,11 +414,213 @@ function RichTextEditor({ value, onChange, placeholder, className }: RichTextEdi
             <rect x="6" y="11" width="9" height="2" rx="0.5" />
           </svg>
         </ToolbarButton>
+
       </div>
 
       {/* Editor */}
       <EditorContent editor={editor} />
+
+      {enableUserMentions && <MentionAutocomplete editor={editor} />}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Inline @mention autocomplete
+// ---------------------------------------------------------------------------
+
+interface MentionAutocompleteProps {
+  editor: Editor;
+}
+
+interface MentionState {
+  open: boolean;
+  query: string;
+  from: number; // document position where the `@` starts
+  coords: { top: number; left: number } | null;
+}
+
+const CLOSED_STATE: MentionState = { open: false, query: '', from: 0, coords: null };
+
+function MentionAutocomplete({ editor }: MentionAutocompleteProps) {
+  const { data } = useSlackUsers();
+  const users = data?.users ?? [];
+
+  const [state, setState] = useState<MentionState>(CLOSED_STATE);
+  const [highlight, setHighlight] = useState(0);
+
+  const filtered = useMemo(() => {
+    const q = state.query.trim().toLowerCase();
+    const list = q
+      ? users.filter((u) => {
+          const name = (u.realName || u.displayName || u.name || '').toLowerCase();
+          const handle = (u.name || '').toLowerCase();
+          return name.includes(q) || handle.includes(q);
+        })
+      : users;
+    return list.slice(0, 20);
+  }, [users, state.query]);
+
+  const itemRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  useLayoutEffect(() => {
+    itemRefs.current[highlight]?.scrollIntoView({ block: 'nearest' });
+  }, [highlight]);
+
+  // Reset highlight when the filtered list shifts.
+  useEffect(() => {
+    setHighlight(0);
+  }, [state.query, filtered.length]);
+
+  // Refs so the editor's static key handler can read the latest values
+  // without re-binding.
+  const stateRef = useRef(state);
+  const filteredRef = useRef(filtered);
+  const highlightRef = useRef(highlight);
+  useLayoutEffect(() => {
+    stateRef.current = state;
+    filteredRef.current = filtered;
+    highlightRef.current = highlight;
+  });
+
+  const close = useCallback(() => {
+    setState(CLOSED_STATE);
+  }, []);
+
+  const insertAt = useCallback(
+    (from: number, userId: string) => {
+      const to = editor.state.selection.from;
+      editor
+        .chain()
+        .focus()
+        .insertContentAt({ from, to }, [
+          { type: 'slackMention', attrs: { id: userId } },
+          { type: 'text', text: ' ' },
+        ])
+        .run();
+      close();
+    },
+    [editor, close],
+  );
+
+  // Watch the editor for `@word` at the cursor and open/update the popup.
+  useEffect(() => {
+    const handler = () => {
+      const { selection } = editor.state;
+      if (!selection.empty) {
+        if (stateRef.current.open) close();
+        return;
+      }
+      const cursor = selection.from;
+      const textBefore = editor.state.doc.textBetween(
+        Math.max(0, cursor - 40),
+        cursor,
+        '\n',
+        '\n',
+      );
+      const match = /(?:^|\s)@([\w.\-]*)$/.exec(textBefore);
+      if (!match) {
+        if (stateRef.current.open) close();
+        return;
+      }
+      // The regex is anchored to the end of textBefore, so match[1] ends
+      // exactly at the cursor. `@` sits one character before match[1].
+      const from = cursor - match[1].length - 1;
+      const coords = editor.view.coordsAtPos(from);
+      setState({
+        open: true,
+        query: match[1],
+        from,
+        coords: { top: coords.bottom, left: coords.left },
+      });
+    };
+
+    editor.on('update', handler);
+    editor.on('selectionUpdate', handler);
+    return () => {
+      editor.off('update', handler);
+      editor.off('selectionUpdate', handler);
+    };
+  }, [editor, close]);
+
+  // Intercept arrow/enter/escape while the popup is open. We attach this once
+  // and read state via refs so Tiptap doesn't need to reinitialize.
+  useEffect(() => {
+    const dom = editor.view.dom;
+    const onKeyDown = (event: KeyboardEvent) => {
+      const s = stateRef.current;
+      if (!s.open) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        close();
+        return;
+      }
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        event.stopPropagation();
+        setHighlight((h) => Math.min(h + 1, Math.max(0, filteredRef.current.length - 1)));
+        return;
+      }
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        event.stopPropagation();
+        setHighlight((h) => Math.max(h - 1, 0));
+        return;
+      }
+      if (event.key === 'Enter' || event.key === 'Tab') {
+        const u = filteredRef.current[highlightRef.current];
+        if (u) {
+          event.preventDefault();
+          event.stopPropagation();
+          insertAt(s.from, u.id);
+        }
+        return;
+      }
+    };
+    dom.addEventListener('keydown', onKeyDown, true);
+    return () => dom.removeEventListener('keydown', onKeyDown, true);
+  }, [editor, insertAt, close]);
+
+  if (!state.open || !state.coords || filtered.length === 0) return null;
+
+  return createPortal(
+    <div
+      className="fixed z-50 w-72 rounded-lg border border-warm-border bg-white shadow-lg"
+      style={{ top: state.coords.top + 4, left: state.coords.left }}
+      onMouseDown={(e) => e.preventDefault()}
+    >
+      <div className="max-h-[240px] overflow-y-auto">
+        {filtered.map((u, idx) => {
+          const name = u.realName || u.displayName || u.name;
+          const isActive = idx === highlight;
+          return (
+            <button
+              key={u.id}
+              ref={(el) => { itemRefs.current[idx] = el; }}
+              type="button"
+              onMouseEnter={() => setHighlight(idx)}
+              onClick={() => insertAt(state.from, u.id)}
+              className={cn(
+                'flex w-full items-center gap-2 px-2 py-1 text-left transition-colors',
+                isActive ? 'bg-warm-bg' : 'hover:bg-warm-bg',
+              )}
+            >
+              <Avatar className="h-8 w-8 flex-shrink-0">
+                <AvatarImage src={u.avatarUrl} />
+                <AvatarFallback>{(name || '?').charAt(0).toUpperCase()}</AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 flex-1 leading-tight">
+                <div className="text-sm font-medium truncate">{name || u.name || 'Unknown'}</div>
+                {u.name && u.name !== name && (
+                  <div className="text-xs text-warm-text-secondary truncate">@{u.name}</div>
+                )}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>,
+    document.body,
   );
 }
 

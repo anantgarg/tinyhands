@@ -11,8 +11,32 @@ import https from 'https';
 import { createKBEntry, upsertKBEntryByExternalId, deleteStaleKBEntries } from '../knowledge-base';
 import { getApiKey, updateSource, updateSourceStatus } from './index';
 import { getProviderForConnector, normalizeConnectorType } from './connectors';
+import { parseDocument } from './parsers';
+import { recordSkippedFile, clearSkippedFile, type SkipReason } from './skip-log';
 import { logger } from '../../utils/logger';
 import type { KBSource, KBConnectorType } from '../../types';
+
+// Hard cap on downloaded file size. Files above this are never buffered —
+// we surface a `too_large` skip log entry and move on. Default is generous
+// (250 MB); self-hosters can override via env var for even larger files.
+// Note: individual parsers may impose tighter practical limits internally
+// and downgrade to a warning rather than abort the sync.
+export const KB_MAX_FILE_BYTES: number = (() => {
+  const override = process.env.KB_MAX_FILE_BYTES;
+  if (override) {
+    const n = Number(override);
+    if (Number.isFinite(n) && n > 0) return Math.floor(n);
+  }
+  return 250 * 1024 * 1024;
+})();
+
+// Per-sync warning accumulator. The Drive handler (and future handlers) push
+// user-facing, per-file warnings here; syncSource persists them onto the
+// kb_sources row under last_sync_warnings so the dashboard can surface which
+// files were skipped and why without aborting the whole sync.
+interface SyncRunContext {
+  warnings: string[];
+}
 
 // ── HTTP Helpers ──
 
@@ -142,28 +166,44 @@ export async function syncSource(workspaceId: string, source: KBSource): Promise
   const handler = SYNC_HANDLERS[resolvedType];
   if (!handler) throw new Error(`No sync handler for source type: ${source.source_type}`);
 
+  const ctx: SyncRunContext = { warnings: [] };
+
   try {
     await updateSourceStatus(workspaceId, source.id, 'syncing');
-    const count = await handler(workspaceId, source, config);
+    const count = await handler(workspaceId, source, config, ctx);
+    const warnings = formatWarnings(ctx.warnings);
     await updateSource(workspaceId, source.id, {
       status: 'active',
       entry_count: count,
       last_sync_at: new Date().toISOString(),
       error_message: null,
+      last_sync_warnings: warnings,
     });
-    logger.info('KB source sync completed', { sourceId: source.id, type: source.source_type, entries: count });
+    logger.info('KB source sync completed', { sourceId: source.id, type: source.source_type, entries: count, warnings: ctx.warnings.length });
     return count;
   } catch (err: any) {
     await updateSource(workspaceId, source.id, {
       status: 'error',
       error_message: err.message?.slice(0, 500) || 'Unknown error',
+      last_sync_warnings: formatWarnings(ctx.warnings),
     });
     logger.error('KB source sync failed', { sourceId: source.id, error: err.message });
     throw err;
   }
 }
 
-type SyncHandler = (workspaceId: string, source: KBSource, config: Record<string, string>) => Promise<number>;
+function formatWarnings(warnings: string[]): string | null {
+  if (!warnings.length) return null;
+  // Cap at 8KB and a few hundred lines so a pathological sync doesn't fill
+  // the row. Keep the first warnings (usually most informative) and note the
+  // overflow.
+  const MAX = 8000;
+  const joined = warnings.join('\n');
+  if (joined.length <= MAX) return joined;
+  return joined.slice(0, MAX) + `\n… (+${warnings.length - joined.slice(0, MAX).split('\n').length} more warnings)`;
+}
+
+type SyncHandler = (workspaceId: string, source: KBSource, config: Record<string, string>, ctx: SyncRunContext) => Promise<number>;
 
 const SYNC_HANDLERS: Record<KBConnectorType, SyncHandler> = {
   github: syncGitHub,
@@ -350,7 +390,7 @@ function getMintlifyCategory(nav: any, pagePath: string): string {
   return 'docs';
 }
 
-async function syncGitHub(workspaceId: string, source: KBSource, config: Record<string, string>): Promise<number> {
+async function syncGitHub(workspaceId: string, source: KBSource, config: Record<string, string>, _ctx: SyncRunContext): Promise<number> {
   const creds = await getProviderCredentials(workspaceId, 'github');
   const token = creds.token;
   const repo = config.repo; // e.g. "owner/repo"
@@ -508,7 +548,7 @@ async function syncGitHub(workspaceId: string, source: KBSource, config: Record<
 // Zendesk Help Center Sync
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-async function syncZendeskHelpCenter(workspaceId: string, source: KBSource, config: Record<string, string>): Promise<number> {
+async function syncZendeskHelpCenter(workspaceId: string, source: KBSource, config: Record<string, string>, _ctx: SyncRunContext): Promise<number> {
   const creds = await getProviderCredentials(workspaceId, 'zendesk_help_center');
   const subdomain = creds.subdomain;
   const email = creds.email;
@@ -569,7 +609,7 @@ async function syncZendeskHelpCenter(workspaceId: string, source: KBSource, conf
 // Website Sync (Firecrawl)
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-async function syncWebsite(workspaceId: string, source: KBSource, config: Record<string, string>): Promise<number> {
+async function syncWebsite(workspaceId: string, source: KBSource, config: Record<string, string>, _ctx: SyncRunContext): Promise<number> {
   const creds = await getProviderCredentials(workspaceId, 'website');
   const apiKey = creds.api_key;
   const url = config.url;
@@ -658,7 +698,118 @@ async function syncWebsite(workspaceId: string, source: KBSource, config: Record
 // Google Drive Sync
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-async function syncGoogleDrive(workspaceId: string, source: KBSource, config: Record<string, string>): Promise<number> {
+// ── Drive MIME handling ──
+//
+// Google-native formats (Docs/Sheets/Slides) export through the Drive
+// /files/:id/export endpoint to a text-like MIME. Everything else is
+// downloaded raw via /files/:id?alt=media and handed to the parser layer.
+// Legacy binary formats (.doc / .xls / .ppt) go through the same parsers
+// best-effort; unsupported files produce a per-file warning on the sync
+// run rather than aborting the whole crawl.
+
+interface GoogleExport {
+  exportMime: string;
+  label: string;
+}
+
+const GOOGLE_NATIVE_EXPORTS: Record<string, GoogleExport> = {
+  'application/vnd.google-apps.document': { exportMime: 'text/markdown', label: 'Google Doc' },
+  'application/vnd.google-apps.spreadsheet': { exportMime: 'text/csv', label: 'Google Sheet' },
+  'application/vnd.google-apps.presentation': { exportMime: 'text/plain', label: 'Google Slides' },
+};
+
+// MIME types we download as bytes and pass through the parser layer.
+// Anything outside this set (and not a Google-native export) is skipped
+// with a warning so admins can see which files were not indexed.
+const BINARY_PARSER_MIMES = new Set<string>([
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/vnd.ms-powerpoint',
+  'application/pdf',
+  'application/vnd.oasis.opendocument.text',
+  'application/vnd.oasis.opendocument.spreadsheet',
+  'application/vnd.oasis.opendocument.presentation',
+  'application/rtf',
+  'text/rtf',
+  'text/html',
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+]);
+
+// File extensions that are safe to treat as plain text even if Drive reports
+// application/octet-stream or a generic MIME — common when the file was
+// uploaded without a MIME hint.
+const TEXT_EXTENSIONS = new Set<string>(['txt', 'md', 'markdown', 'csv', 'tsv', 'log', 'json']);
+
+function fileExtension(name: string): string {
+  const dot = name.lastIndexOf('.');
+  return dot >= 0 ? name.slice(dot + 1).toLowerCase() : '';
+}
+
+function isGoogleNative(mime: string): boolean {
+  return Object.prototype.hasOwnProperty.call(GOOGLE_NATIVE_EXPORTS, mime);
+}
+
+function driveFileUrl(fileId: string): string {
+  return `https://drive.google.com/open?id=${fileId}`;
+}
+
+function httpsGetBinary(
+  hostname: string,
+  path: string,
+  headers: Record<string, string>,
+  maxBytes: number = KB_MAX_FILE_BYTES,
+): Promise<{ status: number; data: Buffer; oversized?: boolean; bytesRead?: number }> {
+  return new Promise((resolve, reject) => {
+    const req = https.request({ hostname, path, method: 'GET', headers }, (res) => {
+      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        const url = new URL(res.headers.location, `https://${hostname}${path}`);
+        httpsGetBinary(url.hostname, url.pathname + url.search, headers, maxBytes).then(resolve).catch(reject);
+        return;
+      }
+
+      // Fast path — if the server tells us the content length up front and
+      // it exceeds the cap, tear the connection down before reading bytes.
+      const declared = Number(res.headers['content-length']);
+      if (Number.isFinite(declared) && declared > maxBytes) {
+        res.resume();
+        req.destroy();
+        resolve({ status: res.statusCode || 0, data: Buffer.alloc(0), oversized: true, bytesRead: declared });
+        return;
+      }
+
+      const chunks: Buffer[] = [];
+      let total = 0;
+      let aborted = false;
+      res.on('data', (chunk: Buffer | string) => {
+        if (aborted) return;
+        const buf = typeof chunk === 'string' ? Buffer.from(chunk) : chunk;
+        total += buf.length;
+        if (total > maxBytes) {
+          aborted = true;
+          req.destroy();
+          resolve({ status: res.statusCode || 0, data: Buffer.alloc(0), oversized: true, bytesRead: total });
+          return;
+        }
+        chunks.push(buf);
+      });
+      res.on('end', () => {
+        if (aborted) return;
+        resolve({ status: res.statusCode || 0, data: Buffer.concat(chunks), bytesRead: total });
+      });
+      res.on('error', (err) => { if (!aborted) reject(err); });
+    });
+    req.on('error', reject);
+    req.setTimeout(120_000, () => { req.destroy(); reject(new Error('Request timeout')); });
+    req.end();
+  });
+}
+
+async function syncGoogleDrive(workspaceId: string, source: KBSource, config: Record<string, string>, ctx: SyncRunContext): Promise<number> {
   // Resolve credentials via the workspace's Google OAuth connection (personal).
   // The admin who created the KB source is preferred; any active admin's Google
   // connection is a fallback so the source keeps working if the original admin
@@ -668,109 +819,132 @@ async function syncGoogleDrive(workspaceId: string, source: KBSource, config: Re
 
   const conn = await getAnyPersonalConnection(workspaceId, 'google-drive', source.created_by);
   if (!conn) {
-    throw new Error('No Google Drive connection found. An admin must connect their Google account in Tools → Personal first.');
+    throw new Error('Google Drive is not connected. Open Tools → Personal Connections and connect Google Drive, then sync again.');
   }
-  const creds = decryptCredentials(conn);
+  let creds: Record<string, string>;
+  try {
+    creds = decryptCredentials(conn);
+  } catch {
+    // AES-GCM "Unsupported state or unable to authenticate data" — the
+    // stored ciphertext can't be decrypted with the current ENCRYPTION_KEY.
+    // Typically means the key was rotated or the DB came from a different
+    // install. The admin needs to reconnect Google Drive to re-encrypt.
+    throw new Error('Google Drive connection is broken (stored credentials cannot be decrypted). Open Tools → Personal Connections and reconnect Google Drive.');
+  }
   if (!creds.refresh_token) {
-    throw new Error('Google connection is missing a refresh token. Reconnect Google in Tools → Personal.');
+    throw new Error('Google Drive connection is missing a refresh token. Open Tools → Personal Connections and reconnect Google Drive.');
   }
   const accessToken = await refreshGoogleAccessToken(workspaceId, creds.refresh_token);
 
   const folderId = config.folder_id || config.folderId;
-  const fileTypes = config.file_types ? config.file_types.split(',').map(t => t.trim()) : [];
-
   if (!folderId) throw new Error('Google Drive Folder ID is required');
 
-  // List files in folder
-  let query = `'${folderId}' in parents and trashed = false`;
-  const mimeMap: Record<string, string> = {
-    doc: 'application/vnd.google-apps.document',
-    sheet: 'application/vnd.google-apps.spreadsheet',
-    pdf: 'application/pdf',
-    slide: 'application/vnd.google-apps.presentation',
+  const includeSubfolders = config.include_subfolders === 'true';
+
+  // file_types is a legacy UI filter that used short names (doc|sheet|pdf|slide).
+  // When present we narrow the Drive query; when absent we crawl everything.
+  const fileTypes = config.file_types ? config.file_types.split(',').map(t => t.trim()) : [];
+  const legacyMimeMap: Record<string, string[]> = {
+    doc: ['application/vnd.google-apps.document', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/msword'],
+    sheet: ['application/vnd.google-apps.spreadsheet', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.ms-excel'],
+    pdf: ['application/pdf'],
+    slide: ['application/vnd.google-apps.presentation', 'application/vnd.openxmlformats-officedocument.presentationml.presentation', 'application/vnd.ms-powerpoint'],
   };
 
-  if (fileTypes.length > 0) {
-    const mimeFilters = fileTypes
-      .map(t => mimeMap[t] ? `mimeType = '${mimeMap[t]}'` : null)
-      .filter(Boolean);
-    if (mimeFilters.length > 0) {
-      query += ` and (${mimeFilters.join(' or ')})`;
-    }
+  // Build the MIME clause once. When recursion is on and a file-type filter is
+  // set, we must also allow the folder MIME through so sub-folders still show
+  // up in the listing; otherwise the walk terminates at the root.
+  const mimes: string[] = [];
+  for (const t of fileTypes) {
+    const entry = legacyMimeMap[t];
+    if (entry) mimes.push(...entry);
+  }
+  const folderMime = 'application/vnd.google-apps.folder';
+  let mimeClause = '';
+  if (mimes.length > 0) {
+    const allowed = includeSubfolders ? [folderMime, ...mimes] : mimes;
+    mimeClause = ` and (${allowed.map(m => `mimeType = '${m}'`).join(' or ')})`;
   }
 
   const authHeaders = { 'Authorization': `Bearer ${accessToken}` };
   let count = 0;
-  let pageToken: string | null = null;
   const seenFileIds: string[] = [];
 
-  do {
-    let path = `/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name,mimeType,size),nextPageToken&pageSize=100`;
-    if (pageToken) path += `&pageToken=${encodeURIComponent(pageToken)}`;
+  async function crawlFolder(currentFolderId: string): Promise<string[]> {
+    const driveQuery = `'${currentFolderId}' in parents and trashed = false${mimeClause}`;
+    const childFolderIds: string[] = [];
+    let pageToken: string | null = null;
 
-    const res = await httpsGet('www.googleapis.com', path, authHeaders);
-    if (res.status >= 400) throw new Error(`Google Drive API error (${res.status}): ${JSON.stringify(res.data).slice(0, 300)}`);
+    do {
+      let path = `/drive/v3/files?q=${encodeURIComponent(driveQuery)}&fields=files(id,name,mimeType,size,modifiedTime),nextPageToken&pageSize=100`;
+      if (pageToken) path += `&pageToken=${encodeURIComponent(pageToken)}`;
 
-    const files = res.data.files || [];
-    for (const file of files) {
-      try {
-        let content = '';
+      const res = await httpsGet('www.googleapis.com', path, authHeaders);
+      if (res.status >= 400) throw new Error(`Google Drive API error (${res.status}): ${JSON.stringify(res.data).slice(0, 300)}`);
 
-        if (file.mimeType === 'application/vnd.google-apps.document') {
-          // Export Google Doc as plain text
-          const expRes = await httpsGetRaw('www.googleapis.com',
-            `/drive/v3/files/${file.id}/export?mimeType=text/plain`, authHeaders);
-          if (expRes.status < 400) {
-            content = expRes.data;
-          } else {
-            logger.warn('Google Doc export failed', { name: file.name, status: expRes.status, body: String(expRes.data).slice(0, 200) });
-          }
-        } else if (file.mimeType === 'application/vnd.google-apps.spreadsheet') {
-          // Export Google Sheet as CSV
-          const expRes = await httpsGetRaw('www.googleapis.com',
-            `/drive/v3/files/${file.id}/export?mimeType=text/csv`, authHeaders);
-          if (expRes.status < 400) content = expRes.data;
-        } else if (file.mimeType === 'application/vnd.google-apps.presentation') {
-          // Export Google Slides as plain text
-          const expRes = await httpsGetRaw('www.googleapis.com',
-            `/drive/v3/files/${file.id}/export?mimeType=text/plain`, authHeaders);
-          if (expRes.status < 400) content = expRes.data;
-        } else if (file.mimeType === 'application/pdf' || file.mimeType?.startsWith('image/')) {
-          // Download binary — skip for now (OCR would need a separate service)
-          logger.debug('Skipping binary file (OCR not yet implemented)', { name: file.name, mime: file.mimeType });
-          continue;
-        } else if (file.mimeType?.startsWith('text/') || file.mimeType === 'application/json') {
-          // Download text files directly
-          const dlRes = await httpsGetRaw('www.googleapis.com',
-            `/drive/v3/files/${file.id}?alt=media`, authHeaders);
-          if (dlRes.status < 400) content = dlRes.data;
-        } else {
+      const files = res.data.files || [];
+      for (const file of files) {
+        if (file.mimeType === folderMime) {
+          childFolderIds.push(file.id);
           continue;
         }
+        try {
+          const extracted = await extractDriveFileText({ file, authHeaders, workspaceId, source, ctx });
+          if (!extracted) continue;
+          const { text, mimeForEntry } = extracted;
 
-        if (!content.trim()) continue;
+          await upsertKBEntryByExternalId(workspaceId, {
+            title: file.name,
+            summary: text.slice(0, 200),
+            content: text,
+            category: 'google-drive',
+            tags: ['google-drive', file.name, mimeForEntry].filter(Boolean) as string[],
+            accessScope: 'all',
+            sourceType: 'google_drive',
+            approved: true,
+            kbSourceId: source.id,
+            sourceExternalId: file.id,
+          });
+          // If this file was previously in the skip log, clear it now that it
+          // has ingested cleanly — the log should reflect current state.
+          await clearSkippedFile(workspaceId, source.id, file.id);
+          seenFileIds.push(file.id);
+          count++;
+        } catch (err: any) {
+          logger.warn('Failed to sync Google Drive file', { name: file.name, error: err.message });
+          ctx.warnings.push(`${file.name}: ${err.message}`);
+          await recordSkippedFile({
+            workspaceId,
+            kbSourceId: source.id,
+            filePath: file.id,
+            filename: file.name,
+            mimeType: file.mimeType || null,
+            sizeBytes: file.size ? Number(file.size) : null,
+            reason: 'parser_failed',
+            message: err.message?.slice(0, 400) || 'Unknown sync error',
+          });
+        }
+      }
 
-        await upsertKBEntryByExternalId(workspaceId, {
-          title: file.name,
-          summary: content.slice(0, 200),
-          content,
-          category: 'google-drive',
-          tags: ['google-drive', file.name],
-          accessScope: 'all',
-          sourceType: 'google_drive',
-          approved: true,
-          kbSourceId: source.id,
-          sourceExternalId: file.id,
-        });
-        seenFileIds.push(file.id);
-        count++;
-      } catch (err: any) {
-        logger.warn('Failed to sync Google Drive file', { name: file.name, error: err.message });
+      pageToken = res.data.nextPageToken || null;
+    } while (pageToken);
+
+    return childFolderIds;
+  }
+
+  const visitedFolderIds = new Set<string>();
+  const queue: string[] = [folderId];
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    if (visitedFolderIds.has(current)) continue;
+    visitedFolderIds.add(current);
+    const children = await crawlFolder(current);
+    if (includeSubfolders) {
+      for (const child of children) {
+        if (!visitedFolderIds.has(child)) queue.push(child);
       }
     }
-
-    pageToken = res.data.nextPageToken || null;
-  } while (pageToken);
+  }
 
   // Tombstone pass: anything in this source not seen this crawl is gone
   // (deleted, moved out of folder, or folder scope changed). Also cleans up
@@ -780,11 +954,154 @@ async function syncGoogleDrive(workspaceId: string, source: KBSource, config: Re
   return count;
 }
 
+interface DriveFileMeta {
+  id: string;
+  name: string;
+  mimeType: string;
+  size?: string;
+  modifiedTime?: string;
+}
+
+async function extractDriveFileText(opts: {
+  file: DriveFileMeta;
+  authHeaders: Record<string, string>;
+  workspaceId: string;
+  source: KBSource;
+  ctx: SyncRunContext;
+}): Promise<{ text: string; mimeForEntry: string } | null> {
+  const { file, authHeaders, workspaceId, source, ctx } = opts;
+  const mime = file.mimeType || '';
+  const declaredSize = file.size ? Number(file.size) : null;
+
+  const recordSkip = async (reason: SkipReason, message: string, sizeBytes: number | null = declaredSize) => {
+    ctx.warnings.push(`${file.name}: ${message}`);
+    await recordSkippedFile({
+      workspaceId,
+      kbSourceId: source.id,
+      filePath: file.id,
+      filename: file.name,
+      mimeType: mime || null,
+      sizeBytes,
+      reason,
+      message,
+    });
+  };
+
+  // 1. Google-native formats — export through Drive API to a text-like MIME.
+  if (isGoogleNative(mime)) {
+    const exp = GOOGLE_NATIVE_EXPORTS[mime];
+    const expRes = await httpsGetRaw(
+      'www.googleapis.com',
+      `/drive/v3/files/${file.id}/export?mimeType=${encodeURIComponent(exp.exportMime)}`,
+      authHeaders,
+    );
+    if (expRes.status >= 400) {
+      await recordSkip('download_failed', `${exp.label} export failed (HTTP ${expRes.status})`);
+      return null;
+    }
+    if (!expRes.data.trim()) {
+      await recordSkip('empty_extraction', `${exp.label} export returned no text`);
+      return null;
+    }
+    return { text: expRes.data, mimeForEntry: exp.exportMime };
+  }
+
+  // 2. Skip video, audio, and unsupported image formats outright — these
+  // aren't KB material. JPG/PNG fall through to the binary-parse path so
+  // they can be OCR'd via Reducto. We still surface a warning so the admin
+  // knows the file wasn't indexed.
+  const isOcrCandidate = mime === 'image/jpeg' || mime === 'image/jpg' || mime === 'image/png';
+  if (mime.startsWith('image/') && !isOcrCandidate) {
+    await recordSkip('unsupported_format', `${mime} is not indexed (only jpg/png images are OCR'd)`);
+    return null;
+  }
+  if (mime.startsWith('video/') || mime.startsWith('audio/')) {
+    await recordSkip('unsupported_format', `${mime} is not indexed (audio/video)`);
+    return null;
+  }
+  if (mime === 'application/vnd.google-apps.shortcut' || mime === 'application/vnd.google-apps.folder') {
+    return null;
+  }
+
+  // 3. Binary formats we can parse — download as bytes and dispatch.
+  const ext = fileExtension(file.name);
+  const canParseBinary = BINARY_PARSER_MIMES.has(mime) || TEXT_EXTENSIONS.has(ext) || mime.startsWith('text/') || mime === 'application/json';
+  if (!canParseBinary) {
+    await recordSkip('unsupported_format', `unsupported type ${mime || 'unknown'}`);
+    return null;
+  }
+
+  // 4. Fast-fail on declared size before we even open the socket.
+  if (declaredSize !== null && declaredSize > KB_MAX_FILE_BYTES) {
+    await recordSkip(
+      'too_large',
+      `file is ${formatSize(declaredSize)}, larger than the ${formatSize(KB_MAX_FILE_BYTES)} per-file cap`,
+      declaredSize,
+    );
+    return null;
+  }
+
+  const dlRes = await httpsGetBinary('www.googleapis.com', `/drive/v3/files/${file.id}?alt=media`, authHeaders);
+  if (dlRes.oversized) {
+    await recordSkip(
+      'too_large',
+      `file exceeds the ${formatSize(KB_MAX_FILE_BYTES)} per-file cap`,
+      dlRes.bytesRead ?? declaredSize,
+    );
+    return null;
+  }
+  if (dlRes.status >= 400) {
+    await recordSkip('download_failed', `download failed (HTTP ${dlRes.status})`);
+    return null;
+  }
+
+  const parsed = await parseDocument({
+    bytes: dlRes.data,
+    filename: file.name,
+    mimeType: mime,
+    workspaceId,
+  });
+  if (parsed.warnings.length) ctx.warnings.push(...parsed.warnings);
+
+  // A parser that finished but produced no text is a skip, not a silent
+  // success. Record it so admins can see the file needs attention (often
+  // a scanned PDF that would benefit from Reducto).
+  if (!parsed.text.trim()) {
+    const parserMeta = (parsed.metadata as any)?.parser;
+    let reason: SkipReason;
+    let message: string;
+    if (parserMeta === 'image-no-reducto') {
+      reason = 'reducto_required';
+      message = 'image OCR requires Reducto — enable it in Settings → Integrations';
+    } else if (parserMeta === 'reducto-failed') {
+      reason = 'reducto_failed';
+      message = parsed.warnings[0] || 'Reducto image OCR failed';
+    } else if (parserMeta === 'failed') {
+      reason = 'parser_failed';
+      message = `could not read the file contents (${parsed.warnings[0] || 'parser error'})`;
+    } else {
+      reason = 'empty_extraction';
+      message = 'no readable text was found — consider enabling Reducto for scanned documents';
+    }
+    await recordSkip(reason, message, dlRes.bytesRead ?? declaredSize);
+    return null;
+  }
+
+  return { text: parsed.text, mimeForEntry: mime };
+}
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // HubSpot Knowledge Base Sync
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-async function syncHubSpotKB(workspaceId: string, source: KBSource, config: Record<string, string>): Promise<number> {
+async function syncHubSpotKB(workspaceId: string, source: KBSource, config: Record<string, string>, _ctx: SyncRunContext): Promise<number> {
   const creds = await getProviderCredentials(workspaceId, 'hubspot_kb');
   const accessToken = creds.access_token;
   const state = config.state || 'PUBLISHED';
@@ -846,7 +1163,7 @@ async function linearGraphQL(query: string, variables: Record<string, any>, apiK
   return res.data.data;
 }
 
-async function syncLinearDocs(workspaceId: string, source: KBSource, config: Record<string, string>): Promise<number> {
+async function syncLinearDocs(workspaceId: string, source: KBSource, config: Record<string, string>, _ctx: SyncRunContext): Promise<number> {
   const creds = await getProviderCredentials(workspaceId, 'linear_docs');
   const apiKey = creds.api_key;
   const teamKey = config.team_key;

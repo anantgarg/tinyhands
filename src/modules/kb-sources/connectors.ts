@@ -11,7 +11,14 @@ export interface ConnectorDef {
   description: string;
   requiredKeys: string[];
   setupSteps: string[];
-  configFields: Array<{ key: string; label: string; placeholder: string; optional?: boolean }>;
+  configFields: Array<{
+    key: string;
+    label: string;
+    placeholder?: string;
+    optional?: boolean;
+    type?: 'text' | 'checkbox';
+    helpText?: string;
+  }>;
 }
 
 export const CONNECTORS: Record<KBConnectorType, ConnectorDef> = {
@@ -20,7 +27,7 @@ export const CONNECTORS: Record<KBConnectorType, ConnectorDef> = {
     label: 'Google Drive',
     icon: ':file_folder:',
     provider: 'google',
-    description: 'Import docs, sheets, PDFs, and files from Google Drive folders. PDFs and images are automatically OCR-processed.',
+    description: 'Import docs, sheets, PDFs, and files from Google Drive folders. PDFs and JPG/PNG images are automatically OCR-processed when Reducto is enabled.',
     requiredKeys: ['client_id', 'client_secret', 'refresh_token'],
     setupSteps: [
       '1. Go to https://console.cloud.google.com/apis/credentials',
@@ -39,6 +46,7 @@ export const CONNECTORS: Record<KBConnectorType, ConnectorDef> = {
     configFields: [
       { key: 'folder_id', label: 'Folder ID', placeholder: 'e.g. 1a2b3c4d5e (from the folder URL)' },
       { key: 'file_types', label: 'File types (comma-separated)', placeholder: 'e.g. doc,pdf,sheet', optional: true },
+      { key: 'include_subfolders', label: 'Include sub-folders', type: 'checkbox', optional: true, helpText: 'Also sync files inside nested folders at any depth.' },
     ],
   },
 

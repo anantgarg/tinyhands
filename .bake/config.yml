@@ -36,3 +36,4 @@ deploy:
   production_command: docker compose up -d
 detected_as: populated
 skip_permissions_dangerously: true
+welcome_video_dismissed: true

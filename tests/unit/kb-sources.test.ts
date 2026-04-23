@@ -384,19 +384,22 @@ describe('updateSource', () => {
 });
 
 describe('deleteSource', () => {
-  it('should delete chunks, entries, and source in order', async () => {
+  it('should delete chunks, entries, skip log, and source in order', async () => {
     await deleteSource(TEST_WORKSPACE_ID, 's1', 'user1');
 
-    expect(mockExecute).toHaveBeenCalledTimes(3);
+    expect(mockExecute).toHaveBeenCalledTimes(4);
     // First: delete chunks
     expect(mockExecute.mock.calls[0][0]).toContain('DELETE FROM kb_chunks');
     expect(mockExecute.mock.calls[0][1]).toEqual(['s1', TEST_WORKSPACE_ID]);
     // Second: delete entries
     expect(mockExecute.mock.calls[1][0]).toContain('DELETE FROM kb_entries');
     expect(mockExecute.mock.calls[1][1]).toEqual(['s1', TEST_WORKSPACE_ID]);
-    // Third: delete source
-    expect(mockExecute.mock.calls[2][0]).toContain('DELETE FROM kb_sources');
+    // Third: delete skip log (new in plan-020 — keeps log in sync with state)
+    expect(mockExecute.mock.calls[2][0]).toContain('DELETE FROM kb_source_skip_log');
     expect(mockExecute.mock.calls[2][1]).toEqual(['s1', TEST_WORKSPACE_ID]);
+    // Fourth: delete source
+    expect(mockExecute.mock.calls[3][0]).toContain('DELETE FROM kb_sources');
+    expect(mockExecute.mock.calls[3][1]).toEqual(['s1', TEST_WORKSPACE_ID]);
   });
 });
 

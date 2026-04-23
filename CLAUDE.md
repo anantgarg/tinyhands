@@ -63,8 +63,9 @@ src/
 │   ├── execution/           # Docker container lifecycle, Claude SDK, token tracking
 │   ├── tools/               # Tool registry + integrations (see below)
 │   ├── knowledge-base/      # KB entries, full-text search (tsvector + GIN)
-│   ├── kb-sources/          # KB source connectors (GitHub, Drive, Zendesk, web)
+│   ├── kb-sources/          # KB source connectors (GitHub, Drive, Zendesk, web) + parsers/ (docx, xlsx, pptx, pdf, rtf, html, plain)
 │   ├── kb-wizard/           # Guided KB source setup flow
+│   ├── reducto/             # Optional per-workspace Reducto integration for PDF / scanned-document parsing
 │   ├── sources/             # Agent data sources (GitHub, Google Drive, memory)
 │   ├── triggers/            # Trigger types: slack, linear, zendesk, intercom, webhook, schedule
 │   ├── workflows/           # Multi-step stateful workflows (DAG of steps)
@@ -96,6 +97,7 @@ PostgreSQL with migrations in `src/db/migrations/`. Key tables:
 - **custom_tools** — Tool definitions (schema, code, config, access_level)
 - **kb_entries** — Knowledge base articles (full-text search via tsvector)
 - **kb_sources** — KB source configs (auto-sync, connectors)
+- **kb_source_skip_log** — Per-file failures from KB syncs (too-large, parser-failed, unsupported, reducto-failed, corrupted). Upsert by `(kb_source_id, file_path)` — rows are deleted when the file later ingests successfully so the log reflects current state.
 - **triggers** — Agent activation rules (cron, webhook, event-based)
 - **sources** / **source_chunks** — Agent data sources and indexed content
 - **agent_memories** — Persistent cross-run memory (facts, categories, relevance)
@@ -322,7 +324,7 @@ Bootstrap-only (single-tenant installs): `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH
 
 - **Use worktrees**: Always use git worktrees (`isolation: "worktree"`) when making code changes, to avoid disrupting the working directory.
 - **Test thoroughly**: Run the full test suite (`npm test`) before committing. All tests must pass with 100% code coverage — no skipped or failing tests. Every code change MUST include corresponding test updates: add tests for new functionality, update existing tests for modified behavior, and remove tests for deleted code.
-- **Publish releases**: Every push should include a tagged release with a changelog summarizing what changed. Use `gh release create` with clear release notes.
+- **Do not cut releases during build or merge.** `git tag` and `gh release create` belong to the deploy flow — see `.bake/harness/deploy.md`. Bumping `package.json` / `VERSION` during a feature change is fine; tagging and publishing the GitHub release is not. This keeps the Releases tab aligned with what's actually shipped.
 - **Check FEATURES.md before building**: Before implementing any feature or change, read the relevant sections in `FEATURES.md` (the source of truth for all features, workflows, and expected behaviors). If the planned change contradicts any documented workflow or behavior, STOP and flag the contradiction to the user before proceeding. This prevents breaking existing workflows.
 - **Update documentation**: Every time you make code changes, you MUST also update the relevant documentation files to reflect those changes:
   - `README.md` — User-facing overview, features list, getting started

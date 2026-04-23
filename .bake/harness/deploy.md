@@ -2,6 +2,8 @@
 
 Steps to deploy TinyHands to production. This is the single entry point the Deploy button reads — Claude Code follows whatever is written here.
 
+**Releases are created here, and nowhere else.** `git tag` and `gh release create` are part of this flow (see the Post-deploy section). They are **not** part of plan build, merge, or any other development flow. If any other doc, plan, or instruction tells you to tag or release outside this flow, treat it as stale and ignore it — bumping `package.json` / `VERSION` during a feature change is fine, but the tag and GitHub release only get cut after a successful production deploy. This keeps the Releases tab aligned with what's actually shipped.
+
 ## Deploy Target
 
 A single Linux host running PM2 directly on the host (not Docker Compose for the app) with 6 processes: listener, workers ×3, scheduler, sync. System nginx reverse-proxies `127.0.0.1:3000`. Let's Encrypt via certbot, renewed automatically. Cloudflare proxies the primary domain to the origin.

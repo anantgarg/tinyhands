@@ -8,6 +8,15 @@ import { logger } from '../../utils/logger';
 const DEFAULT_MAX_CONCURRENT = 3;
 const DEFAULT_MAX_DEPTH = 2;
 
+async function resolveAgentName(workspaceId: string, agentId: string): Promise<string> {
+  try {
+    const a = await getAgent(workspaceId, agentId);
+    return a?.name || 'Unknown agent';
+  } catch {
+    return 'Unknown agent';
+  }
+}
+
 // ── Team Management ──
 
 export async function createTeamRun(
@@ -177,11 +186,19 @@ async function checkTeamCompletion(workspaceId: string, teamRunId: string): Prom
           let summary = `:checkered_flag: *Team run complete*\n`;
           summary += `Completed: ${results.completed.length} | Failed: ${results.failed.length} | Cost: $${cost.toFixed(4)}\n\n`;
 
+          const allSubs = [...results.completed, ...results.failed];
+          const nameBySubAgentId = new Map<string, string>();
+          for (const sub of allSubs) {
+            if (nameBySubAgentId.has(sub.agent_id)) continue;
+            const a = await resolveAgentName(workspaceId, sub.agent_id);
+            nameBySubAgentId.set(sub.agent_id, a);
+          }
+
           for (const sub of results.completed) {
-            summary += `:white_check_mark: *${sub.agent_id.slice(0, 8)}*: ${(sub.result || '').slice(0, 200)}\n`;
+            summary += `:white_check_mark: *${nameBySubAgentId.get(sub.agent_id)}*: ${(sub.result || '').slice(0, 200)}\n`;
           }
           for (const sub of results.failed) {
-            summary += `:x: *${sub.agent_id.slice(0, 8)}*: ${(sub.result || 'Failed').slice(0, 200)}\n`;
+            summary += `:x: *${nameBySubAgentId.get(sub.agent_id)}*: ${(sub.result || 'Failed').slice(0, 200)}\n`;
           }
 
           await postMessage(leadRun.channel_id, summary, leadRun.thread_ts);
@@ -244,7 +261,8 @@ export async function formatTeamProgress(workspaceId: string, teamRunId: string)
       : sub.status === 'running' ? ':hourglass:'
       : ':clock1:';
 
-    lines.push(`${statusEmoji} *${sub.agent_id.slice(0, 8)}* (depth ${sub.depth}): ${sub.task.slice(0, 60)}`);
+    const agentName = await resolveAgentName(workspaceId, sub.agent_id);
+    lines.push(`${statusEmoji} *${agentName}* (depth ${sub.depth}): ${sub.task.slice(0, 60)}`);
 
     if (sub.result) {
       lines.push(`  _Result: ${sub.result.slice(0, 100)}_`);

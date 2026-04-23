@@ -16,8 +16,10 @@
 | express | ^4.21.0 | HTTP server for webhooks, REST API, OAuth callbacks |
 | express-session | ^1.19.0 | Session middleware for web dashboard auth |
 | ioredis | ^5.4.2 | Redis client for BullMQ, rate limiting, approval state |
+| html-to-text | ^9.0.5 | HTML-to-text extraction for KB sync (preserves heading casing, skips images) |
 | mammoth | ^1.8.0 | DOCX file parsing for knowledge base ingestion |
 | multer | ^1.4.5-lts.1 | Multipart file upload handling |
+| officeparser | ^5.1.1 | PPTX / ODP / OpenDocument parsing for KB sync (plan-020) |
 | pdf-parse | ^1.1.1 | PDF text extraction for knowledge base ingestion |
 | pg | ^8.20.0 | PostgreSQL client with connection pooling |
 | uuid | ^11.1.0 | UUID generation for database IDs |

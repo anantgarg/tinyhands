@@ -467,6 +467,7 @@ describe('Teams Module', () => {
       ]);
       // getTeamCost query
       mockQueryOne.mockResolvedValueOnce({ total_cost: '0.0123' });
+      mockGetAgent.mockResolvedValueOnce({ id: 'agent-2', name: 'Worker' });
 
       await completeSubAgent(TEST_WORKSPACE_ID, 'sub-1', 'completed', 'done');
 
@@ -628,12 +629,13 @@ describe('Teams Module', () => {
       mockQuery.mockResolvedValueOnce([
         { id: 'sub-1', agent_id: 'abcdefgh-1234', depth: 1, status: 'completed', task: 'Analyze data', result: 'Data analyzed' },
       ]);
+      mockGetAgent.mockResolvedValueOnce({ id: 'abcdefgh-1234', name: 'Data Analyst' });
 
       const result = await formatTeamProgress(TEST_WORKSPACE_ID, 'team-1');
 
       expect(result).toContain('*Team Progress:*');
       expect(result).toContain(':white_check_mark:');
-      expect(result).toContain('abcdefgh');
+      expect(result).toContain('Data Analyst');
       expect(result).toContain('depth 1');
       expect(result).toContain('Analyze data');
       expect(result).toContain('_Result: Data analyzed_');
@@ -644,6 +646,7 @@ describe('Teams Module', () => {
       mockQuery.mockResolvedValueOnce([
         { id: 'sub-1', agent_id: 'abcdefgh', depth: 1, status: 'failed', task: 'task1', result: 'error' },
       ]);
+      mockGetAgent.mockResolvedValueOnce({ id: 'abcdefgh', name: 'Worker' });
 
       const result = await formatTeamProgress(TEST_WORKSPACE_ID, 'team-1');
       expect(result).toContain(':x:');
@@ -654,6 +657,7 @@ describe('Teams Module', () => {
       mockQuery.mockResolvedValueOnce([
         { id: 'sub-1', agent_id: 'abcdefgh', depth: 1, status: 'running', task: 'task1', result: null },
       ]);
+      mockGetAgent.mockResolvedValueOnce({ id: 'abcdefgh', name: 'Worker' });
 
       const result = await formatTeamProgress(TEST_WORKSPACE_ID, 'team-1');
       expect(result).toContain(':hourglass:');
@@ -664,6 +668,7 @@ describe('Teams Module', () => {
       mockQuery.mockResolvedValueOnce([
         { id: 'sub-1', agent_id: 'abcdefgh', depth: 1, status: 'queued', task: 'task1', result: null },
       ]);
+      mockGetAgent.mockResolvedValueOnce({ id: 'abcdefgh', name: 'Worker' });
 
       const result = await formatTeamProgress(TEST_WORKSPACE_ID, 'team-1');
       expect(result).toContain(':clock1:');
@@ -675,6 +680,7 @@ describe('Teams Module', () => {
       mockQuery.mockResolvedValueOnce([
         { id: 'sub-1', agent_id: 'abcdefgh', depth: 1, status: 'running', task: longTask, result: null },
       ]);
+      mockGetAgent.mockResolvedValueOnce({ id: 'abcdefgh', name: 'Worker' });
 
       const result = await formatTeamProgress(TEST_WORKSPACE_ID, 'team-1');
       // The task should be sliced to 60 chars
@@ -688,6 +694,7 @@ describe('Teams Module', () => {
       mockQuery.mockResolvedValueOnce([
         { id: 'sub-1', agent_id: 'abcdefgh', depth: 1, status: 'completed', task: 'task', result: longResult },
       ]);
+      mockGetAgent.mockResolvedValueOnce({ id: 'abcdefgh', name: 'Worker' });
 
       const result = await formatTeamProgress(TEST_WORKSPACE_ID, 'team-1');
       expect(result).toContain('B'.repeat(100));
@@ -699,6 +706,7 @@ describe('Teams Module', () => {
       mockQuery.mockResolvedValueOnce([
         { id: 'sub-1', agent_id: 'abcdefgh', depth: 1, status: 'queued', task: 'task1', result: null },
       ]);
+      mockGetAgent.mockResolvedValueOnce({ id: 'abcdefgh', name: 'Worker' });
 
       const result = await formatTeamProgress(TEST_WORKSPACE_ID, 'team-1');
       expect(result).not.toContain('_Result:');
@@ -712,6 +720,11 @@ describe('Teams Module', () => {
         { id: 'sub-3', agent_id: 'cccccccc', depth: 1, status: 'failed', task: 'task3', result: 'err' },
         { id: 'sub-4', agent_id: 'dddddddd', depth: 1, status: 'queued', task: 'task4', result: null },
       ]);
+      mockGetAgent
+        .mockResolvedValueOnce({ id: 'aaaaaaaa', name: 'Alpha' })
+        .mockResolvedValueOnce({ id: 'bbbbbbbb', name: 'Beta' })
+        .mockResolvedValueOnce({ id: 'cccccccc', name: 'Gamma' })
+        .mockResolvedValueOnce({ id: 'dddddddd', name: 'Delta' });
 
       const result = await formatTeamProgress(TEST_WORKSPACE_ID, 'team-1');
 
@@ -722,15 +735,27 @@ describe('Teams Module', () => {
       expect(result).toContain('depth 2');
     });
 
-    it('should slice agent_id to first 8 characters', async () => {
+    it('should display the agent name instead of the raw agent id', async () => {
       mockQueryOne.mockResolvedValueOnce({ id: 'team-1', lead_agent_id: 'lead-1' });
       mockQuery.mockResolvedValueOnce([
         { id: 'sub-1', agent_id: '12345678-abcd-efgh', depth: 1, status: 'completed', task: 'task', result: null },
       ]);
+      mockGetAgent.mockResolvedValueOnce({ id: '12345678-abcd-efgh', name: 'Researcher' });
 
       const result = await formatTeamProgress(TEST_WORKSPACE_ID, 'team-1');
-      expect(result).toContain('*12345678*');
-      expect(result).not.toContain('12345678-');
+      expect(result).toContain('*Researcher*');
+      expect(result).not.toContain('12345678');
+    });
+
+    it('falls back to "Unknown agent" when agent lookup fails', async () => {
+      mockQueryOne.mockResolvedValueOnce({ id: 'team-1', lead_agent_id: 'lead-1' });
+      mockQuery.mockResolvedValueOnce([
+        { id: 'sub-1', agent_id: 'missing', depth: 1, status: 'completed', task: 'task', result: null },
+      ]);
+      mockGetAgent.mockResolvedValueOnce(null);
+
+      const result = await formatTeamProgress(TEST_WORKSPACE_ID, 'team-1');
+      expect(result).toContain('Unknown agent');
     });
   });
 
@@ -769,6 +794,9 @@ describe('Teams Module', () => {
       ]);
       // getTeamCost query
       mockQueryOne.mockResolvedValueOnce({ total_cost: '0.0500' });
+      mockGetAgent
+        .mockResolvedValueOnce({ id: 'agent-aa', name: 'Alpha' })
+        .mockResolvedValueOnce({ id: 'agent-bb', name: 'Beta' });
 
       await completeSubAgent(TEST_WORKSPACE_ID, 'sub-1', 'completed', 'done');
 
@@ -812,6 +840,7 @@ describe('Teams Module', () => {
       ]);
       // getTeamCost
       mockQueryOne.mockResolvedValueOnce({ total_cost: '0.01' });
+      mockGetAgent.mockResolvedValueOnce({ id: 'agent-aa', name: 'Alpha' });
 
       // Make postMessage throw
       const { postMessage } = await import('../../src/slack');
@@ -858,6 +887,9 @@ describe('Teams Module', () => {
       ]);
       // getTeamCost
       mockQueryOne.mockResolvedValueOnce({ total_cost: '0.01' });
+      mockGetAgent
+        .mockResolvedValueOnce({ id: 'agent-aa', name: 'Alpha' })
+        .mockResolvedValueOnce({ id: 'agent-bb', name: 'Beta' });
 
       await completeSubAgent(TEST_WORKSPACE_ID, 'sub-1', 'completed', 'done');
 

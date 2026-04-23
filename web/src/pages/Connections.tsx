@@ -20,6 +20,7 @@ import {
   useOAuthIntegrations,
   useUpdateConnectionSettings,
   useExpiredConnectionCount,
+  startOAuthReconnect,
 } from '@/api/connections';
 import { DriveFolderPicker } from '@/components/DriveFolderPicker';
 import { useIntegrations } from '@/api/tools';
@@ -74,7 +75,7 @@ export function ConnectionsContent() {
   };
 
   const handleOAuth = (integration: string) => {
-    window.open(`/api/v1/connections/oauth/${integration}/start`, '_blank');
+    startOAuthReconnect(integration);
   };
 
 
@@ -83,7 +84,7 @@ export function ConnectionsContent() {
   // stores them separately so tool-credential resolution keeps working per
   // sub-service. The Drive sub-row is the one that carries folder-restriction
   // state, so we surface that on the grouped row.
-  const groupGoogleConnections = <T extends { id: string; integrationId: string; userId: string | null; status: string | null; createdAt: string | null }>(list: T[] | undefined): T[] => {
+  const groupGoogleConnections = <T extends { id: string; integrationId: string; userId: string | null; status: string | null; isBroken?: boolean; createdAt: string | null }>(list: T[] | undefined): T[] => {
     if (!list?.length) return [];
     const seen = new Set<string>();
     const result: T[] = [];
@@ -100,12 +101,14 @@ export function ConnectionsContent() {
           .map((s) => s.createdAt ? new Date(s.createdAt).getTime() : Infinity)
           .reduce((a, b) => Math.min(a, b), Infinity);
         const anyExpired = siblings.some((s) => s.status === 'expired');
+        const anyBroken = siblings.some((s) => s.isBroken);
         const allActive = siblings.every((s) => s.status === 'active');
         result.push({
           ...driveRow,
           integrationName: 'Google',
           integrationId: 'google',
           status: anyExpired ? 'expired' : allActive ? 'active' : driveRow.status,
+          isBroken: anyBroken,
           createdAt: earliest === Infinity ? driveRow.createdAt : new Date(earliest).toISOString(),
         } as T);
       } else {
@@ -163,9 +166,13 @@ export function ConnectionsContent() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={conn.status === 'active' ? 'success' : conn.status === 'expired' ? 'warning' : 'danger'}>
-                      {titleCaseStatus(conn.status)}
-                    </Badge>
+                    {conn.isBroken ? (
+                      <Badge variant="danger" title="Stored credentials cannot be used — reconnect to fix">Broken</Badge>
+                    ) : (
+                      <Badge variant={conn.status === 'active' ? 'success' : conn.status === 'expired' ? 'warning' : 'danger'}>
+                        {titleCaseStatus(conn.status)}
+                      </Badge>
+                    )}
                   </TableCell>
                   <TableCell className="text-warm-text-secondary text-xs">
                     {conn.createdAt
@@ -174,18 +181,18 @@ export function ConnectionsContent() {
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1">
-                      {conn.status === 'expired' && (
+                      {(conn.status === 'expired' || conn.isBroken) && (
                         <Button
                           size="sm"
                           variant="outline"
                           onClick={() => {
-                            window.open(`/api/v1/connections/oauth/${conn.integrationId}/start`, '_blank');
+                            startOAuthReconnect(conn.integrationId);
                           }}
                         >
                           Reconnect
                         </Button>
                       )}
-                      {isGoogleDrive && conn.status !== 'expired' && (
+                      {isGoogleDrive && conn.status !== 'expired' && !conn.isBroken && (
                         <Button
                           variant="ghost"
                           size="sm"

@@ -1,4 +1,5 @@
 import type { Agent } from '../../types';
+import { friendlyModel } from '../../utils/labels';
 
 interface PromptContext {
   workspaceAgentCount: number;
@@ -30,12 +31,6 @@ const TOOL_FRIENDLY_NAMES: Record<string, string> = {
 
 function friendlyToolName(name: string): string {
   return TOOL_FRIENDLY_NAMES[name] || name.replace(/-read$/, '').replace(/-write$/, '').replace(/-search$/, '').replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
-}
-
-function friendlyModel(model: string): string {
-  if (model.includes('opus')) return 'Opus';
-  if (model.includes('haiku')) return 'Haiku';
-  return 'Sonnet';
 }
 
 export function buildSystemPrompt(ctx: PromptContext): string {

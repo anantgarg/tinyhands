@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useErrorLog } from '@/api/observability';
 import { useAgents } from '@/api/agents';
 import { renderEmoji } from '@/lib/emoji';
+import { friendlyModel } from '@/lib/labels';
 
 function formatDuration(ms: unknown): string {
   const n = Number(ms) || 0;
@@ -153,7 +154,7 @@ export function ErrorLogs() {
                               </pre>
                             </div>
                             <div className="flex flex-wrap gap-4 text-xs text-warm-text-secondary">
-                              <span>Model: <Badge variant="secondary">{entry.model}</Badge></span>
+                              <span>Model: <Badge variant="secondary">{friendlyModel(entry.model)}</Badge></span>
                               <span>Tokens: {entry.inputTokens?.toLocaleString() ?? 0} in / {entry.outputTokens?.toLocaleString() ?? 0} out</span>
                               <span>Cost: ${(Number(entry.estimatedCostUsd) || 0).toFixed(4)}</span>
                             </div>

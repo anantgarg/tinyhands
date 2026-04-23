@@ -22,6 +22,22 @@
 - [ ] Extend BYO OAuth app pattern to Notion and GitHub once those integrations ship (from plan-015)
 - [ ] Wire GitHub / Zendesk / Web Crawl KB source connectors through the connections table so the wizard can un-grey them (currently "Coming soon") (from plan-015)
 - [ ] Implement a Notion KB source connector (no sync handler exists today) (from plan-015)
+- [ ] Cut a GitHub release (`gh release create v1.51.0`) with changelog entry for plan-020 (from plan-020)
+- [ ] Trigger an agent in Slack and confirm the chosen user is tagged correctly (clickable mention, notification fires) (from plan-012)
+- [ ] Edge: load an agent whose stored Slack ID is deactivated/unknown — verify "@Unknown user" chip renders and the chip can be replaced (from plan-012)
+- [ ] Edge: workspace with >500 members — verify the `@`-mention picker stays responsive (from plan-012)
+- [ ] Run `/agents` in Slack — verify status shows "Running/Paused/Archived" and model shows "Sonnet/Opus/Haiku" (from plan-012)
+- [ ] Open the Slack home tab — verify recent runs show friendly agent name + model + status, no UUIDs (from plan-012)
+- [ ] Open template details in Slack — verify friendly model label (from plan-012)
+- [ ] Sync a KB source — verify friendly status label (from plan-012)
+- [ ] Tag + deploy a patch release with the attachments/Block Kit ingestion fix (`gh release create` once version is bumped) and smoke-test with a synthetic HubSpot-shaped payload: verify `run_history.input` contains the attachment email and the agent replies in-thread (from plan-022)
+- [ ] Post-deploy regression: `@mention` in a plain-text channel message still routes, DMs still work, existing working channels (`C02VCPSB4TC`, `C0746R57W86`) produce equivalent output — no degradation from the added attachment text (from plan-022)
+- [ ] Post-deploy spot-check: one non-HubSpot agent per active workspace, watch next few runs for any behavior change (from plan-022)
+- [ ] Generic (non-workspace-specific) follow-up reply to Vijit once the release is live (from plan-022)
+- [ ] Manually verify Reducto-disabled path: in a workspace with Reducto turned off, drop a JPG/PNG into a synced Drive folder, run sync, confirm the file is listed in the source's skip-log modal with reason "Image OCR requires Reducto" and an actionable message (from plan-025)
+- [ ] Edge case: a 25 MB+ camera-original JPG should be skipped with reason `too_large`, never attempted via Reducto (from plan-025)
+- [ ] Edge case: a corrupt or zero-byte PNG should produce a `reducto_failed` (or `parser_failed`) skip without crashing the sync run (from plan-025)
+- [ ] Edge case: confirm `.gif`, `.webp`, `.svg`, `.tiff`, and `.heic` files each still land in the skip log with reason `unsupported_format` (not OCR'd) (from plan-025)
 
 ## Completed
 

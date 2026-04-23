@@ -187,7 +187,13 @@ Every configuration change creates a version entry in `agent_versions`.
 ### Full Flow
 
 ```
-1. Slack message received (listener process, src/index.ts)
+1. Slack message received (listener process, src/index.ts).
+   Inbound text passed to agents includes msg.text *plus* content from
+   msg.attachments[*] (pretext/title/text/fallback-if-different/action URLs)
+   and, when msg.text is empty, msg.blocks[*] (rich_text, section, header,
+   context) — so payloads from apps like HubSpot, Datadog, Jira, PagerDuty,
+   GitHub, etc. reach the agent. Combined text is capped at 50 KB with a
+   logged truncation marker. @mention detection still uses msg.text alone.
 2. Relevance check (skip if @mentioned or mentions_only/respond_to_all)
 3. Job enqueued to BullMQ (priority queue via Redis)
 4. Worker dequeues job (src/worker.ts)
@@ -981,10 +987,54 @@ Every document must be associated with an agent (`agent_id` is required). Permis
 | Source | Config | Connection Type |
 |--------|--------|-----------------|
 | GitHub | Repository (owner/name), branch, path filter | GitHub API token (KB API key) |
-| Google Drive | Folder ID (via folder picker) | Google OAuth connection |
+| Google Drive | Folder ID (via folder picker), optional "Include sub-folders" toggle | Google OAuth connection |
 | Zendesk Help Center | Subdomain, category ID (optional) | Zendesk API token (KB API key) |
 | Website / Docs (Web Crawl) | Start URL, max pages, URL pattern filter | Firecrawl API key (KB API key) |
 | Notion | Root page ID | Notion OAuth connection |
+
+### Google Drive File Type Coverage
+
+The Google Drive connector indexes both Google-native and uploaded file types from a connected folder. By default only files directly inside the configured folder are indexed; ticking **Include sub-folders** on the source walks the entire folder tree at any depth.
+
+
+
+| Type | Format | How it's extracted |
+|------|--------|---------------------|
+| Google Docs | Native | Drive export → Markdown |
+| Google Sheets | Native | Drive export → CSV (per sheet) |
+| Google Slides | Native | Drive export → plain text |
+| Word | `.docx`, `.doc` | `mammoth` (best-effort on legacy `.doc`) |
+| Excel | `.xlsx`, `.xls` | SheetJS — one block per sheet |
+| PowerPoint | `.pptx`, `.ppt` | `officeparser` (best-effort on legacy `.ppt`) |
+| PDF | `.pdf` | `pdf-parse` locally, or Reducto if enabled |
+| OpenDocument | `.odt`, `.ods`, `.odp` | `officeparser` |
+| Rich Text | `.rtf` | In-house RTF text extractor |
+| HTML | `.html`, `.htm` | `html-to-text` |
+| Plain text | `.txt`, `.md`, `.csv`, `.tsv`, `.json`, `.log` | Pass-through |
+| Images | `.jpg`, `.jpeg`, `.png` | Reducto OCR (required — no local fallback) |
+
+Unsupported or unparseable files are recorded in the per-source **skip log** — a structured `kb_source_skip_log` table keyed by `(kb_source_id, file_path)` with upsert-by-path so repeated skips don't bloat the log. Rows are removed as soon as the file later ingests successfully, so the log reflects current state rather than history. On the KB Sources page each source shows a small failures icon with a count when there are skips; clicking it opens a modal listing every skipped file with a plain-English reason (e.g. "File too large to index", "Could not read the file contents"), file size, and the last-attempted time. One bad file never fails the whole crawl.
+
+### Per-File Size Cap
+
+Downloads are stream-checked against `KB_MAX_FILE_BYTES` (default **250 MB**, overridable via env var for self-hosters). Files that exceed the cap — or declare a `Content-Length` over it — are torn down without buffering and recorded in the skip log with reason `too_large`. Individual parsers may impose tighter practical limits internally and downgrade to a warning rather than abort the sync.
+
+### Re-Parse Control
+
+After flipping Reducto on or off (or any other parser setting change), admins can click the **Re-parse** icon on a source's row in the KB Sources page. This flushes the source's existing entries and runs a fresh sync with current settings — the only path that re-applies new parser settings to already-synced files. Re-parse does not happen implicitly on settings toggle because it can consume significant Reducto credits.
+
+### Reducto (Optional Document Parsing Upgrade)
+
+Reducto is an optional per-workspace upgrade that materially outperforms local parsers on messy PDFs and scanned documents. It is **opt-in** — no bytes are sent to Reducto unless an admin has both pasted an API key in Settings → Document Parsing **and** turned the toggle on.
+
+- **Storage:** API key is AES-256-GCM encrypted in `workspace_settings` (same pattern as the Claude key).
+- **Default routing:** Office documents (docx, xlsx, pptx) and PDFs go through Reducto first when enabled; any file whose local parser throws or returns empty text also falls back to Reducto. Plain text, Markdown, CSV, and HTML always use local parsers (never wasted on Reducto credits).
+- **Image OCR:** JPG (`.jpg`, `.jpeg`, `image/jpeg`) and PNG (`.png`, `image/png`) files in Google Drive sources are OCR'd via Reducto. There is no local OCR fallback — when Reducto is disabled or its key is missing, image files are recorded in the skip log with reason `reducto_required` ("Image OCR requires Reducto") so admins see actionable feedback rather than a silent drop. When Reducto is enabled but its API call fails, the skip reason is `reducto_failed`. Other image formats (GIF, WebP, SVG, TIFF, HEIC) are still skipped with reason `unsupported_format`.
+- **API flow:** Two-step upload → parse (`POST /upload` for the raw bytes → `POST /parse` with the returned `file_id`). Sync call has a 60s timeout; on timeout we retry via `POST /parse_async` and poll `GET /job/{id}` for up to 2 minutes before falling back to the local parser.
+- **Fallback safety:** On Reducto errors, timeouts, or async-job failures, the sync falls back to the local parser and records a per-file warning.
+- **Direct-upload cap:** Files over 100 MB skip Reducto (Reducto's `/upload` endpoint cap) and use the local parser instead — the presigned large-file flow is out of scope for this release.
+- **Concurrency guard:** Per-workspace cap of 8 concurrent Reducto requests so bulk re-parse stays well below the 200-concurrent platform limit.
+- **No platform fallback:** The platform never holds a Reducto key of its own — each workspace brings its own.
 
 ### KB Source Management
 

@@ -11,6 +11,7 @@ import { logger } from '../utils/logger';
 import { execute, queryOne, getDefaultWorkspaceId } from '../db';
 import { getToolIntegrations, getIntegration, getIntegrations } from '../modules/tools/integrations';
 import { getAllTemplates, getTemplateById, getTemplatesByCategory, resolveCustomTools } from '../modules/templates';
+import { friendlyModel, friendlyAgentStatus, friendlyKbSourceStatus } from '../utils/labels';
 
 // ── Available Tool Integrations ──
 // Auto-discovered from src/modules/tools/integrations/*/index.ts
@@ -245,7 +246,7 @@ function _legacyRegisterCommands_removed(app: App): void {
           type: 'section',
           text: {
             type: 'mrkdwn',
-            text: `${statusIcon} *${a.avatar_emoji} ${a.name}*${accessBadge}\n${channels} · ${a.model} · ${maxTurnsToEffort(a.max_turns)} effort · memory ${a.memory_enabled ? 'on' : 'off'}${a.created_by ? ` · by <@${a.created_by}>` : ''}\nTools: ${toolsDisplay}\nAccess: ${formatAccessLevel(a.default_access)} · Writes: ${formatWritePolicy(a.write_policy || 'auto')} · Your role: ${formatUserRole(userRole)}`,
+            text: `${statusIcon} *${a.avatar_emoji} ${a.name}*${accessBadge}\n${channels} · ${friendlyModel(a.model)} · ${maxTurnsToEffort(a.max_turns)} effort · memory ${a.memory_enabled ? 'on' : 'off'}${a.created_by ? ` · by <@${a.created_by}>` : ''}\nTools: ${toolsDisplay}\nAccess: ${formatAccessLevel(a.default_access)} · Writes: ${formatWritePolicy(a.write_policy || 'auto')} · Your role: ${formatUserRole(userRole)}`,
           },
           accessory: {
             type: 'overflow',
@@ -534,7 +535,7 @@ export function registerInlineActions(app: App): void {
             type: 'section',
             text: {
               type: 'mrkdwn',
-              text: `*Status:* ${agent.status}\n*Model:* ${agent.model}\n*Effort:* ${maxTurnsToEffort(agent.max_turns)}\n*Memory:* ${agent.memory_enabled ? 'on' : 'off'}\n*Access:* ${agent.default_access === 'none' ? ':lock: Invite only' : formatAccessLevel(agent.default_access)}\n*Writes:* ${formatWritePolicy(agent.write_policy || 'auto')}\n*Channels:* ${channels}\n*Tools:* ${agent.tools.join(', ') || 'none'}\n*Responds to:* ${respondModeLabelFromAgent(agent)}${toolConnsText}`,
+              text: `*Status:* ${friendlyAgentStatus(agent.status)}\n*Model:* ${friendlyModel(agent.model)}\n*Effort:* ${maxTurnsToEffort(agent.max_turns)}\n*Memory:* ${agent.memory_enabled ? 'on' : 'off'}\n*Access:* ${agent.default_access === 'none' ? ':lock: Invite only' : formatAccessLevel(agent.default_access)}\n*Writes:* ${formatWritePolicy(agent.write_policy || 'auto')}\n*Channels:* ${channels}\n*Tools:* ${agent.tools.join(', ') || 'none'}\n*Responds to:* ${respondModeLabelFromAgent(agent)}${toolConnsText}`,
             },
           },
           { type: 'divider' },
@@ -592,7 +593,7 @@ export function registerInlineActions(app: App): void {
         if (ts) {
           // Post config details as a thread reply — creates a visible thread
           await postMessage(channelId,
-            `Current config: *${agent.model}* model | ${maxTurnsToEffort(agent.max_turns)} effort | ${agent.tools.length} tools | memory ${agent.memory_enabled ? 'on' : 'off'} | channels: ${channelLabels}\n\n` +
+            `Current config: *${friendlyModel(agent.model)}* model | ${maxTurnsToEffort(agent.max_turns)} effort | ${agent.tools.length} tools | memory ${agent.memory_enabled ? 'on' : 'off'} | channels: ${channelLabels}\n\n` +
             `_What would you like to change? You can say things like:_\n` +
             `• _"update the goal to handle X differently"_\n` +
             `• _"add #new-channel" or "replace #old-channel with #new-channel"_\n` +
@@ -735,7 +736,7 @@ export function registerInlineActions(app: App): void {
 
     await postBlocks(channelId, [
       { type: 'header', text: { type: 'plain_text', text: `${template.emoji} ${template.name}` } },
-      { type: 'section', text: { type: 'mrkdwn', text: `${template.description}\n\n*Model:* ${template.model} | *Memory:* ${template.memory_enabled ? 'on' : 'off'} | *Tools:* ${[...template.tools, ...template.custom_tools].join(', ') || 'none'}\n${template.skills.length > 0 ? `*Skills:* ${template.skills.join(', ')}\n` : ''}` } },
+      { type: 'section', text: { type: 'mrkdwn', text: `${template.description}\n\n*Model:* ${friendlyModel(template.model)} | *Memory:* ${template.memory_enabled ? 'on' : 'off'} | *Tools:* ${[...template.tools, ...template.custom_tools].join(', ') || 'none'}\n${template.skills.length > 0 ? `*Skills:* ${template.skills.join(', ')}\n` : ''}` } },
       { type: 'divider' },
       {
         type: 'section',
@@ -876,7 +877,7 @@ export function registerInlineActions(app: App): void {
       const toolList = agentTools.join(', ') || 'none';
       await postMessage(selectedChannelId,
         `${template.emoji} Meet *${agentName}*! Deployed from the *${template.name}* template by <@${userId}>.\n\n` +
-        `*Model:* ${template.model} | *Memory:* ${template.memory_enabled ? 'on' : 'off'}\n` +
+        `*Model:* ${friendlyModel(template.model)} | *Memory:* ${template.memory_enabled ? 'on' : 'off'}\n` +
         `*Tools:* ${toolList}\n` +
         (template.skills.length > 0 ? `*Skills:* ${template.skills.join(', ')}\n` : '') +
         `_${template.description}_`
@@ -1411,7 +1412,7 @@ export function registerInlineActions(app: App): void {
 
     // Post config details as a deeper thread reply — makes the thread clearly visible
     await postMessage(channelId,
-      `Current config: *${agent.model}* model | ${maxTurnsToEffort(agent.max_turns)} effort | ${agent.tools.length} tools | memory ${agent.memory_enabled ? 'on' : 'off'} | channels: ${channelLabels}\n\n` +
+      `Current config: *${friendlyModel(agent.model)}* model | ${maxTurnsToEffort(agent.max_turns)} effort | ${agent.tools.length} tools | memory ${agent.memory_enabled ? 'on' : 'off'} | channels: ${channelLabels}\n\n` +
       `_What would you like to change? You can say things like:_\n` +
       `• _"update the goal to handle X differently"_\n` +
       `• _"add #new-channel" or "replace #old-channel with #new-channel"_\n` +
@@ -2224,7 +2225,7 @@ export function registerToolAndKBModals(app: App): void {
 
       let msg = `:white_check_mark: Source *${sourceName}* created!\n`
         + `• Type: ${connector.icon} ${connector.label}\n`
-        + `• Status: \`${source.status}\`\n`;
+        + `• Status: ${friendlyKbSourceStatus(source.status)}\n`;
 
       if (Object.keys(config).length > 0) {
         msg += `• Config: ${Object.entries(config).map(([k, v]) => `${k}=\`${v}\``).join(', ')}\n`;
@@ -2519,7 +2520,7 @@ async function handleInfeasibleRequest(
         type: 'section',
         text: {
           type: 'mrkdwn',
-          text: `*Suggested agent name:* \`${analysis.agent_name}\`\n*Model:* ${analysis.model}\n*Summary:* ${analysis.summary}`,
+          text: `*Suggested agent name:* \`${analysis.agent_name}\`\n*Model:* ${friendlyModel(analysis.model)}\n*Summary:* ${analysis.summary}`,
         },
       },
     ];
@@ -2846,7 +2847,7 @@ Rules:
     logger.info('Update intent classified', { agentId, intent: intent.intent, channelAction: intent.channel_action });
 
     if (intent.intent === 'info_query') {
-      await postMessage(channelId, intent.info_response || `*${agent.name}* config:\n• Model: ${agent.model}\n• Effort: ${maxTurnsToEffort(agent.max_turns)}\n• Channels: ${channelLabels}\n• Memory: ${agent.memory_enabled ? 'on' : 'off'}\n• Tools: ${agent.tools.join(', ')}`, threadTs);
+      await postMessage(channelId, intent.info_response || `*${agent.name}* config:\n• Model: ${friendlyModel(agent.model)}\n• Effort: ${maxTurnsToEffort(agent.max_turns)}\n• Channels: ${channelLabels}\n• Memory: ${agent.memory_enabled ? 'on' : 'off'}\n• Tools: ${agent.tools.join(', ')}`, threadTs);
       // Re-insert so the user can ask more questions or make changes
       await execute(
         `INSERT INTO pending_confirmations (id, data, expires_at) VALUES ($1, $2, NOW() + INTERVAL '30 minutes')`,
@@ -3342,7 +3343,7 @@ export function registerConfirmationActions(app: App): void {
       try {
         await withTimeout(postMessage(postToChannel,
           `:arrows_counterclockwise: Agent *${agent.name}* updated by <@${userId}>\n\n` +
-          `*Model:* ${analysis.model} | *Memory:* ${analysis.memory_enabled ? 'on' : 'off'}\n` +
+          `*Model:* ${friendlyModel(analysis.model)} | *Memory:* ${analysis.memory_enabled ? 'on' : 'off'}\n` +
           `*Responds to:* ${respondModeLabel(analysis)}\n` +
           `*Tools:* ${allUpdateTools.join(', ')}` +
           channelChangeNote + '\n' +
@@ -4225,7 +4226,7 @@ function buildConfigSummary(name: string, analysis: any, goal: string, existingA
   lines.push(`*Goal:* ${displayGoal.slice(0, 300)}${displayGoal.length > 300 ? '...' : ''}`);
   lines.push('');
   lines.push(`*Name:* ${name}`);
-  lines.push(`*Model:* ${analysis.model}`);
+  lines.push(`*Model:* ${friendlyModel(analysis.model)}`);
   lines.push(`*Memory:* ${analysis.memory_enabled ? 'enabled' : 'disabled'}`);
   const allConfigTools = [...analysis.tools, ...(analysis.custom_tools || [])];
   lines.push(`*Tools:* ${allConfigTools.join(', ')}`);
@@ -4265,7 +4266,7 @@ function buildConfigSummary(name: string, analysis: any, goal: string, existingA
 
   if (existingAgent) {
     const changes: string[] = [];
-    if (existingAgent.model !== analysis.model) changes.push(`model: ${existingAgent.model} → ${analysis.model}`);
+    if (existingAgent.model !== analysis.model) changes.push(`model: ${friendlyModel(existingAgent.model)} → ${friendlyModel(analysis.model)}`);
     if (JSON.stringify(existingAgent.tools.sort()) !== JSON.stringify(analysis.tools.sort())) changes.push('tools changed');
     if (existingAgent.memory_enabled !== analysis.memory_enabled) changes.push(`memory: ${analysis.memory_enabled ? 'enabled' : 'disabled'}`);
     if (changes.length > 0) {
@@ -4669,7 +4670,7 @@ async function handleSourceDetails(
 
     let msg = `:white_check_mark: Source *${sourceName}* created!\n`
       + `• Type: ${connector.icon} ${connector.label}\n`
-      + `• Status: \`${source.status}\`\n`;
+      + `• Status: ${friendlyKbSourceStatus(source.status)}\n`;
 
     if (Object.keys(config).length > 0) {
       msg += `• Config: ${Object.entries(config).map(([k, v]) => `${k}=\`${v}\``).join(', ')}\n`;

@@ -4,6 +4,7 @@ import { getAgentByChannel, getAgentsByChannel, canAccessAgent, getDmConversatio
 import { enqueueRun } from '../queue';
 import { handleWizardMessage, isInWizard, handleConversationReply } from './commands';
 import { postMessage, postBlocks, publishHomeTab, updateMessage, getSystemSlackClient, getThreadHistory } from './index';
+import { extractSlackMessageText } from './message-text';
 import { detectCritique } from '../modules/self-improvement';
 import { parseModelOverride, stripModelOverride } from '../modules/model-selection';
 import { checkMessageRelevance } from '../modules/agents/goal-analyzer';
@@ -88,7 +89,11 @@ export function registerEvents(app: App): void {
 
     const channelId = msg.channel;
     const userId = msg.user || msg.bot_id; // bot messages may not have user
-    const text = msg.text || '';
+    // rawText is msg.text only — used for @mention detection (mentions never
+    // appear inside attachments/blocks). `text` includes attachment + block
+    // content so agents see payloads from apps like HubSpot/Datadog/Jira.
+    const { combined, raw: rawText } = extractSlackMessageText(msg);
+    const text = combined || rawText;
     const threadTs = msg.thread_ts || msg.ts;
 
     // Check if user is in creation wizard
@@ -145,8 +150,10 @@ export function registerEvents(app: App): void {
     const agents = allAgents.filter((_, i) => agentAccessResults[i]);
     logger.info('Agent lookup result', { channelId, agentCount: agents.length, totalInChannel: allAgents.length, agentNames: agents.map(a => a.name) });
 
-    // Check if agent is @mentioned (always respond to mentions)
-    const isMentioned = ownBotUserId ? text.includes(`<@${ownBotUserId}>`) : false;
+    // Check if agent is @mentioned (always respond to mentions).
+    // Uses rawText (msg.text only) — mentions always arrive in msg.text, and
+    // we don't want to match a <@BOT> literal an app rendered into an attachment.
+    const isMentioned = ownBotUserId ? rawText.includes(`<@${ownBotUserId}>`) : false;
     // Thread replies are always relevant — the user is continuing a conversation
     const isThreadReply = !!msg.thread_ts;
 
@@ -369,7 +376,8 @@ export function registerEvents(app: App): void {
               ts: msg.thread_ts,
               limit: 1,
             });
-            const parentText = parentMessages.messages?.[0]?.text || '';
+            const parentMsg = parentMessages.messages?.[0];
+            const parentText = parentMsg ? (extractSlackMessageText(parentMsg).combined || parentMsg.text || '') : '';
             const agentIdMatch = parentText.match(/\[([^\]]+)\]/);
 
             if (agentIdMatch) {

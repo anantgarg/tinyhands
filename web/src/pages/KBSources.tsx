@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowLeft, RefreshCw, Trash2, Plus, Key, AlertCircle, Pencil,
-  Github, Globe, FileText, Database, BookOpen,
+  Github, Globe, FileText, Database, BookOpen, AlertTriangle, Sparkles,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -30,6 +30,8 @@ import {
   useUpdateKBSource,
   useCreateKBSource,
   useDriveFolderName,
+  useKBSourceSkipLog,
+  useReparseKBSource,
 } from '@/api/kb';
 import { DriveFolderPicker } from '@/components/DriveFolderPicker';
 import { toast } from '@/components/ui/use-toast';
@@ -44,7 +46,7 @@ const SOURCE_TYPES = [
   { id: 'notion', name: 'Notion', description: 'Sync pages from a Notion workspace', icon: Database, comingSoon: true },
 ];
 
-const SOURCE_CONFIG_FIELDS: Record<string, { key: string; label: string; placeholder: string; required: boolean; help?: string }[]> = {
+const SOURCE_CONFIG_FIELDS: Record<string, { key: string; label: string; placeholder?: string; required: boolean; help?: string; type?: 'text' | 'checkbox' }[]> = {
   github: [
     { key: 'repo', label: 'Repository (owner/name)', placeholder: 'myorg/docs', required: true, help: 'The GitHub repository to sync, e.g. "acme/knowledge-base"' },
     { key: 'branch', label: 'Branch', placeholder: 'main', required: false, help: 'Branch to sync from. Defaults to the repo\'s default branch.' },
@@ -52,6 +54,7 @@ const SOURCE_CONFIG_FIELDS: Record<string, { key: string; label: string; placeho
   ],
   google_drive: [
     { key: 'folderId', label: 'Folder', placeholder: 'Pick a Google Drive folder', required: true, help: 'Browse and pick a folder to sync into the knowledge base.' },
+    { key: 'include_subfolders', label: 'Include sub-folders', required: false, type: 'checkbox', help: 'Also sync files inside nested folders at any depth.' },
   ],
   zendesk: [
     { key: 'subdomain', label: 'Subdomain', placeholder: 'yourcompany', required: true, help: 'Your Zendesk subdomain, e.g. "acme" from acme.zendesk.com' },
@@ -78,6 +81,14 @@ function getSourceTypeName(type: string | null): string {
   return type ? names[type] ?? type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : 'Unknown';
 }
 
+function formatBytes(bytes: number | null): string {
+  if (bytes === null || bytes === undefined) return '—';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  return `${(bytes / 1024 / 1024 / 1024).toFixed(2)} GB`;
+}
+
 function getStatusLabel(status: string | null): string {
   const labels: Record<string, string> = {
     active: 'Active',
@@ -100,8 +111,15 @@ export function KBSources() {
   const syncSource = useSyncKBSource();
   const deleteSource = useDeleteKBSource();
   const createSource = useCreateKBSource();
+  const reparseSource = useReparseKBSource();
 
   const updateSource = useUpdateKBSource();
+
+  // Skip-log modal state — the icon only appears on a row when the source
+  // has one or more file-level failures from recent syncs. Clicking opens
+  // this modal and loads the detailed list lazily.
+  const [skipLogFor, setSkipLogFor] = useState<{ id: string; name: string } | null>(null);
+  const { data: skipLog, isLoading: skipLogLoading } = useKBSourceSkipLog(skipLogFor?.id ?? null);
 
   // Edit source state
   const [editSource, setEditSource] = useState<{ id: string; name: string; type: string; config: Record<string, unknown> } | null>(null);
@@ -147,6 +165,15 @@ export function KBSources() {
         onSuccess: () => toast({ title: 'Source deleted', variant: 'success' }),
       });
     }
+  };
+
+  const handleReparse = (id: string, name: string) => {
+    const msg = `Re-parse every file in "${name}" with current settings? This may take a while and, if Reducto is turned on, will use Reducto credits.`;
+    if (!confirm(msg)) return;
+    reparseSource.mutate(id, {
+      onSuccess: () => toast({ title: 'Re-parse started', variant: 'success' }),
+      onError: (err) => toast({ title: 'Re-parse failed', description: err.message, variant: 'error' }),
+    });
   };
 
   const openWizard = () => {
@@ -235,7 +262,42 @@ export function KBSources() {
               <TableBody>
                 {(sources ?? []).map((source) => (
                   <TableRow key={source.id}>
-                    <TableCell className="font-medium">{source.name ?? 'Unnamed Source'}</TableCell>
+                    <TableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        <span>{source.name ?? 'Unnamed Source'}</span>
+                        {(source.skippedCount ?? 0) > 0 && (
+                          <button
+                            type="button"
+                            title={`${source.skippedCount} file${source.skippedCount === 1 ? '' : 's'} could not be indexed — click to see the list`}
+                            onClick={() => setSkipLogFor({ id: source.id, name: source.name ?? 'source' })}
+                            className="inline-flex items-center gap-1 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800 hover:bg-amber-100 dark:bg-amber-950 dark:text-amber-300 dark:hover:bg-amber-900"
+                          >
+                            <AlertTriangle className="h-3 w-3" />
+                            {source.skippedCount}
+                          </button>
+                        )}
+                      </div>
+                      {source.status === 'error' && source.errorMessage && (
+                        <div className="mt-1.5 max-w-xl space-y-1.5">
+                          <div className="text-xs text-warm-text-secondary leading-snug">
+                            {source.errorMessage}
+                          </div>
+                          {source.errorFix?.kind === 'reconnect' && (
+                            <Button
+                              asChild
+                              size="sm"
+                              variant="outline"
+                              className="h-7 px-2.5 text-xs"
+                            >
+                              <Link to="/tools?tab=personal" onClick={(e) => e.stopPropagation()}>
+                                <RefreshCw className="h-3 w-3 mr-1.5" />
+                                Reconnect Google Drive
+                              </Link>
+                            </Button>
+                          )}
+                        </div>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <Badge variant="secondary">{getSourceTypeName(source.type)}</Badge>
                     </TableCell>
@@ -278,6 +340,15 @@ export function KBSources() {
                         <Button
                           size="sm"
                           variant="ghost"
+                          title="Re-parse all files with current settings (useful after turning Reducto on or off)"
+                          onClick={() => handleReparse(source.id, source.name ?? 'source')}
+                          disabled={reparseSource.isPending}
+                        >
+                          <Sparkles className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
                           title="Delete"
                           className="text-red-500"
                           onClick={() => handleDeleteSource(source.id, source.name ?? 'source')}
@@ -294,6 +365,55 @@ export function KBSources() {
         )}
       </section>
 
+      {/* Skipped Files Dialog — shown only when the icon on a row is clicked */}
+      <Dialog open={!!skipLogFor} onOpenChange={(open) => { if (!open) setSkipLogFor(null); }}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Files not indexed — {skipLogFor?.name}</DialogTitle>
+            <DialogDescription>
+              These files couldn't be added to the knowledge base on the most recent syncs.
+              Files disappear from this list as soon as they sync successfully.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[60vh] overflow-y-auto">
+            {skipLogLoading ? (
+              <div className="py-8 text-center text-sm text-warm-text-secondary">Loading…</div>
+            ) : (skipLog ?? []).length === 0 ? (
+              <div className="py-8 text-center text-sm text-warm-text-secondary">No skipped files.</div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>File</TableHead>
+                    <TableHead>Reason</TableHead>
+                    <TableHead className="w-32">Size</TableHead>
+                    <TableHead className="w-40">Last attempted</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(skipLog ?? []).map((row) => (
+                    <TableRow key={row.id}>
+                      <TableCell className="font-medium break-all">{row.filename}</TableCell>
+                      <TableCell>
+                        <div className="text-sm">{row.reasonLabel}</div>
+                        <div className="text-xs text-warm-text-secondary mt-0.5">{row.message}</div>
+                      </TableCell>
+                      <TableCell className="text-sm text-warm-text-secondary">{formatBytes(row.sizeBytes)}</TableCell>
+                      <TableCell className="text-sm text-warm-text-secondary">
+                        {formatDistanceToNow(new Date(row.lastSeenAt), { addSuffix: true })}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setSkipLogFor(null)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Edit Source Dialog */}
       <Dialog open={!!editSource} onOpenChange={() => setEditSource(null)}>
         <DialogContent>
@@ -306,34 +426,53 @@ export function KBSources() {
               <Label>Source Name</Label>
               <Input value={editName} onChange={(e) => setEditName(e.target.value)} className="mt-1" />
             </div>
-            {(SOURCE_CONFIG_FIELDS[editSource?.type ?? ''] ?? []).map((field) => (
-              <div key={field.key}>
-                <Label>{field.label}</Label>
-                {editSource?.type === 'google_drive' && field.key === 'folderId' ? (
-                  <div className="mt-1">
-                    <DriveFolderPicker
-                      value={editConfig.folderId ?? ''}
-                      valueName={editFolderName}
-                      onChange={(id, name) => {
-                        setEditConfig((prev) => ({ ...prev, folderId: id }));
-                        setEditFolderName(name);
-                      }}
-                      helpText={field.help}
+            {(SOURCE_CONFIG_FIELDS[editSource?.type ?? ''] ?? []).map((field) => {
+              if (field.type === 'checkbox') {
+                const checked = editConfig[field.key] === 'true';
+                return (
+                  <div key={field.key} className="flex items-center gap-3">
+                    <Switch
+                      checked={checked}
+                      onCheckedChange={(next) =>
+                        setEditConfig((prev) => ({ ...prev, [field.key]: next ? 'true' : 'false' }))
+                      }
                     />
+                    <div>
+                      <Label>{field.label}</Label>
+                      {field.help && <p className="text-xs text-warm-text-secondary">{field.help}</p>}
+                    </div>
                   </div>
-                ) : (
-                  <>
-                    <Input
-                      value={editConfig[field.key] ?? ''}
-                      onChange={(e) => setEditConfig((prev) => ({ ...prev, [field.key]: e.target.value }))}
-                      placeholder={field.placeholder}
-                      className="mt-1"
-                    />
-                    {field.help && <p className="text-xs text-warm-text-secondary mt-1">{field.help}</p>}
-                  </>
-                )}
-              </div>
-            ))}
+                );
+              }
+              return (
+                <div key={field.key}>
+                  <Label>{field.label}</Label>
+                  {editSource?.type === 'google_drive' && field.key === 'folderId' ? (
+                    <div className="mt-1">
+                      <DriveFolderPicker
+                        value={editConfig.folderId ?? ''}
+                        valueName={editFolderName}
+                        onChange={(id, name) => {
+                          setEditConfig((prev) => ({ ...prev, folderId: id }));
+                          setEditFolderName(name);
+                        }}
+                        helpText={field.help}
+                      />
+                    </div>
+                  ) : (
+                    <>
+                      <Input
+                        value={editConfig[field.key] ?? ''}
+                        onChange={(e) => setEditConfig((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                        placeholder={field.placeholder}
+                        className="mt-1"
+                      />
+                      {field.help && <p className="text-xs text-warm-text-secondary mt-1">{field.help}</p>}
+                    </>
+                  )}
+                </div>
+              );
+            })}
 
             <div className="border-t border-warm-border pt-4">
               <div className="flex items-center gap-3 mb-3">
@@ -476,41 +615,65 @@ export function KBSources() {
                   className="mt-1"
                 />
               </div>
-              {configFields.map((field) => (
-                <div key={field.key}>
-                  <Label>
-                    {field.label}
-                    {field.required && <span className="text-red-500 ml-1">*</span>}
-                  </Label>
-                  {wizardType === 'google_drive' && field.key === 'folderId' ? (
-                    <div className="mt-1 space-y-2">
-                      <DriveFolderPicker
-                        value={wizardConfig.folderId ?? ''}
-                        valueName={wizardFolderName}
-                        onChange={(id, name) => {
-                          setWizardConfig((prev) => ({ ...prev, folderId: id }));
-                          setWizardFolderName(name);
-                          if (name && !wizardName) setWizardName(name);
-                        }}
-                        helpText={field.help}
+              {configFields.map((field) => {
+                if (field.type === 'checkbox') {
+                  const checked = wizardConfig[field.key] === 'true';
+                  return (
+                    <div key={field.key} className="flex items-center gap-3">
+                      <Switch
+                        checked={checked}
+                        onCheckedChange={(next) =>
+                          setWizardConfig((prev) => {
+                            if (next) return { ...prev, [field.key]: 'true' };
+                            const rest = { ...prev };
+                            delete rest[field.key];
+                            return rest;
+                          })
+                        }
                       />
-                      <p className="text-xs text-warm-text-secondary">
-                        Folders are browsed through your personal Google connection. The knowledge base itself is shared across the workspace.
-                      </p>
+                      <div>
+                        <Label>{field.label}</Label>
+                        {field.help && <p className="text-xs text-warm-text-secondary">{field.help}</p>}
+                      </div>
                     </div>
-                  ) : (
-                    <>
-                      <Input
-                        value={wizardConfig[field.key] ?? ''}
-                        onChange={(e) => setWizardConfig((prev) => ({ ...prev, [field.key]: e.target.value }))}
-                        placeholder={field.placeholder}
-                        className="mt-1"
-                      />
-                      {field.help && <p className="text-xs text-warm-text-secondary mt-1">{field.help}</p>}
-                    </>
-                  )}
-                </div>
-              ))}
+                  );
+                }
+                return (
+                  <div key={field.key}>
+                    <Label>
+                      {field.label}
+                      {field.required && <span className="text-red-500 ml-1">*</span>}
+                    </Label>
+                    {wizardType === 'google_drive' && field.key === 'folderId' ? (
+                      <div className="mt-1 space-y-2">
+                        <DriveFolderPicker
+                          value={wizardConfig.folderId ?? ''}
+                          valueName={wizardFolderName}
+                          onChange={(id, name) => {
+                            setWizardConfig((prev) => ({ ...prev, folderId: id }));
+                            setWizardFolderName(name);
+                            if (name && !wizardName) setWizardName(name);
+                          }}
+                          helpText={field.help}
+                        />
+                        <p className="text-xs text-warm-text-secondary">
+                          Folders are browsed through your personal Google connection. The knowledge base itself is shared across the workspace.
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        <Input
+                          value={wizardConfig[field.key] ?? ''}
+                          onChange={(e) => setWizardConfig((prev) => ({ ...prev, [field.key]: e.target.value }))}
+                          placeholder={field.placeholder}
+                          className="mt-1"
+                        />
+                        {field.help && <p className="text-xs text-warm-text-secondary mt-1">{field.help}</p>}
+                      </>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -554,8 +717,13 @@ export function KBSources() {
                 </div>
                 {Object.entries(wizardConfig).filter(([, v]) => v).map(([k, v]) => {
                   const isDriveFolder = wizardType === 'google_drive' && k === 'folderId';
-                  const label = isDriveFolder ? 'Folder' : k;
-                  const display = isDriveFolder && wizardFolderName ? wizardFolderName : v;
+                  const isSubfolders = wizardType === 'google_drive' && k === 'include_subfolders';
+                  const label = isDriveFolder ? 'Folder' : isSubfolders ? 'Include sub-folders' : k;
+                  const display = isDriveFolder && wizardFolderName
+                    ? wizardFolderName
+                    : isSubfolders
+                      ? (v === 'true' ? 'Yes' : 'No')
+                      : v;
                   return (
                     <div key={k} className="flex justify-between">
                       <span className="text-sm text-warm-text-secondary">{label}</span>
