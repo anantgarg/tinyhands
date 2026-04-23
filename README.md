@@ -98,7 +98,7 @@ Hierarchical browsing: **Sources > Documents > Content**
 | Source Type | Description |
 |-------------|-------------|
 | **GitHub** | Markdown files from repos, with Mintlify docs auto-detection |
-| **Google Drive** | Docs, Sheets, Slides, Word, Excel, PowerPoint, PDF, OpenDocument, RTF, HTML, and plain text from Drive folders (with folder picker) |
+| **Google Drive** | Docs, Sheets, Slides, Word, Excel, PowerPoint, PDF, OpenDocument, RTF, HTML, plain text, and JPG/PNG images (OCR'd via Reducto) from Drive folders (with folder picker) |
 | **Zendesk Help Center** | Published help center articles |
 | **Website** | Crawl and index web pages |
 | **HubSpot KB** | Knowledge base articles from HubSpot CMS |
@@ -114,7 +114,7 @@ Hierarchical browsing: **Sources > Documents > Content**
 - Per-file skip log — every file that fails to index is surfaced behind a failures icon on the source row with a plain-English reason (too large, corrupted, unsupported format, etc.)
 - Per-file size cap (default 250 MB, env-overridable) enforced at download time — nothing oversized is ever buffered
 - Re-parse button on each source so admins can opt in to re-processing existing files after changing parser settings
-- Optional Reducto integration per workspace for high-fidelity PDF and Office-document extraction (Settings → Document Parsing) — two-step upload → parse with automatic sync-to-async fallback and per-workspace concurrency guard
+- Optional Reducto integration per workspace for high-fidelity PDF, Office-document, and JPG/PNG image OCR (Settings → Document Parsing) — two-step upload → parse with automatic sync-to-async fallback and per-workspace concurrency guard. Without Reducto, image files are surfaced in the skip log with reason "Image OCR requires Reducto" rather than silently dropped.
 
 ### Connections & Credentials
 

@@ -34,6 +34,7 @@ const REDUCTO_PREFERRED_FAMILIES = new Set<ParserFamily>([
   'xlsx', 'xlsx-legacy',
   'pptx', 'pptx-legacy',
   'pdf',
+  'image',
 ]);
 
 // Format families. We key on file extension because Google Drive sometimes
@@ -61,6 +62,9 @@ const EXT_TO_FAMILY: Record<string, ParserFamily> = {
   tsv: 'plain',
   json: 'plain',
   log: 'plain',
+  jpg: 'image',
+  jpeg: 'image',
+  png: 'image',
 };
 
 const MIME_TO_FAMILY: Record<string, ParserFamily> = {
@@ -82,13 +86,16 @@ const MIME_TO_FAMILY: Record<string, ParserFamily> = {
   'text/csv': 'plain',
   'text/tab-separated-values': 'plain',
   'application/json': 'plain',
+  'image/jpeg': 'image',
+  'image/jpg': 'image',
+  'image/png': 'image',
 };
 
 type ParserFamily =
   | 'docx' | 'docx-legacy'
   | 'xlsx' | 'xlsx-legacy'
   | 'pptx' | 'pptx-legacy'
-  | 'pdf' | 'rtf' | 'html' | 'plain';
+  | 'pdf' | 'rtf' | 'html' | 'plain' | 'image';
 
 function resolveFamily(mimeType: string, filename: string): ParserFamily | null {
   const byMime = MIME_TO_FAMILY[mimeType.toLowerCase()];
@@ -116,6 +123,16 @@ async function runLocalParser(family: ParserFamily, input: ParseInput): Promise<
       return parseHtml(input);
     case 'plain':
       return parsePlainText(input);
+    case 'image':
+      // Images have no local OCR engine — Reducto is required. When the
+      // dispatcher reaches this case, it means Reducto is disabled or its
+      // upstream call failed; surface a clear, admin-actionable result so
+      // sync-handlers can map it to the `reducto_required` skip reason.
+      return {
+        text: '',
+        warnings: [`${input.filename}: image OCR requires Reducto to be enabled for this workspace`],
+        metadata: { parser: 'image-no-reducto' },
+      };
   }
 }
 
@@ -136,6 +153,27 @@ export async function parseDocument(input: ParseInput): Promise<ParseResult> {
   const reductoCandidate = REDUCTO_PREFERRED_FAMILIES.has(family);
   const reductoEnabled = reductoCandidate ? await isReductoEnabledAndConfigured(input.workspaceId) : false;
   const shouldTryReducto = reductoEnabled && reductoCandidate;
+
+  // Images have no local fallback. Handle them separately so the caller gets
+  // a precise metadata signal: `image-no-reducto` when the workspace hasn't
+  // enabled Reducto, `reducto-failed` when Reducto rejected the upload.
+  if (family === 'image') {
+    if (!reductoEnabled) {
+      return runLocalParser('image', input);
+    }
+    try {
+      const result = await parseWithReducto(input);
+      logger.info('Parsed image via Reducto', { filename: input.filename, chars: result.text.length });
+      return result;
+    } catch (err: any) {
+      logger.warn('Reducto image parse failed', { filename: input.filename, error: err.message });
+      return {
+        text: '',
+        warnings: [`${input.filename}: image OCR via Reducto failed (${err.message})`],
+        metadata: { parser: 'reducto-failed' },
+      };
+    }
+  }
 
   // First attempt: Reducto if enabled and the format is one it handles well.
   if (shouldTryReducto) {

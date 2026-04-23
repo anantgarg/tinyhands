@@ -124,4 +124,28 @@ describe('SKIP_REASON_LABELS', () => {
       expect(label).not.toMatch(/_/);
     }
   });
+
+  it('includes a label for the reducto_required reason (image OCR without Reducto)', () => {
+    expect(SKIP_REASON_LABELS.reducto_required).toBe('Image OCR requires Reducto');
+  });
+});
+
+describe('reducto_required round-trip', () => {
+  beforeEach(() => { vi.clearAllMocks(); });
+
+  it('records and reads back as a recognized skip reason', async () => {
+    await recordSkippedFile({
+      workspaceId: 'W1',
+      kbSourceId: 'S1',
+      filePath: 'drive://img-1',
+      filename: 'screenshot.png',
+      mimeType: 'image/png',
+      sizeBytes: 12_345,
+      reason: 'reducto_required',
+      message: 'image OCR requires Reducto — enable it in Settings → Integrations',
+    });
+    const vals = mockExecute.mock.calls[0][1];
+    expect(vals[7]).toBe('reducto_required');
+    expect(vals[8]).toMatch(/Reducto/);
+  });
 });
