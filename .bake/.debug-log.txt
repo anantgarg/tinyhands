@@ -2691,3 +2691,10 @@
 [11:00:34.589] [AutoSwitch] plan → activating existing session {"itemId":"plan-019","sessionId":"plan-019","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-019","prevSession":"swift-jaguar"}
 [11:00:34.592] [TerminalSwitch] transitioning {"from":"swift-jaguar","to":"plan-019","storeSessionsLen":35}
 [11:00:34.592] [Terminal] getOrCreate → returning cached {"sessionId":"plan-019","cachedCwd":null}
+[11:00:39.342] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-025.md","isReadOnly":false,"parsedStatus":"review","editorContentLen":10018,"isPlanPath":true}
+[11:00:39.342] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-025.md","title":"OCR for images (jpg, png) in Google Drive KB sync"}
+[11:00:39.361] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-025.md","sessionsLen":35,"activeSessionId":"plan-019"}
+[11:00:39.361] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-025.md"}
+[11:00:39.377] [AutoSwitch] plan → activating existing session {"itemId":"plan-025","sessionId":"plan-025","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-025","prevSession":"plan-019"}
+[11:00:39.381] [TerminalSwitch] transitioning {"from":"plan-019","to":"plan-025","storeSessionsLen":35}
+[11:00:39.381] [Terminal] getOrCreate → returning cached {"sessionId":"plan-025","cachedCwd":null}
