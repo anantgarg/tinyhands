@@ -2404,3 +2404,6 @@
 [08:57:03.319] [AutoSwitch] plan → activating existing session {"itemId":"plan-024","sessionId":"plan-024","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-024","prevSession":"plan-012"}
 [08:57:03.320] [TerminalSwitch] transitioning {"from":"plan-012","to":"plan-024","storeSessionsLen":34}
 [08:57:03.320] [Terminal] getOrCreate → returning cached {"sessionId":"plan-024","cachedCwd":null}
+[08:59:09.316] [Poll] External change detected {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-024.md","resolvedPath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-024/.bake/tasks/plans/plan-024.md","newTitle":"Recursive sub-folder support for Google Drive knowledge base sync","currentH1":"New Plan","refExists":true}
+[08:59:09.316] [Poll] Updated h1 DOM {"newTitle":"Recursive sub-folder support for Google Drive knowledge base sync"}
+[08:59:09.335] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-024.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":16257,"isPlanPath":true}
