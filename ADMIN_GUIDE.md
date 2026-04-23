@@ -196,7 +196,7 @@ Click the **Sources** button on the Knowledge Base page to manage data sources a
 | Source | Setup Requirements | Config Options |
 |--------|-------------------|----------------|
 | **GitHub** | GitHub API token (configured via KB API keys) | Repository (owner/name), branch, path filter |
-| **Google Drive** | Google OAuth connection | Folder ID (browsable via folder picker) |
+| **Google Drive** | Google OAuth connection | Folder ID (browsable via folder picker), optional "Include sub-folders" toggle |
 | **Zendesk Help Center** | Zendesk API token (configured via KB API keys) | Subdomain, category ID (optional) |
 | **Website / Docs (Web Crawl)** | Firecrawl API key (configured via KB API keys) | Start URL, max pages, URL pattern filter |
 | **Notion** | Notion OAuth connection | Root page ID |
@@ -206,7 +206,7 @@ Click the **Sources** button on the Knowledge Base page to manage data sources a
 The "Add Source" button opens a four-step wizard:
 
 1. **Choose Source Type** -- Select from GitHub, Google Drive, Zendesk, Web Crawl, or Notion
-2. **Configure** -- Enter the source name and type-specific settings. For Google Drive sources, a folder picker lets you browse and select folders from your connected Google account.
+2. **Configure** -- Enter the source name and type-specific settings. For Google Drive sources, a folder picker lets you browse and select folders from your connected Google account, and a **Include sub-folders** switch (off by default) makes the sync walk every nested folder under the root at any depth. Deep trees mean more Drive API calls per sync.
 3. **Sync Settings** -- Toggle auto-sync (periodic 24-hour syncing) and optionally assign a category
 4. **Review & Create** -- Confirm all settings and create the source
 
@@ -226,7 +226,7 @@ The Sources page also manages API keys for external KB access. Click **New API K
 
 #### Google Drive File Type Coverage
 
-Connecting a Drive folder indexes both Google-native formats (Docs, Sheets, Slides) and uploaded files: Word (`.docx`/`.doc`), Excel (`.xlsx`/`.xls`), PowerPoint (`.pptx`/`.ppt`), PDF, OpenDocument (`.odt`/`.ods`/`.odp`), RTF, HTML, and plain text (txt, md, csv, tsv, json). Unsupported or unparseable files are recorded in a per-source **skip log**; on the KB Sources page each row shows an orange ⚠ icon with a count when there are failures, and clicking it opens a modal listing every skipped file with a plain-English reason, file size, and the last-attempted time. One bad file never fails the whole crawl.
+Connecting a Drive folder indexes both Google-native formats (Docs, Sheets, Slides) and uploaded files: Word (`.docx`/`.doc`), Excel (`.xlsx`/`.xls`), PowerPoint (`.pptx`/`.ppt`), PDF, OpenDocument (`.odt`/`.ods`/`.odp`), RTF, HTML, and plain text (txt, md, csv, tsv, json). By default only the direct children of the configured folder are synced — enable **Include sub-folders** on the source (off by default; settable in the Add Source wizard and the Edit Source dialog) to walk nested folders at any depth. Toggling it off later tombstones previously-synced nested files on the next sync. Unsupported or unparseable files are recorded in a per-source **skip log**; on the KB Sources page each row shows an orange ⚠ icon with a count when there are failures, and clicking it opens a modal listing every skipped file with a plain-English reason, file size, and the last-attempted time. One bad file never fails the whole crawl.
 
 **Per-file size cap**: Downloads are capped at **250 MB** by default (set `KB_MAX_FILE_BYTES` in the deployment environment to override). Files above the cap are torn down before full download and recorded in the skip log with reason `too_large`.
 

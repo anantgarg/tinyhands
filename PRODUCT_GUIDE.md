@@ -115,7 +115,7 @@ The **Sources** sub-page (accessible via the "Sources" button) lets admins manag
 
 ### Google Drive File Type Coverage
 
-When you connect a Google Drive folder, the sync indexes both Google-native formats (Docs, Sheets, Slides) and uploaded files of the types people actually keep in Drive:
+When you connect a Google Drive folder, the sync indexes both Google-native formats (Docs, Sheets, Slides) and uploaded files of the types people actually keep in Drive. By default only the files sitting directly inside the folder are indexed; flip on **Include sub-folders** to walk the entire folder tree at any depth:
 
 - **Word** (`.docx`, `.doc`)
 - **Excel** (`.xlsx`, `.xls`)

@@ -11,7 +11,14 @@ export interface ConnectorDef {
   description: string;
   requiredKeys: string[];
   setupSteps: string[];
-  configFields: Array<{ key: string; label: string; placeholder: string; optional?: boolean }>;
+  configFields: Array<{
+    key: string;
+    label: string;
+    placeholder?: string;
+    optional?: boolean;
+    type?: 'text' | 'checkbox';
+    helpText?: string;
+  }>;
 }
 
 export const CONNECTORS: Record<KBConnectorType, ConnectorDef> = {
@@ -39,6 +46,7 @@ export const CONNECTORS: Record<KBConnectorType, ConnectorDef> = {
     configFields: [
       { key: 'folder_id', label: 'Folder ID', placeholder: 'e.g. 1a2b3c4d5e (from the folder URL)' },
       { key: 'file_types', label: 'File types (comma-separated)', placeholder: 'e.g. doc,pdf,sheet', optional: true },
+      { key: 'include_subfolders', label: 'Include sub-folders', type: 'checkbox', optional: true, helpText: 'Also sync files inside nested folders at any depth.' },
     ],
   },
 

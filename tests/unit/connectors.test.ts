@@ -49,15 +49,18 @@ describe('KB Source Connectors', () => {
       expect(Array.isArray(connector.configFields)).toBe(true);
     });
 
-    it.each(expectedTypes)('connector "%s" configFields should have key, label, placeholder', (type) => {
+    it.each(expectedTypes)('connector "%s" configFields should have key, label, and either a placeholder or a non-text type', (type) => {
       const connector = CONNECTORS[type];
       for (const field of connector.configFields) {
         expect(typeof field.key).toBe('string');
         expect(field.key.length).toBeGreaterThan(0);
         expect(typeof field.label).toBe('string');
         expect(field.label.length).toBeGreaterThan(0);
-        expect(typeof field.placeholder).toBe('string');
-        expect(field.placeholder.length).toBeGreaterThan(0);
+        const fieldType = field.type ?? 'text';
+        if (fieldType === 'text') {
+          expect(typeof field.placeholder).toBe('string');
+          expect((field.placeholder ?? '').length).toBeGreaterThan(0);
+        }
       }
     });
 
