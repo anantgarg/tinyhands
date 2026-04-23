@@ -6,6 +6,7 @@ import { getWorkspace } from '../db';
 import { registerModalHandlers, registerConfirmationActions, registerInlineActions, registerToolAndKBModals } from './commands';
 import { registerEvents } from './events';
 import { registerActions } from './actions';
+import { extractSlackMessageText } from './message-text';
 import { logger } from '../utils/logger';
 
 // Per-event workspace context. Bolt's middleware wraps each handler in a run,
@@ -344,7 +345,8 @@ export async function getThreadHistory(channelId: string, threadTs: string, limi
     const history = result.messages.slice(0, -1).map(msg => {
       const isBot = msg.bot_id || msg.user === botUserId;
       const role = isBot ? 'assistant' : 'user';
-      const text = msg.text || '';
+      const { combined, raw } = extractSlackMessageText(msg);
+      const text = combined || raw;
       return `[${role}]: ${text}`;
     }).join('\n\n');
 

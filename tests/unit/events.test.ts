@@ -582,6 +582,38 @@ describe('Slack Events -- registerEvents', () => {
       );
     });
 
+    it('should include attachment text in enqueued input (HubSpot-shaped payload)', async () => {
+      const agent = makeAgent();
+      mockGetAgentsByChannel.mockResolvedValue([agent]);
+      mockCheckMessageRelevance.mockResolvedValue(true);
+
+      registerEvents(mockApp as any);
+      const event = makeMessageEvent({
+        text: '🚀 Heads up, team! We have a new prospect engaging.',
+        attachments: [
+          {
+            title: 'New Prospect',
+            text: '*Email*: stefan.silion@mannah.it\n*Vertical*: SaaS',
+            fallback: '*Email*: stefan.silion@mannah.it\n*Vertical*: SaaS',
+            actions: [
+              { type: 'button', text: 'View contact in HubSpot', url: 'https://app.hubspot.com/contacts/1/contact/42' },
+            ],
+          },
+        ],
+      });
+      await mockApp._trigger('message', { event, client: {}, context: { teamId: 'W_TEST_123' } });
+
+      expect(mockEnqueueRun).toHaveBeenCalledWith(
+        expect.objectContaining({
+          input: expect.stringContaining('stefan.silion@mannah.it'),
+        }),
+        'high',
+      );
+      const call = mockEnqueueRun.mock.calls[0][0];
+      expect(call.input).toContain('New Prospect');
+      expect(call.input).toContain('https://app.hubspot.com/contacts/1/contact/42');
+    });
+
     it('should skip agent when message is not relevant', async () => {
       const agent = makeAgent();
       mockGetAgentsByChannel.mockResolvedValue([agent]);

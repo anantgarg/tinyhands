@@ -187,7 +187,13 @@ Every configuration change creates a version entry in `agent_versions`.
 ### Full Flow
 
 ```
-1. Slack message received (listener process, src/index.ts)
+1. Slack message received (listener process, src/index.ts).
+   Inbound text passed to agents includes msg.text *plus* content from
+   msg.attachments[*] (pretext/title/text/fallback-if-different/action URLs)
+   and, when msg.text is empty, msg.blocks[*] (rich_text, section, header,
+   context) — so payloads from apps like HubSpot, Datadog, Jira, PagerDuty,
+   GitHub, etc. reach the agent. Combined text is capped at 50 KB with a
+   logged truncation marker. @mention detection still uses msg.text alone.
 2. Relevance check (skip if @mentioned or mentions_only/respond_to_all)
 3. Job enqueued to BullMQ (priority queue via Redis)
 4. Worker dequeues job (src/worker.ts)
