@@ -255,7 +255,7 @@
       "name": "New Plan",
       "planId": "plan-020",
       "planPath": "/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-020.md",
-      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-020",
+      "worktreePath": null,
       "branch": "bake/plan/plan-020",
       "createdAt": "2026-04-22T11:06:49.734Z"
     },
