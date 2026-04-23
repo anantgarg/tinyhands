@@ -1064,7 +1064,11 @@ describe('KB Source Sync Handlers', () => {
       }));
     });
 
-    it('should skip binary files (PDFs, images)', async () => {
+    it('does not index PDFs or images directly when no parser produces text in the test environment', async () => {
+      // JPG/PNG now fall through to parseDocument (Reducto-required path);
+      // PDFs go through pdf-parse. Neither produces usable text against the
+      // stubbed download response, so both end up in the skip log and no KB
+      // entries are created.
       setupProviderCredentials('google', {
         client_id: 'id',
         client_secret: 'secret',
@@ -1079,6 +1083,42 @@ describe('KB Source Sync Handlers', () => {
             files: [
               { id: 'f1', name: 'photo.jpg', mimeType: 'image/jpeg', size: 500 },
               { id: 'f2', name: 'report.pdf', mimeType: 'application/pdf', size: 500 },
+            ],
+            nextPageToken: null,
+          }),
+        },
+      ]);
+
+      const source = makeFakeSource({
+        source_type: 'google_drive',
+        config_json: JSON.stringify({ folder_id: 'folder_123' }),
+      });
+
+      const result = await syncSource(TEST_WORKSPACE_ID, source);
+      expect(result).toBe(0);
+      expect(mockUpsertKBEntryByExternalId).not.toHaveBeenCalled();
+    });
+
+    it('still skips unsupported image formats (gif, webp, svg, tiff, heic) outright', async () => {
+      // These types never reach parseDocument — they're caught by the
+      // narrowed image-format guard with reason `unsupported_format`.
+      setupProviderCredentials('google', {
+        client_id: 'id',
+        client_secret: 'secret',
+        refresh_token: 'refresh',
+      });
+
+      setupHttpsMock([
+        { status: 200, body: JSON.stringify({ access_token: 'access_tok' }) },
+        {
+          status: 200,
+          body: JSON.stringify({
+            files: [
+              { id: 'g1', name: 'animation.gif', mimeType: 'image/gif', size: 500 },
+              { id: 'g2', name: 'logo.svg', mimeType: 'image/svg+xml', size: 500 },
+              { id: 'g3', name: 'photo.heic', mimeType: 'image/heic', size: 500 },
+              { id: 'g4', name: 'scan.tiff', mimeType: 'image/tiff', size: 500 },
+              { id: 'g5', name: 'photo.webp', mimeType: 'image/webp', size: 500 },
             ],
             nextPageToken: null,
           }),

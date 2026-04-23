@@ -272,4 +272,47 @@ describe('parseDocument dispatcher', () => {
     }));
     expect(r.text).toBe('local text');
   });
+
+  // ── Image OCR via Reducto ──
+
+  it('routes PNG images through Reducto when enabled and returns the OCR text', async () => {
+    mockIsReductoEnabled.mockResolvedValue(true);
+    mockParseWithReducto.mockResolvedValue({ text: 'OCR result', warnings: [], metadata: { parser: 'reducto' } });
+    const r = await parseDocument(input({ filename: 'screenshot.png', mimeType: 'image/png' }));
+    expect(r.text).toBe('OCR result');
+    expect(mockParseWithReducto).toHaveBeenCalled();
+  });
+
+  it('routes JPG images through Reducto by extension when MIME is generic', async () => {
+    mockIsReductoEnabled.mockResolvedValue(true);
+    mockParseWithReducto.mockResolvedValue({ text: 'OCR result', warnings: [], metadata: { parser: 'reducto' } });
+    const r = await parseDocument(input({ filename: 'photo.jpg', mimeType: 'application/octet-stream' }));
+    expect(r.text).toBe('OCR result');
+    expect(mockParseWithReducto).toHaveBeenCalled();
+  });
+
+  it('returns image-no-reducto skip metadata when Reducto is disabled for an image', async () => {
+    mockIsReductoEnabled.mockResolvedValue(false);
+    const r = await parseDocument(input({ filename: 'a.png', mimeType: 'image/png' }));
+    expect(r.text).toBe('');
+    expect((r.metadata as any).parser).toBe('image-no-reducto');
+    expect(r.warnings[0]).toMatch(/image OCR requires Reducto/);
+    expect(mockParseWithReducto).not.toHaveBeenCalled();
+  });
+
+  it('returns reducto-failed metadata when image OCR via Reducto throws', async () => {
+    mockIsReductoEnabled.mockResolvedValue(true);
+    mockParseWithReducto.mockRejectedValue(new Error('reducto boom'));
+    const r = await parseDocument(input({ filename: 'a.png', mimeType: 'image/png' }));
+    expect(r.text).toBe('');
+    expect((r.metadata as any).parser).toBe('reducto-failed');
+    expect(r.warnings[0]).toMatch(/image OCR via Reducto failed/);
+  });
+
+  it('treats image/jpeg the same as JPG/PNG', async () => {
+    mockIsReductoEnabled.mockResolvedValue(true);
+    mockParseWithReducto.mockResolvedValue({ text: 'OCR', warnings: [], metadata: { parser: 'reducto' } });
+    const r = await parseDocument(input({ filename: 'a.jpeg', mimeType: 'image/jpeg' }));
+    expect(r.text).toBe('OCR');
+  });
 });

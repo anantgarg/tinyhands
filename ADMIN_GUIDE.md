@@ -226,7 +226,7 @@ The Sources page also manages API keys for external KB access. Click **New API K
 
 #### Google Drive File Type Coverage
 
-Connecting a Drive folder indexes both Google-native formats (Docs, Sheets, Slides) and uploaded files: Word (`.docx`/`.doc`), Excel (`.xlsx`/`.xls`), PowerPoint (`.pptx`/`.ppt`), PDF, OpenDocument (`.odt`/`.ods`/`.odp`), RTF, HTML, and plain text (txt, md, csv, tsv, json). By default only the direct children of the configured folder are synced — enable **Include sub-folders** on the source (off by default; settable in the Add Source wizard and the Edit Source dialog) to walk nested folders at any depth. Toggling it off later tombstones previously-synced nested files on the next sync. Unsupported or unparseable files are recorded in a per-source **skip log**; on the KB Sources page each row shows an orange ⚠ icon with a count when there are failures, and clicking it opens a modal listing every skipped file with a plain-English reason, file size, and the last-attempted time. One bad file never fails the whole crawl.
+Connecting a Drive folder indexes both Google-native formats (Docs, Sheets, Slides) and uploaded files: Word (`.docx`/`.doc`), Excel (`.xlsx`/`.xls`), PowerPoint (`.pptx`/`.ppt`), PDF, OpenDocument (`.odt`/`.ods`/`.odp`), RTF, HTML, plain text (txt, md, csv, tsv, json), and JPG/PNG images. JPG and PNG images are OCR'd via Reducto — without Reducto enabled, image files are listed in the skip log with the reason "Image OCR requires Reducto" instead of being silently dropped. Other image formats (GIF, WebP, SVG, TIFF, HEIC), video, and audio are not supported and are skipped with the standard "File format not supported" reason. By default only the direct children of the configured folder are synced — enable **Include sub-folders** on the source (off by default; settable in the Add Source wizard and the Edit Source dialog) to walk nested folders at any depth. Toggling it off later tombstones previously-synced nested files on the next sync. Unsupported or unparseable files are recorded in a per-source **skip log**; on the KB Sources page each row shows an orange ⚠ icon with a count when there are failures, and clicking it opens a modal listing every skipped file with a plain-English reason, file size, and the last-attempted time. One bad file never fails the whole crawl.
 
 **Per-file size cap**: Downloads are capped at **250 MB** by default (set `KB_MAX_FILE_BYTES` in the deployment environment to override). Files above the cap are torn down before full download and recorded in the skip log with reason `too_large`.
 
@@ -234,7 +234,7 @@ Connecting a Drive folder indexes both Google-native formats (Docs, Sheets, Slid
 
 #### Reducto Setup (Optional)
 
-Reducto is an optional per-workspace upgrade for higher-fidelity PDF and scanned-document extraction. It is opt-in — no bytes are sent to the vendor unless you have both pasted a key and flipped the toggle on.
+Reducto is an optional per-workspace upgrade for higher-fidelity PDF and scanned-document extraction, and the only OCR engine available for JPG/PNG image files in Google Drive sources. It is opt-in — no bytes are sent to the vendor unless you have both pasted a key and flipped the toggle on. **If you want image OCR, you must enable Reducto.**
 
 1. **Get a Reducto API key** at [reducto.ai](https://reducto.ai) (create an account, generate a key in your Reducto dashboard).
 2. In TinyHands, open **Workspace Settings**. You'll see a **Document Parsing** card below the Claude API key card.

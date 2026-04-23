@@ -27,7 +27,7 @@ export const CONNECTORS: Record<KBConnectorType, ConnectorDef> = {
     label: 'Google Drive',
     icon: ':file_folder:',
     provider: 'google',
-    description: 'Import docs, sheets, PDFs, and files from Google Drive folders. PDFs and images are automatically OCR-processed.',
+    description: 'Import docs, sheets, PDFs, and files from Google Drive folders. PDFs and JPG/PNG images are automatically OCR-processed when Reducto is enabled.',
     requiredKeys: ['client_id', 'client_secret', 'refresh_token'],
     setupSteps: [
       '1. Go to https://console.cloud.google.com/apis/credentials',

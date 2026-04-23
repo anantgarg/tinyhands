@@ -125,8 +125,11 @@ When you connect a Google Drive folder, the sync indexes both Google-native form
 - **Rich Text** (`.rtf`)
 - **HTML** (`.html`, `.htm`)
 - **Plain text** (`.txt`, `.md`, `.csv`, `.tsv`, `.json`, `.log`)
+- **Images** (`.jpg`, `.jpeg`, `.png`) — OCR'd via Reducto. Other image formats (GIF, WebP, SVG, TIFF, HEIC), video, and audio are not supported and are recorded in the skip log.
 
-Unsupported or unparseable files (images, video, audio, corrupted uploads, files over 250 MB) are skipped — not silently, but recorded in a per-source skip log. On the KB Sources page each affected row shows a small orange **failures icon** with the count; clicking it opens a modal listing every skipped file with a plain-English reason ("File too large to index", "Could not read the file contents", etc.), size, and when it was last attempted. Files disappear from the list as soon as they ingest successfully on a later sync. One bad file never fails the whole crawl — other files index normally.
+If Reducto is not enabled for the workspace, JPG/PNG files appear in the skip log with reason "Image OCR requires Reducto" so admins know the files were seen but couldn't be processed.
+
+Unsupported or unparseable files (other image types, video, audio, corrupted uploads, files over 250 MB) are skipped — not silently, but recorded in a per-source skip log. On the KB Sources page each affected row shows a small orange **failures icon** with the count; clicking it opens a modal listing every skipped file with a plain-English reason ("File too large to index", "Could not read the file contents", etc.), size, and when it was last attempted. Files disappear from the list as soon as they ingest successfully on a later sync. One bad file never fails the whole crawl — other files index normally.
 
 ### Re-Parsing After Settings Changes
 
@@ -139,8 +142,9 @@ By default, every supported file type is parsed locally in the sync process. If 
 Once enabled:
 - Office files (Word, Excel, PowerPoint) and PDFs are routed through Reducto first; if Reducto fails or times out, the sync automatically falls back to the local parser and records a warning in the source's skip log.
 - Any file whose local parser fails or returns empty text is retried through Reducto.
+- JPG and PNG images are OCR'd through Reducto (no local fallback — without Reducto, images cannot be indexed).
 - Reducto is opt-in per workspace — no bytes are sent to the vendor unless both the key is saved and the toggle is on.
-- Files over 100 MB always use the local parser (Reducto's direct-upload cap).
+- Files over 100 MB always use the local parser (Reducto's direct-upload cap). Images over 100 MB are skipped.
 
 ### Searching the Knowledge Base
 

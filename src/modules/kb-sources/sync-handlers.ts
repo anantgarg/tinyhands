@@ -735,6 +735,9 @@ const BINARY_PARSER_MIMES = new Set<string>([
   'application/rtf',
   'text/rtf',
   'text/html',
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
 ]);
 
 // File extensions that are safe to treat as plain text even if Drive reports
@@ -1003,11 +1006,17 @@ async function extractDriveFileText(opts: {
     return { text: expRes.data, mimeForEntry: exp.exportMime };
   }
 
-  // 2. Skip images, video, audio, and Drive shortcuts outright — these
-  // aren't KB material. We still surface a warning so the admin knows
-  // the file wasn't indexed.
-  if (mime.startsWith('image/') || mime.startsWith('video/') || mime.startsWith('audio/')) {
-    await recordSkip('unsupported_format', `${mime} is not indexed (image/audio/video)`);
+  // 2. Skip video, audio, and unsupported image formats outright — these
+  // aren't KB material. JPG/PNG fall through to the binary-parse path so
+  // they can be OCR'd via Reducto. We still surface a warning so the admin
+  // knows the file wasn't indexed.
+  const isOcrCandidate = mime === 'image/jpeg' || mime === 'image/jpg' || mime === 'image/png';
+  if (mime.startsWith('image/') && !isOcrCandidate) {
+    await recordSkip('unsupported_format', `${mime} is not indexed (only jpg/png images are OCR'd)`);
+    return null;
+  }
+  if (mime.startsWith('video/') || mime.startsWith('audio/')) {
+    await recordSkip('unsupported_format', `${mime} is not indexed (audio/video)`);
     return null;
   }
   if (mime === 'application/vnd.google-apps.shortcut' || mime === 'application/vnd.google-apps.folder') {
@@ -1058,14 +1067,23 @@ async function extractDriveFileText(opts: {
   // success. Record it so admins can see the file needs attention (often
   // a scanned PDF that would benefit from Reducto).
   if (!parsed.text.trim()) {
-    const looksLikeParserFailure = (parsed.metadata as any)?.parser === 'failed';
-    await recordSkip(
-      looksLikeParserFailure ? 'parser_failed' : 'empty_extraction',
-      looksLikeParserFailure
-        ? `could not read the file contents (${parsed.warnings[0] || 'parser error'})`
-        : 'no readable text was found — consider enabling Reducto for scanned documents',
-      dlRes.bytesRead ?? declaredSize,
-    );
+    const parserMeta = (parsed.metadata as any)?.parser;
+    let reason: SkipReason;
+    let message: string;
+    if (parserMeta === 'image-no-reducto') {
+      reason = 'reducto_required';
+      message = 'image OCR requires Reducto — enable it in Settings → Integrations';
+    } else if (parserMeta === 'reducto-failed') {
+      reason = 'reducto_failed';
+      message = parsed.warnings[0] || 'Reducto image OCR failed';
+    } else if (parserMeta === 'failed') {
+      reason = 'parser_failed';
+      message = `could not read the file contents (${parsed.warnings[0] || 'parser error'})`;
+    } else {
+      reason = 'empty_extraction';
+      message = 'no readable text was found — consider enabling Reducto for scanned documents';
+    }
+    await recordSkip(reason, message, dlRes.bytesRead ?? declaredSize);
     return null;
   }
 

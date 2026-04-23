@@ -18,6 +18,7 @@ export type SkipReason =
   | 'unsupported_format'
   | 'parser_failed'
   | 'reducto_failed'
+  | 'reducto_required'
   | 'corrupted'
   | 'download_failed'
   | 'empty_extraction';
@@ -117,6 +118,7 @@ export const SKIP_REASON_LABELS: Record<SkipReason, string> = {
   unsupported_format: 'File format not supported',
   parser_failed: 'Could not read the file contents',
   reducto_failed: 'Advanced parsing failed',
+  reducto_required: 'Image OCR requires Reducto',
   corrupted: 'File appears to be corrupted',
   download_failed: 'Could not download from source',
   empty_extraction: 'No readable text was found in the file',

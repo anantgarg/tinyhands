@@ -1011,6 +1011,7 @@ The Google Drive connector indexes both Google-native and uploaded file types fr
 | Rich Text | `.rtf` | In-house RTF text extractor |
 | HTML | `.html`, `.htm` | `html-to-text` |
 | Plain text | `.txt`, `.md`, `.csv`, `.tsv`, `.json`, `.log` | Pass-through |
+| Images | `.jpg`, `.jpeg`, `.png` | Reducto OCR (required — no local fallback) |
 
 Unsupported or unparseable files are recorded in the per-source **skip log** — a structured `kb_source_skip_log` table keyed by `(kb_source_id, file_path)` with upsert-by-path so repeated skips don't bloat the log. Rows are removed as soon as the file later ingests successfully, so the log reflects current state rather than history. On the KB Sources page each source shows a small failures icon with a count when there are skips; clicking it opens a modal listing every skipped file with a plain-English reason (e.g. "File too large to index", "Could not read the file contents"), file size, and the last-attempted time. One bad file never fails the whole crawl.
 
@@ -1028,6 +1029,7 @@ Reducto is an optional per-workspace upgrade that materially outperforms local p
 
 - **Storage:** API key is AES-256-GCM encrypted in `workspace_settings` (same pattern as the Claude key).
 - **Default routing:** Office documents (docx, xlsx, pptx) and PDFs go through Reducto first when enabled; any file whose local parser throws or returns empty text also falls back to Reducto. Plain text, Markdown, CSV, and HTML always use local parsers (never wasted on Reducto credits).
+- **Image OCR:** JPG (`.jpg`, `.jpeg`, `image/jpeg`) and PNG (`.png`, `image/png`) files in Google Drive sources are OCR'd via Reducto. There is no local OCR fallback — when Reducto is disabled or its key is missing, image files are recorded in the skip log with reason `reducto_required` ("Image OCR requires Reducto") so admins see actionable feedback rather than a silent drop. When Reducto is enabled but its API call fails, the skip reason is `reducto_failed`. Other image formats (GIF, WebP, SVG, TIFF, HEIC) are still skipped with reason `unsupported_format`.
 - **API flow:** Two-step upload → parse (`POST /upload` for the raw bytes → `POST /parse` with the returned `file_id`). Sync call has a 60s timeout; on timeout we retry via `POST /parse_async` and poll `GET /job/{id}` for up to 2 minutes before falling back to the local parser.
 - **Fallback safety:** On Reducto errors, timeouts, or async-job failures, the sync falls back to the local parser and records a per-file warning.
 - **Direct-upload cap:** Files over 100 MB skip Reducto (Reducto's `/upload` endpoint cap) and use the local parser instead — the presigned large-file flow is out of scope for this release.
