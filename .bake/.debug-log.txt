@@ -2460,3 +2460,10 @@
 [09:46:53.147] [AutoSwitch] plan → activating existing session {"itemId":"plan-024","sessionId":"plan-024","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-024","prevSession":"plan-022"}
 [09:46:53.152] [TerminalSwitch] transitioning {"from":"plan-022","to":"plan-024","storeSessionsLen":34}
 [09:46:53.152] [Terminal] getOrCreate → returning cached {"sessionId":"plan-024","cachedCwd":null}
+[09:48:40.449] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md","isReadOnly":false,"parsedStatus":"review","editorContentLen":13141,"isPlanPath":true}
+[09:48:40.449] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md","title":"Include Slack attachments and Block Kit content in the text passed to agents"}
+[09:48:40.463] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md","sessionsLen":34,"activeSessionId":"plan-024"}
+[09:48:40.463] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md"}
+[09:48:40.475] [AutoSwitch] plan → activating existing session {"itemId":"plan-022","sessionId":"plan-022","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-022","prevSession":"plan-024"}
+[09:48:40.476] [TerminalSwitch] transitioning {"from":"plan-024","to":"plan-022","storeSessionsLen":34}
+[09:48:40.476] [Terminal] getOrCreate → returning cached {"sessionId":"plan-022","cachedCwd":null}
