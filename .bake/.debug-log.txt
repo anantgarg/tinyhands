@@ -2474,3 +2474,8 @@
 [09:49:00.449] [AutoSwitch] plan → activating existing session {"itemId":"plan-024","sessionId":"plan-024","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-024","prevSession":"plan-022"}
 [09:49:00.454] [TerminalSwitch] transitioning {"from":"plan-022","to":"plan-024","storeSessionsLen":34}
 [09:49:00.454] [Terminal] getOrCreate → returning cached {"sessionId":"plan-024","cachedCwd":null}
+[09:55:15.992] [TerminalSwitch] transitioning {"from":"plan-024","to":"main","storeSessionsLen":34}
+[09:55:15.992] [Terminal] getOrCreate → creating new {"sessionId":"main","sessionFound":true,"sessionType":"vibe","worktreePath":null,"sessionsLen":34,"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[09:55:16.010] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"__main__","sessionsLen":34,"activeSessionId":"main"}
+[09:55:16.010] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":false,"activeFilePath":"__main__"}
+[09:55:16.312] [Terminal] resolved cwd {"sessionId":"main","cwd":"/Users/anantgarg/Local/tinyhands","cwdSource":"project-fallback","worktreePath":null,"projectPath":"/Users/anantgarg/Local/tinyhands"}
