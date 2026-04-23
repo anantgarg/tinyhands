@@ -2677,3 +2677,9 @@
 [10:58:47.216] [AutoSwitch] plan → activating existing session {"itemId":"plan-025","sessionId":"plan-025","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-025","prevSession":"plan-019"}
 [10:58:47.218] [TerminalSwitch] transitioning {"from":"plan-019","to":"plan-025","storeSessionsLen":35}
 [10:58:47.218] [Terminal] getOrCreate → returning cached {"sessionId":"plan-025","cachedCwd":null}
+[11:00:16.471] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-005.md","isReadOnly":false,"parsedStatus":"active","editorContentLen":87,"isPlanPath":false}
+[11:00:16.472] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-005.md","title":"Swift Jaguar"}
+[11:00:16.481] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-005.md","sessionsLen":35,"activeSessionId":"plan-025"}
+[11:00:16.481] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":true,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-005.md"}
+[11:00:16.494] [TerminalSwitch] transitioning {"from":"plan-025","to":"swift-jaguar","storeSessionsLen":35}
+[11:00:16.495] [Terminal] getOrCreate → returning cached {"sessionId":"swift-jaguar","cachedCwd":null}
