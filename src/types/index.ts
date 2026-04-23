@@ -259,6 +259,7 @@ export type KBConnectorType = 'google_drive' | 'zendesk_help_center' | 'website'
 
 export interface KBSource {
   id: string;
+  workspace_id: string;
   name: string;
   source_type: KBConnectorType;
   config_json: string;

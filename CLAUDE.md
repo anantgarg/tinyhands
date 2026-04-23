@@ -36,7 +36,7 @@ Slack (Socket Mode) → Listener (src/index.ts)
 | Listener | `src/index.ts` | Slack events, commands, webhooks, Express server |
 | Worker (x3) | `src/worker.ts` | Dequeue jobs, run agents in Docker containers |
 | Scheduler | `src/scheduler.ts` | Evaluate cron triggers every 60s |
-| Sync | `src/sync.ts` | KB source sync, alerts, daily digest, auto-update |
+| Sync | `src/sync.ts` | KB source auto-sync (5 min), agent source sync (15 min), alerts (1 min), daily digest, connection health (30 min), auto-update — all cross-workspace |
 
 ## Project Structure
 

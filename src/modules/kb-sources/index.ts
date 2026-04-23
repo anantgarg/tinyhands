@@ -117,6 +117,7 @@ export async function createSource(workspaceId: string, params: {
 
   const source: KBSource = {
     id,
+    workspace_id: workspaceId,
     name: params.name,
     source_type: params.sourceType,
     config_json: JSON.stringify(restConfig),
@@ -264,4 +265,29 @@ export async function getSourcesDueForSync(): Promise<KBSource[]> {
       AND (last_sync_at IS NULL OR last_sync_at < NOW() - (sync_interval_hours || ' hours')::INTERVAL)
     ORDER BY last_sync_at ASC NULLS FIRST
   `);
+}
+
+// Rows stuck in 'syncing' for longer than this window are treated as orphaned
+// (the process that started them almost certainly died) and reset to 'error'
+// so the next auto-sync tick picks them up.
+const STUCK_SYNC_THRESHOLD_MINUTES = 30;
+
+export async function resetStuckSyncingSources(): Promise<number> {
+  const rows = await query<{ id: string; workspace_id: string; name: string }>(
+    `UPDATE kb_sources
+        SET status = 'error',
+            error_message = 'Sync was interrupted (process restart). Will retry on next auto-sync.',
+            updated_at = NOW()
+      WHERE status = 'syncing'
+        AND updated_at < NOW() - ($1 || ' minutes')::INTERVAL
+      RETURNING id, workspace_id, name`,
+    [String(STUCK_SYNC_THRESHOLD_MINUTES)],
+  );
+  if (rows.length > 0) {
+    logger.warn('KB sources reset from stuck syncing state', {
+      count: rows.length,
+      sources: rows.map(r => ({ id: r.id, workspaceId: r.workspace_id, name: r.name })),
+    });
+  }
+  return rows.length;
 }

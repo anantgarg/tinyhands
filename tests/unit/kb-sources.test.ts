@@ -51,6 +51,7 @@ import {
   startSync,
   flushAndResync,
   getSourcesDueForSync,
+  resetStuckSyncingSources,
 } from '../../src/modules/kb-sources/index';
 
 beforeEach(() => {
@@ -529,5 +530,37 @@ describe('getSourcesDueForSync', () => {
     mockQuery.mockResolvedValue([]);
     const result = await getSourcesDueForSync();
     expect(result).toEqual([]);
+  });
+
+  it('should filter to active or error status only (not syncing)', async () => {
+    mockQuery.mockResolvedValue([]);
+    await getSourcesDueForSync();
+    const sql = mockQuery.mock.calls[0][0];
+    expect(sql).toContain("status IN ('active', 'error')");
+  });
+});
+
+describe('resetStuckSyncingSources', () => {
+  it('should reset stuck syncing rows older than the threshold', async () => {
+    const stuck = [
+      { id: 's1', workspace_id: 'W1', name: 'Drive' },
+      { id: 's2', workspace_id: 'W2', name: 'Zendesk' },
+    ];
+    mockQuery.mockResolvedValue(stuck);
+
+    const count = await resetStuckSyncingSources();
+
+    expect(count).toBe(2);
+    const [sql, params] = mockQuery.mock.calls[0];
+    expect(sql).toContain("status = 'syncing'");
+    expect(sql).toMatch(/status\s*=\s*'error'/);
+    expect(sql).toContain('RETURNING id, workspace_id, name');
+    expect(params).toEqual(['30']);
+  });
+
+  it('should return 0 when nothing was stuck', async () => {
+    mockQuery.mockResolvedValue([]);
+    const count = await resetStuckSyncingSources();
+    expect(count).toBe(0);
   });
 });
