@@ -19,6 +19,7 @@ import {
   useRecentActivity,
 } from '@/api/dashboard';
 import { renderEmoji } from '@/lib/emoji';
+import { friendlyAgentStatus, friendlyModel, friendlyRunStatus } from '@/lib/labels';
 import { useAuthStore } from '@/store/auth';
 
 // Safe number/date formatting helpers
@@ -207,8 +208,8 @@ export function Dashboard() {
                     {(fleet.data ?? []).map((a) => (
                       <TableRow key={a.id}>
                         <TableCell><div className="flex items-center gap-2"><span>{renderEmoji(a.avatar || '🤖')}</span><span className="font-medium">{a.name || 'Unknown'}</span></div></TableCell>
-                        <TableCell><Badge variant={a.status === 'active' ? 'success' : 'secondary'}>{a.status || 'unknown'}</Badge></TableCell>
-                        <TableCell className="text-warm-text-secondary">{a.model || '\u2014'}</TableCell>
+                        <TableCell><Badge variant={a.status === 'active' ? 'success' : 'secondary'}>{friendlyAgentStatus(a.status)}</Badge></TableCell>
+                        <TableCell className="text-warm-text-secondary">{a.model ? friendlyModel(a.model) : '\u2014'}</TableCell>
                         <TableCell>{a.toolsCount ?? 0}</TableCell>
                       </TableRow>
                     ))}
@@ -245,14 +246,14 @@ export function Dashboard() {
                         {r.status === 'failed' ? (
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <Badge variant="danger" className="cursor-help">{r.status}</Badge>
+                              <Badge variant="danger" className="cursor-help">{friendlyRunStatus(r.status)}</Badge>
                             </TooltipTrigger>
                             <TooltipContent side="top" className="max-w-xs">
                               <p className="text-xs">{r.error || r.errorMessage || 'No error details available'}</p>
                             </TooltipContent>
                           </Tooltip>
                         ) : (
-                          <Badge variant={r.status === 'completed' ? 'success' : 'secondary'}>{r.status ?? 'unknown'}</Badge>
+                          <Badge variant={r.status === 'completed' ? 'success' : 'secondary'}>{friendlyRunStatus(r.status)}</Badge>
                         )}
                       </TableCell>
                       <TableCell>{fmtMs(r.durationMs)}</TableCell>
