@@ -30,6 +30,10 @@
 - [ ] Open the Slack home tab — verify recent runs show friendly agent name + model + status, no UUIDs (from plan-012)
 - [ ] Open template details in Slack — verify friendly model label (from plan-012)
 - [ ] Sync a KB source — verify friendly status label (from plan-012)
+- [ ] Tag + deploy a patch release with the attachments/Block Kit ingestion fix (`gh release create` once version is bumped) and smoke-test with a synthetic HubSpot-shaped payload: verify `run_history.input` contains the attachment email and the agent replies in-thread (from plan-022)
+- [ ] Post-deploy regression: `@mention` in a plain-text channel message still routes, DMs still work, existing working channels (`C02VCPSB4TC`, `C0746R57W86`) produce equivalent output — no degradation from the added attachment text (from plan-022)
+- [ ] Post-deploy spot-check: one non-HubSpot agent per active workspace, watch next few runs for any behavior change (from plan-022)
+- [ ] Generic (non-workspace-specific) follow-up reply to Vijit once the release is live (from plan-022)
 
 ## Completed
 
