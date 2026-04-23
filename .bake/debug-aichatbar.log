@@ -3,3 +3,5 @@
 2026-04-23T11:50:01.935Z [AiChatBar] FINAL PROMPT: "In file \".bake/tasks/plans/plan-026.md\", make the following changes:\nshould we do wiki based search for kb https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f or should we do traditional rag for kb? which one would give better results?"
 2026-04-23T11:57:35.450Z [AiChatBar] handleSend - savedPaths: [] savingCount: 0
 2026-04-23T11:57:35.450Z [AiChatBar] FINAL PROMPT: "In file \".bake/tasks/plans/plan-026.md\", make the following changes:\nwill it also use metadata like putting the google drive folder structure inside it (if its a google drive sync) as that might help too."
+2026-04-23T12:34:26.562Z [AiChatBar] handleSend - savedPaths: [] savingCount: 0
+2026-04-23T12:34:26.562Z [AiChatBar] FINAL PROMPT: "In file \".bake/tasks/plans/plan-026.md\", make the following changes:\ndo we need any additional api keys? if yes, add them to the workspace settings. are we using embedding model of openai? isn't that best in class?"
