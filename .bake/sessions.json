@@ -307,7 +307,8 @@
       "vibeId": "vibe-005",
       "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/swift-jaguar",
       "branch": "bake/vibe/swift-jaguar",
-      "createdAt": "2026-04-22T13:11:45.693Z"
+      "createdAt": "2026-04-22T13:11:45.693Z",
+      "claudeSessionId": "a6865498-3897-49bb-9329-ced4420cde0f"
     },
     {
       "id": "plan-024",
