@@ -2479,3 +2479,11 @@
 [09:55:16.010] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"__main__","sessionsLen":34,"activeSessionId":"main"}
 [09:55:16.010] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":false,"activeFilePath":"__main__"}
 [09:55:16.312] [Terminal] resolved cwd {"sessionId":"main","cwd":"/Users/anantgarg/Local/tinyhands","cwdSource":"project-fallback","worktreePath":null,"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[09:56:50.148] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-024.md","isReadOnly":false,"parsedStatus":"review","editorContentLen":17796,"isPlanPath":true}
+[09:56:50.149] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-024.md","title":"Recursive sub-folder support for Google Drive knowledge base sync"}
+[09:56:50.188] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-024.md","sessionsLen":34,"activeSessionId":"main"}
+[09:56:50.188] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-024.md"}
+[09:56:50.191] [Editor] useLayoutEffect syncing h1 {"planTitle":"Recursive sub-folder support for Google Drive knowledge base sync","currentTextContent":""}
+[09:56:50.222] [AutoSwitch] plan → activating existing session {"itemId":"plan-024","sessionId":"plan-024","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-024","prevSession":"main"}
+[09:56:50.226] [TerminalSwitch] transitioning {"from":"main","to":"plan-024","storeSessionsLen":34}
+[09:56:50.226] [Terminal] getOrCreate → returning cached {"sessionId":"plan-024","cachedCwd":null}
