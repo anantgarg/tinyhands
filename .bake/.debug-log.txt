@@ -1136,3 +1136,10 @@ tiveFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-018.md","
 [16:07:29.713] [AutoSwitch] bailed — activeFilePath changed during await {"capturedPath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-019.md","currentActiveFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-028.md"}
 [16:07:29.717] [AutoSwitch] plan → already on correct session, no-op {"itemId":"plan-028","activeSessionId":"plan-028"}
 [16:07:29.992] [Terminal] resolved cwd {"sessionId":"plan-028","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-028","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-028","projectPath":"/Users/anantgarg/Local/tinyhands"}
+[16:12:28.314] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-027.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":12974,"isPlanPath":true}
+[16:12:28.314] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-027.md","title":"Fix silent save failures, run-history model label, and brittle agent-name uniqueness"}
+[16:12:28.326] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-027.md","sessionsLen":38,"activeSessionId":"plan-028"}
+[16:12:28.326] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-027.md"}
+[16:12:28.339] [AutoSwitch] plan → activating existing session {"itemId":"plan-027","sessionId":"plan-027","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-027","prevSession":"plan-028"}
+[16:12:28.340] [TerminalSwitch] transitioning {"from":"plan-028","to":"plan-027","storeSessionsLen":38}
+[16:12:28.340] [Terminal] getOrCreate → returning cached {"sessionId":"plan-027","cachedCwd":null}
