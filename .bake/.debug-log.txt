@@ -1173,3 +1173,6 @@ tiveFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-018.md","
 [16:13:00.102] [Terminal] getOrCreate → returning cached {"sessionId":"plan-028","cachedCwd":null}
 [16:13:40.100] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-028.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":15476,"isPlanPath":true}
 [16:13:40.101] [Editor] editorContent changed externally — reloading body {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-028.md","title":"Database feature — workspace-isolated tables, imports, and agent tool"}
+[16:13:51.098] [Poll] External change detected {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-028.md","resolvedPath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-028/.bake/tasks/plans/plan-028.md","newTitle":"Database feature — workspace-isolated tables, imports, and agent tool","currentH1":"New Plan","refExists":true}
+[16:13:51.099] [Poll] Updated h1 DOM {"newTitle":"Database feature — workspace-isolated tables, imports, and agent tool"}
+[16:13:51.112] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-028.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":15704,"isPlanPath":true}
