@@ -329,7 +329,7 @@
       "name": "New Plan",
       "planId": "plan-025",
       "planPath": "/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-025.md",
-      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-025",
+      "worktreePath": null,
       "branch": "bake/plan/plan-025",
       "createdAt": "2026-04-23T10:05:01.495Z",
       "claudeSessionId": "5f9c8484-4398-4da3-b98d-cc4f5b0979fd"
