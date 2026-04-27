@@ -38,6 +38,8 @@
 - [ ] Edge case: a 25 MB+ camera-original JPG should be skipped with reason `too_large`, never attempted via Reducto (from plan-025)
 - [ ] Edge case: a corrupt or zero-byte PNG should produce a `reducto_failed` (or `parser_failed`) skip without crashing the sync run (from plan-025)
 - [ ] Edge case: confirm `.gif`, `.webp`, `.svg`, `.tiff`, and `.heic` files each still land in the skip log with reason `unsupported_format` (not OCR'd) (from plan-025)
+- [ ] Restore the dashboard CSV import affordance in the Database page's import dialog — backend already supports `kind: 'csv'` and is unit-tested (from plan-028)
+- [ ] Restore the dashboard XLSX import affordance in the Database page's import dialog — backend already supports `kind: 'xlsx'` and is unit-tested (from plan-028)
 
 ## Completed
 
