@@ -1238,3 +1238,8 @@ tiveFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-018.md","
 [21:42:03.611] [TerminalSwitch] transitioning {"from":"main","to":"plan-021","storeSessionsLen":38}
 [21:42:03.611] [Terminal] getOrCreate → creating new {"sessionId":"plan-021","sessionFound":true,"sessionType":"plan","sessionPlanId":"plan-021","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-021","sessionsLen":38,"projectPath":"/Users/anantgarg/Local/tinyhands"}
 [21:42:03.962] [Terminal] resolved cwd {"sessionId":"plan-021","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-021","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-021","projectPath":"/Users/anantgarg/Local/tinyhands"}
+[21:42:07.804] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"__main__","sessionsLen":38,"activeSessionId":"plan-021"}
+[21:42:07.804] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":false,"activeFilePath":"__main__"}
+[21:42:07.804] [AutoSwitch] non-plan/vibe → forcing main {"prevSession":"plan-021"}
+[21:42:07.809] [TerminalSwitch] transitioning {"from":"plan-021","to":"main","storeSessionsLen":38}
+[21:42:07.809] [Terminal] getOrCreate → returning cached {"sessionId":"main","cachedCwd":null}
