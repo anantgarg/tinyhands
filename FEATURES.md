@@ -476,8 +476,9 @@ Every integration exports a `manifest` from `src/modules/tools/integrations/<nam
 | Notion | `notion` | read-only | OAuth |
 | GitHub | `github` | read-only | OAuth |
 | Documents | `docs` | read + write | (auto-configured) |
+| Database | `database` | read + write | (auto-configured) |
 
-Most integrations support all three credential modes (team, delegated, runtime). Integrations can restrict this via `supportedCredentialModes` in their manifest. **Auto-configured tools** (Documents, Knowledge Base) have `supportedCredentialModes: []` — they don't need external credentials and the credential dropdown is hidden in the dashboard.
+Most integrations support all three credential modes (team, delegated, runtime). Integrations can restrict this via `supportedCredentialModes` in their manifest. **Auto-configured tools** (Documents, Knowledge Base, Database) have `supportedCredentialModes: []` — they don't need external credentials and the credential dropdown is hidden in the dashboard.
 
 **Google OAuth note:** All four Google integrations share a single OAuth config and callback (`/auth/callback/google`). One connection covers Drive, Sheets, Docs, and Gmail. Which services an agent uses depends on which tools are enabled. Legacy "Google Workspace" integration exists for backward compat but registers no tools (cleaned up by migration 019).
 
@@ -968,6 +969,72 @@ Every document must be associated with an agent (`agent_id` is required). Permis
 | Delete (archive) | Yes | Yes | Yes | No | No |
 | Permanent delete | Yes | Yes | No | No | No |
 | Toggle agent_editable | Yes | Yes | Yes | No | No |
+
+---
+
+## Database (Workspace Tables)
+
+Workspace-isolated structured tables. Each workspace is given its own Postgres schema (`ws_<workspace_id>`); user data lives in real Postgres tables inside that schema so isolation is enforced at the database layer, not in application code.
+
+### Admin-managed schema (dashboard only)
+
+- Admins create tables and columns at `/database`. Supported column types: **Text**, **Number (whole)** / **Number (large whole)** / **Number (decimal)**, **True / False**, **Date & time**, **Date**, **JSON**.
+- Every table automatically has `id` (bigserial primary key), `created_at`, `updated_at`.
+- Admins can add, rename, or drop columns. Dropping requires typed confirmation.
+- Table and column names are validated against `^[a-z_][a-z0-9_]{0,62}$`; `id`, `created_at`, `updated_at` are reserved.
+
+### Imports & auto-sync
+
+- **CSV** — upload directly; types inferred from a 100-row sample unless explicitly set.
+- **Excel (XLSX)** — upload; pick a sheet name; re-uses the existing KB xlsx parser.
+- **Google Sheet** — paste a URL or ID; picks the first tab by default; toggle sync on.
+- **Auto-sync cadence**: 5 minutes — same cadence as KB source auto-sync. Runs from the `sync` process, reads the sheet's header row, diffs against the Postgres columns, and truncates + re-inserts the data. Each run writes a `database_sync_log` row.
+
+### Google Sheet schema drift (never fails the whole table)
+
+When a synced Google Sheet changes shape, the sync keeps going and surfaces a **⚠ warning triangle** on the table row — the same indicator component used by the KB source sync.
+
+| Sheet change | What happens | Dashboard tooltip |
+|--------------|--------------|-------------------|
+| New column added | Skipped in sync; `database_sync_log.detail.issues` records `unmapped_column` | "Column 'foo' was added in the Google Sheet but hasn't been imported. Add it to the table to start syncing its values." |
+| Column removed | Postgres column kept; value is no longer updated | "Column 'bar' was removed from the Google Sheet. Existing values are preserved but no longer syncing." |
+| Column renamed | Treated as removed + added; both triangles appear | Map-to-existing action resolves both at once |
+| Row value doesn't match column type | That row is skipped; others still import; `row_type_mismatch` logged | "N rows couldn't be imported in the latest sync." |
+| Google auth failed | Sync marked `failed`; issue kind `auth_failed` | "Could not authenticate with Google. Reconnect Google in Tools → Personal Connections." |
+
+Clicking the triangle opens a **Sync issues** drawer with three resolution actions per issue: **Add this column** (opens the add-column modal with the type pre-filled), **Map to existing column** (persists to `source_config.column_mapping`), or **Ignore this column** (persists to `source_config.ignored_columns`). Resolving all issues clears the triangle on the next sync.
+
+### Database tool (agent-facing)
+
+Two auto-configured tools:
+
+- **`database-read`** (read-only):
+  - `list_tables` — all tables in this workspace with column metadata.
+  - `describe_table` — columns + types for a single table.
+  - `select` — column + where filter + order + limit/offset.
+  - `aggregate` — `count` / `sum` / `avg` / `min` / `max`, with optional `group_by`.
+  - `sql` — free-form **read-only** SELECT. Rejects any non-SELECT statement before execution (INSERT, UPDATE, DELETE, DROP, CREATE, ALTER, TRUNCATE, GRANT, COPY, EXECUTE, CALL, …). Also rejects multiple statements, and rejects fully-qualified cross-schema references (e.g. `FROM ws_other.customers`). Runs under `SET LOCAL default_transaction_read_only = on` plus a statement timeout.
+- **`database-write`** (read + write):
+  - `insert` / `update` / `delete` — structured operations that flow through the standard write-policy approval gate (`confirm` / `admin_confirm`). DDL is **never** exposed to agents.
+
+Workspace isolation: every tool operation opens a transaction with `SET LOCAL search_path = "<ws_schema>"`, so an agent in workspace A can never see workspace B's tables, even via a fully-qualified cross-schema reference in raw SQL.
+
+### Agent builder `@database:<table>` references
+
+In the agent system-prompt editor, typing `@database` pops a required second-level picker of the workspace's tables. The author must pick a specific table before the reference is inserted — there is no bare `@database` reference. The rendered form is `@database:<table_name>`. At runtime, the execution module parses the system prompt for `@database:<name>` references, calls `describeTable` for each, and appends the schema descriptions to the system context before the first turn.
+
+### Workspace settings
+
+- `database_statement_timeout_ms` — max duration for a raw-SQL query (default 10000).
+- `database_max_rows` — max rows returned by raw-SQL (default 1000).
+
+### Out of scope
+
+- Cross-workspace joins (hard-blocked by the schema isolation).
+- Raw write-SQL for agents — writes are always through structured operations so they flow through approval gates.
+- Foreign keys, views, triggers inside user tables.
+- Row-level permissions within a table.
+- Import sources other than CSV / XLSX / Google Sheets.
 
 ---
 

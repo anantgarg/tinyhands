@@ -693,3 +693,79 @@ export interface AuditLogEntry {
   status: string;
   error_message: string | null;
 }
+
+// ── Database feature ──
+
+export type DatabaseColumnType =
+  | 'text'
+  | 'integer'
+  | 'bigint'
+  | 'numeric'
+  | 'boolean'
+  | 'timestamptz'
+  | 'date'
+  | 'json';
+
+export type DatabaseImportSource = 'manual' | 'csv' | 'xlsx' | 'google_sheet';
+
+export type DatabaseSyncStatus = 'success' | 'partial_sync' | 'failed';
+
+export interface DatabaseColumn {
+  name: string;
+  type: DatabaseColumnType;
+  nullable?: boolean;
+  description?: string | null;
+}
+
+export interface DatabaseTable {
+  id: string;
+  workspace_id: string;
+  name: string;
+  description: string | null;
+  source_type: DatabaseImportSource;
+  source_config: Record<string, any>;
+  /** Per-column descriptions, keyed by sanitized column name. */
+  column_descriptions: Record<string, string>;
+  last_synced_at: string | null;
+  last_sync_status: DatabaseSyncStatus | null;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DatabaseRow {
+  id: number;
+  created_at: string;
+  updated_at: string;
+  [column: string]: any;
+}
+
+export type DatabaseSyncIssueKind =
+  | 'unmapped_column'
+  | 'removed_column'
+  | 'renamed_column'
+  | 'row_type_mismatch'
+  | 'auth_failed'
+  | 'fetch_failed';
+
+export interface DatabaseSyncIssue {
+  kind: DatabaseSyncIssueKind;
+  column?: string;
+  from?: string;
+  to?: string;
+  row_index?: number;
+  value?: string;
+  message?: string;
+}
+
+export interface DatabaseSyncLogRecord {
+  id: string;
+  workspace_id: string;
+  table_id: string;
+  status: DatabaseSyncStatus;
+  rows_imported: number;
+  rows_skipped: number;
+  detail: { issues: DatabaseSyncIssue[] };
+  created_at: string;
+}
+

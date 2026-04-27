@@ -257,6 +257,7 @@ import {
   getRunsByAgent,
   executeAgentRun,
   createWorker,
+  parseAndStoreToolCalls,
 } from '../../src/modules/execution';
 
 import type { JobData, RunRecord } from '../../src/types';
@@ -2598,5 +2599,117 @@ describe('Execution Module – Credential Resolution', () => {
     const contextBlock = postedBlocks.find((b: any) => b.type === 'context');
     expect(contextBlock).toBeDefined();
     expect(contextBlock.elements[0].text).toContain('connections');
+  });
+});
+
+describe('Execution Module – parseAndStoreToolCalls', () => {
+  beforeEach(() => {
+    mockExecute.mockReset();
+    mockExecute.mockResolvedValue(undefined);
+  });
+
+  function toolCallInserts() {
+    return mockExecute.mock.calls
+      .filter((c: any[]) => typeof c[0] === 'string' && c[0].includes('INSERT INTO tool_calls'))
+      .map((c: any[]) => {
+        const params = c[1];
+        return {
+          runId: params[1],
+          workspaceId: params[2],
+          toolName: params[3],
+          toolInput: params[4] ? JSON.parse(params[4]) : null,
+          toolOutput: params[5],
+          error: params[6],
+          sequence: params[8],
+        };
+      });
+  }
+
+  it('pairs each tool_use with its tool_result by tool_use_id', async () => {
+    const lines = [
+      JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'tu_1', name: 'database-read', input: { action: 'sql', query: 'SELECT 1' } }] } }),
+      JSON.stringify({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'tu_1', content: '{"rows":[{"?column?":1}]}', is_error: false }] } }),
+      JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'tu_2', name: 'Bash', input: { command: 'ls' } }] } }),
+      JSON.stringify({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'tu_2', content: 'file.txt\n', is_error: false }] } }),
+    ].join('\n');
+
+    await parseAndStoreToolCalls('W1', 'R1', lines);
+
+    const inserts = toolCallInserts();
+    expect(inserts).toHaveLength(2);
+    expect(inserts[0].toolName).toBe('database-read');
+    expect(inserts[0].toolInput).toEqual({ action: 'sql', query: 'SELECT 1' });
+    expect(inserts[0].toolOutput).toContain('"rows"');
+    expect(inserts[0].error).toBeNull();
+    expect(inserts[0].sequence).toBe(0);
+    expect(inserts[1].toolName).toBe('Bash');
+    expect(inserts[1].sequence).toBe(1);
+  });
+
+  it('handles parallel tool calls in a single assistant message', async () => {
+    const lines = [
+      JSON.stringify({ type: 'assistant', message: { content: [
+        { type: 'tool_use', id: 'tu_a', name: 'WebSearch', input: { query: 'a' } },
+        { type: 'tool_use', id: 'tu_b', name: 'WebSearch', input: { query: 'b' } },
+      ] } }),
+      JSON.stringify({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'tu_a', content: 'result-a' }] } }),
+      JSON.stringify({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'tu_b', content: 'result-b' }] } }),
+    ].join('\n');
+
+    await parseAndStoreToolCalls('W1', 'R1', lines);
+
+    const inserts = toolCallInserts();
+    expect(inserts).toHaveLength(2);
+    expect(inserts.map((i) => i.toolInput?.query).sort()).toEqual(['a', 'b']);
+    expect(inserts[0].toolOutput).toBe('result-a');
+    expect(inserts[1].toolOutput).toBe('result-b');
+  });
+
+  it('records errors when tool_result is_error is true', async () => {
+    const lines = [
+      JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'tu_1', name: 'Bash', input: { command: 'false' } }] } }),
+      JSON.stringify({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'tu_1', content: 'command failed', is_error: true }] } }),
+    ].join('\n');
+
+    await parseAndStoreToolCalls('W1', 'R1', lines);
+
+    const inserts = toolCallInserts();
+    expect(inserts).toHaveLength(1);
+    expect(inserts[0].error).toBe('command failed');
+    expect(inserts[0].toolOutput).toBeNull();
+  });
+
+  it('marks a tool_use without a result as no-result', async () => {
+    const lines = [
+      JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'tu_orphan', name: 'WebSearch', input: { query: 'x' } }] } }),
+    ].join('\n');
+
+    await parseAndStoreToolCalls('W1', 'R1', lines);
+
+    const inserts = toolCallInserts();
+    expect(inserts).toHaveLength(1);
+    expect(inserts[0].error).toBe('No result received (possible timeout)');
+    expect(inserts[0].toolOutput).toBeNull();
+  });
+
+  it('extracts text from array-shaped tool_result content', async () => {
+    const lines = [
+      JSON.stringify({ type: 'assistant', message: { content: [{ type: 'tool_use', id: 'tu_1', name: 'WebSearch', input: { query: 'x' } }] } }),
+      JSON.stringify({ type: 'user', message: { content: [{ type: 'tool_result', tool_use_id: 'tu_1', content: [{ type: 'text', text: 'first' }, { type: 'text', text: 'second' }] }] } }),
+    ].join('\n');
+
+    await parseAndStoreToolCalls('W1', 'R1', lines);
+
+    const inserts = toolCallInserts();
+    expect(inserts).toHaveLength(1);
+    expect(inserts[0].toolOutput).toBe('first\nsecond');
+  });
+
+  it('skips non-JSON lines and inserts nothing for empty logs', async () => {
+    await parseAndStoreToolCalls('W1', 'R1', '');
+    expect(toolCallInserts()).toHaveLength(0);
+
+    await parseAndStoreToolCalls('W1', 'R1', 'TINYHANDS_OUTPUT:{"output":"hi"}\nnot json\n');
+    expect(toolCallInserts()).toHaveLength(0);
   });
 });

@@ -177,13 +177,17 @@ DURATION_MS=$(( (END_TIME - START_TIME) / 1000000 ))
 # Use a single jq call to build the output JSON — avoids shell escaping issues
 # that can corrupt special characters (backslashes, quotes, etc.) in agent output
 RESULT_LINE=$(grep '"type":"result"' "$OUTPUT_FILE" 2>/dev/null | tail -1 || true)
+# Count actual tool_use blocks across all assistant messages — num_turns from
+# the SDK counts conversation turns (assistant → tool result round-trips), not
+# tool invocations, and parallel tool calls in one turn would be undercounted.
+TOOL_USE_COUNT=$(grep -o '"type":"tool_use"' "$OUTPUT_FILE" 2>/dev/null | wc -l | tr -d ' ' || echo 0)
 if [ -n "$RESULT_LINE" ]; then
   printf 'TINYHANDS_OUTPUT:'
-  echo "$RESULT_LINE" | jq -c --arg dur "$DURATION_MS" '{
+  echo "$RESULT_LINE" | jq -c --arg dur "$DURATION_MS" --arg tc "$TOOL_USE_COUNT" '{
     output: (.result // ""),
     input_tokens: (.usage.input_tokens // 0),
     output_tokens: (.usage.output_tokens // 0),
-    tool_calls_count: (.num_turns // 0),
+    tool_calls_count: ($tc | tonumber),
     duration_ms: ($dur | tonumber),
     cost_usd: (.total_cost_usd // 0)
   }'

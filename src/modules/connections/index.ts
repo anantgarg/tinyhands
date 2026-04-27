@@ -223,6 +223,24 @@ export function decryptCredentials(conn: Connection): Record<string, string> {
 }
 
 /**
+ * Returns decrypted credentials with a guaranteed-fresh `access_token` for
+ * Google connections. Unlike raw `decryptCredentials`, this:
+ *   - Pre-emptively refreshes Google OAuth tokens on every call when a
+ *     refresh_token is available (Google access_tokens are 1-hour TTL, so
+ *     the stored one is almost always stale by the time we'd use it).
+ *   - Persists the fresh token + new expiry back to the row, so concurrent
+ *     callers benefit from one refresh.
+ * Use this everywhere instead of `decryptCredentials` for Google work —
+ * unattended sync jobs (cron-like) need it the most, since there's no human
+ * to retry. For non-Google integrations this is identical to
+ * `decryptCredentials`.
+ */
+export async function getFreshCredentials(conn: Connection): Promise<Record<string, string>> {
+  const creds = decryptCredentials(conn);
+  return refreshIfGoogleOAuth(creds, conn);
+}
+
+/**
  * For Google OAuth connections, refresh the access_token using the stored refresh_token.
  * Updates the stored credentials with the fresh token so subsequent calls within the hour
  * don't need to refresh again. Returns credentials with a valid access_token.

@@ -14,6 +14,14 @@ interface RichTextEditorProps {
   placeholder?: string;
   className?: string;
   enableUserMentions?: boolean;
+  /**
+   * When true, typing `@database` in the editor opens a second-level picker
+   * of the workspace's database tables. Selecting a table inserts the literal
+   * reference `@database:<table_name> ` into the prompt. The reference is
+   * surfaced to the agent at runtime — its `describe_table` output is injected
+   * into the system context before the first turn.
+   */
+  enableDatabaseMentions?: boolean;
 }
 
 /**
@@ -281,7 +289,7 @@ function MentionChip({ node }: { node: { attrs: Record<string, unknown> } }) {
 // Main component
 // ---------------------------------------------------------------------------
 
-function RichTextEditor({ value, onChange, placeholder, className, enableUserMentions }: RichTextEditorProps) {
+function RichTextEditor({ value, onChange, placeholder, className, enableUserMentions, enableDatabaseMentions }: RichTextEditorProps) {
   // Track whether the latest change came from the editor itself so we don't
   // feed the value back in an infinite loop.
   const isInternalChange = useRef(false);
@@ -421,6 +429,7 @@ function RichTextEditor({ value, onChange, placeholder, className, enableUserMen
       <EditorContent editor={editor} />
 
       {enableUserMentions && <MentionAutocomplete editor={editor} />}
+      {enableDatabaseMentions && <DatabaseMentionAutocomplete editor={editor} />}
     </div>
   );
 }
@@ -613,6 +622,151 @@ function MentionAutocomplete({ editor }: MentionAutocompleteProps) {
                 <div className="text-sm font-medium truncate">{name || u.name || 'Unknown'}</div>
                 {u.name && u.name !== name && (
                   <div className="text-xs text-warm-text-secondary truncate">@{u.name}</div>
+                )}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Database table @ autocomplete
+// ---------------------------------------------------------------------------
+//
+// Triggered when the user types `@database` (with optional `:partial` suffix)
+// at a word boundary. The plan REQUIRES that the author pick a specific table
+// — there is no bare `@database` reference. So we only insert the fully
+// qualified `@database:<table_name> ` once a table is chosen.
+
+interface DBState {
+  open: boolean;
+  query: string;
+  from: number;
+  coords: { top: number; left: number } | null;
+}
+const DB_CLOSED: DBState = { open: false, query: '', from: 0, coords: null };
+
+function DatabaseMentionAutocomplete({ editor }: { editor: Editor }) {
+  // Lazy-import the hook to avoid loading the database API surface on every
+  // page that uses the editor — only bundles it when this picker is enabled.
+  // Note: dynamic import isn't possible at the hook level, so we just import
+  // the hook here. The api/database file is small.
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const { useDatabaseTables } = require('@/api/database') as typeof import('@/api/database');
+  const { data: tables } = useDatabaseTables();
+
+  const [state, setState] = useState<DBState>(DB_CLOSED);
+  const [highlight, setHighlight] = useState(0);
+
+  const filtered = useMemo(() => {
+    const q = state.query.trim().toLowerCase();
+    const all = tables || [];
+    const list = q
+      ? all.filter((t) => t.name.toLowerCase().includes(q) || (t.description || '').toLowerCase().includes(q))
+      : all;
+    return list.slice(0, 12);
+  }, [tables, state.query]);
+
+  const stateRef = useRef(state);
+  const filteredRef = useRef(filtered);
+  const highlightRef = useRef(highlight);
+  useLayoutEffect(() => {
+    stateRef.current = state;
+    filteredRef.current = filtered;
+    highlightRef.current = highlight;
+  });
+
+  useEffect(() => { setHighlight(0); }, [state.query, filtered.length]);
+
+  const close = useCallback(() => setState(DB_CLOSED), []);
+
+  const insertAt = useCallback((from: number, tableName: string) => {
+    const to = editor.state.selection.from;
+    editor
+      .chain()
+      .focus()
+      .insertContentAt({ from, to }, [
+        { type: 'text', text: `@database:${tableName} ` },
+      ])
+      .run();
+    close();
+  }, [editor, close]);
+
+  // Detect `@database` or `@database:partial` at the cursor.
+  useEffect(() => {
+    const handler = () => {
+      const { selection } = editor.state;
+      if (!selection.empty) { if (stateRef.current.open) close(); return; }
+      const cursor = selection.from;
+      const before = editor.state.doc.textBetween(Math.max(0, cursor - 50), cursor, '\n', '\n');
+      const m = /(?:^|\s)@database(?::([\w\-]*))?$/i.exec(before);
+      if (!m) { if (stateRef.current.open) close(); return; }
+      const matchedLen = m[0].length - (m[0].startsWith(' ') || m[0].startsWith('\n') ? 1 : 0);
+      const from = cursor - matchedLen;
+      const coords = editor.view.coordsAtPos(from);
+      setState({ open: true, query: m[1] || '', from, coords: { top: coords.bottom, left: coords.left } });
+    };
+    editor.on('update', handler);
+    editor.on('selectionUpdate', handler);
+    return () => { editor.off('update', handler); editor.off('selectionUpdate', handler); };
+  }, [editor, close]);
+
+  useEffect(() => {
+    const dom = editor.view.dom;
+    const onKey = (e: KeyboardEvent) => {
+      const s = stateRef.current;
+      if (!s.open) return;
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); return; }
+      if (e.key === 'ArrowDown') { e.preventDefault(); e.stopPropagation(); setHighlight(h => Math.min(h + 1, Math.max(0, filteredRef.current.length - 1))); return; }
+      if (e.key === 'ArrowUp') { e.preventDefault(); e.stopPropagation(); setHighlight(h => Math.max(h - 1, 0)); return; }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        const t = filteredRef.current[highlightRef.current];
+        if (t) { e.preventDefault(); e.stopPropagation(); insertAt(s.from, t.name); }
+        return;
+      }
+    };
+    dom.addEventListener('keydown', onKey, true);
+    return () => dom.removeEventListener('keydown', onKey, true);
+  }, [editor, insertAt, close]);
+
+  if (!state.open || !state.coords) return null;
+
+  return createPortal(
+    <div
+      className="fixed z-50 w-80 rounded-lg border border-warm-border bg-white shadow-lg"
+      style={{ top: state.coords.top + 4, left: state.coords.left }}
+      onMouseDown={(e) => e.preventDefault()}
+    >
+      <div className="px-3 py-2 border-b border-warm-border text-xs font-medium text-warm-text-secondary">
+        Pick a database table
+      </div>
+      <div className="max-h-[260px] overflow-y-auto">
+        {filtered.length === 0 ? (
+          <div className="px-3 py-4 text-center text-xs text-warm-text-secondary">
+            {tables === undefined ? 'Loading tables…' : 'No tables yet. Create one in Database.'}
+          </div>
+        ) : filtered.map((t, idx) => {
+          const isActive = idx === highlight;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onMouseEnter={() => setHighlight(idx)}
+              onClick={() => insertAt(state.from, t.name)}
+              title={`${(t.columns || []).length} columns`}
+              className={cn(
+                'flex w-full items-start gap-2 px-3 py-2 text-left transition-colors',
+                isActive ? 'bg-warm-bg' : 'hover:bg-warm-bg',
+              )}
+            >
+              <div className="min-w-0 flex-1 leading-tight">
+                <div className="text-sm font-medium font-mono">{t.name}</div>
+                {t.description && (
+                  <div className="text-xs text-warm-text-secondary truncate">{t.description}</div>
                 )}
               </div>
             </button>

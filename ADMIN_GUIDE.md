@@ -296,6 +296,65 @@ The documents feature requires these npm packages:
 
 ---
 
+## Database (Workspace Tables)
+
+Workspace-isolated structured tables for data agents read and write. Each workspace has its own Postgres schema (`ws_<workspace_id>`) — isolation is enforced by Postgres, not just application code.
+
+### Dashboard page
+
+Admins manage tables at `/database` (sidebar → Manage → Database). Non-admins don't see the entry point. The page shows:
+- All tables in the workspace with their source (manual, CSV, Excel, Google Sheet) and last sync time.
+- A ⚠ warning triangle next to any table whose most recent sync had unresolved issues (same indicator used by KB sources).
+- **New table**, **Import data**, per-row **Sync** / **Delete** actions.
+
+Click a table to see its column list (add/drop columns), rows (pagination + inline edit), and — for Google-Sheet-backed tables with drift — a **Sync issues** drawer with per-issue resolution actions: **Add this column**, **Map to existing column**, **Ignore this column**.
+
+### Supported column types
+
+- **Text**
+- **Number (whole)** / **Number (large whole)** / **Number (decimal)**
+- **True / False**
+- **Date & time** / **Date**
+- **JSON**
+
+Every table automatically gets `id` (bigserial primary key), `created_at`, and `updated_at`. Those names are reserved.
+
+### Imports
+
+- **CSV**: upload a file, column types are inferred from a 100-row sample.
+- **Excel (XLSX)**: upload a workbook and pick a sheet name (defaults to the first sheet). Re-uses the existing KB xlsx parser.
+- **Google Sheet**: paste a sheet URL or ID, pick an optional tab, toggle **sync automatically** to re-pull every 5 minutes. Requires a Google OAuth connection (set one up in Tools → Personal Connections first).
+
+### Google Sheet auto-sync
+
+Runs every 5 minutes from the `sync` process — same cadence as KB source auto-sync. The sync truncates and re-inserts the table's rows from the sheet. If the sheet's header row differs from the Postgres columns, the sync does NOT fail the whole table; instead:
+
+- New columns in the sheet are skipped (issue: `unmapped_column`) until an admin clicks **Add this column** or **Ignore this column**.
+- Removed columns keep their Postgres column (values no longer update; issue: `removed_column`).
+- Row values that don't match the column type are skipped per-row (issue: `row_type_mismatch`).
+- Google auth failures are marked as `auth_failed` — reconnect Google to recover.
+
+### Agent tool (`database-read` + `database-write`)
+
+Auto-configured: no API keys. Every workspace automatically gets the Database tool registered on first run.
+
+- **Read mode** exposes `list_tables`, `describe_table`, `select`, `aggregate` (count / sum / avg / min / max with optional group-by), and a read-only raw `SELECT` runner.
+- **Write mode** exposes `insert` / `update` / `delete`. Gated by the agent's `write_policy` (`confirm` / `admin_confirm`) exactly like other write tools.
+- **Never** exposes DDL (create / alter / drop of tables or columns). Schema changes are dashboard-only.
+
+### Workspace settings (optional)
+
+Set via the `workspace_settings` table:
+
+- `database_statement_timeout_ms` — max duration for a raw-SQL query (default 10000).
+- `database_max_rows` — max rows returned by the raw-SQL runner (default 1000).
+
+### Migration
+
+`030_database_feature.sql` creates `database_tables` and `database_sync_log`. Per-workspace schemas (`ws_<workspace_id>`) are created lazily on first table creation.
+
+---
+
 ## Agent Management
 
 ### Creating Agents

@@ -235,7 +235,81 @@ async function executeAgentRunInner(job: Job<JobData>, data: JobData, workspaceI
   await updateRunRecord(workspaceId, runRecord.id, { context_tokens_injected: contextTokens });
 
   // Build task prompt with system prompt + context
-  const systemPrompt = agent.system_prompt || '';
+  let systemPrompt = agent.system_prompt || '';
+
+  // ── @database:<table> reference injection ──
+  // The agent builder lets authors drop `@database:customers` references into
+  // the system prompt. At runtime we resolve each referenced table to its
+  // schema description and append it to the system prompt so the agent has
+  // an up-to-date sense of what's available without an extra describe_table
+  // tool call. Uniquely deduped — repeating the same reference doesn't
+  // duplicate context. References that no longer resolve are left as-is in
+  // the prompt (the editor flags them visually) — we surface a single warning
+  // line instead of failing the run.
+  try {
+    const refs = Array.from(systemPrompt.matchAll(/@database:([a-z_][a-z0-9_]*)/gi))
+      .map(m => m[1].toLowerCase());
+    const unique = Array.from(new Set(refs));
+    if (unique.length > 0) {
+      const { describeTable } = await import('../database');
+      const blocks: string[] = [];
+      const missing: string[] = [];
+      for (const name of unique) {
+        const d = await describeTable(workspaceId, name);
+        if (!d) { missing.push(name); continue; }
+        const cols = d.columns
+          .map(c => {
+            const meta: string[] = [c.type];
+            if (c.nullable === false) meta.push('required');
+            const tail = c.description ? ` — ${c.description}` : '';
+            return `  - ${c.name} (${meta.join(', ')})${tail}`;
+          })
+          .join('\n');
+        blocks.push(`Table \`${d.table.name}\`${d.table.description ? ` — ${d.table.description}` : ''}\n${cols}`);
+      }
+      if (blocks.length > 0) {
+        systemPrompt += `\n\n## Referenced database tables\n${blocks.join('\n\n')}\n\nUse the database tool to read or update these tables.`;
+      }
+      if (missing.length > 0) {
+        systemPrompt += `\n\nNote: these database table references no longer exist: ${missing.map(m => `@database:${m}`).join(', ')}.`;
+      }
+    }
+  } catch (err) {
+    logger.warn('Database reference injection failed', { error: String(err) });
+  }
+
+  // Auto-discovery: if the agent has the database tool but didn't @-reference
+  // any specific table, list all available tables (with their AI-authored
+  // descriptions) so the model knows what structured data is queryable. This
+  // makes the agent reach for `database-read.list_tables` / `select` / `sql`
+  // for questions about workspace data instead of bouncing off the KB.
+  try {
+    const agentToolList: string[] = (agent as any).tools || [];
+    const hasDbTool = agentToolList.includes('database-read') || agentToolList.includes('database-write');
+    const alreadyReferenced = /@database:/i.test(systemPrompt);
+    if (hasDbTool && !alreadyReferenced) {
+      const { listTables, describeTable } = await import('../database');
+      const all = await listTables(workspaceId);
+      if (all.length > 0) {
+        const summaries: string[] = [];
+        for (const t of all) {
+          const d = await describeTable(workspaceId, t.name);
+          if (!d) continue;
+          const colNames = d.columns
+            .filter(c => !['id', 'created_at', 'updated_at'].includes(c.name))
+            .map(c => c.name)
+            .slice(0, 20);
+          const desc = (t.description || '').trim();
+          summaries.push(`- \`${t.name}\`${desc ? ` — ${desc}` : ''}${colNames.length ? ` (columns: ${colNames.join(', ')})` : ''}`);
+        }
+        if (summaries.length > 0) {
+          systemPrompt += `\n\n## Database tables available to you\nUse the \`database-read\` tool (\`list_tables\`, \`describe_table\`, \`select\`, \`aggregate\`, \`sql\`) to query these:\n\n${summaries.join('\n')}\n\nWhen the user asks about workspace data — totals, counts, lookups, filtering — check these tables first before saying you don't know.`;
+        }
+      }
+    }
+  } catch (err) {
+    logger.warn('Database table auto-discovery injection failed', { error: String(err) });
+  }
 
   // Inject permission context into system prompt
   let permissionContext = '';
@@ -858,65 +932,103 @@ interface ParsedToolCall {
   sequence: number;
 }
 
-async function parseAndStoreToolCalls(workspaceId: string, runId: string, allLogs: string): Promise<void> {
+export async function parseAndStoreToolCalls(workspaceId: string, runId: string, allLogs: string): Promise<void> {
   if (!allLogs) return;
 
-  const toolCalls: ParsedToolCall[] = [];
+  // Two-pass: first collect every tool_use (keyed by id, in emit order),
+  // then pair each tool_result back to its tool_use by tool_use_id. The SDK
+  // emits assistant messages with tool_use blocks and user messages with
+  // tool_result blocks — possibly multiple per message (parallel tool calls).
+  interface PendingUse {
+    sequence: number;
+    name: string;
+    input: Record<string, unknown> | null;
+    output: string | null;
+    error: string | null;
+  }
+  const byId = new Map<string, PendingUse>();
+  const orderedIds: string[] = [];
+  const orphanResults: ParsedToolCall[] = [];
   let sequence = 0;
-  let pendingToolUse: { name: string; input: Record<string, unknown> | null } | null = null;
+
+  const extractResultText = (content: unknown): { text: string; isError: boolean } => {
+    if (Array.isArray(content)) {
+      const text = content
+        .map((b: any) => (typeof b === 'string' ? b : b?.text || b?.content || ''))
+        .join('\n');
+      return { text, isError: false };
+    }
+    return { text: String(content ?? ''), isError: false };
+  };
 
   for (const line of allLogs.split('\n')) {
+    if (!line.trim()) continue;
+    let event: any;
     try {
-      const event = JSON.parse(line);
+      event = JSON.parse(line);
+    } catch {
+      continue;
+    }
 
-      // Format 1: Complete assistant messages
-      if (event.type === 'assistant' && event.message?.content) {
-        for (const block of event.message.content) {
-          if (block.type === 'tool_use') {
-            pendingToolUse = { name: block.name || 'unknown', input: block.input || null };
+    // Assistant messages: capture every tool_use block
+    if (event.type === 'assistant' && Array.isArray(event.message?.content)) {
+      for (const block of event.message.content) {
+        if (block?.type === 'tool_use') {
+          const id = block.id || `seq-${sequence}`;
+          if (!byId.has(id)) {
+            byId.set(id, {
+              sequence: sequence++,
+              name: block.name || 'unknown',
+              input: block.input ?? null,
+              output: null,
+              error: null,
+            });
+            orderedIds.push(id);
           }
         }
       }
+    }
 
-      // Format 2: Granular stream events
-      if (event.type === 'content_block_start' && event.content_block?.type === 'tool_use') {
-        pendingToolUse = { name: event.content_block.name || 'unknown', input: event.content_block.input || null };
+    // User messages: tool_result blocks pair back via tool_use_id
+    if (event.type === 'user' && Array.isArray(event.message?.content)) {
+      for (const block of event.message.content) {
+        if (block?.type !== 'tool_result') continue;
+        const { text } = extractResultText(block.content);
+        const isError = block.is_error === true;
+        const useId = block.tool_use_id;
+        const existing = useId ? byId.get(useId) : undefined;
+        if (existing) {
+          existing.output = isError ? null : text.slice(0, 4000);
+          existing.error = isError ? text.slice(0, 2000) : null;
+        } else {
+          orphanResults.push({
+            name: 'unknown',
+            input: null,
+            output: isError ? null : text.slice(0, 4000),
+            error: isError ? text.slice(0, 2000) : null,
+            sequence: sequence++,
+          });
+        }
       }
-
-      // Tool result (appears after tool_use in both formats)
-      if (event.type === 'tool' && event.message?.content) {
-        const resultText = Array.isArray(event.message.content)
-          ? event.message.content.map((b: any) => b.text || b.content || '').join('\n')
-          : String(event.message.content);
-        const isError = event.message.is_error === true || resultText.toLowerCase().startsWith('error');
-        toolCalls.push({
-          name: pendingToolUse?.name || 'unknown',
-          input: pendingToolUse?.input || null,
-          output: isError ? null : resultText.slice(0, 4000),
-          error: isError ? resultText.slice(0, 2000) : null,
-          sequence: sequence++,
-        });
-        pendingToolUse = null;
-      }
-    } catch {
-      // Not JSON — skip
     }
   }
 
-  // If we found a pending tool_use without a result, record it
-  if (pendingToolUse) {
-    toolCalls.push({
-      name: pendingToolUse.name,
-      input: pendingToolUse.input,
-      output: null,
-      error: 'No result received (possible timeout)',
-      sequence: sequence++,
-    });
-  }
+  const toolCalls: ParsedToolCall[] = [
+    ...orderedIds.map((id) => {
+      const u = byId.get(id)!;
+      return {
+        name: u.name,
+        input: u.input,
+        output: u.output,
+        error: u.output == null && u.error == null ? 'No result received (possible timeout)' : u.error,
+        sequence: u.sequence,
+      };
+    }),
+    ...orphanResults,
+  ];
 
   if (toolCalls.length === 0) return;
 
-  // Batch insert tool calls
   for (const tc of toolCalls) {
     await execute(
       `INSERT INTO tool_calls (id, run_id, workspace_id, tool_name, tool_input, tool_output, error, duration_ms, sequence_number)

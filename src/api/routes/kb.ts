@@ -504,14 +504,15 @@ router.delete('/api-keys/:provider', requireAdmin, async (req: Request, res: Res
 
 // ── Google Drive Folder Browser ──
 
-// GET /kb/drive-folders — List Google Drive folders for the current user
+// GET /kb/drive-folders — List Google Drive folders for the current user.
+// Uses getFreshCredentials so the Google access_token is refreshed pre-call;
+// no per-route retry-on-401 logic needed.
 router.get('/drive-folders', requireAdmin, async (req: Request, res: Response) => {
   try {
     const { workspaceId, userId } = getSessionUser(req);
     const parentId = (req.query.parentId as string) || 'root';
 
-    // Get user's Google OAuth token
-    const { getPersonalConnection } = await import('../../modules/connections');
+    const { getPersonalConnection, getFreshCredentials } = await import('../../modules/connections');
     let conn = await getPersonalConnection(workspaceId, 'google-drive', userId);
     if (!conn) conn = await getPersonalConnection(workspaceId, 'google', userId);
     if (!conn) conn = await getPersonalConnection(workspaceId, 'google_drive', userId);
@@ -521,16 +522,13 @@ router.get('/drive-folders', requireAdmin, async (req: Request, res: Response) =
       return;
     }
 
-    const { decryptCredentials } = await import('../../modules/connections');
-    const connConfig = decryptCredentials(conn);
-    const token = connConfig?.access_token;
-    if (!token) {
-      res.status(400).json({ error: 'Google access token not found' });
+    const creds: any = await getFreshCredentials(conn);
+    if (!creds?.access_token) {
+      res.status(400).json({ error: 'Google session expired. Reconnect Google in Tools → Personal Connections.' });
       return;
     }
-
     const { listDriveFolders } = await import('../../modules/sources/google-drive');
-    const folders = await listDriveFolders(parentId, token);
+    const folders = await listDriveFolders(parentId, creds.access_token);
     res.json({ parentId, folders });
   } catch (err: any) {
     logger.error('Drive folders error', { error: err.message });
@@ -546,14 +544,14 @@ router.get('/drive-folder-name/:id', requireAdmin, async (req: Request, res: Res
     const { workspaceId, userId } = getSessionUser(req);
     const folderId = req.params.id as string;
 
-    const { getPersonalConnection, decryptCredentials } = await import('../../modules/connections');
+    const { getPersonalConnection, getFreshCredentials } = await import('../../modules/connections');
     let conn = await getPersonalConnection(workspaceId, 'google-drive', userId);
     if (!conn) conn = await getPersonalConnection(workspaceId, 'google', userId);
     if (!conn) {
       res.status(400).json({ error: 'Connect your Google account in Tools → Personal first.' });
       return;
     }
-    const creds = decryptCredentials(conn);
+    const creds = await getFreshCredentials(conn);
     const token = creds?.access_token;
     if (!token) {
       res.status(400).json({ error: 'Google access token not found' });

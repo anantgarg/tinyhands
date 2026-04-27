@@ -78,6 +78,7 @@ src/
 │   ├── observability/       # Cost tracking, error rates, alerts, daily digest
 │   ├── dashboard/           # Slack Home Tab metrics
 │   ├── docs/                # Native documents (docs, sheets, files) — CRUD, versioning, search, storage
+│   ├── database/            # Workspace-isolated tables (schema-per-workspace), CSV/XLSX/Google Sheet imports, read-only SQL runner, structured CRUD for the agent tool
 │   ├── document-filling/    # Google Docs/Sheets template automation
 │   ├── auto-update/         # Pull-based deploy from GitHub
 │   ├── permissions/         # Tool access control (read-only vs read-write)
@@ -117,6 +118,8 @@ PostgreSQL with migrations in `src/db/migrations/`. Key tables:
 - **sheet_tabs** — Per-tab sparse cell data (JSONB), columns, row/col counts
 - **document_files** — Binary file storage (BYTEA), abstracted via StorageProvider
 - **document_search** — Full-text search index (tsvector + GIN)
+- **database_tables** — Admin-created tables (workspace_id, name, source_type, source_config, last_synced_at). User rows live in per-workspace schemas `ws_<workspace_id>`, not in this metadata table.
+- **database_sync_log** — Per-sync-cycle results for CSV/XLSX/Google-Sheet-backed tables. `status` ∈ `success` / `partial_sync` / `failed`; `detail.issues` surfaces unmapped columns, removed columns, row type mismatches, etc. Dashboard reads the latest row per table to decide whether to render the warning triangle.
 
 Query helpers: `query()`, `queryOne()`, `execute()` from `src/db/index.ts`.
 
@@ -136,6 +139,7 @@ Tools live in `src/modules/tools/integrations/`. Each tool is a self-contained f
 | SerpAPI | `integrations/serpapi/` | read-only | `api_key` |
 | Knowledge Base | `integrations/kb/` | read-only | (auto-configured) |
 | Documents | `integrations/docs/` | read + write | (auto-configured) |
+| Database | `integrations/database/` | read + write | (auto-configured) |
 
 ### Adding a new tool
 
