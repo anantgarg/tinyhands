@@ -104,6 +104,39 @@ export async function listDriveFolders(
   return data.files;
 }
 
+// List the Google Sheets *and* sub-folders inside a Drive folder. Used by the
+// Database feature's sheet picker so admins can drill down to a specific
+// spreadsheet without leaving the dashboard. Folders are returned alongside
+// sheets so the same panel handles navigation and selection.
+export async function listDriveSpreadsheets(
+  parentId: string,
+  accessToken: string,
+): Promise<{
+  folders: Array<{ id: string; name: string }>;
+  sheets: Array<{ id: string; name: string; modifiedTime?: string }>;
+}> {
+  const q = encodeURIComponent(
+    `'${parentId}' in parents and ` +
+    `(mimeType = 'application/vnd.google-apps.folder' or mimeType = 'application/vnd.google-apps.spreadsheet') ` +
+    `and trashed = false`,
+  );
+  const res = await fetch(
+    `https://www.googleapis.com/drive/v3/files?q=${q}&pageSize=200&fields=files(id,name,mimeType,modifiedTime)&orderBy=folder,name`,
+    { headers: { Authorization: `Bearer ${accessToken}` } },
+  );
+  if (!res.ok) throw new Error(`Failed to list Drive contents: ${res.status}`);
+  const data = await res.json() as {
+    files: Array<{ id: string; name: string; mimeType: string; modifiedTime?: string }>;
+  };
+  const folders = data.files
+    .filter(f => f.mimeType === 'application/vnd.google-apps.folder')
+    .map(f => ({ id: f.id, name: f.name }));
+  const sheets = data.files
+    .filter(f => f.mimeType === 'application/vnd.google-apps.spreadsheet')
+    .map(f => ({ id: f.id, name: f.name, modifiedTime: f.modifiedTime }));
+  return { folders, sheets };
+}
+
 // ── Write-Back for Document Filling (Module 14) ──
 
 export async function writeGoogleSheet(

@@ -121,6 +121,37 @@ async function runAgentSourceSync(): Promise<void> {
   }
 }
 
+// ── Database tables backed by Google Sheets ──
+async function runDatabaseSheetSync(): Promise<void> {
+  try {
+    const { getSheetTablesDueForSync, syncGoogleSheet } = await import('./modules/database');
+    const tables = await getSheetTablesDueForSync();
+    if (tables.length === 0) return;
+    logger.info(`Database sheet sync: ${tables.length} tables due for re-sync`);
+    for (const t of tables) {
+      try {
+        const started = Date.now();
+        const result = await syncGoogleSheet(t.workspace_id, t.id);
+        logger.info('Database sheet sync completed', {
+          workspaceId: t.workspace_id,
+          tableId: t.id,
+          status: result.status,
+          rowsImported: result.rowsImported,
+          rowsSkipped: result.rowsSkipped,
+          issues: result.issues.length,
+          durationMs: Date.now() - started,
+        });
+      } catch (err: any) {
+        logger.error('Database sheet sync failed', {
+          workspaceId: t.workspace_id, tableId: t.id, error: err.message,
+        });
+      }
+    }
+  } catch (err: any) {
+    logger.error('Database sheet sync cycle failed', { error: err.message });
+  }
+}
+
 // ── KB sources (kb_sources table) ──
 async function runKBSourceSync(): Promise<void> {
   try {
@@ -226,9 +257,15 @@ async function main(): Promise<void> {
     runKBSourceSync().catch(err => logger.error('KB source sync uncaught', { error: err.message }));
   }, KB_SYNC_INTERVAL_MS);
 
+  // Database sheet sync runs on the same cadence as KB source auto-sync.
+  const dbSheetSyncInterval = setInterval(() => {
+    runDatabaseSheetSync().catch(err => logger.error('Database sheet sync uncaught', { error: err.message }));
+  }, KB_SYNC_INTERVAL_MS);
+
   // Kick off a KB sync pass immediately so restart-triggered stuck rows
   // (status=syncing) are recovered without waiting a full interval.
   runKBSourceSync().catch(err => logger.error('Initial KB sync failed', { error: err.message }));
+  runDatabaseSheetSync().catch(err => logger.error('Initial database sheet sync failed', { error: err.message }));
 
   const alertInterval = setInterval(() => {
     runAlertCheck().catch(err => logger.error('Alert check uncaught', { error: err.message }));
@@ -260,6 +297,7 @@ async function main(): Promise<void> {
     logger.info('Sync process shutting down...');
     clearInterval(sourceInterval);
     clearInterval(kbSyncInterval);
+    clearInterval(dbSheetSyncInterval);
     clearInterval(alertInterval);
     clearInterval(digestInterval);
     clearInterval(connectionHealthInterval);

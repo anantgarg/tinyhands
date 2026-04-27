@@ -450,6 +450,7 @@ function OverviewTab({ agentId, agent }: { agentId: string; agent: AgentData }) 
                 onChange={setPromptDraft}
                 placeholder="Write your agent instructions here..."
                 enableUserMentions
+                enableDatabaseMentions
               />
               <div className="flex justify-end gap-2">
                 <Button variant="outline" size="sm" onClick={() => setEditingPrompt(false)}>Cancel</Button>

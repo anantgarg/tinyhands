@@ -21,6 +21,7 @@ import slackHelperRoutes from './routes/slack-helpers';
 import chatRoutes from './routes/chat';
 import docsRoutes from './routes/docs';
 import platformRoutes from './routes/platform';
+import databaseRoutes from './routes/database';
 
 export function createApiRouter(): Router {
   const router = Router();
@@ -50,6 +51,7 @@ export function createApiRouter(): Router {
   router.use('/slack', requireAuth, slackHelperRoutes);
   router.use('/chat', requireAuth, chatRoutes);
   router.use('/docs', requireAuth, docsRoutes);
+  router.use('/database', requireAuth, databaseRoutes);
   // Platform admin routes do their own auth check (platform_admins table)
   router.use('/platform', requireAuth, platformRoutes);
 

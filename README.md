@@ -78,6 +78,7 @@ Core tools (file access, web search, code execution) are always available. Conne
 | **SerpAPI** | SERP rankings (Google, Bing, Yahoo) | -- | API key |
 | **Zendesk** | Tickets, groups, users | Create tickets, comments, update priority | API key |
 | **Documents** | Read docs, sheets, files | Create, edit, archive documents | Auto |
+| **Database** | List tables, describe columns, select, aggregate (count/sum/avg/min/max), read-only SQL | Insert, update, delete rows (schema changes admin-only) | Auto |
 
 All four Google integrations share a single OAuth flow -- one authorization covers Drive, Sheets, Docs, and Gmail. Google OAuth uses **your workspace's own Google Cloud OAuth app** (an admin sets this up once via Settings → Integrations), not a TinyHands-owned app. This keeps you off Google's CASA audit, removes the 100-user cap when using Internal publishing, and keeps your Google data's processor relationship with Google alone — TinyHands is transport only.
 
@@ -90,6 +91,16 @@ Native document management — create, edit, and manage three document types dir
 - **Files** — Upload any file (images, PDFs, text) with preview and download
 
 Agents can create and edit documents via tool calls. Each document has an "Allow agents to edit" toggle. Full-text search across all document types.
+
+### Database
+
+Workspace-isolated structured tables for data your agents read and write. Each workspace gets its own PostgreSQL schema (`ws_<workspace_id>`) so tenants can never see each other's data.
+
+- **Admin-managed schema**: dashboard admins create tables and columns (Text, Number, True/False, Date & time, JSON) under the Database page. Agents never alter the schema.
+- **Imports**: CSV upload, Excel upload (any sheet), or a Google Sheet URL. Google-Sheet-backed tables auto-sync every 5 minutes on the same cadence as KB source sync.
+- **Schema drift**: when a synced Google Sheet adds, removes, or renames a column — or a value doesn't match its Postgres column type — the sync never fails the whole table. A ⚠ warning triangle (the same indicator used by the KB source sync) appears on the table, and a "Sync issues" drawer offers **Add this column**, **Map to existing**, or **Ignore this column** actions.
+- **Agent tool**: read mode exposes `list_tables`, `describe_table`, `select`, `aggregate` (count / sum / avg / min / max with optional group-by), and a read-only raw `SELECT` runner. Write mode exposes `insert` / `update` / `delete` — gated by the existing write-policy approval system. The tool never exposes DDL (no create / alter / drop of tables or columns).
+- **Agent builder references**: in the system prompt, type `@database` and pick a specific table from the second-level picker. The reference becomes `@database:<table_name>` and the runtime injects that table's schema description into the agent's context before the first turn.
 
 ### Knowledge Base
 

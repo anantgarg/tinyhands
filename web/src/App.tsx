@@ -29,6 +29,8 @@ const Skills = lazy(() => import('@/pages/Skills').then(m => ({ default: m.Skill
 const Evolution = lazy(() => import('@/pages/Evolution').then(m => ({ default: m.Evolution })));
 const Documents = lazy(() => import('@/pages/Documents').then(m => ({ default: m.Documents })));
 const DocumentDetail = lazy(() => import('@/pages/DocumentDetail').then(m => ({ default: m.DocumentDetail })));
+const Database = lazy(() => import('@/pages/Database').then(m => ({ default: m.Database })));
+const DatabaseTable = lazy(() => import('@/pages/DatabaseTable').then(m => ({ default: m.DatabaseTable })));
 const Platform = lazy(() => import('@/pages/Platform').then(m => ({ default: m.Platform })));
 
 const queryClient = new QueryClient({
@@ -117,6 +119,8 @@ export function App() {
                 <Route path="kb/sources" element={<Suspense fallback={<PageLoader />}><KBSources /></Suspense>} />
                 <Route path="documents" element={<Suspense fallback={<PageLoader />}><Documents /></Suspense>} />
                 <Route path="documents/:id" element={<Suspense fallback={<PageLoader />}><DocumentDetail /></Suspense>} />
+                <Route path="database" element={<Suspense fallback={<PageLoader />}><Database /></Suspense>} />
+                <Route path="database/:id" element={<Suspense fallback={<PageLoader />}><DatabaseTable /></Suspense>} />
                 <Route path="tools" element={<Suspense fallback={<PageLoader />}><Apps /></Suspense>} />
                 <Route path="apps" element={<Navigate to="/tools" replace />} />
                 <Route path="connections" element={<Navigate to="/tools?tab=personal" replace />} />

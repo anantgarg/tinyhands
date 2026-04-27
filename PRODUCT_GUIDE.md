@@ -187,6 +187,58 @@ Every edit creates a version snapshot. Click **History** in any document editor 
 
 ---
 
+## Database
+
+The **Database** page (admin only) lets you give your agents structured, queryable data — the kind of data that belongs in a spreadsheet, not a document.
+
+### What it's for
+
+- Customer segments, pricing tables, inventory, lookup tables, pipeline snapshots — anything with rows and columns.
+- Replaces the habit of pasting spreadsheets into the knowledge base: agents can now `SELECT`, aggregate, and update real tables.
+
+### Creating a table
+
+1. Go to **Database** in the sidebar.
+2. Click **New table**, name it, and add at least one column.
+3. Pick a type for each column: Text, Number (whole / decimal), True/False, Date, Date & time, or JSON.
+4. Create. The table is ready to accept rows immediately.
+
+### Importing data
+
+Click **Import data**. Choose a source:
+
+- **CSV** — upload a file. The first row is the header; column types are detected automatically.
+- **Excel** — upload an `.xlsx` file and pick a sheet.
+- **Google Sheet** — paste the sheet URL or ID. Toggle **Re-sync automatically every 5 minutes** to keep the table in lock-step with the sheet.
+
+### When the Google Sheet changes
+
+If you add, rename, or remove a column in a synced sheet — or a row has a value that doesn't fit its column's type — the sync doesn't fail. Instead, a ⚠ warning triangle appears on the table row. Click it to open **Sync issues** and pick what to do:
+
+- **Add this column** — adds it to the Postgres table (pick the type); next sync backfills the values.
+- **Map to existing column** — for renames: tells the sync that "old Postgres name" and "new sheet name" are the same column.
+- **Ignore this column** — persists the decision so the triangle clears on the next sync.
+
+Removed sheet columns are preserved in Postgres with their existing values frozen until you decide what to do.
+
+### Referencing tables in an agent prompt
+
+In the agent system prompt editor, type `@database` and pick a specific table from the picker that opens. The reference becomes `@database:<table_name>`. At run time the agent automatically sees that table's schema (column names and types) in its context — no extra tool call needed.
+
+### What agents can and can't do
+
+Agents have the **Database** tool in read mode by default and can optionally have it in write mode.
+
+- **Read** — list tables, describe columns, select rows, run `count` / `sum` / `avg` / `min` / `max` aggregates with optional group-by, and run their own read-only `SELECT` queries.
+- **Write** (when enabled on the agent) — insert, update, or delete rows. Gated by the agent's write-policy approval flow, just like any other write tool.
+- **Never** — agents cannot create, rename, or drop tables or columns. Schema changes are admin-only.
+
+### Workspace isolation
+
+Your workspace's tables live in their own Postgres schema. An agent in another workspace cannot see your data, even if they try to fully qualify a cross-schema reference in raw SQL.
+
+---
+
 ## Triggers
 
 Triggers control when an agent activates beyond direct messages. Types include:
@@ -216,6 +268,7 @@ Your agents come with core tools (web search, file operations, code analysis) an
 | **Chargebee** | List customers, subscriptions, invoices |
 | **SerpAPI** | Track search engine rankings across Google, Bing, Yahoo |
 | **Knowledge Base** | Search your internal KB |
+| **Database** | Query your workspace's tables — select, aggregate, read-only SQL, and (with write mode) insert/update/delete |
 
 Google services (Drive, Sheets, Docs, Gmail) each appear as separate integrations but share a single Google OAuth connection. Connecting your Google account once gives agents access to whichever Google tools are enabled.
 

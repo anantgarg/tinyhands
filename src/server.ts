@@ -722,6 +722,148 @@ export function createWebhookServer(): express.Application {
     }
   });
 
+  // ── Internal Database API (used by in-container database tool) ──
+  // Auth: X-Internal-Secret header + workspace from X-Workspace-Id header.
+  // Schema mutations are NOT exposed here — those are admin-only and live in
+  // /api/database. The agent can read everything in its workspace and write
+  // through structured insert/update/delete (write_policy approval gates run
+  // separately, inside the tool code).
+
+  function requireInternalSecret(req: import('express').Request, res: import('express').Response): boolean {
+    const secret = req.headers['x-internal-secret'] as string;
+    if (config.server.internalSecret && secret !== config.server.internalSecret) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return false;
+    }
+    return true;
+  }
+
+  app.get('/internal/database/tables', async (req, res) => {
+    if (!requireInternalSecret(req, res)) return;
+    try {
+      const workspaceId = resolveInternalWorkspaceId(req);
+      const { listTables, describeTable } = await import('./modules/database');
+      const tables = await listTables(workspaceId);
+      const out = await Promise.all(tables.map(async (t) => {
+        const d = await describeTable(workspaceId, t.name);
+        return { name: t.name, description: t.description, columns: d?.columns || [] };
+      }));
+      res.json({ tables: out });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get('/internal/database/tables/:name', async (req, res) => {
+    if (!requireInternalSecret(req, res)) return;
+    try {
+      const workspaceId = resolveInternalWorkspaceId(req);
+      const { describeTable } = await import('./modules/database');
+      const d = await describeTable(workspaceId, req.params.name);
+      if (!d) { res.status(404).json({ error: 'Table not found' }); return; }
+      res.json({ name: d.table.name, description: d.table.description, columns: d.columns });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/internal/database/select', async (req, res) => {
+    if (!requireInternalSecret(req, res)) return;
+    try {
+      const workspaceId = resolveInternalWorkspaceId(req);
+      const { selectRows } = await import('./modules/database');
+      const { table, columns, where, order_by, order_dir, limit, offset } = req.body;
+      const result = await selectRows(workspaceId, table, {
+        columns, where, orderBy: order_by, orderDir: order_dir, limit, offset,
+      });
+      res.json(result);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  app.post('/internal/database/aggregate', async (req, res) => {
+    if (!requireInternalSecret(req, res)) return;
+    try {
+      const workspaceId = resolveInternalWorkspaceId(req);
+      const { aggregate } = await import('./modules/database');
+      const { table, fn, column, group_by, where, limit } = req.body;
+      const result = await aggregate(workspaceId, table, {
+        fn, column, groupBy: group_by, where, limit,
+      });
+      res.json(result);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  app.post('/internal/database/sql', async (req, res) => {
+    if (!requireInternalSecret(req, res)) return;
+    try {
+      const workspaceId = resolveInternalWorkspaceId(req);
+      const { runReadOnlySql } = await import('./modules/database');
+      const result = await runReadOnlySql(workspaceId, req.body.query || '');
+      res.json(result);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  // Refuse agent writes targeting Google-Sheet-backed tables. The 5-minute
+  // sync truncates and re-inserts from the sheet, so any insert/update/delete
+  // here would silently disappear on the next cycle. Better to fail loudly so
+  // the agent knows to push the change to the source spreadsheet instead.
+  async function rejectIfSyncedTable(workspaceId: string, tableName: string): Promise<string | null> {
+    const { getTableByName } = await import('./modules/database');
+    const t = await getTableByName(workspaceId, String(tableName || ''));
+    if (t && t.source_type === 'google_sheet') {
+      return `'${t.name}' is a read-only mirror of a Google Sheet — writes from agents are not allowed because they'd be overwritten on the next sync. Edit the source spreadsheet instead.`;
+    }
+    return null;
+  }
+
+  app.post('/internal/database/insert', async (req, res) => {
+    if (!requireInternalSecret(req, res)) return;
+    try {
+      const workspaceId = resolveInternalWorkspaceId(req);
+      const blocked = await rejectIfSyncedTable(workspaceId, req.body.table);
+      if (blocked) { res.status(403).json({ error: blocked }); return; }
+      const { insertRow } = await import('./modules/database');
+      const result = await insertRow(workspaceId, req.body.table, req.body.values || {});
+      res.json(result);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  app.post('/internal/database/update', async (req, res) => {
+    if (!requireInternalSecret(req, res)) return;
+    try {
+      const workspaceId = resolveInternalWorkspaceId(req);
+      const blocked = await rejectIfSyncedTable(workspaceId, req.body.table);
+      if (blocked) { res.status(403).json({ error: blocked }); return; }
+      const { updateRow } = await import('./modules/database');
+      const result = await updateRow(workspaceId, req.body.table, Number(req.body.id), req.body.values || {});
+      res.json(result);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
+  app.post('/internal/database/delete', async (req, res) => {
+    if (!requireInternalSecret(req, res)) return;
+    try {
+      const workspaceId = resolveInternalWorkspaceId(req);
+      const blocked = await rejectIfSyncedTable(workspaceId, req.body.table);
+      if (blocked) { res.status(403).json({ error: blocked }); return; }
+      const { deleteRow } = await import('./modules/database');
+      const result = await deleteRow(workspaceId, req.body.table, Number(req.body.id));
+      res.json(result);
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  });
+
   // ── SPA fallback — serve index.html for all non-API, non-webhook routes ──
   app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api/') || req.path.startsWith('/webhooks/') ||
