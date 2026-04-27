@@ -88,6 +88,22 @@
 | Document search | `src/modules/docs/` | Full-text search index |
 | Template filling | `src/modules/document-filling/` | Google Docs/Sheets automation |
 
+## Database
+
+| Feature | Module | Entry Points |
+|---------|--------|-------------|
+| Workspace-isolated tables | `src/modules/database/schema.ts` | Postgres schema-per-workspace `ws_<workspaceId>` |
+| Admin table CRUD | `src/modules/database/tables.ts`, `src/api/routes/database.ts` | `GET/POST /api/database/tables`, `PATCH /api/database/tables/:id`, `PATCH /api/database/tables/:id/columns` |
+| Row CRUD (admin UI) | `src/modules/database/rows.ts`, `src/api/routes/database.ts` | `GET/POST/PATCH/DELETE /api/database/tables/:id/rows[/:rowId]` |
+| Google Sheet imports + auto-sync | `src/modules/database/imports/google-sheets.ts`, `src/sync.ts` | `POST /api/database/import`, `POST /api/database/tables/:id/sync`, sync cadence shared with KB sources |
+| AI table/column descriptions | `src/modules/database/ai-metadata.ts` | `POST /api/database/suggest-metadata`, `POST /api/database/tables/:id/suggest-column-descriptions` (Claude Haiku) |
+| Schema-drift detection | `src/modules/database/sync-log.ts` | `database_sync_log` rows with `partial_sync` status and structured `detail.issues`; dashboard surfaces ⚠ warning |
+| Read-only SQL runner | `src/modules/database/sql.ts` | `SET LOCAL default_transaction_read_only=on`, statement timeout, single-statement validator, cross-schema rejection |
+| Database tool (read/write) | `src/modules/tools/integrations/database/` | `database-read` (list_tables/describe_table/select/aggregate/sql), `database-write` (insert/update/delete with approval) |
+| `@database:<table>` autocomplete | `web/src/components/RichTextEditor.tsx`, `src/modules/execution/index.ts` | Two-level mention picker; runtime injects table schema into agent context |
+| Drive folder picker (restricted) | `web/src/components/DriveSheetPicker.tsx`, `src/api/routes/database.ts` | `GET /api/database/drive-sheets` honors per-connection `root_folder_id` |
+| Synced-table write block | `src/server.ts` `rejectIfSyncedTable` | Agent writes to google_sheet-backed tables are rejected at the runtime endpoint |
+
 ## Access Control
 
 | Feature | Module | Entry Points |
