@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, RefreshCw, Plus, Trash2, AlertTriangle, Pencil, ChevronDown, ChevronRight } from 'lucide-react';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -18,7 +18,7 @@ import { Textarea } from '@/components/ui/textarea';
 import {
   useDatabaseTable, useDatabaseRows, useColumnOp, useSyncSheet,
   useIgnoreColumn, useMapColumn, useInsertRow, useUpdateRow, useDeleteRow,
-  useUpdateColumnDescription, useUpdateTableDescription, useSuggestColumnDescriptions,
+  useUpdateColumnDescription, useSuggestColumnDescriptions,
   type DatabaseColumnType,
 } from '@/api/database';
 
@@ -32,7 +32,6 @@ const TYPE_OPTIONS: DatabaseColumnType[] = ['text', 'integer', 'numeric', 'boole
 
 export function DatabaseTable() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
   const { data: table, isLoading } = useDatabaseTable(id || null);
   const { data: rowsData } = useDatabaseRows(id || null, { limit: 100 });
   const [addColOpen, setAddColOpen] = useState(false);
