@@ -321,6 +321,8 @@ Superseded by `workspace_memberships` + `platform_admins`. Retained read-only fo
 | code_artifacts | Agent-authored code artifacts |
 | mcp_configs | MCP server configurations |
 | authored_skills | Agent-created skill definitions |
+| database_tables | Admin-created tables (workspace_id, name, source_type, source_config, last_synced_at, column_descriptions JSONB). User row data lives in per-workspace `ws_<workspace_id>` schemas, not here. |
+| database_sync_log | Per-sync-cycle results for CSV/XLSX/Google-Sheet-backed tables (status: success/partial_sync/failed; detail.issues surfaces unmapped/removed/renamed columns and row type mismatches) |
 
 ## Relationships
 
