@@ -2,6 +2,21 @@
 
 One entry per deploy to production. Each entry names the version, the date, the merges included since the previous release, and the exact rollback command. Updated automatically by the Deploy button (see `.bake/harness/deploy.md` for the post-deploy step that appends here).
 
+## v1.57.0 — 2026-04-27
+
+Deployed to the production host. Includes:
+
+- plan-028 merged: Database feature. Workspace-isolated PostgreSQL schemas (`ws_<workspaceId>`) with admin-managed typed tables, Google Sheet imports with auto-sync and schema-drift detection (yellow warning triangle matching the KB sync indicator), AI-generated table/column descriptions via Claude Haiku (editable), and a new `Database` agent tool with read mode (list_tables/describe_table/select/aggregate/sql) and write mode (insert/update/delete) gated by the existing write-policy approval system.
+- New `@database:<table>` autocomplete in the agent builder injects the table schema into runtime context. Synced (Google-Sheet-backed) tables are read-only at runtime — agent writes are rejected because they would be overwritten on the next sync.
+- Read-only SQL runner enforces `SET LOCAL default_transaction_read_only=on`, statement timeout, single-statement-only validation, and rejects cross-schema references.
+- Drive picker honors per-connection root-folder restrictions. Refresh-on-401 for Google APIs is now a default `getFreshCredentials()` helper across the connections module (no more per-route patches).
+- Fix: `parseAndStoreToolCalls` was looking for a non-existent `'tool'` event type and only persisted ~1 row per run. Now pairs every `tool_use` block with its matching `tool_result` by `tool_use_id` (handles parallel tool calls); `tool_calls_count` in the runner counts real tool_use blocks instead of `num_turns`.
+- Build hotfix: removed unused `useNavigate` import and `useUpdateTableDescription` hook reference in `web/src/pages/DatabaseTable.tsx` that broke the production TypeScript build.
+
+Migration: none new in this release (Database feature shipped its migrations in plan-028's merge).
+
+Rollback: `doctl compute ssh tinyjobs-prod --ssh-key-path ~/.ssh/tinyjobs_deploy --ssh-command "cd /root/tinyjobs && git checkout v1.56.0 && NODE_ENV=development npm install && NODE_ENV=development npm run build && NODE_ENV=development npm run build:web && pm2 reload ecosystem.config.js --force"`.
+
 ## v1.55.0 — 2026-04-23
 
 Deployed to the production host. Includes:
