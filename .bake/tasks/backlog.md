@@ -40,6 +40,7 @@
 - [ ] Edge case: confirm `.gif`, `.webp`, `.svg`, `.tiff`, and `.heic` files each still land in the skip log with reason `unsupported_format` (not OCR'd) (from plan-025)
 - [ ] Restore the dashboard CSV import affordance in the Database page's import dialog — backend already supports `kind: 'csv'` and is unit-tested (from plan-028)
 - [ ] Restore the dashboard XLSX import affordance in the Database page's import dialog — backend already supports `kind: 'xlsx'` and is unit-tested (from plan-028)
+- [ ] Manually verify the agent detail page (`/agents/:id`) renders the prompt editor without triggering the error boundary, both in local dev and against a freshly built production bundle (from plan-029)
 
 ## Completed
 
