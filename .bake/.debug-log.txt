@@ -1259,3 +1259,6 @@ tiveFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-018.md","
 [12:04:24.401] [TerminalSwitch] transitioning {"from":"main","to":"plan-029","storeSessionsLen":39}
 [12:04:24.401] [Terminal] getOrCreate → returning cached {"sessionId":"plan-029","cachedCwd":null}
 [12:04:24.846] [Terminal] resolved cwd {"sessionId":"plan-029","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-029","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-029","projectPath":"/Users/anantgarg/Local/tinyhands"}
+[12:10:15.387] [Poll] External change detected {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-029.md","resolvedPath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-029/.bake/tasks/plans/plan-029.md","newTitle":"Fix \"require is not defined\" crash on agent edit page","currentH1":"New Plan","refExists":true}
+[12:10:15.388] [Poll] Updated h1 DOM {"newTitle":"Fix \"require is not defined\" crash on agent edit page"}
+[12:10:15.412] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-029.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":8644,"isPlanPath":true}
