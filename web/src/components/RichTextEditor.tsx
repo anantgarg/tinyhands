@@ -6,6 +6,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } fr
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 import { useSlackUsers } from '@/api/slack';
+import { useDatabaseTables } from '@/api/database';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
 interface RichTextEditorProps {
@@ -651,12 +652,6 @@ interface DBState {
 const DB_CLOSED: DBState = { open: false, query: '', from: 0, coords: null };
 
 function DatabaseMentionAutocomplete({ editor }: { editor: Editor }) {
-  // Lazy-import the hook to avoid loading the database API surface on every
-  // page that uses the editor — only bundles it when this picker is enabled.
-  // Note: dynamic import isn't possible at the hook level, so we just import
-  // the hook here. The api/database file is small.
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
-  const { useDatabaseTables } = require('@/api/database') as typeof import('@/api/database');
   const { data: tables } = useDatabaseTables();
 
   const [state, setState] = useState<DBState>(DB_CLOSED);
