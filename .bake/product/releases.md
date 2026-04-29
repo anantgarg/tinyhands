@@ -2,6 +2,17 @@
 
 One entry per deploy to production. Each entry names the version, the date, the merges included since the previous release, and the exact rollback command. Updated automatically by the Deploy button (see `.bake/harness/deploy.md` for the post-deploy step that appends here).
 
+## v1.57.1 — 2026-04-29
+
+Deployed to the production host. Includes:
+
+- plan-029 merged: fix "require is not defined" crash on the agent edit page. `RichTextEditor`'s database-mention autocomplete used an inline CommonJS `require()` call that broke inside the Vite-built ES module bundle, tripping React's error boundary the moment the prompt editor mounted. Replaced with a top-of-file ES import.
+- Added a static-source regression test under `tests/unit/web/` that fails if `require(` ever reappears in `RichTextEditor.tsx`.
+
+No database migrations in this release.
+
+Rollback: `doctl compute ssh tinyjobs-prod --ssh-key-path ~/.ssh/tinyjobs_deploy --ssh-command "cd /root/tinyjobs && git checkout v1.57.0 && NODE_ENV=development npm install && NODE_ENV=development npm run build && NODE_ENV=development npm run build:web && pm2 reload ecosystem.config.js --force"`.
+
 ## v1.57.0 — 2026-04-27
 
 Deployed to the production host. Includes:
