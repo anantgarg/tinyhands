@@ -1243,3 +1243,19 @@ tiveFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-018.md","
 [21:42:07.804] [AutoSwitch] non-plan/vibe → forcing main {"prevSession":"plan-021"}
 [21:42:07.809] [TerminalSwitch] transitioning {"from":"plan-021","to":"main","storeSessionsLen":38}
 [21:42:07.809] [Terminal] getOrCreate → returning cached {"sessionId":"main","cachedCwd":null}
+[12:04:24.353] [TerminalSwitch] transitioning {"from":"main","to":"plan-029","storeSessionsLen":39}
+[12:04:24.353] [Terminal] getOrCreate → creating new {"sessionId":"plan-029","sessionFound":true,"sessionType":"plan","sessionPlanId":"plan-029","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-029","sessionsLen":39,"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[12:04:24.366] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"__main__","sessionsLen":39,"activeSessionId":"plan-029"}
+[12:04:24.366] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":false,"activeFilePath":"__main__"}
+[12:04:24.366] [AutoSwitch] non-plan/vibe → forcing main {"prevSession":"plan-029"}
+[12:04:24.368] [TerminalSwitch] transitioning {"from":"plan-029","to":"main","storeSessionsLen":39}
+[12:04:24.368] [Terminal] getOrCreate → returning cached {"sessionId":"main","cachedCwd":null}
+[12:04:24.384] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-029.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":1964,"isPlanPath":true}
+[12:04:24.384] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-029.md","title":"New Plan"}
+[12:04:24.392] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-029.md","sessionsLen":39,"activeSessionId":"main"}
+[12:04:24.392] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-029.md"}
+[12:04:24.394] [Editor] useLayoutEffect syncing h1 {"planTitle":"New Plan","currentTextContent":""}
+[12:04:24.400] [AutoSwitch] plan → activating existing session {"itemId":"plan-029","sessionId":"plan-029","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-029","prevSession":"main"}
+[12:04:24.401] [TerminalSwitch] transitioning {"from":"main","to":"plan-029","storeSessionsLen":39}
+[12:04:24.401] [Terminal] getOrCreate → returning cached {"sessionId":"plan-029","cachedCwd":null}
+[12:04:24.846] [Terminal] resolved cwd {"sessionId":"plan-029","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-029","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-029","projectPath":"/Users/anantgarg/Local/tinyhands"}
