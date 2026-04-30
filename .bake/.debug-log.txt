@@ -1294,3 +1294,18 @@ tiveFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-018.md","
 [12:43:16.802] [Terminal] getOrCreate → returning cached {"sessionId":"main","cachedCwd":null}
 [12:43:16.802] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"__main__","sessionsLen":39,"activeSessionId":"main"}
 [12:43:16.802] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":false,"activeFilePath":"__main__"}
+[18:45:53.675] [TerminalSwitch] transitioning {"from":"main","to":"loud-dove","storeSessionsLen":40}
+[18:45:53.675] [Terminal] getOrCreate → creating new {"sessionId":"loud-dove","sessionFound":true,"sessionType":"vibe","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/loud-dove","sessionsLen":40,"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[18:45:53.701] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"__main__","sessionsLen":40,"activeSessionId":"loud-dove"}
+[18:45:53.701] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":false,"activeFilePath":"__main__"}
+[18:45:53.701] [AutoSwitch] non-plan/vibe → forcing main {"prevSession":"loud-dove"}
+[18:45:53.703] [TerminalSwitch] transitioning {"from":"loud-dove","to":"main","storeSessionsLen":40}
+[18:45:53.703] [Terminal] getOrCreate → returning cached {"sessionId":"main","cachedCwd":null}
+[18:45:53.724] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-006.md","isReadOnly":false,"parsedStatus":"active","editorContentLen":84,"isPlanPath":false}
+[18:45:53.724] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-006.md","title":"Loud Dove"}
+[18:45:53.727] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-006.md","sessionsLen":40,"activeSessionId":"main"}
+[18:45:53.727] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":true,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-006.md"}
+[18:45:53.728] [Editor] useLayoutEffect syncing h1 {"planTitle":"Loud Dove","currentTextContent":""}
+[18:45:53.735] [TerminalSwitch] transitioning {"from":"main","to":"loud-dove","storeSessionsLen":40}
+[18:45:53.735] [Terminal] getOrCreate → returning cached {"sessionId":"loud-dove","cachedCwd":null}
+[18:45:54.003] [Terminal] resolved cwd {"sessionId":"loud-dove","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/loud-dove","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/loud-dove","projectPath":"/Users/anantgarg/Local/tinyhands"}
