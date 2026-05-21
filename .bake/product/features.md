@@ -242,6 +242,7 @@
 | Tools | `/api/tools` | Available, custom, integrations |
 | Connections | `/api/connections` | Personal, team, OAuth |
 | Triggers | `/api/triggers` | Definitions, webhooks |
+| Web Chat | `/api/v1/web-chat`, `/api/public/chat` | Channel CRUD (admin) + public chat |
 | Workflows | `/api/workflows` | Definitions, runs |
 | Observability | `/api/observability` | Errors, runs, stats |
 | Audit | `/api/audit` | Entries |
