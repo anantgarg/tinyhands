@@ -41,6 +41,9 @@
 - [ ] Restore the dashboard CSV import affordance in the Database page's import dialog — backend already supports `kind: 'csv'` and is unit-tested (from plan-028)
 - [ ] Restore the dashboard XLSX import affordance in the Database page's import dialog — backend already supports `kind: 'xlsx'` and is unit-tested (from plan-028)
 - [ ] Manually verify the agent detail page (`/agents/:id`) renders the prompt editor without triggering the error boundary, both in local dev and against a freshly built production bundle (from plan-029)
+- [ ] Add brute-force protection to the public Web Chat login endpoint (`POST /api/public/chat/:token/login`) — currently unlimited password attempts; needs per-token failure throttling/lockout (from plan-030)
+- [ ] Guard against attaching a write-policy (`confirm`/`admin_confirm`) agent to a Web Chat — such runs hang waiting for a Slack DM approval the visitor can't trigger; either block at attach time or warn the admin (from plan-030)
+- [ ] End-to-end smoke test of Web Chat against a real DB/Redis/Docker: apply migration 032, create a web chat, complete a visitor conversation, confirm the empty-`channelId` run path produces output (from plan-030)
 
 ## Completed
 
