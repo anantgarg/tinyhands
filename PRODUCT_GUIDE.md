@@ -251,6 +251,32 @@ Triggers are configured on the agent's Triggers tab in the dashboard. You can ad
 
 ---
 
+## Channels: Web Chat
+
+Agents normally live in Slack — but sometimes you need to put an agent in front of people who
+aren't in your Slack workspace: a customer, a contractor, or a prospect you're demoing to. A
+**web chat** does exactly that.
+
+From the dashboard's **Channels** page, an admin creates a web chat by giving it a name,
+choosing which agent answers it, and setting a **username and password**. The system then
+generates a shareable link. Anyone you send that link to can open it in a browser, enter the
+username and password, and chat with the agent — **no Slack account and no dashboard login
+required.**
+
+Each web chat:
+
+- Is protected by a single shared username and password that you set (and can view and change
+  on the Channels page at any time).
+- Runs the agent you attached, with all of its tools, knowledge, and memory — just like in Slack.
+- Keeps each visitor's conversation in context, so follow-up questions work naturally.
+- Can be turned off or deleted at any time. Disabling it, deleting it, or changing the password
+  makes the old link stop working immediately.
+
+The Channels page is admin-only. The web chat link itself can be shared with anyone you trust
+with the username and password.
+
+---
+
 ## Available Tools and Integrations
 
 Your agents come with core tools (web search, file operations, code analysis) and may also have access to these integrations:

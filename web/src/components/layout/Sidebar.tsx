@@ -15,6 +15,7 @@ import {
   LogOut,
   FolderOpen,
   Database,
+  MessageSquare,
   ChevronsLeft,
   ChevronsRight,
 } from 'lucide-react';
@@ -57,6 +58,7 @@ const manageNav: NavItem[] = [
   { label: 'Documents', to: '/documents', icon: FolderOpen },
   { label: 'Database', to: '/database', icon: Database, adminOnly: true },
   { label: 'Triggers', to: '/triggers', icon: Zap },
+  { label: 'Channels', to: '/channels', icon: MessageSquare, adminOnly: true },
 ];
 
 const reviewNav: NavItem[] = [

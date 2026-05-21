@@ -1184,6 +1184,55 @@ Reducto is an optional per-workspace upgrade that materially outperforms local p
 
 ---
 
+## Channels (Web Chat)
+
+A **web chat** exposes a single agent as a password-protected public chat page that anyone can
+open in a browser — no Slack workspace, no dashboard account, no "Sign in with Slack".
+
+### Creating a web chat
+
+- Dashboard → **Channels** (admin-only page) → **Web Chat** section → **New web chat**.
+- The admin sets: a **name**, the **agent** that answers it, and a **username + password** that
+  visitors must enter. All four are required.
+- On save, the system generates a random, unguessable URL of the form `/chat/{token}`. The
+  Channels page shows the link (with a copy button) plus the username and password (revealable),
+  so the admin can share all three.
+- A web chat can be edited (rename, re-attach a different agent, change the username/password),
+  enabled/disabled, and deleted.
+
+### Visitor experience
+
+- Opening the link shows a username/password prompt. Correct credentials unlock the chat;
+  incorrect credentials are rejected.
+- After authenticating, the visitor holds a normal multi-message conversation with the agent in
+  the browser. Earlier messages in the same session are carried as context into later replies.
+- A successful login issues a signed, httpOnly cookie scoped to that one web chat (valid 12
+  hours). The cookie is the only thing the visitor's browser holds — there is no account.
+
+### Rules
+
+- **Credential storage** — the visitor password is AES-GCM encrypted (not hashed) so an admin
+  can read it back on the Channels page to re-share it. There is one shared username/password
+  per web chat, not per-visitor accounts.
+- **Execution** — a visitor message enqueues a normal agent run with no Slack channel; the reply
+  is polled back from the run record. The agent's tools, knowledge, memory, and write policies
+  all apply exactly as they do in Slack. The per-workspace rate limit also applies — when the
+  workspace is busy the visitor sees a friendly "try again in a moment" message.
+- **Disabling, deleting, or changing the credentials of a web chat takes effect immediately** —
+  the old link/credential stops working at once.
+- An unknown or disabled link returns a clean "chat unavailable" page, never an error trace.
+- The public chat page is served outside the dashboard's authenticated area — it never requires
+  or exposes a dashboard or Slack session.
+
+**Access:**
+
+| Action | Superadmin | Admin | Agent Owner | Agent Member | Viewer |
+|--------|-----------|-------|-------------|-------------|--------|
+| View / create / edit / delete web chats | Yes | Yes | No | No | No |
+| Use a web chat link (with the shared credential) | Anyone with the link + username/password |
+
+---
+
 ## Agent Memory
 
 - **Optional** per-agent (toggle in Settings during creation or on Overview tab).
@@ -1384,6 +1433,7 @@ All user-facing text in the dashboard and agent creation flow MUST use these lab
 | Connections | All | Personal connections tab + Team connections tab (read-only for non-admins) |
 | Knowledge Base | All | Browse sources, entries, search. Admin: add/edit/approve/delete |
 | Documents | All | List, create, edit, delete docs/sheets/files. Filter by type, search, version history |
+| Channels | Admin only | Web Chat — create password-protected public chat links for agents |
 | Requests | All | Tabs: Tool Requests, Upgrade Requests, Evolution Proposals, Feature Requests, KB Contributions |
 | Error Logs | All | Recent errors and failed runs |
 | Audit Log | Admin only | Full action audit trail, filterable |
