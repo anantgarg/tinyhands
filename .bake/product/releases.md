@@ -2,6 +2,16 @@
 
 One entry per deploy to production. Each entry names the version, the date, the merges included since the previous release, and the exact rollback command. Updated automatically by the Deploy button (see `.bake/harness/deploy.md` for the post-deploy step that appends here).
 
+## v1.58.0 — 2026-05-21
+
+Deployed to the production host. Includes:
+
+- plan-030 merged: Web Chat channels. An admin can expose an agent as a password-protected public chat page — a new admin-only **Channels** dashboard page lets them name a web chat, attach an agent, and set a shared username/password; the system generates a random `/chat/{token}` link anyone can open in a browser with no Slack or dashboard login. The visitor password is AES-GCM encrypted (not hashed) so an admin can read it back to re-share. Public unauthenticated routes (`login` → signed httpOnly per-token cookie, `message` → enqueues a normal agent run with empty `channelId`/`threadTs`, `poll` → reads `run_history` by `trace_id`) live in `src/api/public-chat.ts`. The new `src/modules/web-chat/` module handles channel CRUD and message dispatch.
+
+Migration 032 (`web_chat_channels.sql`) applied — adds `web_chat_channels`, `web_chat_sessions`, and `web_chat_messages`. Additive; safe to leave applied on a code rollback.
+
+Rollback: `doctl compute ssh tinyjobs-prod --ssh-key-path ~/.ssh/tinyjobs_deploy --ssh-command "cd /root/tinyjobs && git checkout v1.57.1 && NODE_ENV=development npm install && NODE_ENV=development npm run build && NODE_ENV=development npm run build:web && pm2 reload ecosystem.config.js --force"`.
+
 ## v1.57.1 — 2026-04-29
 
 Deployed to the production host. Includes:
