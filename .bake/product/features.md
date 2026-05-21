@@ -189,6 +189,8 @@
 | Doc editor | `web/src/pages/DocEditor.tsx` | Rich text document editing |
 | Workflows | `web/src/pages/Workflows.tsx` | Workflow builder |
 | Triggers | `web/src/pages/Triggers.tsx` | Event trigger management |
+| Channels | `web/src/pages/Channels.tsx` | Web Chat channel management (admin) |
+| Web Chat (public) | `web/src/pages/WebChat.tsx` | Public `/chat/:token` visitor page |
 | Evolution | `web/src/pages/Evolution.tsx` | Self-improvement proposals |
 | Audit log | `web/src/pages/AuditLog.tsx` | Action audit trail |
 | Error logs | `web/src/pages/ErrorLogs.tsx` | Error tracking |
