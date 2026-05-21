@@ -124,3 +124,24 @@
 |--------|------|------|---------|
 | GET | `/channels` | Required | List all Slack channels |
 | GET | `/users` | Required | List all Slack users |
+
+## Web Chat — Admin (`/api/v1/web-chat`)
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| GET | `/channels` | Admin | List web chats (includes decrypted shared password) |
+| POST | `/channels` | Admin | Create a web chat (name, agentId, username, password) |
+| PATCH | `/channels/:id` | Admin | Update a web chat (rename, re-attach agent, change credentials, enable/disable) |
+| DELETE | `/channels/:id` | Admin | Delete a web chat |
+
+## Web Chat — Public (`/api/public/chat`)
+
+Unauthenticated routes — no Slack or dashboard session. A username/password gate
+issues a signed, httpOnly, per-token cookie.
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| GET | `/:token` | None | Public metadata (chat name, agent name/emoji) |
+| POST | `/:token/login` | None | Verify the shared credential; sets the session cookie |
+| POST | `/:token/message` | Cookie | Enqueue a visitor message; returns `{ sessionId, traceId }` |
+| GET | `/:token/message/:traceId` | Cookie | Poll for the agent reply (`running` / `done` / `error`) |
