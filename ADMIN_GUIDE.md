@@ -625,6 +625,45 @@ Triggers can be paused and resumed from the Triggers tab.
 
 ---
 
+## Channels: Web Chat
+
+The **Channels** page (admin-only) lets you expose an agent as a password-protected public chat
+page. This is the way to let people who are **not** in your Slack workspace — customers,
+contractors, prospects — talk to an agent.
+
+### Creating a web chat
+
+1. Open the dashboard → **Channels** → **Web Chat** → **New web chat**.
+2. Give it a name, pick the agent that should answer it, and set a **username and password**.
+3. Save. The page now shows a shareable link of the form `https://<your-dashboard>/chat/<token>`.
+4. Share the link, username, and password with whoever should have access.
+
+Visitors open the link, enter the username and password, and chat with the agent in their
+browser. No Slack account and no dashboard login is required of them.
+
+### Managing web chats
+
+- The Channels page lists every web chat with its link (copy button), username, password
+  (click the eye icon to reveal), and an Active/Disabled toggle.
+- **Edit** to rename, attach a different agent, or change the username/password.
+- **Disable** to take a web chat offline without deleting it; **Delete** to remove it entirely.
+- Disabling, deleting, or changing the password of a web chat takes effect immediately — the
+  old link or credential stops working at once.
+
+### Security notes
+
+- Each web chat is protected by **one shared username and password**, not per-visitor accounts.
+  Anyone who has the link and the credential can chat. Treat the credential like a shared
+  password: rotate it (via Edit) if it may have leaked, and disable web chats you no longer use.
+- The visitor password is stored encrypted (using your `ENCRYPTION_KEY`) so it can be displayed
+  back to you for re-sharing — keep `ENCRYPTION_KEY` safe as with all other credentials.
+- A web chat runs the attached agent with all of its tools, knowledge, memory, and write
+  policies. Only attach agents whose capabilities are appropriate for the audience you are
+  sharing the link with.
+- Web chat traffic counts against the workspace's normal rate limits and Anthropic usage/cost.
+
+---
+
 ## Audit Log
 
 Platform admins can view a comprehensive audit trail of all actions via the web dashboard audit log. The `/audit` Slack command redirects to the dashboard. The audit log tracks:

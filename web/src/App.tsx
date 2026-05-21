@@ -32,6 +32,8 @@ const DocumentDetail = lazy(() => import('@/pages/DocumentDetail').then(m => ({ 
 const Database = lazy(() => import('@/pages/Database').then(m => ({ default: m.Database })));
 const DatabaseTable = lazy(() => import('@/pages/DatabaseTable').then(m => ({ default: m.DatabaseTable })));
 const Platform = lazy(() => import('@/pages/Platform').then(m => ({ default: m.Platform })));
+const Channels = lazy(() => import('@/pages/Channels').then(m => ({ default: m.Channels })));
+const WebChat = lazy(() => import('@/pages/WebChat').then(m => ({ default: m.WebChat })));
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -99,6 +101,7 @@ export function App() {
           <Suspense fallback={<PageLoader />}>
             <Routes>
               <Route path="/login" element={<Login />} />
+              <Route path="/chat/:token" element={<Suspense fallback={<PageLoader />}><WebChat /></Suspense>} />
               <Route
                 path="/*"
                 element={
@@ -125,6 +128,7 @@ export function App() {
                 <Route path="apps" element={<Navigate to="/tools" replace />} />
                 <Route path="connections" element={<Navigate to="/tools?tab=personal" replace />} />
                 <Route path="triggers" element={<Suspense fallback={<PageLoader />}><Triggers /></Suspense>} />
+                <Route path="channels" element={<Suspense fallback={<PageLoader />}><Channels /></Suspense>} />
                 <Route path="requests" element={<Suspense fallback={<PageLoader />}><Requests /></Suspense>} />
                 <Route path="errors" element={<Suspense fallback={<PageLoader />}><ErrorLogs /></Suspense>} />
                 <Route path="evolution" element={<Suspense fallback={<PageLoader />}><Evolution /></Suspense>} />

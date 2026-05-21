@@ -145,6 +145,12 @@ Hierarchical browsing: **Sources > Documents > Content**
 - **Custom avatars** -- each agent posts with its own name and emoji
 - **Slash commands** -- `/agents` opens dashboard, `/new-agent` creates agents from Slack
 
+### Channels
+
+- **Web Chat** -- share an agent as a password-protected public chat page. Create a web chat in
+  the dashboard, attach an agent, set a username and password, and get a link anyone can open in
+  a browser -- no Slack account or dashboard login required.
+
 ### Triggers & Automation
 
 | Type | Description |

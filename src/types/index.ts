@@ -769,3 +769,42 @@ export interface DatabaseSyncLogRecord {
   created_at: string;
 }
 
+// ── Web Chat Channels ──
+// A web chat exposes one agent as a password-protected public chat page at
+// /chat/<public_token>, with no Slack or dashboard login required.
+
+export interface WebChatChannel {
+  id: string;
+  workspace_id: string;
+  name: string;
+  slug: string;
+  agent_id: string;
+  auth_username: string;
+  auth_password_encrypted: string;
+  auth_password_iv: string;
+  public_token: string;
+  enabled: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WebChatSession {
+  id: string;
+  channel_id: string;
+  visitor_label: string | null;
+  created_at: string;
+  last_active_at: string;
+}
+
+export type WebChatMessageRole = 'user' | 'assistant';
+
+export interface WebChatMessage {
+  id: string;
+  session_id: string;
+  role: WebChatMessageRole;
+  content: string;
+  trace_id: string | null;
+  created_at: string;
+}
+

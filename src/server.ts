@@ -6,6 +6,7 @@ import Redis from 'ioredis';
 import { config } from './config';
 import { getDefaultWorkspaceId } from './db';
 import { createApiRouter } from './api';
+import { registerPublicChatRoutes } from './api/public-chat';
 import { deployWebhookHandler } from './modules/auto-update';
 import { fireTrigger, getActiveTriggersByType } from './modules/triggers';
 import { searchKB, listKBEntries, getCategories } from './modules/knowledge-base';
@@ -50,6 +51,11 @@ export function createWebhookServer(): express.Application {
 
   // ── Web Dashboard API ──
   app.use('/api/v1', createApiRouter());
+
+  // ── Public Web Chat API (no Slack / dashboard auth) ──
+  // A web chat is reachable at /chat/:token by anyone who knows the shared
+  // username/password. These routes never touch the dashboard session.
+  registerPublicChatRoutes(app);
 
   // ── Serve static files for web dashboard ──
   app.use(express.static(path.join(__dirname, '../dist/web')));

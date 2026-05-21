@@ -68,6 +68,7 @@ src/
 │   ├── reducto/             # Optional per-workspace Reducto integration for PDF / scanned-document parsing
 │   ├── sources/             # Agent data sources (GitHub, Google Drive, memory)
 │   ├── triggers/            # Trigger types: slack, linear, zendesk, intercom, webhook, schedule
+│   ├── web-chat/            # Web Chat channels — password-protected public /chat/{token} pages that run an agent
 │   ├── workflows/           # Multi-step stateful workflows (DAG of steps)
 │   ├── teams/               # Multi-agent orchestration
 │   ├── skills/              # Skill registry + builtins loader (reads /skills/*.md)
@@ -120,6 +121,8 @@ PostgreSQL with migrations in `src/db/migrations/`. Key tables:
 - **document_search** — Full-text search index (tsvector + GIN)
 - **database_tables** — Admin-created tables (workspace_id, name, source_type, source_config, last_synced_at). User rows live in per-workspace schemas `ws_<workspace_id>`, not in this metadata table.
 - **database_sync_log** — Per-sync-cycle results for CSV/XLSX/Google-Sheet-backed tables. `status` ∈ `success` / `partial_sync` / `failed`; `detail.issues` surfaces unmapped columns, removed columns, row type mismatches, etc. Dashboard reads the latest row per table to decide whether to render the warning triangle.
+- **web_chat_channels** — Web Chat channels (workspace_id, name, slug, agent_id, auth_username, AES-GCM-encrypted `auth_password_encrypted`/`auth_password_iv`, random `public_token` used in the `/chat/{token}` URL, `enabled`). The visitor password is encrypted (not hashed) so an admin can read it back to re-share it.
+- **web_chat_sessions** / **web_chat_messages** — One row per visitor conversation and its user/assistant turns. Assistant rows carry the `trace_id` of the `run_history` row that produced them.
 
 Query helpers: `query()`, `queryOne()`, `execute()` from `src/db/index.ts`.
 
@@ -242,6 +245,9 @@ Defined in `src/slack/commands.ts`. Each command opens modals or sends DM blocks
 
 ### Webhooks
 Express routes in `src/server.ts`. Signature verification for GitHub, Linear, Zendesk, Intercom. Per-workspace agent webhooks at `/webhooks/w/{workspaceSlug}/agent/{agentSlug}`; the legacy `/webhooks/agent-{name}` URL redirects (301) when unambiguous or falls back to the default workspace for self-hosted compatibility. Signed webhooks fan out across all workspaces that have an active trigger of that type, with each trigger's `webhook_secret` verified independently.
+
+### Web Chat
+A web chat exposes one agent as a password-protected public page at `/chat/{token}` — no Slack or dashboard login. Admin CRUD is `/api/v1/web-chat/channels` (admin-only). Public, unauthenticated routes are registered by `registerPublicChatRoutes` in `src/api/public-chat.ts` (mounted from `src/server.ts`): `POST /api/public/chat/:token/login` verifies the shared username/password and issues a signed, httpOnly, per-token cookie; `POST /api/public/chat/:token/message` enqueues an agent run with an empty `channelId`/`threadTs` (the execution module already guards every Slack call on `channelId`); `GET /api/public/chat/:token/message/:traceId` polls `run_history` by `trace_id` for the reply. The public chat React page (`web/src/pages/WebChat.tsx`) is routed outside `RequireAuth`/`Shell`.
 
 ### Rate Limiting
 Redis-backed token bucket in `src/queue/index.ts`. Pre-flight check at 90% TPM capacity. Per-minute tracking for both TPM and RPM.
