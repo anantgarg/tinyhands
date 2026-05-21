@@ -50,6 +50,7 @@ Defined directly in `src/server.ts` with signature verification:
 | POST | `/webhooks/intercom` | Intercom events (signature verified) |
 | GET | `/auth/callback/:integration` | OAuth provider callbacks |
 | GET | `/health` | Health check |
+| GET/POST | `/api/public/chat/:token[...]` | Public Web Chat — metadata, login, message, poll (see [remaining.md](remaining.md#web-chat--public-apipublicchat)) |
 
 ## Internal APIs (Runner Container Access)
 
