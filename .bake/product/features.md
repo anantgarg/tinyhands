@@ -138,6 +138,14 @@
 | Schedule triggers | `src/modules/triggers/` | Cron expressions with timezone |
 | Workflows | `src/modules/workflows/` | Multi-step DAGs with waiting states |
 
+## Channels
+
+| Feature | Module | Entry Points |
+|---------|--------|-------------|
+| Web Chat channels | `src/modules/web-chat/`, `src/db/migrations/032_web_chat_channels.sql` | `web_chat_channels` / `web_chat_sessions` / `web_chat_messages` tables |
+| Web Chat admin API | `src/api/routes/web-chat.ts`, `web/src/pages/Channels.tsx` | `GET/POST/PATCH/DELETE /api/v1/web-chat/channels` (admin-only) |
+| Web Chat public page | `src/api/public-chat.ts`, `web/src/pages/WebChat.tsx` | `/chat/:token`, `POST /api/public/chat/:token/{login,message}`, `GET /api/public/chat/:token[/message/:traceId]` |
+
 ## Self-Improvement
 
 | Feature | Module | Entry Points |
