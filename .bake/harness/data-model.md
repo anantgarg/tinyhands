@@ -297,6 +297,30 @@ Superseded by `workspace_memberships` + `platform_admins`. Retained read-only fo
 | current_step | TEXT | Active step identifier |
 | state | JSONB | Accumulated workflow state |
 
+### Web Chat Channels (plan-030)
+
+#### web_chat_channels
+
+| Column | Type | Purpose |
+|--------|------|---------|
+| id | TEXT | Primary key |
+| workspace_id | TEXT | FK → workspaces |
+| name | TEXT | Display name |
+| slug | TEXT | Unique per workspace |
+| agent_id | TEXT | FK → agents (the agent that answers) |
+| auth_username | TEXT | Shared visitor username |
+| auth_password_encrypted / auth_password_iv | TEXT | AES-GCM-encrypted visitor password (encrypted, not hashed, so an admin can read it back to re-share) |
+| public_token | TEXT | Random, unique — the `/chat/{token}` URL segment |
+| enabled | BOOLEAN | Disabling immediately stops the link from working |
+| created_by | TEXT | dbUserId of the creating admin (nullable) |
+
+#### web_chat_sessions / web_chat_messages
+
+| Table | Purpose |
+|-------|---------|
+| web_chat_sessions | One row per visitor conversation (channel_id FK, visitor_label, last_active_at) |
+| web_chat_messages | User/assistant turns within a session; assistant rows carry the `trace_id` of the run_history row that produced them |
+
 ### Other Tables
 
 | Table | Purpose |
