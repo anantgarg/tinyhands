@@ -1372,3 +1372,6 @@ tiveFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-018.md","
 [08:51:15.195] [TerminalSwitch] transitioning {"from":"main","to":"plan-031","storeSessionsLen":42}
 [08:51:15.195] [Terminal] getOrCreate → returning cached {"sessionId":"plan-031","cachedCwd":null}
 [08:51:15.469] [Terminal] resolved cwd {"sessionId":"plan-031","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-031","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-031","projectPath":"/Users/anantgarg/Local/tinyhands"}
+[08:55:29.966] [Poll] External change detected {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-031.md","resolvedPath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-031/.bake/tasks/plans/plan-031.md","newTitle":"WhatsApp channels — talk to an agent over WhatsApp via Twilio","currentH1":"New Plan","refExists":true}
+[08:55:29.967] [Poll] Updated h1 DOM {"newTitle":"WhatsApp channels — talk to an agent over WhatsApp via Twilio"}
+[08:55:29.997] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-031.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":20767,"isPlanPath":true}
