@@ -1,6 +1,6 @@
 # Data Model
 
-PostgreSQL 16 with 24 SQL migrations. Multi-tenant via `workspace_id` on all major tables.
+PostgreSQL 16 with 33 SQL migrations. Multi-tenant via `workspace_id` on all major tables.
 
 ## Core Entities
 
