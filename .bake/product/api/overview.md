@@ -49,6 +49,7 @@ Defined directly in `src/server.ts` with signature verification:
 | POST | `/webhooks/linear` | Linear issue events (signature verified) |
 | POST | `/webhooks/zendesk` | Zendesk ticket events (signature verified) |
 | POST | `/webhooks/intercom` | Intercom events (signature verified) |
+| POST | `/webhooks/twilio/whatsapp` | Inbound WhatsApp messages via Twilio (`X-Twilio-Signature` verified) |
 | GET | `/auth/callback/:integration` | OAuth provider callbacks |
 | GET | `/health` | Health check |
 | GET/POST | `/api/public/chat/:token[...]` | Public Web Chat — metadata, login, message, poll (see [remaining.md](remaining.md#web-chat--public-apipublicchat)) |
