@@ -808,3 +808,51 @@ export interface WebChatMessage {
   created_at: string;
 }
 
+// ── WhatsApp Channels ──
+// A WhatsApp channel exposes one agent over WhatsApp via Twilio. Access is by
+// phone number — only numbers on the channel's allowlist may message the agent.
+
+export interface WhatsAppChannel {
+  id: string;
+  workspace_id: string;
+  name: string;
+  agent_id: string;
+  twilio_account_sid: string;
+  twilio_auth_token_encrypted: string;
+  twilio_auth_token_iv: string;
+  whatsapp_number: string;
+  enabled: boolean;
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WhatsAppAllowedNumber {
+  id: string;
+  channel_id: string;
+  phone_number: string;
+  label: string | null;
+  created_at: string;
+}
+
+export interface WhatsAppSession {
+  id: string;
+  channel_id: string;
+  visitor_number: string;
+  created_at: string;
+  last_active_at: string;
+}
+
+export type WhatsAppMessageRole = 'user' | 'assistant';
+
+export interface WhatsAppMessage {
+  id: string;
+  session_id: string;
+  role: WhatsAppMessageRole;
+  content: string;
+  trace_id: string | null;
+  twilio_message_sid: string | null;
+  reply_to_message_id: string | null;
+  created_at: string;
+}
+

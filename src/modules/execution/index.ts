@@ -861,6 +861,20 @@ async function executeAgentRunInner(job: Job<JobData>, data: JobData, workspaceI
       }
     }
 
+    // Push the reply back over WhatsApp for runs that came from a WhatsApp
+    // channel. A no-op (one cheap lookup) for Slack and Web Chat runs.
+    if (!data.channelId) {
+      if (agentProducedOutput || hitMaxTurns) {
+        import('../whatsapp')
+          .then((m) => m.deliverWhatsAppReply(data.traceId, output, true))
+          .catch((err) => logger.warn('WhatsApp reply delivery failed', { traceId: data.traceId, error: String(err) }));
+      } else if (exitCode !== 0) {
+        import('../whatsapp')
+          .then((m) => m.deliverWhatsAppReply(data.traceId, '', false))
+          .catch((err) => logger.warn('WhatsApp reply delivery failed', { traceId: data.traceId, error: String(err) }));
+      }
+    }
+
     logRunEvent({
       trace_id: data.traceId,
       agent_id: data.agentId,
@@ -901,6 +915,12 @@ async function executeAgentRunInner(job: Job<JobData>, data: JobData, workspaceI
         false,
         data.agentId,
       );
+    } else {
+      // No Slack channel — if this came from a WhatsApp channel, let the
+      // visitor know the run failed. A no-op for Web Chat runs.
+      import('../whatsapp')
+        .then((m) => m.deliverWhatsAppReply(data.traceId, '', false))
+        .catch((wErr) => logger.warn('WhatsApp reply delivery failed', { traceId: data.traceId, error: String(wErr) }));
     }
 
     logRunEvent({

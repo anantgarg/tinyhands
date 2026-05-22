@@ -150,6 +150,10 @@ Hierarchical browsing: **Sources > Documents > Content**
 - **Web Chat** -- share an agent as a password-protected public chat page. Create a web chat in
   the dashboard, attach an agent, set a username and password, and get a link anyone can open in
   a browser -- no Slack account or dashboard login required.
+- **WhatsApp** -- let people message an agent on WhatsApp through Twilio. Add a Twilio WhatsApp
+  number in the dashboard, attach an agent, and list the phone numbers allowed to reach it.
+  Visitors can use WhatsApp's reply gesture to ask a follow-up about an earlier answer, just
+  like a Slack thread.
 
 ### Triggers & Automation
 

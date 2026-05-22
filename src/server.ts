@@ -7,6 +7,7 @@ import { config } from './config';
 import { getDefaultWorkspaceId } from './db';
 import { createApiRouter } from './api';
 import { registerPublicChatRoutes } from './api/public-chat';
+import { registerTwilioWhatsAppWebhook } from './api/twilio-webhook';
 import { deployWebhookHandler } from './modules/auto-update';
 import { fireTrigger, getActiveTriggersByType } from './modules/triggers';
 import { searchKB, listKBEntries, getCategories } from './modules/knowledge-base';
@@ -225,6 +226,9 @@ export function createWebhookServer(): express.Application {
       idempotencyKeyFor: (b) => `intercom:${b.id || uuid()}`,
     });
   });
+
+  // ── Twilio WhatsApp inbound webhook ──
+  registerTwilioWhatsAppWebhook(app);
 
   // ── OAuth Callback ──
   app.get('/auth/callback/:integration', async (req, res) => {

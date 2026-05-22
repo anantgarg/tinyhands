@@ -23,6 +23,7 @@ import docsRoutes from './routes/docs';
 import platformRoutes from './routes/platform';
 import databaseRoutes from './routes/database';
 import webChatRoutes from './routes/web-chat';
+import whatsappRoutes from './routes/whatsapp';
 
 export function createApiRouter(): Router {
   const router = Router();
@@ -54,6 +55,7 @@ export function createApiRouter(): Router {
   router.use('/docs', requireAuth, docsRoutes);
   router.use('/database', requireAuth, databaseRoutes);
   router.use('/web-chat', requireAuth, webChatRoutes);
+  router.use('/whatsapp', requireAuth, whatsappRoutes);
   // Platform admin routes do their own auth check (platform_admins table)
   router.use('/platform', requireAuth, platformRoutes);
 

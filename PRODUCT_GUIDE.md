@@ -277,6 +277,34 @@ with the username and password.
 
 ---
 
+## Channels: WhatsApp
+
+For people who live in WhatsApp and will never open a browser link, an agent can answer them
+directly on WhatsApp. This works through **Twilio**, which provides the WhatsApp Business
+connection.
+
+From the dashboard's **Channels** page, an admin adds a WhatsApp number by giving it a name,
+choosing which agent answers it, and entering the **Twilio connection details** (Account SID,
+auth token, and the Twilio WhatsApp number). The admin then adds the **phone numbers allowed
+to message it** — as many as needed, each entered with its country code. There is no username
+or password: access is the phone number itself, so only the numbers on the allow list reach
+the agent.
+
+Each WhatsApp channel:
+
+- Answers only messages from numbers on its allow list. Messages from anyone else are ignored.
+- Runs the agent you attached, with all of its tools, knowledge, and memory — just like in Slack.
+- Keeps each person's conversation in context, so follow-up questions work naturally.
+- Supports **Slack-style replies**: if someone uses WhatsApp's reply gesture to quote an
+  earlier message — the agent's first answer or any later one — the agent receives the whole
+  thread from that point on, so they can ask a focused follow-up without losing context.
+- Can be turned off or deleted at any time. Disabling it stops the agent responding immediately.
+
+To receive messages, the admin pastes the webhook address shown on the Channels page into the
+Twilio number's incoming-message setting. The Channels page is admin-only.
+
+---
+
 ## Available Tools and Integrations
 
 Your agents come with core tools (web search, file operations, code analysis) and may also have access to these integrations:
