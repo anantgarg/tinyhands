@@ -1426,3 +1426,11 @@ tiveFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-018.md","
 [10:12:07.289] [AutoSwitch] plan → activating existing session {"itemId":"plan-032","sessionId":"plan-032","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-032","prevSession":"main"}
 [10:12:07.293] [TerminalSwitch] transitioning {"from":"main","to":"plan-032","storeSessionsLen":43}
 [10:12:07.293] [Terminal] getOrCreate → returning cached {"sessionId":"plan-032","cachedCwd":null}
+[10:12:13.458] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-011.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":8071,"isPlanPath":true}
+[10:12:13.458] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-011.md","title":"Add CustomerIO Integration"}
+[10:12:13.470] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-011.md","sessionsLen":43,"activeSessionId":"plan-032"}
+[10:12:13.470] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-011.md"}
+[10:12:13.484] [AutoSwitch] plan → activating existing session {"itemId":"plan-011","sessionId":"plan-011","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-011","prevSession":"plan-032"}
+[10:12:13.486] [TerminalSwitch] transitioning {"from":"plan-032","to":"plan-011","storeSessionsLen":43}
+[10:12:13.486] [Terminal] getOrCreate → creating new {"sessionId":"plan-011","sessionFound":true,"sessionType":"plan","sessionPlanId":"plan-011","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-011","sessionsLen":43,"projectPath":"/Users/anantgarg/Local/tinyhands"}
+[10:12:13.808] [Terminal] resolved cwd {"sessionId":"plan-011","cwd":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-011","cwdSource":"worktree","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-011","projectPath":"/Users/anantgarg/Local/tinyhands"}
