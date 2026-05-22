@@ -145,3 +145,22 @@ issues a signed, httpOnly, per-token cookie.
 | POST | `/:token/login` | None | Verify the shared credential; sets the session cookie |
 | POST | `/:token/message` | Cookie | Enqueue a visitor message; returns `{ sessionId, traceId }` |
 | GET | `/:token/message/:traceId` | Cookie | Poll for the agent reply (`running` / `done` / `error`) |
+
+## WhatsApp — Admin (`/api/v1/whatsapp`)
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| GET | `/channels` | Admin | List WhatsApp channels (auth token never returned — only a "configured" flag + masked Account SID) |
+| GET | `/channels/:id/numbers` | Admin | List a channel's allowed phone numbers |
+| POST | `/channels` | Admin | Create a WhatsApp channel (name, agentId, Twilio Account SID/auth token/number, allowedNumbers) |
+| PATCH | `/channels/:id` | Admin | Update a channel (rename, re-attach agent, change Twilio credentials/number, enable/disable, replace allowlist) |
+| DELETE | `/channels/:id` | Admin | Delete a WhatsApp channel |
+
+## WhatsApp — Inbound Webhook
+
+Unauthenticated route — Twilio posts inbound WhatsApp messages here. Each request is
+verified against Twilio's `X-Twilio-Signature` using the channel's auth token.
+
+| Method | Path | Auth | Purpose |
+|--------|------|------|---------|
+| POST | `/webhooks/twilio/whatsapp` | Twilio signature | Inbound WhatsApp message → channel lookup by destination number, allowlist check, `MessageSid` dedup, enqueue an agent run; the reply is pushed back via Twilio when the run completes |
