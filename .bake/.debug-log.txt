@@ -1412,3 +1412,6 @@ tiveFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-018.md","
 [10:11:40.486] [AutoSwitch] non-plan/vibe → forcing main {"prevSession":"plan-032"}
 [10:11:40.497] [TerminalSwitch] transitioning {"from":"plan-032","to":"main","storeSessionsLen":43}
 [10:11:40.497] [Terminal] getOrCreate → returning cached {"sessionId":"main","cachedCwd":null}
+[10:11:51.244] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/product/releases.md","isReadOnly":false,"parsedStatus":null,"editorContentLen":21265,"isPlanPath":false}
+[10:11:51.258] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/product/releases.md","sessionsLen":43,"activeSessionId":"main"}
+[10:11:51.258] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/product/releases.md"}
