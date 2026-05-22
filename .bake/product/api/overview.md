@@ -35,6 +35,7 @@ Routes are defined in `src/api/routes/` and mounted in `src/server.ts`.
 | [runs.ts](runs.md) | `/api/v1/runs` | Execution history |
 | [slack-helpers.ts](slack-helpers.md) | `/api/v1/slack` | Channel and user listings |
 | [web-chat.ts](remaining.md#web-chat--admin-apiv1web-chat) | `/api/v1/web-chat` | Web Chat channel CRUD (admin) |
+| [whatsapp.ts](remaining.md#whatsapp--admin-apiv1whatsapp) | `/api/v1/whatsapp` | WhatsApp channel CRUD + allowlist (admin) |
 
 ## Webhooks (No Auth)
 
