@@ -1447,3 +1447,17 @@ tiveFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-018.md","
 [12:30:42.984] [Terminal] getOrCreate → returning cached {"sessionId":"main","cachedCwd":null}
 [12:30:42.984] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"__main__","sessionsLen":43,"activeSessionId":"main"}
 [12:30:42.984] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":false,"activeFilePath":"__main__"}
+[12:30:51.312] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-006.md","isReadOnly":false,"parsedStatus":"active","editorContentLen":84,"isPlanPath":false}
+[12:30:51.313] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-006.md","title":"Loud Dove"}
+[12:30:51.314] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-006.md","sessionsLen":43,"activeSessionId":"main"}
+[12:30:51.314] [AutoSwitch] classified file {"isPlanFile":false,"isVibeFile":true,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/vibes/vibe-006.md"}
+[12:30:51.315] [Editor] useLayoutEffect syncing h1 {"planTitle":"Loud Dove","currentTextContent":""}
+[12:30:51.317] [TerminalSwitch] transitioning {"from":"main","to":"loud-dove","storeSessionsLen":43}
+[12:30:51.317] [Terminal] getOrCreate → returning cached {"sessionId":"loud-dove","cachedCwd":null}
+[12:30:53.816] [Editor] isReadOnly eval {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-032.md","isReadOnly":false,"parsedStatus":"draft","editorContentLen":1964,"isPlanPath":true}
+[12:30:53.816] [Editor] File changed — setting plan title {"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-032.md","title":"New Plan"}
+[12:30:53.824] [AutoSwitch] effect fired {"projectPath":"/Users/anantgarg/Local/tinyhands","activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-032.md","sessionsLen":43,"activeSessionId":"loud-dove"}
+[12:30:53.824] [AutoSwitch] classified file {"isPlanFile":true,"isVibeFile":false,"activeFilePath":"/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-032.md"}
+[12:30:53.829] [AutoSwitch] plan → activating existing session {"itemId":"plan-032","sessionId":"plan-032","worktreePath":"/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-032","prevSession":"loud-dove"}
+[12:30:53.831] [TerminalSwitch] transitioning {"from":"loud-dove","to":"plan-032","storeSessionsLen":43}
+[12:30:53.831] [Terminal] getOrCreate → returning cached {"sessionId":"plan-032","cachedCwd":null}
