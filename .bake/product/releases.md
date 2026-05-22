@@ -2,6 +2,17 @@
 
 One entry per deploy to production. Each entry names the version, the date, the merges included since the previous release, and the exact rollback command. Updated automatically by the Deploy button (see `.bake/harness/deploy.md` for the post-deploy step that appends here).
 
+## v1.59.0 — 2026-05-22
+
+Deployed to the production host. Includes:
+
+- plan-031 merged: WhatsApp channels. A second channel type on the admin **Channels** page alongside Web Chat — an admin names a WhatsApp channel, attaches an agent, enters Twilio connection details (Account SID, auth token, WhatsApp sender number), and adds an allowlist of visitor phone numbers normalised to E.164. Access is by phone number, no username/password. Inbound messages hit `POST /webhooks/twilio/whatsapp`, which resolves the channel by destination number, verifies the `X-Twilio-Signature` (403 on forgery), checks the allowlist, dedups on `MessageSid`, and enqueues a normal agent run; replies are pushed back via Twilio from the execution post-run path. WhatsApp reply gestures are mapped to the quoted turn so the agent gets the full reply thread.
+- New `src/modules/whatsapp/` module (channel CRUD, allowlist, sessions, dispatch/deliver) with a built-ins-only Twilio client. 76 unit tests added; full suite 99 files / 2975 tests green.
+
+Migration 033 (`whatsapp_channels.sql`) applied — adds `whatsapp_channels` (Twilio auth token AES-GCM encrypted), `whatsapp_allowed_numbers`, `whatsapp_sessions`, `whatsapp_messages`. Additive; safe to leave applied on a code rollback.
+
+Rollback: `doctl compute ssh tinyjobs-prod --ssh-key-path ~/.ssh/tinyjobs_deploy --ssh-command "cd /root/tinyjobs && git checkout v1.58.0 && NODE_ENV=development npm install && NODE_ENV=development npm run build && NODE_ENV=development npm run build:web && pm2 reload ecosystem.config.js --force"`.
+
 ## v1.58.0 — 2026-05-21
 
 Deployed to the production host. Includes:
