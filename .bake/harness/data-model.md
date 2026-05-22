@@ -321,6 +321,30 @@ Superseded by `workspace_memberships` + `platform_admins`. Retained read-only fo
 | web_chat_sessions | One row per visitor conversation (channel_id FK, visitor_label, last_active_at) |
 | web_chat_messages | User/assistant turns within a session; assistant rows carry the `trace_id` of the run_history row that produced them |
 
+### WhatsApp Channels (plan-031)
+
+#### whatsapp_channels
+
+| Column | Type | Purpose |
+|--------|------|---------|
+| id | TEXT | Primary key |
+| workspace_id | TEXT | FK → workspaces |
+| name | TEXT | Display name |
+| agent_id | TEXT | FK → agents (the agent that answers) |
+| twilio_account_sid | TEXT | Twilio Account SID |
+| twilio_auth_token_encrypted / twilio_auth_token_iv | TEXT | AES-GCM-encrypted Twilio auth token (never returned to the browser) |
+| whatsapp_number | TEXT | E.164 Twilio WhatsApp sender number; unique — one channel per number |
+| enabled | BOOLEAN | Disabling immediately stops the agent responding |
+| created_by | TEXT | dbUserId of the creating admin (nullable) |
+
+#### whatsapp_allowed_numbers / whatsapp_sessions / whatsapp_messages
+
+| Table | Purpose |
+|-------|---------|
+| whatsapp_allowed_numbers | The per-channel allowlist: many E.164 `phone_number` rows per channel, unique on `(channel_id, phone_number)`. Only numbers here may message the channel |
+| whatsapp_sessions | One row per visitor conversation (channel_id FK, E.164 `visitor_number`, last_active_at) |
+| whatsapp_messages | User/assistant turns within a session; each row records its `twilio_message_sid`, and a quoted (replied-to) inbound message links to the earlier turn via `reply_to_message_id` for Slack-style reply threads |
+
 ### Other Tables
 
 | Table | Purpose |
