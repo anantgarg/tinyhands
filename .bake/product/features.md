@@ -145,6 +145,9 @@
 | Web Chat channels | `src/modules/web-chat/`, `src/db/migrations/032_web_chat_channels.sql` | `web_chat_channels` / `web_chat_sessions` / `web_chat_messages` tables |
 | Web Chat admin API | `src/api/routes/web-chat.ts`, `web/src/pages/Channels.tsx` | `GET/POST/PATCH/DELETE /api/v1/web-chat/channels` (admin-only) |
 | Web Chat public page | `src/api/public-chat.ts`, `web/src/pages/WebChat.tsx` | `/chat/:token`, `POST /api/public/chat/:token/{login,message}`, `GET /api/public/chat/:token[/message/:traceId]` |
+| WhatsApp channels | `src/modules/whatsapp/`, `src/db/migrations/033_whatsapp_channels.sql` | `whatsapp_channels` / `whatsapp_allowed_numbers` / `whatsapp_sessions` / `whatsapp_messages` tables; agent over WhatsApp via Twilio, phone-number allowlist, Slack-style reply threads |
+| WhatsApp admin API | `src/api/routes/whatsapp.ts`, `web/src/pages/Channels.tsx` | `GET/POST/PATCH/DELETE /api/v1/whatsapp/channels`, `GET /api/v1/whatsapp/channels/:id/numbers` (admin-only) |
+| WhatsApp inbound webhook | `src/api/twilio-webhook.ts`, `src/modules/whatsapp/twilio.ts` | `POST /webhooks/twilio/whatsapp` (Twilio-signed; reply pushed back via Twilio by `deliverWhatsAppReply` from the execution post-run path) |
 
 ## Self-Improvement
 
