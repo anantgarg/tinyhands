@@ -664,6 +664,58 @@ browser. No Slack account and no dashboard login is required of them.
 
 ---
 
+## Channels: WhatsApp
+
+The **Channels** page also lets you put an agent on **WhatsApp**, via Twilio. People message
+your Twilio WhatsApp number and the attached agent answers them inside WhatsApp — no Slack and
+no browser.
+
+### Getting Twilio WhatsApp credentials
+
+1. Create a [Twilio](https://www.twilio.com/) account and enable a WhatsApp sender (the Twilio
+   sandbox works for testing; a registered WhatsApp Business number for production).
+2. From the Twilio Console you need three things: the **Account SID**, the **Auth Token**, and
+   the **WhatsApp sender number** (in international `+…` form).
+
+### Creating a WhatsApp channel
+
+1. Open the dashboard → **Channels** → **WhatsApp** → **New WhatsApp number**.
+2. Give it a name, pick the agent that should answer it, and enter the Twilio Account SID,
+   auth token, and WhatsApp number.
+3. Add the **allowed phone numbers** — the people permitted to message the agent. Add as many
+   as you need; always include the country code (e.g. `+14155550123`). Only these numbers can
+   reach the agent.
+4. Save. The dialog shows a **webhook address** (`https://<your-dashboard>/webhooks/twilio/whatsapp`).
+5. In the Twilio Console, paste that address into your WhatsApp number's **incoming-message
+   webhook** ("When a message comes in").
+
+People on the allow list can now message the Twilio number and chat with the agent.
+
+### How the allow list works
+
+- Access is by **phone number**, not a password. A message from a number that is not on the
+  allow list is silently ignored.
+- Numbers are stored in full international form, so the same local number under two different
+  country codes is treated as two distinct numbers.
+- Edit the channel at any time to add or remove allowed numbers.
+
+### Reply threads
+
+If someone uses WhatsApp's **reply** gesture to quote an earlier message and ask a follow-up,
+the agent receives the whole conversation thread from the quoted message onward — the same
+context Slack gives an agent when you reply inside a thread.
+
+### Security notes
+
+- The Twilio auth token is stored encrypted (using your `ENCRYPTION_KEY`) and is never shown
+  back in the dashboard — re-enter it only if you need to change it.
+- Every inbound request is verified against Twilio's request signature, so only genuine Twilio
+  traffic for your number is accepted.
+- Disabling or deleting a WhatsApp channel stops the agent responding immediately.
+- WhatsApp traffic counts against the workspace's normal rate limits and Anthropic usage/cost.
+
+---
+
 ## Audit Log
 
 Platform admins can view a comprehensive audit trail of all actions via the web dashboard audit log. The `/audit` Slack command redirects to the dashboard. The audit log tracks:

@@ -69,6 +69,7 @@ src/
 │   ├── sources/             # Agent data sources (GitHub, Google Drive, memory)
 │   ├── triggers/            # Trigger types: slack, linear, zendesk, intercom, webhook, schedule
 │   ├── web-chat/            # Web Chat channels — password-protected public /chat/{token} pages that run an agent
+│   ├── whatsapp/            # WhatsApp channels — agent over WhatsApp via Twilio (allowlisted phone numbers, reply threads)
 │   ├── workflows/           # Multi-step stateful workflows (DAG of steps)
 │   ├── teams/               # Multi-agent orchestration
 │   ├── skills/              # Skill registry + builtins loader (reads /skills/*.md)
@@ -123,6 +124,9 @@ PostgreSQL with migrations in `src/db/migrations/`. Key tables:
 - **database_sync_log** — Per-sync-cycle results for CSV/XLSX/Google-Sheet-backed tables. `status` ∈ `success` / `partial_sync` / `failed`; `detail.issues` surfaces unmapped columns, removed columns, row type mismatches, etc. Dashboard reads the latest row per table to decide whether to render the warning triangle.
 - **web_chat_channels** — Web Chat channels (workspace_id, name, slug, agent_id, auth_username, AES-GCM-encrypted `auth_password_encrypted`/`auth_password_iv`, random `public_token` used in the `/chat/{token}` URL, `enabled`). The visitor password is encrypted (not hashed) so an admin can read it back to re-share it.
 - **web_chat_sessions** / **web_chat_messages** — One row per visitor conversation and its user/assistant turns. Assistant rows carry the `trace_id` of the `run_history` row that produced them.
+- **whatsapp_channels** — WhatsApp channels (workspace_id, name, agent_id, `twilio_account_sid`, AES-GCM-encrypted `twilio_auth_token_encrypted`/`twilio_auth_token_iv`, `whatsapp_number` (E.164, unique — the Twilio sender), `enabled`). One channel per Twilio WhatsApp number.
+- **whatsapp_allowed_numbers** — The per-channel allow list: many E.164 `phone_number` rows per channel, unique on `(channel_id, phone_number)`. Only numbers here may message the channel.
+- **whatsapp_sessions** / **whatsapp_messages** — One row per visitor conversation (keyed by E.164 `visitor_number`) and its user/assistant turns. Each message row records its `twilio_message_sid`; an inbound reply that quotes an earlier message links to it via `reply_to_message_id` (Slack-style reply threads).
 
 Query helpers: `query()`, `queryOne()`, `execute()` from `src/db/index.ts`.
 
@@ -248,6 +252,9 @@ Express routes in `src/server.ts`. Signature verification for GitHub, Linear, Ze
 
 ### Web Chat
 A web chat exposes one agent as a password-protected public page at `/chat/{token}` — no Slack or dashboard login. Admin CRUD is `/api/v1/web-chat/channels` (admin-only). Public, unauthenticated routes are registered by `registerPublicChatRoutes` in `src/api/public-chat.ts` (mounted from `src/server.ts`): `POST /api/public/chat/:token/login` verifies the shared username/password and issues a signed, httpOnly, per-token cookie; `POST /api/public/chat/:token/message` enqueues an agent run with an empty `channelId`/`threadTs` (the execution module already guards every Slack call on `channelId`); `GET /api/public/chat/:token/message/:traceId` polls `run_history` by `trace_id` for the reply. The public chat React page (`web/src/pages/WebChat.tsx`) is routed outside `RequireAuth`/`Shell`.
+
+### WhatsApp
+A WhatsApp channel (`src/modules/whatsapp/`) exposes one agent over WhatsApp via Twilio — the second channel type on the Channels page. Admin CRUD is `/api/v1/whatsapp/channels` (admin-only); the auth token is never returned to the browser. `src/modules/whatsapp/twilio.ts` is a built-ins-only Twilio client (`verifyTwilioSignature`, `sendWhatsAppMessage`, `parseE164`/`normalizeE164`). Inbound messages hit the public webhook `POST /webhooks/twilio/whatsapp`, registered by `registerTwilioWhatsAppWebhook` in `src/api/twilio-webhook.ts`: it resolves the channel by destination number (no cross-workspace fan-out), verifies `X-Twilio-Signature`, checks the sender against `whatsapp_allowed_numbers`, dedups on `MessageSid` (Redis NX), and enqueues an agent run with empty `channelId`/`threadTs`. The reply is pushed back via Twilio by `deliverWhatsAppReply`, called from the execution module's post-run path (a no-op for Slack/Web Chat runs). When an inbound message carries `OriginalRepliedMessageSid`, the quoted turn is resolved via `twilio_message_sid` and the full reply thread is sent to the agent.
 
 ### Rate Limiting
 Redis-backed token bucket in `src/queue/index.ts`. Pre-flight check at 90% TPM capacity. Per-minute tracking for both TPM and RPM.

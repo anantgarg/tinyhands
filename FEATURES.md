@@ -1233,6 +1233,63 @@ open in a browser — no Slack workspace, no dashboard account, no "Sign in with
 
 ---
 
+## Channels (WhatsApp)
+
+A **WhatsApp channel** exposes a single agent over WhatsApp, through Twilio. People message a
+Twilio WhatsApp number and the attached agent answers them inside WhatsApp — no Slack, no
+dashboard account, no browser. It is the second channel type on the Channels page, alongside
+Web Chat.
+
+### Creating a WhatsApp channel
+
+- Dashboard → **Channels** (admin-only page) → **WhatsApp** section → **New WhatsApp number**.
+- The admin sets: a **name**, the **agent** that answers it, the **Twilio connection details**
+  (Account SID, auth token, and the Twilio WhatsApp sender number), and an **allow list** of
+  visitor phone numbers.
+- The allow list holds **as many numbers as needed**. Each is entered with its country (ISD)
+  code and stored in full international (E.164) form, so the same national number under two
+  different country codes is treated as two distinct numbers.
+- A WhatsApp channel can be edited (rename, re-attach a different agent, change the Twilio
+  credentials/number, add or remove allowed numbers), enabled/disabled, and deleted.
+- The Channels page shows the Twilio **webhook address** to paste into the Twilio number's
+  incoming-message setting.
+
+### Visitor experience
+
+- Access is by **phone number**, not a credential — there is no login. Only numbers on the
+  channel's allow list can reach the agent; messages from anyone else are silently ignored.
+- A person holds a normal multi-message conversation with the agent in WhatsApp. Earlier
+  messages in the same conversation are carried as context into later replies.
+- **Reply threads** — if a person uses WhatsApp's reply gesture to quote an earlier message
+  (the agent's first answer or any later one) and asks a follow-up, the agent receives the
+  full reply thread from the quoted message forward, emulating Slack thread replies. A plain
+  (non-reply) message uses the recent conversation history as before.
+
+### Rules
+
+- **Credential storage** — the Twilio auth token is AES-GCM encrypted and is never returned to
+  the dashboard; only a "configured" flag and the masked Account SID tail are shown.
+- **Inbound verification** — every inbound request is checked against Twilio's
+  `X-Twilio-Signature`; a forged signature is rejected with 403. Unknown destination numbers
+  and disabled channels are answered with an empty 200 (Twilio retries on errors). A repeated
+  Twilio `MessageSid` is de-duplicated so a retried delivery never runs the agent twice.
+- **Execution** — an inbound message enqueues a normal agent run with no Slack channel; the
+  reply is pushed back to the visitor over Twilio when the run completes. The agent's tools,
+  knowledge, memory, and write policies all apply exactly as they do in Slack. The
+  per-workspace rate limit also applies.
+- **Disabling or deleting a WhatsApp channel takes effect immediately.**
+- v1 is **text only** — inbound media and outbound WhatsApp templates are not handled. Only
+  Twilio is supported as the WhatsApp provider.
+
+**Access:**
+
+| Action | Superadmin | Admin | Agent Owner | Agent Member | Viewer |
+|--------|-----------|-------|-------------|-------------|--------|
+| View / create / edit / delete WhatsApp channels | Yes | Yes | No | No | No |
+| Message a WhatsApp channel | Anyone whose phone number is on the channel's allow list |
+
+---
+
 ## Agent Memory
 
 - **Optional** per-agent (toggle in Settings during creation or on Overview tab).
