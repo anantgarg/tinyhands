@@ -184,7 +184,7 @@
       "name": "New Plan",
       "planId": "plan-012",
       "planPath": "/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-012.md",
-      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-012",
+      "worktreePath": null,
       "branch": "bake/plan/plan-012",
       "createdAt": "2026-04-17T09:27:51.506Z",
       "claudeSessionId": "cad11525-2347-4a16-b131-f8cedae77785"
@@ -225,7 +225,7 @@
       "name": "Bring-your-own Google OAuth app (per-workspace OAuth credentials)",
       "planId": "plan-015",
       "planPath": "/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-015.md",
-      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-015",
+      "worktreePath": null,
       "branch": "bake/plan/plan-015",
       "createdAt": "2026-04-20T09:17:17.332Z"
     },
@@ -256,7 +256,7 @@
       "name": "New Plan",
       "planId": "plan-020",
       "planPath": "/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-020.md",
-      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-020",
+      "worktreePath": null,
       "branch": "bake/plan/plan-020",
       "createdAt": "2026-04-22T11:06:49.734Z"
     },
@@ -288,7 +288,7 @@
       "name": "New Plan",
       "planId": "plan-022",
       "planPath": "/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-022.md",
-      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-022",
+      "worktreePath": null,
       "branch": "bake/plan/plan-022",
       "createdAt": "2026-04-22T11:39:52.639Z",
       "claudeSessionId": "1d898aac-56bf-409f-8fb2-191feef317a6"
@@ -330,7 +330,7 @@
       "name": "New Plan",
       "planId": "plan-025",
       "planPath": "/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-025.md",
-      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-025",
+      "worktreePath": null,
       "branch": "bake/plan/plan-025",
       "createdAt": "2026-04-23T10:05:01.495Z",
       "claudeSessionId": "5f9c8484-4398-4da3-b98d-cc4f5b0979fd"
@@ -363,7 +363,7 @@
       "name": "New Plan",
       "planId": "plan-028",
       "planPath": "/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-028.md",
-      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-028",
+      "worktreePath": null,
       "branch": "bake/plan/plan-028",
       "createdAt": "2026-04-24T16:07:29.674Z",
       "claudeSessionId": "5a3b5e5e-932d-46b8-86a2-d416daba01ef"
@@ -374,7 +374,7 @@
       "name": "New Plan",
       "planId": "plan-029",
       "planPath": "/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-029.md",
-      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-029",
+      "worktreePath": null,
       "branch": "bake/plan/plan-029",
       "createdAt": "2026-04-29T12:04:24.351Z",
       "claudeSessionId": "4a9dc9e1-07e7-431f-ae2b-e940a924ef50"
@@ -395,7 +395,7 @@
       "name": "New Plan",
       "planId": "plan-030",
       "planPath": "/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-030.md",
-      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-030",
+      "worktreePath": null,
       "branch": "bake/plan/plan-030",
       "createdAt": "2026-05-21T10:14:13.673Z",
       "claudeSessionId": "fe589695-a42e-470f-b948-8686407ea568"
@@ -406,7 +406,7 @@
       "name": "New Plan",
       "planId": "plan-031",
       "planPath": "/Users/anantgarg/Local/tinyhands/.bake/tasks/plans/plan-031.md",
-      "worktreePath": "/Users/anantgarg/Local/.bake-worktrees-tinyhands/plan-031",
+      "worktreePath": null,
       "branch": "bake/plan/plan-031",
       "createdAt": "2026-05-22T08:51:15.150Z",
       "claudeSessionId": "9252ad65-913d-4ec8-b939-10ee61b0a271"
