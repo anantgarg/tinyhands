@@ -105,6 +105,9 @@ The credential system was overhauled: `connectionModel` replaced with `supported
 ### Flaky test: `api-kb.test.ts > DELETE /kb/sources/:id > deletes source (admin)`
 Passes in isolation (`npx vitest run tests/unit/api-kb.test.ts`) but intermittently returns 404 instead of 200 when run inside the full `npm test` suite. Indicates test pollution from an earlier file mutating shared mock state. Blocks deploys occasionally via husky pre-commit. Discovered during v1.47.0 deploy.
 
+### Flaky test: `api-tools.test.ts` error-path cases (e.g. `DELETE /tools/custom/:name > returns 400 on error`)
+Same class of issue as the `api-kb.test.ts` flake above. Passes in isolation (33/33) but intermittently returns 200 instead of the expected 400 on ~3 error-path tests when run inside the full `npm test` suite — a mock that should make the handler throw isn't applied, pointing to cross-file shared-mock pollution sensitive to worker scheduling. Reproduced once, then green on re-run. Likely the same underlying shared-mock-state bug; worth fixing both together (give each api-*.test.ts file its own isolated mock reset / `vi.resetModules()` between files, or stop sharing a module-level mock object). Discovered 2026-06-25 while fixing paused-agent triggers.
+
 ### Production host untracked cruft
 The production app checkout accumulated untracked files worth cleaning up: a handful of `retrigger*.js` files plus a nested `src/src/` folder with stale duplicates of repo-root files (`LICENSE`, `README.md`, `PLAN.md`, `.env.example`, `Dockerfile`, `ecosystem.config.js`, etc.). Safe to delete after confirming nothing references them, but not urgent.
 

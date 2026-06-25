@@ -105,6 +105,22 @@ export async function fireTrigger(workspaceId: string, event: TriggerEvent): Pro
   const trigger = await getTrigger(workspaceId, event.triggerId);
   if (!trigger || trigger.status !== 'active') return null;
 
+  // The agent's status is the master switch over all of its triggers. A paused (or archived/error)
+  // agent must not run, even if its triggers are still active — otherwise schedule/webhook/Slack
+  // triggers keep firing it. See FEATURES.md: "Paused agents ignore all messages."
+  const agent = await queryOne<{ status: string }>(
+    'SELECT status FROM agents WHERE id = $1 AND workspace_id = $2',
+    [trigger.agent_id, workspaceId]
+  );
+  if (!agent || agent.status !== 'active') {
+    logger.info('Trigger skipped — agent not active', {
+      triggerId: event.triggerId,
+      agentId: trigger.agent_id,
+      agentStatus: agent?.status ?? 'missing',
+    });
+    return null;
+  }
+
   // Dedup check
   const isDuplicate = await isDuplicateEvent(workspaceId, event.idempotencyKey);
   if (isDuplicate) {
