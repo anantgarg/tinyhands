@@ -150,7 +150,7 @@ Navigate to agent detail page
 
 ### Pausing / Resuming / Deleting
 
-- **Pause/Resume** -- from agent detail header button or Agents list overflow menu. Sets `agents.status` to `paused` or `active`. Paused agents ignore all messages.
+- **Pause/Resume** -- from agent detail header button or Agents list overflow menu. Sets `agents.status` to `paused` or `active`. Paused agents ignore all messages **and do not fire any triggers** -- schedule, webhook, Linear, Zendesk, Intercom, and Slack-channel triggers are all skipped while the agent is paused, even if the trigger itself is still active. The agent's status is the master switch over its triggers. Resuming the agent restores trigger firing.
 - **Delete** -- from agent detail overflow menu or Agents list overflow menu. Requires owner access (`canModifyAgent`).
 - Platform admins (superadmin/admin) have owner-level access to all agents and can pause/resume/delete any agent.
 
@@ -1166,6 +1166,7 @@ Reducto is an optional per-workspace upgrade that materially outperforms local p
 ### Rules
 
 - Scheduler process (`src/scheduler.ts`) evaluates cron triggers every 60 seconds.
+- Triggers only fire for **active** agents. If the agent is paused (or archived/error), `fireTrigger` skips it regardless of the trigger's own status — the agent status is the master switch.
 - Deduplication via Redis NX keys with 5-minute window (prevents duplicate triggers from same event).
 - Scheduled triggers post results to agent's `channel_id`.
 - Triggers can be paused, resumed, edited, and deleted from dashboard Triggers tab.

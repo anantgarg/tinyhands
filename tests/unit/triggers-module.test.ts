@@ -346,6 +346,55 @@ describe('fireTrigger', () => {
     expect(mockEnqueueRun).not.toHaveBeenCalled();
   });
 
+  it('should return null when the agent is paused (even if the trigger is active)', async () => {
+    mockQueryOne
+      .mockResolvedValueOnce({ id: 't1', agent_id: 'agent-1', trigger_type: 'schedule', status: 'active' })
+      .mockResolvedValueOnce({ status: 'paused' });
+
+    const result = await fireTrigger(TEST_WORKSPACE_ID, makeEvent());
+    expect(result).toBeNull();
+    expect(mockIsDuplicateEvent).not.toHaveBeenCalled(); // bails before dedup/enqueue
+    expect(mockEnqueueRun).not.toHaveBeenCalled();
+  });
+
+  it('should return null when the agent is archived', async () => {
+    mockQueryOne
+      .mockResolvedValueOnce({ id: 't1', agent_id: 'agent-1', trigger_type: 'webhook', status: 'active' })
+      .mockResolvedValueOnce({ status: 'archived' });
+
+    const result = await fireTrigger(TEST_WORKSPACE_ID, makeEvent());
+    expect(result).toBeNull();
+    expect(mockEnqueueRun).not.toHaveBeenCalled();
+  });
+
+  it('should return null when the agent no longer exists', async () => {
+    mockQueryOne
+      .mockResolvedValueOnce({ id: 't1', agent_id: 'agent-1', trigger_type: 'schedule', status: 'active' })
+      .mockResolvedValueOnce(null);
+
+    const result = await fireTrigger(TEST_WORKSPACE_ID, makeEvent());
+    expect(result).toBeNull();
+    expect(mockEnqueueRun).not.toHaveBeenCalled();
+  });
+
+  it('should look up the agent scoped to the workspace and fire when it is active', async () => {
+    mockQueryOne
+      .mockResolvedValueOnce({ id: 't1', agent_id: 'agent-1', trigger_type: 'schedule', status: 'active' })
+      .mockResolvedValueOnce({ status: 'active' });
+    mockIsDuplicateEvent.mockResolvedValue(false);
+
+    const result = await fireTrigger(TEST_WORKSPACE_ID, makeEvent());
+
+    expect(result).toBe('test-uuid-1234');
+    // 2nd queryOne is the agent-status gate, scoped by agent id + workspace
+    expect(mockQueryOne).toHaveBeenNthCalledWith(
+      2,
+      expect.stringContaining('FROM agents'),
+      ['agent-1', TEST_WORKSPACE_ID],
+    );
+    expect(mockEnqueueRun).toHaveBeenCalled();
+  });
+
   it('should return null for duplicate events', async () => {
     mockQueryOne.mockResolvedValue({
       id: 't1',
