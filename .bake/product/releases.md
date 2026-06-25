@@ -2,6 +2,17 @@
 
 One entry per deploy to production. Each entry names the version, the date, the merges included since the previous release, and the exact rollback command. Updated automatically by the Deploy button (see `.bake/harness/deploy.md` for the post-deploy step that appends here).
 
+## v1.59.1 — 2026-06-25
+
+Deployed to the production host. Includes:
+
+- Bug fix: **paused agents no longer fire triggers.** `fireTrigger` (`src/modules/triggers/index.ts`) — the single choke point for every trigger path (scheduler, server webhooks, Slack-channel) — only checked the trigger's own status, never the agent's, so a paused (or archived/error) agent kept running via its still-active schedule / webhook / Linear / Zendesk / Intercom triggers. It now also loads `agents.status` and skips any non-active agent (logging "Trigger skipped — agent not active"); triggers stay active so resuming the agent restores firing. The Slack message path already enforced agent status — this closes the gap for automated triggers. Found via production report (5 agents shown Paused but still appearing in Runs); confirmed "Usage Alert Logger" (paused) had an active schedule trigger firing as recently as 06:28 that morning.
+- 4 new unit tests in `triggers-module.test.ts`; full suite 99 files / 2979 tests green. Patch bump 1.59.0 → 1.59.1.
+
+No migrations in this release. Verified post-deploy: all 6 PM2 processes on v1.59.1, `app.tinyhands.ai` HTTP 200, and zero new paused-agent runs after the deploy.
+
+Rollback: `doctl compute ssh tinyjobs-prod --ssh-key-path ~/.ssh/tinyjobs_deploy --ssh-command "cd /root/tinyjobs && git checkout v1.59.0 && NODE_ENV=development npm install && NODE_ENV=development npm run build && NODE_ENV=development npm run build:web && pm2 reload ecosystem.config.js --force"`.
+
 ## v1.59.0 — 2026-05-22
 
 Deployed to the production host. Includes:
